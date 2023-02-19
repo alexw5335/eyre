@@ -1,0 +1,10 @@
+.gradle/
+build/
+.idea/
+out/
+run/
+/test.*
+/test/
+prev/
+*.dll
+/temp/
