@@ -1,6 +1,7 @@
 package eyre
 
 import java.nio.file.Files
+import java.util.*
 
 class Lexer {
 
@@ -17,49 +18,24 @@ class Lexer {
 
 	private var stringBuilder = StringBuilder()
 
+	private var tokens = ArrayList<Token>()
+
+	private var tokenLines = IntList(512)
+
+	private var terminators = BitList(512)
+
+	private var newlines = BitList(512)
+
 	private val Char.isIdentifierPart get() = isLetterOrDigit() || this == '_'
-
-
-
-	var terminators = BitList()
-		private set
-
-	var newlines = BitList()
-		private set
-
-	var tokenLines = ShortArray(256)
-		private set
-
-	var tokens = LongArray(256)
-		private set
-
-	var tokenCount = 0
-		private set
-
-
-
-	private fun addToken(type: TokenType, value: Int) {
-		if(tokenCount >= tokenLines.size) {
-			tokens = tokens.copyOf(tokenCount shl 2)
-			tokenLines = tokenLines.copyOf(tokenCount shl 2)
-		}
-
-		tokens[tokenCount] = type.ordinal.toLong() or (value.toLong() shl 32)
-		tokenLines[tokenCount++] = lineCount.toShort()
-	}
-
-
-
-	private fun addSym(symbol: SymToken) = addToken(TokenType.SYM, symbol.ordinal)
 
 
 
 	fun lex(srcFile: SrcFile) {
 		pos = 0
-		tokenCount = 0
 		lineCount = 1
 		terminators.array.clear()
 		newlines.array.clear()
+		tokens.clear()
 
 		this.srcFile = srcFile
 		size = Files.size(srcFile.path).toInt() + 1
@@ -79,11 +55,25 @@ class Lexer {
 			charMap[char.code]!!()
 		}
 
-		terminators.set(tokenCount)
-		addToken(TokenType.END, 0)
-		newlines.ensureCapacity(tokenCount)
-		terminators.ensureCapacity(tokenCount)
+		terminators.set(tokens.size)
+		addToken(EndToken)
+		newlines.ensureCapacity(tokens.size)
+		terminators.ensureCapacity(tokens.size)
+
+		srcFile.tokens      = tokens
+		srcFile.tokenLines  = tokenLines
+		srcFile.newlines    = newlines
+		srcFile.terminators = terminators
 	}
+
+
+
+	private fun addToken(token: Token) {
+		tokens.add(token)
+		tokenLines.add(lineCount)
+		tokenLines[tokens.size] = lineCount
+	}
+
 
 
 
@@ -98,8 +88,8 @@ class Lexer {
 
 
 	private fun onNewline() {
-		terminators.set(tokenCount)
-		newlines.set(tokenCount)
+		terminators.set(tokens.size)
+		newlines.set(tokens.size)
 		lineCount++
 	}
 
@@ -132,7 +122,7 @@ class Lexer {
 			}
 		}
 
-		addToken(TokenType.STRING, StringInterner.add(stringBuilder.toString()).id)
+		addToken(StringToken(StringInterner.add(stringBuilder.toString())))
 	}
 
 
@@ -143,7 +133,7 @@ class Lexer {
 		if(char == '\\')
 			char = chars[pos++].escape
 
-		addToken(TokenType.CHAR, char.code)
+		addToken(CharToken(char))
 
 		if(chars[pos++] != '\'')
 			lexerError("Unterminated char literal")
@@ -158,7 +148,7 @@ class Lexer {
 		}
 
 		if(chars[pos] != '*') {
-			addSym(SymToken.SLASH)
+			addToken(SymToken.SLASH)
 			return
 		}
 
@@ -250,7 +240,7 @@ class Lexer {
 
 	private fun digit() {
 		pos--
-		addToken(TokenType.INT, readDecimal().toInt())
+		addToken(IntToken(readDecimal()))
 		if(chars[pos].isLetterOrDigit()) lexerError("Invalid char in number literal: '${chars[pos]}'")
 	}
 
@@ -258,18 +248,18 @@ class Lexer {
 
 	private fun zero() {
 		if(chars[pos].isDigit()) {
-			addToken(TokenType.INT, readDecimal().toInt())
+			addToken(IntToken(readDecimal()))
 			return
 		}
 
 		if(!chars[pos].isLetter()) {
-			addToken(TokenType.INT, 0)
+			addToken(IntToken(0))
 			return
 		}
 
 		when(val base = chars[pos++]) {
-			'x'  -> addToken(TokenType.INT, readHex().toInt())
-			'b'  -> addToken(TokenType.INT, readBinary().toInt())
+			'x'  -> addToken(IntToken(readHex()))
+			'b'  -> addToken(IntToken(readBinary()))
 			else -> lexerError("Invalid integer base: $base")
 		}
 	}
@@ -289,7 +279,7 @@ class Lexer {
 
 		val string = String(chars, startPos, pos - startPos)
 		val intern = StringInterner.add(string)
-		addToken(TokenType.ID, intern.id)
+		addToken(IdToken(intern))
 	}
 
 
@@ -311,8 +301,8 @@ class Lexer {
 
 				if(s.string.length == 1) {
 					charMap[firstChar] = {
-						terminators.set(tokenCount)
-						addToken(TokenType.SYM, s.ordinal)
+						terminators.set(tokens.size)
+						addToken(s)
 					}
 					continue
 				}
@@ -320,12 +310,12 @@ class Lexer {
 				val secondChar = s.string[1]
 
 				charMap[firstChar] = {
-					terminators.set(tokenCount)
+					terminators.set(tokens.size)
 					if(chars[pos] == secondChar) {
-						addSym(s)
+						addToken(s)
 						pos++
 					} else
-						addSym(s.firstSymbol ?: lexerError("Invalid symbol"))
+						addToken(s.firstSymbol ?: lexerError("Invalid symbol"))
 				}
 			}
 

@@ -22,4 +22,8 @@ class BitList(array: BitArray) {
 	}
 
 
+
+	operator fun get(index: Int) = array[index]
+
+
 }
