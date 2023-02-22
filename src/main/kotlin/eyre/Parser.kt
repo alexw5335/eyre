@@ -254,9 +254,26 @@ class Parser(private val context: CompilerContext) {
 		val dllName = id()
 		expect(SymToken.LEFT_BRACE)
 
-		val scope = addScope(dllName)
+		val thisScope = addScope(dllName)
 
-		val dllSymbol = DllSymbol(currentScope, dllName, )
+		val dllSymbol = context.dlls.firstOrNull { it.name == dllName }
+			?: DllSymbol(currentScope, dllName, thisScope, ArrayList()).also(context.dlls::add)
+
+		addSymbol(dllSymbol)
+
+		while(pos < tokens.size) {
+			if(next == SymToken.RIGHT_BRACE) {
+				pos++
+				break
+			}
+
+			val importName = id()
+			expectTerminator()
+			if(next == SymToken.COMMA) pos++
+			val importSymbol = DllImportSymbol(thisScope, importName, Section.IDATA, 0)
+			addSymbol(importSymbol)
+			dllSymbol.symbols.add(importSymbol)
+		}
 	}
 
 
@@ -274,7 +291,7 @@ class Parser(private val context: CompilerContext) {
 			when(StringInterner.keywords[id]) {
 				Keyword.NAMESPACE -> parseNamespace()
 				Keyword.DLLIMPORT -> parseDllImport()
-				else -> error("Invalid keyword: $id")
+				else              -> error("Invalid keyword: $id")
 			}
 		}
 
@@ -303,7 +320,9 @@ class Parser(private val context: CompilerContext) {
 	private fun parseScope(scope: ScopeIntern) {
 		val prevScope = currentScope
 		currentScope = scope
+		scopeStackSize++
 		parseScope()
+		scopeStackSize--
 		currentScope = prevScope
 	}
 
@@ -312,9 +331,9 @@ class Parser(private val context: CompilerContext) {
 	private fun addScope(name: StringIntern): ScopeIntern {
 		if(scopeStackSize >= scopeStack.size)
 			scopeStack = scopeStack.copyOf(scopeStackSize * 2)
-		scopeStack[scopeStackSize++] = name.id
+		scopeStack[scopeStackSize] = name.id
 		val hash = currentScope.hash * 31 + name.id
-		return ScopeInterner.add(scopeStack.copyOf(scopeStackSize), hash)
+		return ScopeInterner.add(scopeStack.copyOf(scopeStackSize + 1), hash)
 	}
 
 

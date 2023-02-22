@@ -6,8 +6,9 @@ import kotlin.io.path.relativeTo
 
 
 fun main() {
-	val compiler = Compiler("samples", "main.eyre")
-	compiler.compile()
+	EncodingGenerator(Paths.get("encodings.txt")).gen()
+	//val compiler = Compiler("samples", "main.eyre")
+	//compiler.compile()
 }
 
 

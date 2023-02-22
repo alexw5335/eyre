@@ -31,7 +31,7 @@ class StringIntern(override val id: Int, val hash: Int, val string: String) : In
 class ScopeIntern(override val id: Int, val hash: Int, val array: IntArray) : Intern {
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
-	override fun toString() = array.joinToString(transform = { StringInterner[it].string })
+	override fun toString() = array.joinToString(transform = { StringInterner[it].string }, separator = ".")
 }
 
 
@@ -70,11 +70,7 @@ object StringInterner : Interner<String, StringIntern>() {
 
 	val EMPTY  = add("")
 	val RES    = add("res")
-	val NULL   = add("null")
-	val GLOBAL = add("global")
 	val MAIN   = add("main")
-	val PROC   = add("proc")
-	val ENDP   = add("endp")
 	val SIZEOF = add("sizeof")
 
 	val keywords     = createRange(Keyword.values(), Keyword::string)

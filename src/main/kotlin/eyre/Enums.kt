@@ -20,21 +20,9 @@ enum class Width(val string: String, val varString: String, val bytes: Int) {
 
 
 
-enum class Widths(val bits: Int) {
-
-	NONE  (0b0000),
-	ALL   (0b1111),
-	NO8   (0b1110),
-	NO64  (0b0111),
-	NO816 (0b1100),
-	NO832 (0b1010),
-	NO864 (0b0110),
-	ONLY8 (0b0001),
-	ONLY16(0b0010),
-	ONLY64(0b1000);
-
-	operator fun contains(width: Width) = bits and width.bit != 0
-
+@JvmInline
+value class Widths(val value: Int) {
+	operator fun contains(width: Width) = value and width.bit != 0
 }
 
 
@@ -245,4 +233,49 @@ enum class Keyword {
 
 	val string = name.lowercase()
 
+}
+
+
+
+enum class Operands(val isCustom: Boolean = false) {
+
+	NONE,
+	R,
+	M,
+	R_R,
+	R_M,
+	M_R,
+	R_I,
+	M_I,
+	CUSTOM1,
+	CUSTOM2,
+
+}
+
+
+
+enum class CustomOperands {
+
+	O,
+	I,
+	I8,
+	A_I,
+	RM_1,
+	RM_CL,
+	RM_I8,
+	REL8,
+	REL32,
+	R64_RM32,
+	R_RM8,
+	R_RM16,
+
+}
+
+
+
+enum class CompoundOperands(vararg val operandsList: Operands) {
+	RM(Operands.R, Operands.M),
+	RM_R(Operands.R_R, Operands.M_R),
+	R_RM(Operands.R_R, Operands.R_M),
+	RM_I(Operands.R_I, Operands.M_I),
 }

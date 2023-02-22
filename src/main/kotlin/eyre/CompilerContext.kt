@@ -6,4 +6,6 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val dlls = ArrayList<DllSymbol>()
 
+	var entryPoint: PosSymbol? = null
+
 }

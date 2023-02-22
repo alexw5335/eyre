@@ -12,8 +12,8 @@ interface ScopedSymbol : Symbol {
 }
 
 interface PosSymbol : Symbol {
-	val section: Section
-	val pos: Int
+	var section: Section
+	var pos: Int
 }
 
 class Namespace(
@@ -25,15 +25,15 @@ class Namespace(
 class LabelSymbol(
 	override val scope: ScopeIntern,
 	override val name: StringIntern,
-	override val section: Section,
-	override val pos: Int
+	override var section: Section,
+	override var pos: Int
 ) : PosSymbol
 
 class DllImportSymbol(
 	override val scope   : ScopeIntern,
 	override val name    : StringIntern,
-	override val section : Section,
-	override val pos     : Int
+	override var section : Section,
+	override var pos     : Int
 ) : PosSymbol
 
 class DllSymbol(

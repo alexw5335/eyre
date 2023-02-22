@@ -1,9 +1,6 @@
 package eyre
 
-class Resolver(
-	private val context: CompilerContext,
-	private val srcFiles: List<SrcFile>
-) {
+class Resolver(private val context: CompilerContext) {
 
 
 	private var scopeStack = arrayOfNulls<ScopeIntern>(64)
@@ -28,14 +25,14 @@ class Resolver(
 
 	fun resolve() {
 		pushScope(ScopeInterner.EMPTY)
-		srcFiles.forEach(::resolveFile)
+		context.srcFiles.forEach(::resolveFile)
 	}
 
 
 
 	private fun resolveFile(srcFile: SrcFile) {
 		if(srcFile.resolving)
-			error("Circular dependency found. Currently resolving files: ${srcFiles.filter { it.resolving }}")
+			error("Circular dependency found. Currently resolving files: ${context.srcFiles.filter { it.resolving }}")
 		else if(srcFile.resolved)
 			return
 

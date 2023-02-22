@@ -18,8 +18,11 @@ class Compiler(private val context: CompilerContext) {
 			printSymbols()
 		}
 
-		val resolver = Resolver(context, context.srcFiles)
+		val resolver = Resolver(context)
 		resolver.resolve()
+
+		val assembler = Assembler(context)
+		assembler.assemble()
 	}
 
 
@@ -81,8 +84,10 @@ class Compiler(private val context: CompilerContext) {
 
 		for(symbol in context.symbols.getAll()) {
 			when(symbol) {
-				is LabelSymbol -> print("Label      ")
-				is Namespace   -> print("Namespace  ")
+				is LabelSymbol     -> print("Label       ")
+				is Namespace       -> print("Namespace   ")
+				is DllSymbol       -> print("DLL         ")
+				is DllImportSymbol -> print("DLL import  ")
 			}
 
 			if(symbol.scope.isNotEmpty) {
