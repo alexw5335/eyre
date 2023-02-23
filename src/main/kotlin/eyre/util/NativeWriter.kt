@@ -141,6 +141,14 @@ class NativeWriter(bytes: ByteArray) {
 
 
 
+	fun i24(value: Int) {
+		ensureCapacity(4)
+		Unsafe.instance.putInt(bytes, pos + 16L, value)
+		pos += 3
+	}
+
+
+
 	/*
 	Big-endian primitives
 	 */

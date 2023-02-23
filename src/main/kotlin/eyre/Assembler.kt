@@ -3,7 +3,6 @@ package eyre
 class Assembler(private val context: CompilerContext) {
 
 
-
 	private val textWriter = context.textWriter
 
 	private var dataWriter = context.dataWriter
@@ -13,8 +12,6 @@ class Assembler(private val context: CompilerContext) {
 	private var section = Section.TEXT
 
 	private lateinit var group: EncodingGroup
-
-	private fun invalidEncoding(): Nothing = error("Invalid encoding")
 
 
 
@@ -30,6 +27,18 @@ class Assembler(private val context: CompilerContext) {
 			}
 		}
 	}
+
+
+
+	// TODO: Add detailed error messages
+
+
+
+	private fun invalidEncoding(): Nothing = error("Invalid encoding")
+
+
+
+	// Node assembly
 
 
 
@@ -62,47 +71,33 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	// Instruction assembly
+
+
+
 	private fun assembleInstruction(node: InsNode) {
 		group = groups[node.mnemonic.ordinal]
 		val customEncoding = customEncodings[node.mnemonic]
 
-		if(customEncoding != null) {
+		if(customEncoding != null)
 			customEncoding(node)
-			return
-		}
-
-		assembleInstructionInternal(node)
-	}
-
-
-
-	private fun assembleInstructionInternal(node: InsNode) {
-		when(node.size) {
-			0 -> assemble0()
-			1 -> assemble1(node)
-			2 -> assemble2(node)
-			3 -> invalidEncoding()
-			4 -> invalidEncoding()
-		}
-	}
-
-
-
-	private fun assemble0() {
-		encodeNone(Operands.NONE)
+		else
+			when(node.size) {
+				0 -> encodeNone(Operands.NONE)
+				1 -> assemble1(node)
+				2 -> assemble2(node)
+				3 -> invalidEncoding()
+				4 -> invalidEncoding()
+			}
 	}
 
 
 
 	private fun assemble1(node: InsNode) {
-		val op1 = node.op1
-
-		if(op1 is RegNode) {
-			encode1R(Operands.R, op1.value)
-		} else if(op1 is MemNode) {
-			encode1M(Operands.M, op1, 0)
-		} else {
-			invalidEncoding()
+		when(val op1 = node.op1) {
+			is RegNode -> encode1R(Operands.R, op1.value)
+			is MemNode -> encode1M(Operands.M, op1, 0)
+			else       -> invalidEncoding()
 		}
 	}
 
@@ -116,11 +111,13 @@ class Assembler(private val context: CompilerContext) {
 			if(op2 is RegNode) {
 				if(op1.value.width != op2.value.width)
 					invalidEncoding()
-				encode2RR(Operands.R_R, op1.value, op2.value)
+				else
+					encode2RR(Operands.R_R, op1.value, op2.value)
 			} else if(op2 is MemNode) {
 				if(op2.width != null && op1.value.width != op2.width)
 					invalidEncoding()
-				encode2RM(Operands.R_M, op1.value, op2, 0)
+				else
+					encode2RM(Operands.R_M, op1.value, op2, 0)
 			} else {
 				val imm = resolveImm(op2)
 				encode1R(Operands.R_I, op1.value)
@@ -130,9 +127,8 @@ class Assembler(private val context: CompilerContext) {
 			if(op2 is RegNode) {
 				if(op1.width != null && op1.width != op2.value.width)
 					invalidEncoding()
-				encode2RM(Operands.M_R, op2.value, op1, 0)
-			} else if(op2 is MemNode) {
-				invalidEncoding()
+				else
+					encode2RM(Operands.M_R, op2.value, op1, 0)
 			} else {
 				val imm = resolveImm(op2)
 				val width = op1.width ?: invalidEncoding()
@@ -199,6 +195,12 @@ class Assembler(private val context: CompilerContext) {
 		writer.varLengthInt(opcode + (offset shl ((length - 1) shl 3)))
 	}
 
+
+
+	// Relocations
+
+
+
 	private fun addDefaultRelocation(width: Width, node: AstNode) = context.relocations.add(Relocation(
 		writer.pos,
 		section,
@@ -225,7 +227,6 @@ class Assembler(private val context: CompilerContext) {
 		offset,
 		Relocation.Type.RIP_RELATIVE
 	))
-
 
 
 
@@ -350,13 +351,14 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	// Immediate resolution
+	// Immediate resolution and writing
 
 
 
 	private var immRelocCount = 0
-
 	private val hasImmReloc get() = immRelocCount > 0
+
+
 
 	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long {
 		if(node is IntNode) return node.value
@@ -386,14 +388,20 @@ class Assembler(private val context: CompilerContext) {
 		error("Invalid imm node: $node")
 	}
 
+
+
 	private fun resolveImm(node: AstNode): Long {
 		immRelocCount = 0
 		return resolveImmRec(node, true)
 	}
 
+
+
 	private fun writeImm(node: AstNode, width: Width) {
 		writeImm(node, width, resolveImm(node))
 	}
+
+
 
 	private fun writeImm(node: AstNode, width: Width, value: Long, hasImm64: Boolean = false) {
 		if(hasImmReloc) {
@@ -424,16 +432,19 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 
-	// Memory resolution
+
+	// Memory resolution and writing
 
 
 
-	var baseReg: Register? = null
-	var indexReg: Register? = null
-	var indexScale = 0
-	var aso = -1 // -1: No reg present. 0: Both R64. 1: Both R32
-	var memRelocCount = 0
-	val hasMemReloc get() = memRelocCount > 0
+	private var baseReg: Register? = null
+	private var indexReg: Register? = null
+	private var indexScale = 0
+	private var aso = -1 // -1: No reg present. 0: Both R64. 1: Both R32
+	private var memRelocCount = 0
+	private val hasMemReloc get() = memRelocCount > 0
+
+
 
 	private fun checkAso(width: Width) {
 		aso = if(width == Width.BIT32)
@@ -449,6 +460,8 @@ class Assembler(private val context: CompilerContext) {
 		else
 			error("Invalid effective address")
 	}
+
+
 
 	private fun resolveMemRec(node: AstNode, regValid: Boolean): Long {
 		if(node is IntNode) return node.value
@@ -635,7 +648,7 @@ class Assembler(private val context: CompilerContext) {
 		Mnemonic.CALL  custom ::customEncodeCALL
 		Mnemonic.JMP   custom ::customEncodeJMP
 
-		Mnemonic.JECXZ custom ::customEncodeJECXZ
+		Mnemonic.JECXZ custom ::customEncodeJRCXZ
 		Mnemonic.JRCXZ custom ::customEncodeJRCXZ
 		Mnemonic.JA    custom ::customEncodeJCC
 		Mnemonic.JAE   custom ::customEncodeJCC
@@ -664,25 +677,27 @@ class Assembler(private val context: CompilerContext) {
 		Mnemonic.JS    custom ::customEncodeJCC
 		Mnemonic.JZ    custom ::customEncodeJCC
 
-		Mnemonic.ROL   custom ::customEncodeGroup2
-		Mnemonic.ROR   custom ::customEncodeGroup2
-		Mnemonic.RCL   custom ::customEncodeGroup2
-		Mnemonic.RCR   custom ::customEncodeGroup2
-		Mnemonic.SHL   custom ::customEncodeGroup2
-		Mnemonic.SHR   custom ::customEncodeGroup2
-		Mnemonic.SAR   custom ::customEncodeGroup2
-		Mnemonic.SAL   custom ::customEncodeGroup2
+		Mnemonic.ROL   custom ::customEncodeROL
+		Mnemonic.ROR   custom ::customEncodeROL
+		Mnemonic.RCL   custom ::customEncodeROL
+		Mnemonic.RCR   custom ::customEncodeROL
+		Mnemonic.SHL   custom ::customEncodeROL
+		Mnemonic.SHR   custom ::customEncodeROL
+		Mnemonic.SAR   custom ::customEncodeROL
+		Mnemonic.SAL   custom ::customEncodeROL
 
-		Mnemonic.ADD   custom ::customEncodeGroup1
-		Mnemonic.OR    custom ::customEncodeGroup1
-		Mnemonic.CMP   custom ::customEncodeGroup1
-		Mnemonic.XOR   custom ::customEncodeGroup1
-		Mnemonic.SUB   custom ::customEncodeGroup1
-		Mnemonic.ADC   custom ::customEncodeGroup1
-		Mnemonic.SBB   custom ::customEncodeGroup1
+		Mnemonic.ADD   custom ::customEncodeADD
+		Mnemonic.OR    custom ::customEncodeADD
+		Mnemonic.CMP   custom ::customEncodeADD
+		Mnemonic.XOR   custom ::customEncodeADD
+		Mnemonic.SUB   custom ::customEncodeADD
+		Mnemonic.ADC   custom ::customEncodeADD
+		Mnemonic.SBB   custom ::customEncodeADD
 
-		Mnemonic.PUSH  custom ::customEncodePUSH
-		Mnemonic.POP   custom ::customEncodePOP
+		Mnemonic.PUSH   custom ::customEncodePUSH
+		Mnemonic.PUSHW  custom ::customEncodePUSHW
+		Mnemonic.POP    custom ::customEncodePOP
+		Mnemonic.POPW   custom ::customEncodePOPW
 
 		Mnemonic.MOVSX custom ::customEncodeMOVSX
 		Mnemonic.MOVZX custom ::customEncodeMOVSX
@@ -700,6 +715,10 @@ class Assembler(private val context: CompilerContext) {
 
 		Mnemonic.IMUL custom ::customEncodeIMUL
 		Mnemonic.TEST custom ::customEncodeTEST
+
+		Mnemonic.LOOP custom ::customEncodeLOOP
+		Mnemonic.LOOPE custom ::customEncodeLOOP
+		Mnemonic.LOOPNE custom ::customEncodeLOOP
 	}
 
 
@@ -826,96 +845,6 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun customEncodeOUT(node: InsNode) {
-		if(node.size != 2) invalidEncoding()
-		val op1 = node.op1!!
-		val op2 = node.op2 as? RegNode ?: invalidEncoding()
-
-		if(op1 is RegNode) {
-			if(op1.value != Register.DX) invalidEncoding()
-			when(op2.value) {
-				Register.AL  -> writer.i8(0xEE)
-				Register.AX  -> writer.i16(0xEF66)
-				Register.EAX -> writer.i8(0xEF)
-				else         -> invalidEncoding()
-			}
-		} else {
-			when(op2.value) {
-				Register.AL  -> writer.i8(0xE6)
-				Register.AX  -> writer.i16(0xE766)
-				Register.EAX -> writer.i8(0xE7)
-				else         -> invalidEncoding()
-			}
-			writeImm(op1, Width.BIT8)
-		}
-	}
-
-
-
-	private fun customEncodeIN(node: InsNode) {
-		if(node.size != 2) invalidEncoding()
-		val op1 = node.op1 as? RegNode ?: invalidEncoding()
-		val op2 = node.op2!!
-
-		if(op2 is RegNode) {
-			if(op2.value != Register.DX) invalidEncoding()
-			when(op1.value) {
-				Register.AL  -> writer.i8(0xEC)
-				Register.AX  -> writer.i16(0xED66)
-				Register.EAX -> writer.i8(0xED)
-				else -> invalidEncoding()
-			}
-		} else {
-			when(op1.value) {
-				Register.AL  -> writer.i8(0xE4)
-				Register.AX  -> writer.i16(0xE566)
-				Register.EAX -> writer.i8(0xE5)
-				else         -> invalidEncoding()
-			}
-			writeImm(op2, Width.BIT8)
-		}
-	}
-
-
-
-	private fun customEncodeJRCXZ(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val op1 = node.op1!!
-		val imm = resolveImm(op1)
-
-		if(hasImmReloc) {
-			writer.i8(0xE3)
-			addRelativeRelocation(Width.BIT8, op1, 0)
-			writer.i8(0)
-		} else if(imm.isImm8) {
-			writer.i8(0xE3)
-			writer.i8(imm.toInt())
-		} else {
-			invalidEncoding()
-		}
-	}
-
-
-
-	private fun customEncodeJECXZ(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val op1 = node.op1!!
-		val imm = resolveImm(op1)
-
-		if(hasImmReloc) {
-			writer.i16(0xE367)
-			addRelativeRelocation(Width.BIT8, op1, 0)
-			writer.i8(0)
-		} else if(imm.isImm8) {
-			writer.i16(0xE367)
-			writer.i8(imm.toInt())
-		} else {
-			invalidEncoding()
-		}
-	}
-
-
-
 	private fun customEncodeINT(node: InsNode) {
 		if(node.size != 1) invalidEncoding()
 		writer.i8(0xCD)
@@ -925,26 +854,20 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun customEncodeRET(node: InsNode) {
-		if(node.size == 0) {
-			writer.i8(0xC3)
-		} else if(node.size == 1) {
-			writer.i8(0xC2)
-			writeImm(node.op1!!, Width.BIT16)
-		} else {
-			invalidEncoding()
+		when(node.size) {
+			0    -> writer.i8(0xC3)
+			1    -> { writer.i8(0xC2); writeImm(node.op1!!, Width.BIT64) }
+			else -> invalidEncoding()
 		}
 	}
 
 
 
 	private fun customEncodeRETF(node: InsNode) {
-		if(node.size == 0) {
-			writer.i8(0xCB)
-		} else if(node.size == 1) {
-			writer.i8(0xCA)
-			writeImm(node.op1!!, Width.BIT16)
-		} else {
-			invalidEncoding()
+		when(node.size) {
+			0    -> writer.i8(0xCB)
+			1    -> { writer.i8(0xCA); writeImm(node.op1!!, Width.BIT64) }
+			else -> invalidEncoding()
 		}
 	}
 
@@ -997,62 +920,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	/**
-	 *    8F/0  POP    M      0111
-	 *    58    POP    O      0101
-	 */
-	private fun customEncodePOP(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val op1 = node.op1!!
-
-		if(op1 is RegNode) {
-			encode1O(Operands.CUSTOM1, op1.value)
-		} else if(op1 is MemNode) {
-			encode1M(Operands.M, op1, 0)
-		} else {
-			invalidEncoding()
-		}
-	}
-
-
-
-	/**
-	 *    FF/6  PUSH   M      0111
-	 *    50    PUSH   O      0101
-	 *    6A    PUSH   I8
-	 *    6668  PUSH   I16
-	 *    68    PUSH   I32
-	 */
-	private fun customEncodePUSH(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val op1 = node.op1!!
-
-		if(op1 is RegNode) {
-			encode1O(Operands.CUSTOM1, op1.value)
-		} else if(op1 is MemNode) {
-			encode1M(Operands.M, op1, 0)
-		} else {
-			val imm = resolveImm(op1)
-
-			if(hasImmReloc) {
-				writer.i8(0x68)
-				writeImm(op1, Width.BIT32, imm)
-			} else if(imm.isImm8) {
-				writer.i8(0x6A)
-				writeImm(op1, Width.BIT8, imm)
-			} else if(imm.isImm16) {
-				writer.i16(0x6866)
-				writeImm(op1, Width.BIT16, imm)
-			} else {
-				writer.i8(0x68)
-				writeImm(op1, Width.BIT32, imm)
-			}
-		}
-	}
-
-
-
-	private fun customEncodeGroup1(node: InsNode) {
+	private fun customEncodeADD(node: InsNode) {
 		if(node.size != 2) invalidEncoding()
 		val op1 = node.op1!!
 		val op2 = node.op2!!
@@ -1100,7 +968,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun customEncodeGroup2(node: InsNode) {
+	private fun customEncodeROL(node: InsNode) {
 		if(node.size != 2) invalidEncoding()
 		val op1 = node.op1!!
 		val op2 = node.op2!!
@@ -1170,74 +1038,260 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun customEncodeJMP(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val op1 = node.op1!!
+	/*
+	REL custom encodings
+	 */
 
-		if(op1 is RegNode) {
-			encode1R(Operands.R, op1.value)
-		} else if(op1 is MemNode) {
-			encode1M(Operands.M, op1, 0)
-		} else {
-			val imm = resolveImm(op1)
 
-			if(hasImmReloc) {
-				writer.i8(0xE9)
-				addRelativeRelocation(Width.BIT32, op1, 0)
-				writer.i32(0)
-			} else if(imm.isImm8) {
-				writer.i8(0xEB)
-				writer.i8(imm.toInt())
-			} else if(imm.isImm32) {
-				writer.i8(0xE9)
-				writer.i32(imm.toInt())
-			} else {
-				invalidEncoding()
-			}
-		}
+
+	private fun encodeRel32(op1: AstNode) {
+		val imm = resolveImm(op1)
+		encodeNone(Operands.CUSTOM1)
+		if(hasImmReloc) addRelativeRelocation(Width.BIT32, op1, 0)
+		else if(!imm.isImm32) invalidEncoding()
+		writer.i32(imm.toInt())
 	}
 
 
 
-	private fun customEncodeCALL(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val op1 = node.op1!!
-
-		if(op1 is RegNode) {
-			encode1R(Operands.R, op1.value)
-		} else if(op1 is MemNode) {
-			encode1M(Operands.M, op1, 0)
-		} else {
-			val imm = resolveImm(op1)
-
-			if(hasImmReloc) {
-				writer.i8(0xE8)
-				addRelativeRelocation(Width.BIT32, op1, 0)
-				writer.i32(0)
-			} else if(imm.isImm32) {
-				writer.i8(0xE8)
-				writer.i32(imm.toInt())
-			} else {
-				invalidEncoding()
-			}
-		}
+	private fun encodeRel8(op1: AstNode) {
+		val imm = resolveImm(op1)
+		encodeNone(Operands.CUSTOM1)
+		if(hasImmReloc) addRelativeRelocation(Width.BIT8, op1, 0)
+		else if(!imm.isImm8) invalidEncoding()
+		writer.i8(imm.toInt())
 	}
 
 
 
-	private fun customEncodeJCC(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val imm = resolveImm(node.op1!!)
+	private fun encodeRel8OrRel32(op1: AstNode) {
+		val imm = resolveImm(op1)
 		if(hasImmReloc) {
 			encodeNone(Operands.CUSTOM2)
-			addRelativeRelocation(Width.BIT32, node.op1, 0)
+			addRelativeRelocation(Width.BIT32, op1, 0)
 			writer.i32(0)
 		} else if(imm.isImm8) {
 			encodeNone(Operands.CUSTOM1)
 			writer.i8(imm.toInt())
-		} else {
+		} else if(imm.isImm32){
 			encodeNone(Operands.CUSTOM2)
 			writer.i32(imm.toInt())
+		} else {
+			invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 *     E2  LOOP    REL8
+	 *     E1  LOOPE   REL8
+	 *     E0  LOOPNE  REL8
+	 */
+	private fun customEncodeLOOP(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+		encodeRel8(node.op1!!)
+	}
+
+
+
+	/**
+	 *     E367  JECXZ  REL8
+	 *     E3    JRCXZ  REL8
+	 */
+	private fun customEncodeJRCXZ(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+		encodeRel8(node.op1!!)
+	}
+
+
+
+	/**
+	 *     E8    CALL   REL32
+	 *     FF/2  CALL   RM     0001
+	 *     FF/3  CALLF  M      0111
+	 */
+	private fun customEncodeCALL(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+
+		when(val op1 = node.op1!!) {
+			is RegNode -> encode1R(Operands.R, op1.value)
+			is MemNode -> encode1M(Operands.M, op1, 0)
+			else       ->
+				if(op1 is SymProviderNode && op1.symbol is DllImportSymbol)
+					encode1M(Operands.M, MemNode(Width.BIT64, op1), 0)
+				else
+					encodeRel32(op1)
+		}
+	}
+
+
+
+
+	/**
+	 *    EB    JMP   REL8
+	 *    E9    JMP   REL32
+	 *    FF/4  JMP   RM     0001
+	 *    FF/5  JMPF  M      0111
+	 */
+	private fun customEncodeJMP(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+
+		when(val op1 = node.op1!!) {
+			is RegNode -> encode1R(Operands.R, op1.value)
+			is MemNode -> encode1M(Operands.M, op1, 0)
+			else       -> encodeRel8OrRel32(op1)
+		}
+	}
+
+
+
+	/**
+	 *    77    JA    REL8
+	 *    870F  JA    REL32
+	 *    ...
+	 */
+	private fun customEncodeJCC(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+		encodeRel8OrRel32(node.op1!!)
+	}
+
+
+
+	/*
+	IN/OUT custom encodings
+	 */
+
+
+
+	private fun encodeINOUT(op1: RegNode, op2: AstNode, opcode1: Int, opcode2: Int) {
+		if(op2 is RegNode) {
+			if(op2.value != Register.DX) invalidEncoding()
+			when(op1.value) {
+				Register.AL  -> writer.i8(opcode1)
+				Register.AX  -> writer.i16(((opcode1 + 1) shl 8) or 0x66)
+				Register.EAX -> writer.i8(opcode1 + 1)
+				else         -> invalidEncoding()
+			}
+		} else {
+			when(op1.value) {
+				Register.AL  -> writer.i8(opcode2)
+				Register.AX  -> writer.i16(((opcode2 + 1) shl 8) or 0x66)
+				Register.EAX -> writer.i8(opcode2 + 1)
+				else         -> invalidEncoding()
+			}
+			writeImm(op2, Width.BIT8)
+		}
+	}
+
+
+
+	private fun customEncodeOUT(node: InsNode) {
+		if(node.size != 2) invalidEncoding()
+		encodeINOUT(node.op2 as? RegNode ?: invalidEncoding(), node.op1!!, 0xEE, 0xE6)
+	}
+
+
+
+	private fun customEncodeIN(node: InsNode) {
+		if(node.size != 2) invalidEncoding()
+		encodeINOUT(node.op1 as? RegNode ?: invalidEncoding(), node.op2!!, 0xEC, 0xE4)
+	}
+
+
+
+	/*
+	PUSH/POP custom encodings
+	 */
+
+
+
+	/**
+	 *     A00F    PUSH   FS
+	 *     A80F    PUSH   GS
+	 *     A00F66  PUSHW  FS
+	 *     A80F66  PUSHW  GS
+	 */
+	private fun customEncodePUSHW(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+		when((node.op1 as? SegRegNode ?: invalidEncoding()).value) {
+			SegReg.FS -> writer.varLengthInt(0xA00F66)
+			SegReg.GS -> writer.varLengthInt(0xA80F66)
+		}
+	}
+
+
+
+	/**
+	 *     A10F    POP    FS
+	 *     A90F    POP    GS
+	 *     A10F66  POPW   FS
+	 *     A90F66  POPW   GS
+	 */
+	private fun customEncodePOPW(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+		when((node.op1 as? SegRegNode ?: invalidEncoding()).value) {
+			SegReg.FS -> writer.varLengthInt(0xA10F66)
+			SegReg.GS -> writer.varLengthInt(0xA90F66)
+		}
+	}
+
+
+
+	/**
+	 *    FF/6  PUSH   M      0111
+	 *    50    PUSH   O      0101
+	 *    6A    PUSH   I8
+	 *    6668  PUSH   I16
+	 *    68    PUSH   I32
+	 */
+	private fun customEncodePUSH(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+
+		when(val op1 = node.op1!!) {
+			is RegNode    -> encode1O(Operands.CUSTOM1, op1.value)
+			is MemNode    -> encode1M(Operands.M, op1, 0)
+			is SegRegNode -> when(op1.value) {
+				SegReg.FS -> writer.i16(0xA00F)
+				SegReg.GS -> writer.i16(0xA80F)
+			}
+			else -> {
+				val imm = resolveImm(op1)
+
+				if(hasImmReloc) {
+					writer.i8(0x68)
+					addDefaultRelocation(Width.BIT32, op1)
+					writer.i32(0)
+				} else if(imm.isImm8) {
+					writer.i8(0x6A)
+					writer.i8(imm.toInt())
+				} else if(imm.isImm16) {
+					writer.i16(0x6866)
+					writer.i16(imm.toInt())
+				} else {
+					writer.i8(0x68)
+					writer.i32(imm.toInt())
+				}
+			}
+		}
+	}
+
+
+
+	/**
+	 *    8F/0  POP    M      0111
+	 *    58    POP    O      0101
+	 */
+	private fun customEncodePOP(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+		when(val op1 = node.op1!!) {
+			is RegNode    -> encode1O(Operands.CUSTOM1, op1.value)
+			is MemNode    -> encode1M(Operands.M, op1, 0)
+			is SegRegNode -> when(op1.value) {
+				SegReg.FS -> writer.i16(0xA10F)
+				SegReg.GS -> writer.i16(0xA90F)
+			}
+			else -> invalidEncoding()
 		}
 	}
 

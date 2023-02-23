@@ -182,10 +182,16 @@ class Parser(private val context: CompilerContext) {
 		var width: Width? = null
 
 		if(token is IdToken) {
-			if(token.value in StringInterner.widths)
+			if(token.value in StringInterner.widths) {
 				width = StringInterner.widths[token.value]
-			if(tokens[pos + 1] == SymToken.LEFT_BRACKET)
-				token = tokens[++pos]
+				if(tokens[pos + 1] == SymToken.LEFT_BRACKET)
+					token = tokens[++pos]
+			} else if(token.value == StringInterner.FS)
+				return SegRegNode(SegReg.FS)
+			else if(token.value == StringInterner.GS)
+				return SegRegNode(SegReg.GS)
+			else
+				return parseExpression()
 		}
 
 		if(token == SymToken.LEFT_BRACKET) {

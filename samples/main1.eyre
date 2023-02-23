@@ -14,5 +14,5 @@ main:
 	mov r8d, 8
 	mov r9, [rsp + 40]
 	mov qword [rsp + 32], 0
-	call qword [Kernel32.WriteFile]
-	call qword [Kernel32.ExitProcess]
+	call Kernel32.WriteFile
+	call Kernel32.ExitProcess

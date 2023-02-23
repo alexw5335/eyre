@@ -29,6 +29,12 @@ data class TempEncoding(
 
 
 
+fun main() {
+	EncodingGenerator(Paths.get("encodings.txt")).gen()
+}
+
+
+
 class EncodingGenerator(private val chars: CharArray) {
 
 

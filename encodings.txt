@@ -46,7 +46,6 @@
 38    CMP  RM_R   1111
 3A    CMP  R_RM   1111
 
-# PUSH I8/16/32 is handled differently
 FF/6  PUSH   M      0111
 50    PUSH   O      0101
 6A    PUSH   I8
@@ -54,15 +53,14 @@ FF/6  PUSH   M      0111
 8F/0  POP    M      0111
 58    POP    O      0101
 
-# How to support 16-bit and 64-bit FS and GS segment register push/pop?
-# A00F    PUSHFS
-# A80F    PUSHGS
-# A00F66  PUSHWFS
-# a80F66  PUSHWGS
-# A10F    POPFS
-# A90F    POPGS
-# A10F66  POPWFS
-# A90F66  POPWGS
+A00F    PUSH   FS
+A80F    PUSH   GS
+A00F66  PUSHW  FS
+A80F66  PUSHW  GS
+A10F    POP    FS
+A90F    POP    GS
+A10F66  POPW   FS
+A90F66  POPW   GS
 
 63    MOVSXD  R64_RM32   0111
 BE0F  MOVSX   R_RM8      0111
@@ -251,10 +249,9 @@ CF66  IRETW
 CF    IRETD
 CF48  IRETQ
 
-# LOOP should not be used
-# E2  LOOP    REL8
-# E1  LOOPE   REL8
-# E0  LOOPNE  REL8
+E2  LOOP    REL8
+E1  LOOPE   REL8
+E0  LOOPNE  REL8
 
 E367  JECXZ  REL8
 E3    JRCXZ  REL8

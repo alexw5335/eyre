@@ -38,6 +38,8 @@ class VarNode(val symbol: VarSymbol, val parts: List<VarPart>) : AstNode
 
 class ResNode(val symbol: ResSymbol, val size: AstNode) : AstNode
 
+class SegRegNode(val value: SegReg) : AstNode
+
 class InsNode(
 	val mnemonic : Mnemonic,
 	val size     : Int,
@@ -55,7 +57,6 @@ Formatting
 
 
 
-@Suppress("REDUNDANT_ELSE_IN_WHEN")
 val AstNode.printString: String get() = when(this) {
 	is LabelNode     -> "label ${symbol.name}:"
 	is StringNode    -> "\"${value.string}\""
@@ -68,6 +69,7 @@ val AstNode.printString: String get() = when(this) {
 	is NamespaceNode -> "namespace ${symbol.name}"
 	is ScopeEndNode  -> "scope end"
 	is MemNode       -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
+	is SegRegNode    -> value.name.lowercase()
 
 	is InsNode -> buildString {
 		append(mnemonic.string)

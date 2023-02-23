@@ -28,6 +28,13 @@ value class Widths(val value: Int) {
 
 
 
+enum class SegReg {
+	FS,
+	GS;
+}
+
+
+
 enum class Register(val value: Int, val width: Width, val flags: Int) {
 
 	RAX(0, Width.BIT64, 2),
@@ -246,7 +253,9 @@ enum class CustomOperands {
 	R_RM_I8,
 	R_RM_I,
 	A_O,
-	O_I
+	O_I,
+	FS,
+	GS,
 
 }
 

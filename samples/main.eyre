@@ -1,9 +1,12 @@
 namespace main
 
-var testing
-	db 1, 2, 3, 4
-	dq 18
-	db "This is a test"
-
 main:
-	test rax, 1
+	push  fs
+	push  gs
+	pushw fs
+	pushw gs
+
+	pop fs
+	pop gs
+	popw fs
+	popw gs

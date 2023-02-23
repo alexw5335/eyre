@@ -72,6 +72,8 @@ object StringInterner : Interner<String, StringIntern>() {
 	val RES    = add("res")
 	val MAIN   = add("main")
 	val SIZEOF = add("sizeof")
+	val FS     = add("fs")
+	val GS     = add("gs")
 
 	val keywords     = createRange(Keyword.values(), Keyword::string)
 	val widths       = createRange(Width.values(), Width::string)
