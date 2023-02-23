@@ -180,7 +180,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseOperand(): AstNode {
 		var token = next
 		var width: Width? = null
-		
+
 		if(token is IdToken) {
 			if(token.value in StringInterner.widths)
 				width = StringInterner.widths[token.value]
@@ -200,28 +200,28 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseInstruction(mnemonic: Mnemonic): InstructionNode {
-		if(atTerminator())
-			return InstructionNode(mnemonic, 0, null, null, null, null)
+	private fun parseInstruction(mnemonic: Mnemonic): InsNode {
+		if(atNewline() || next == EndToken)
+			return InsNode(mnemonic, 0, null, null, null, null)
 
 		val op1 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InstructionNode(mnemonic, 1, op1, null, null, null)
+			return InsNode(mnemonic, 1, op1, null, null, null)
 		pos++
 
 		val op2 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InstructionNode(mnemonic, 2, op1, op2, null, null)
+			return InsNode(mnemonic, 2, op1, op2, null, null)
 		pos++
 
 		val op3 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InstructionNode(mnemonic, 3, op1, op2, op3, null)
+			return InsNode(mnemonic, 3, op1, op2, op3, null)
 		pos++
 
 		val op4 = parseOperand()
 		expectTerminator()
-		return InstructionNode(mnemonic, 4, op1, op2, op3, op4)
+		return InsNode(mnemonic, 4, op1, op2, op3, op4)
 	}
 
 
@@ -278,6 +278,53 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun parseVar() {
+		val name = id()
+		var initialiser = id()
+
+		if(initialiser == StringInterner.RES) {
+			val size = parseExpression()
+			val symbol = ResSymbol(currentScope, name, Section.DATA, 0, 0)
+			addSymbol(symbol)
+			addNode(ResNode(symbol, size))
+			return
+		}
+
+		val parts = ArrayList<VarPart>()
+		var size = 0
+
+		while(true) {
+			if(initialiser !in StringInterner.varWidths) break
+			val width = StringInterner.varWidths[initialiser]
+			val values = ArrayList<AstNode>()
+
+			while(true) {
+				val component = parseExpression()
+				values.add(component)
+
+				size += if(component is StringNode)
+					width.bytes * component.value.string.length
+				else
+					width.bytes
+
+				if(tokens[pos] != SymToken.COMMA) break
+				pos++
+			}
+
+			parts.add(VarPart(width, values))
+			initialiser = (tokens[pos++] as? IdToken)?.value ?: break
+		}
+
+		pos--
+		if(parts.isEmpty()) error("Expecting variable initialiser")
+		val symbol = VarSymbol(currentScope, name, Section.DATA, 0, size)
+		addSymbol(symbol)
+		val node = VarNode(symbol, parts)
+		addNode(node)
+	}
+
+
+
 	private fun parseId(id: StringIntern) {
 		if(next == SymToken.COLON) {
 			pos++
@@ -291,6 +338,7 @@ class Parser(private val context: CompilerContext) {
 			when(StringInterner.keywords[id]) {
 				Keyword.NAMESPACE -> parseNamespace()
 				Keyword.DLLIMPORT -> parseDllImport()
+				Keyword.VAR       -> parseVar()
 				else              -> error("Invalid keyword: $id")
 			}
 		}

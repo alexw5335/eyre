@@ -6,9 +6,20 @@ import kotlin.io.path.relativeTo
 
 
 fun main() {
+	//gen()
+	test()
+}
+
+
+
+private fun test() {
+	Compiler("samples", "main1.eyre").compile()
+}
+
+
+
+private fun gen() {
 	EncodingGenerator(Paths.get("encodings.txt")).gen()
-	//val compiler = Compiler("samples", "main.eyre")
-	//compiler.compile()
 }
 
 

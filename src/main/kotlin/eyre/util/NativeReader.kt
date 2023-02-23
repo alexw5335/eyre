@@ -1,5 +1,7 @@
 package eyre.util
 
+import eyre.swapEndian
+
 @Suppress("Unused", "MemberVisibilityCanBePrivate")
 class NativeReader(val bytes: ByteArray) {
 

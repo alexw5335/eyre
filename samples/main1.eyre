@@ -1,0 +1,18 @@
+namespace main
+
+dllimport Kernel32 {
+	WriteFile
+	ExitProcess
+}
+
+var string db "Message\0"
+
+main:
+	sub rsp, 56
+	mov ecx, -11
+	lea rdx, [string]
+	mov r8d, 8
+	mov r9, [rsp + 40]
+	mov qword [rsp + 32], 0
+	call qword [Kernel32.WriteFile]
+	call qword [Kernel32.ExitProcess]

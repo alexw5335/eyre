@@ -42,7 +42,7 @@ class Resolver(private val context: CompilerContext) {
 			when(node) {
 				is NamespaceNode   -> pushScope(node.symbol.thisScope)
 				is ScopeEndNode    -> popScope()
-				is InstructionNode -> {
+				is InsNode -> {
 					resolveSymbols(node.op1 ?: continue)
 					resolveSymbols(node.op2 ?: continue)
 					resolveSymbols(node.op3 ?: continue)
@@ -61,8 +61,10 @@ class Resolver(private val context: CompilerContext) {
 			is UnaryNode  -> resolveSymbols(node.node)
 			is BinaryNode -> { resolveSymbols(node.left); resolveSymbols(node.right) }
 			is MemNode    -> resolveSymbols(node.value)
-			is SymNode    -> resolveSymbol(node.name)
-			is DotNode    -> resolveDot(node)
+			is SymNode    -> node.symbol = resolveSymbol(node.name)
+			is DotNode    -> node.right.symbol = resolveDot(node)
+			is VarNode    -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
+			is ResNode    -> resolveSymbols(node.size)
 			else          -> { }
 		}
 	}

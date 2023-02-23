@@ -42,3 +42,19 @@ class DllSymbol(
 	override val thisScope: ScopeIntern,
 	val symbols: ArrayList<DllImportSymbol>
 ) : ScopedSymbol
+
+class VarSymbol(
+	override val scope   : ScopeIntern,
+	override val name    : StringIntern,
+	override var section : Section,
+	override var pos     : Int,
+	val size             : Int
+) : PosSymbol
+
+class ResSymbol(
+	override val scope   : ScopeIntern,
+	override val name    : StringIntern,
+	override var section : Section,
+	override var pos     : Int,
+	var size             : Int
+) : PosSymbol

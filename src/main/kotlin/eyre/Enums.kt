@@ -12,6 +12,7 @@ enum class Width(val string: String, val varString: String, val bytes: Int) {
 	val bit = 1 shl ordinal
 	val min = -(1 shl ((bytes shl 3) - 1))
 	val max = (1 shl ((bytes shl 3) - 1)) - 1
+	val immLength = bytes.coerceAtMost(4)
 
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
@@ -109,6 +110,8 @@ enum class Register(val value: Int, val width: Width, val flags: Int) {
 	val isSP get() = flags and 4 != 0
 	val rex8 get() = flags and 8 != 0
 	val noRex8 get() = flags and 16 != 0
+	val invalidBase get() = value == 5
+	val isSpOr12 get() = value == 4
 
 }
 
@@ -127,43 +130,6 @@ enum class Section {
 
 	/** .idata, initialised, read */
 	IDATA;
-
-}
-
-
-
-enum class Mnemonic {
-
-	ADD, OR, ADC, SBB, AND, SUB, XOR, CMP, ROL, ROR, RCL, RCR, SHL, SAL, SHR, SAR,
-	CBW, CWDE, CDQE, CWD, CDQ, CQO, CLC, CLD, CLI, CLTS, CMC, STC, STI, STD, BSWAP,
-	CMPSB, CMPSW, CMPSD, CMPSQ, SCASB, SCASW, SCASD, SCASQ, STOSB, STOSW, STOSD, STOSQ,
-	LODSB, LODSW, LODSD, LODSQ, MOVSB, MOVSW, MOVSD, MOVSQ, INSB, INSW, INSD,
-	OUTSB, OUTSW, OUTSD, CPUID, RET, RETF, SHLD, SHRD, MOVZX, MOVSX, MOVSXD,
-	CMOVA, CMOVAE, CMOVB, CMOVBE, CMOVC, CMOVE, CMOVG, CMOVGE, CMOVL, CMOVLE, CMOVNA,
-	CMOVNAE, CMOVNB, CMOVNBE, CMOVNC, CMOVNE, CMOVNG, CMOVNGE, CMOVNL, CMOVNLE, CMOVNO,
-	CMOVNP, CMOVNS, CMOVNZ, CMOVO, CMOVP, CMOVPE, CMOVPO, CMOVS, CMOVZ,
-	SETA, SETAE, SETB, SETBE, SETC, SETE, SETG, SETGE, SETL, SETLE, SETNA, SETNAE,
-	SETNB, SETNBE, SETNC, SETNE, SETNG, SETNGE, SETNL, SETNLE, SETNO, SETNP, SETNS,
-	SETNZ, SETO, SETP, SETPE, SETPO, SETS, SETZ,
-	JA, JAE, JB, JBE, JC, JE, JG, JGE, JL, JLE, JNA, JNAE, JNB, JNBE, JNC, JNE,
-	JNG, JNGE, JNL, JNLE, JNO, JNP, JNS, JNZ, JO, JP, JPE, JPO, JS, JZ,
-	JCXZ, JECXZ, JRCXZ, LOOP, LOOPE, LOOPNE, CALL, CALLF, JMP, JMPF,
-	PUSH, POP, POPW_FS, PUSHW_FS, PUSHW_GS, PUSH_GS, POP_FS, PUSH_FS, POP_GS, POPW_GS,
-	INT1, INT3, INT, HLT, INC, DEC, PUSHF, PUSHFQ, LAHF, IN, OUT, WAIT, FWAIT,
-	NOP, LEA, XCHG, MOV, IRETW, IRETD, IRETQ, TEST, NOT, NEG, MUL, IMUL, DIV, IDIV, MFENCE,
-	LEAVE, LEAVEW, ENTER, ENTERW, BT, BTC, BTR, BTS, BSF, BSR, RSM, MOVNTI,
-	SLDT, LLDT, STR, LTR, SGDT, SIDT, VERR, VERW, VMCALL, VMLAUNCH, VMRESUME, VMXOFF,
-	FADD, FADDP, FIADD, FMUL, FMULP, FIMUL, FCOM, FCOMP, FCOMPP, FSUB, FSUBP, FISUB,
-	FSUBR, FSUBRP, FISUBR, FDIV, FDIVP, FIDIV, FDIVR, FDIVRP, FIDVR, FLD, FXCH, FST,
-	FSTP, FNOP, FLDENV, FCHS, FABS, FTST, FXAM, FLDCW, FLD1, FLDL2T, FLDL2E, FLDPI,
-	FLDLG2, FLDLN2, FLDZ, FSTENV, FNSTENV, F2XM1, FYL2X, FPTAN, FPATAN, FXTRACT, FPREM1,
-	FDECSTP, FINCSTP, FPREM, FYL2XP1, FSQRT, FSINCOS, FRNDINT, FSCALE, FSIN, FCOS, FNSTCW,
-	FSTCW, FCMOVB, FCMOVE, FCMOVBE, FCMOVU, FCMOVNB, FCMOVNE, FCMOVNBE, FCMOVNU, FUCOM,
-	FUCOMP, FUCOMPP, FILD, FISTTP, FCLEX, FNCLEX, FINIT, FNINIT, FCOMI, FCOMIP, FUCOMI,
-	FUCOMIP, FFREE, FRSTOR, FICOM, FICOMP, FSAVE, FNSAVE, FSTSW, FNSTSW, FIST, FISTP, FBSTP,
-	RDRAND, RDSEED;
-
-	val string = name.lowercase()
 
 }
 
@@ -198,6 +164,10 @@ enum class BinaryOp(
 	AND("&",  1, { a, b -> a and b }),
 	XOR("^",  1, { a, b -> a xor b }),
 	OR( "|",  1, { a, b -> a or b });
+
+
+	val isLeftRegValid get() = this == ADD || this == SUB
+	val isRightRegValid get() = this == ADD
 
 }
 
@@ -237,7 +207,7 @@ enum class Keyword {
 
 
 
-enum class Operands(val isCustom: Boolean = false) {
+enum class Operands {
 
 	NONE,
 	R,
@@ -249,6 +219,7 @@ enum class Operands(val isCustom: Boolean = false) {
 	M_I,
 	CUSTOM1,
 	CUSTOM2,
+	CUSTOM3,
 
 }
 
@@ -268,6 +239,14 @@ enum class CustomOperands {
 	R64_RM32,
 	R_RM8,
 	R_RM16,
+	I16,
+	A_D,
+	I_A,
+	D_A,
+	R_RM_I8,
+	R_RM_I,
+	A_O,
+	O_I
 
 }
 
@@ -279,3 +258,23 @@ enum class CompoundOperands(vararg val operandsList: Operands) {
 	R_RM(Operands.R_R, Operands.R_M),
 	RM_I(Operands.R_I, Operands.M_I),
 }
+
+
+
+class Encoding(
+	val opcode    : Int,
+	val extension : Int,
+	val prefix    : Int,
+	val widths    : Widths
+)
+
+
+
+class EncodingGroup(
+	val operandsBits : Int,
+	val encodings    : List<Encoding>,
+)
+
+
+
+class SectionData(val size: Int, val rva: Int, val pos: Int)

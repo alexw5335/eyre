@@ -2,13 +2,18 @@ package eyre
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
+import kotlin.io.path.createDirectory
+import kotlin.io.path.exists
+import kotlin.io.path.notExists
 
 
 
 class TempGroup(
 	val mnemonic: String,
 	val encodings: ArrayList<TempEncoding>,
-	var customCount: Int
+	var customCount: Int,
+	var operandsBits: Int
 )
 
 
@@ -31,7 +36,7 @@ class EncodingGenerator(private val chars: CharArray) {
 
 
 
-	private val groups = HashMap<String, TempGroup>()
+	private val groups = LinkedHashMap<String, TempGroup>()
 
 	private val operandsMap = Operands.values().associateBy { it.name }
 
@@ -46,12 +51,6 @@ class EncodingGenerator(private val chars: CharArray) {
 
 
 	fun gen() {
-		read()
-	}
-
-
-
-	private fun read() {
 		while(pos < chars.size) {
 			when(chars[pos]) {
 				'#'  -> skipLine()
@@ -62,6 +61,38 @@ class EncodingGenerator(private val chars: CharArray) {
 				';'  -> break
 				else -> readEncoding()
 			}
+		}
+
+		val dirPath = Paths.get("prev")
+		if(dirPath.notExists()) dirPath.createDirectory()
+		val encodingsPath = Paths.get("src/main/kotlin/eyre/Encodings.kt")
+		val backupPath = dirPath.resolve("Encodings.kt")
+		if(encodingsPath.exists()) {
+			Files.deleteIfExists(backupPath)
+			Files.copy(encodingsPath, dirPath.resolve("Encodings.kt"))
+		}
+
+		Files.newBufferedWriter(encodingsPath).use {
+			it.appendLine("package eyre\n")
+			it.appendLine("enum class Mnemonic {")
+			for((mnemonic, _) in groups)
+				it.appendLine("\t$mnemonic,")
+			it.appendLine("\t;")
+			it.appendLine("\tval string = name.lowercase()")
+			it.appendLine("}\n")
+
+			it.appendLine("val groups = listOf(")
+			for((_, group) in groups) {
+				group.encodings.sortBy { e -> e.operands.ordinal }
+				it.append("\tEncodingGroup(${group.operandsBits}, listOf(")
+				for(encoding in group.encodings) {
+					it.append("Encoding(${encoding.opcode}, ${encoding.extension}, ${encoding.prefix}, Widths(${encoding.widths.value}))")
+					if(encoding != group.encodings.last()) it.append(", ")
+				}
+				it.appendLine(")),")
+			}
+			it.appendLine(")")
+
 		}
 	}
 
@@ -92,10 +123,11 @@ class EncodingGenerator(private val chars: CharArray) {
 			}
 		}
 
-		skipWhitespace()
+		skipSpaces()
 		val mnemonic = readUntil { it.isWhitespace() }
-		skipWhitespace()
+		skipSpaces()
 		val operandsString = if(atNewline()) Operands.NONE.name else readUntil { it.isWhitespace() }
+		skipSpaces()
 		val widths = readWidths()
 
 		operandsMap[operandsString]?.let {
@@ -107,6 +139,7 @@ class EncodingGenerator(private val chars: CharArray) {
 			val operands = when(val count = groups[mnemonic]?.customCount ?: 0) {
 				0    -> Operands.CUSTOM1
 				1    -> Operands.CUSTOM2
+				2    -> Operands.CUSTOM3
 				else -> error("Too many custom operands ($count, line $lineCount) ${groups[mnemonic]?.encodings!!.joinToString()}")
 			}
 
@@ -129,14 +162,10 @@ class EncodingGenerator(private val chars: CharArray) {
 		if(atNewline()) return Widths(0)
 		var value = 0
 
-		while(true) {
-			val char = chars[pos++]
-
-			if(char.isWhitespace()) break
-
-			value = when(char) {
-				'0'  -> value shl 2
-				'1'  -> (value shl 2) or 1
+		for(i in 0 until 4) {
+			when(chars[pos++]) {
+				'1' -> value = value or (1 shl i)
+				'0' -> continue
 				else -> error("Invalid widths char (line $lineCount)")
 			}
 		}
@@ -147,10 +176,12 @@ class EncodingGenerator(private val chars: CharArray) {
 
 
 	private fun addEncoding(encoding: TempEncoding) {
-		val group = groups.getOrPut(encoding.mnemonic) { TempGroup(encoding.mnemonic, ArrayList(), 0) }
+		val group = groups.getOrPut(encoding.mnemonic) { TempGroup(encoding.mnemonic, ArrayList(), 0, 0) }
+		if(group.encodings.any { it.operands == encoding.operands }) return
 		if(encoding.operands == Operands.CUSTOM1 || encoding.operands == Operands.CUSTOM2)
 			group.customCount++
 		group.encodings.add(encoding)
+		group.operandsBits = group.operandsBits or (1 shl encoding.operands.ordinal)
 	}
 
 
@@ -172,8 +203,8 @@ class EncodingGenerator(private val chars: CharArray) {
 
 
 
-	private fun skipWhitespace() {
-		while(chars[pos].isWhitespace()) pos++
+	private fun skipSpaces() {
+		while(chars[pos] == ' ' || chars[pos] == '\t') pos++
 	}
 
 

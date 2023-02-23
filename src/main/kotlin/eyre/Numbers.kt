@@ -1,4 +1,4 @@
-package eyre.util
+package eyre
 
 
 
@@ -145,3 +145,11 @@ fun ByteArray.printHex() {
 	}
 	if(size % 16 != 0) println()
 }
+
+
+
+val Long.isImm8 get() = this in Byte.MIN_VALUE..Byte.MAX_VALUE
+val Long.isImm16 get() = this in Short.MIN_VALUE..Short.MAX_VALUE
+val Long.isImm32 get() = this in Int.MIN_VALUE..Int.MAX_VALUE
+val Int.isImm8 get() = this in Byte.MIN_VALUE..Byte.MAX_VALUE
+val Int.isImm16 get() = this in Short.MIN_VALUE..Short.MAX_VALUE

@@ -1,5 +1,7 @@
 package eyre.util
 
+import eyre.Width
+import eyre.swapEndian
 import java.nio.charset.Charset
 import kotlin.math.max
 import kotlin.math.min
@@ -67,10 +69,17 @@ class NativeWriter(bytes: ByteArray) {
 
 
 
-	fun int(value: Int) {
+	fun varLengthInt(value: Int) {
 		ensureCapacity(4)
 		Unsafe.instance.putInt(bytes, pos + 16L, value)
 		pos += ((39 - (value or 1).countLeadingZeroBits()) and -8) shr 3
+	}
+
+
+
+	fun seek(pos: Int) {
+		this.pos = pos
+		ensureCapacity()
 	}
 
 
@@ -222,15 +231,20 @@ class NativeWriter(bytes: ByteArray) {
 
 
 
+	fun ascii(string: String) {
+		for(c in string) i8(c.code)
+	}
+
+
+
 	fun asciiNT(string: String) {
-		for(c in string)
-			i8(c.code)
+		for(c in string) i8(c.code)
 		i8(0)
 	}
 
 
 
-	fun ascii8(string: String) {
+	fun ascii64(string: String) {
 		ensureCapacity(8)
 		for(i in 0 until min(8, string.length))
 			i8(string[i].code)
@@ -277,6 +291,38 @@ class NativeWriter(bytes: ByteArray) {
 	fun advanceTo(pos: Int) {
 		ensureCapacity(pos - this.pos)
 		this.pos = pos
+	}
+
+
+
+	/*
+	Temp
+	 */
+
+
+
+	fun writeWidth(width: Width, value: Int) {
+		if(value !in width) error("Value out of range")
+
+		when(width) {
+			Width.BIT8  -> i8(value)
+			Width.BIT16 -> i16(value)
+			Width.BIT32 -> i32(value)
+			else        -> error("Value out of range")
+		}
+	}
+
+
+
+	fun writeWidth(width: Width, value: Long) {
+		if(value !in width) error("Value out of range")
+
+		when(width) {
+			Width.BIT8  -> i8(value.toInt())
+			Width.BIT16 -> i16(value.toInt())
+			Width.BIT32 -> i32(value.toInt())
+			Width.BIT64 -> i64(value)
+		}
 	}
 
 

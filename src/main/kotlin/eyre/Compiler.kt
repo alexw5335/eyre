@@ -1,5 +1,8 @@
 package eyre
 
+import java.nio.file.Files
+import java.nio.file.Paths
+
 /**
  * Token and node lines aren't working properly
  */
@@ -12,10 +15,11 @@ class Compiler(private val context: CompilerContext) {
 
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
-			printTokens(srcFile)
+			//printTokens(srcFile)
 			parser.parse(srcFile)
 			printNodes(srcFile)
 			printSymbols()
+			println()
 		}
 
 		val resolver = Resolver(context)
@@ -23,6 +27,48 @@ class Compiler(private val context: CompilerContext) {
 
 		val assembler = Assembler(context)
 		assembler.assemble()
+
+		val linker = Linker(context)
+		linker.link()
+		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
+
+		//dumpbin()
+
+		disassemble()
+	}
+
+
+
+	private fun run(vararg params: String) {
+		val process = Runtime.getRuntime().exec(params)
+		process.waitFor()
+		process.errorReader().readText().let {
+			if(it.isNotEmpty()) {
+				print("\u001B[31m$it\\u001B[0m")
+				error("Process failed")
+			}
+		}
+
+		process.inputReader().readText().let {
+			if(it.isNotEmpty()) print(it)
+		}
+	}
+
+
+
+	private fun dumpbin() {
+		printHeader("DUMPBIN")
+		run("dumpbin", "/ALL", "test.exe")
+	}
+
+
+
+	private fun disassemble() {
+		val pos = context.sections[Section.TEXT.ordinal]!!.pos
+		val size = context.sections[Section.TEXT.ordinal]!!.size
+		Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
+		printHeader("DISASSEMBLY")
+		run("ndisasm", "-b64", "test.bin")
 	}
 
 
@@ -40,9 +86,11 @@ class Compiler(private val context: CompilerContext) {
 		printHeader("TOKENS (${srcFile.relPath}):")
 
 		for(i in 0 until srcFile.tokens.size) {
+			val line = srcFile.tokenLines[i]
 			print("Line ")
-			print(srcFile.tokenLines[i])
-			print("   ")
+			print(line)
+			for(j in 0 until (5 - line.toString().length))
+				print(' ')
 
 			val token = srcFile.tokens[i]
 
@@ -68,9 +116,11 @@ class Compiler(private val context: CompilerContext) {
 		printHeader("NODES (${srcFile.relPath}):")
 
 		for((index, node) in srcFile.nodes.withIndex()) {
+			val line = srcFile.nodeLines[index]
 			print("Line ")
-			print(srcFile.nodeLines[index])
-			print("   ")
+			print(line)
+			for(i in 0 until (5 - line.toString().length))
+				print(' ')
 			println(node.printString)
 		}
 

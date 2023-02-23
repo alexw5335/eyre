@@ -221,9 +221,9 @@ class Lexer {
 		while(true) {
 			val mask = when(val char = chars[pos++]) {
 				'_'         -> continue
-				in '0'..'9' -> char.code - 48L
-				in 'a'..'z' -> char.code - 75L
-				in 'A'..'Z' -> char.code - 107L
+				in '0'..'9' -> char.code - '0'.code.toLong()
+				in 'a'..'z' -> char.code - 'a'.code.toLong() + 10
+				in 'A'..'Z' -> char.code - 'A'.code.toLong() + 10
 				else        -> break
 			}
 
