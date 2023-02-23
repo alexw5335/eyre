@@ -1,10 +1,4 @@
 namespace main
 
-dllimport Kernel32 {
-	WriteFile
-	ExitProcess
-}
-
 main:
-	call qword [Kernel32.WriteFile]
-	call qword [Kernel32.ExitProcess]
+	test rax, 1
