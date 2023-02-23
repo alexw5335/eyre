@@ -805,31 +805,22 @@ class Assembler(private val context: CompilerContext) {
 		val op1 = node.op1!!
 		val op2 = node.op2!!
 
-		if(op1 is RegNode) {
-			val r1 = op1.value
-			if(op2 is RegNode) {
-				val r2 = op2.value
-				if(r1.width != r2.width) invalidEncoding()
-				if(r1.isA) {
-					encode1O(Operands.CUSTOM1, r2)
-				} else if(r2.isA) {
-					encode1O(Operands.CUSTOM1, r1)
-				} else {
-					encode2RR(Operands.R_R, r1, r2)
+		when(op1) {
+			is RegNode -> when(op2) {
+				is RegNode -> when {
+					op1.width != op2.width -> invalidEncoding()
+					op1.value.isA          -> encode1O(Operands.CUSTOM1, op2.value)
+					op2.value.isA          -> encode1O(Operands.CUSTOM1, op1.value)
+					else                   -> encode2RR(Operands.R_R, op1.value, op2.value)
 				}
-			} else if(op2 is MemNode) {
-				encodeExact2RM(r1, op2)
-			} else {
-				invalidEncoding()
+				is MemNode -> encodeExact2RM(op1.value, op2)
+				else       -> invalidEncoding()
 			}
-		} else if(op1 is MemNode) {
-			if(op2 is RegNode) {
-				encodeExact2MR(op1, op2.value)
-			} else {
-				invalidEncoding()
+			is MemNode -> when(op2) {
+				is RegNode -> encodeExact2MR(op1, op2.value)
+				else       -> invalidEncoding()
 			}
-		} else {
-			invalidEncoding()
+			else -> invalidEncoding()
 		}
 	}
 

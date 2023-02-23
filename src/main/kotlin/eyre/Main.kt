@@ -13,7 +13,7 @@ fun main() {
 
 
 private fun test() {
-	Compiler("samples", "main1.eyre").compile()
+	Compiler("samples", "main.eyre").compile()
 }
 
 
