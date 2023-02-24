@@ -16,6 +16,11 @@ interface PosSymbol : Symbol {
 	var pos: Int
 }
 
+interface ConstSymbol : Symbol {
+	var resolved: Boolean
+	var resolving: Boolean
+}
+
 class Namespace(
 	override val scope: ScopeIntern,
 	override val name: StringIntern,
@@ -37,11 +42,10 @@ class DllImportSymbol(
 ) : PosSymbol
 
 class DllSymbol(
-	override val scope: ScopeIntern,
-	override val name: StringIntern,
-	override val thisScope: ScopeIntern,
-	val symbols: ArrayList<DllImportSymbol>
-) : ScopedSymbol
+	override val scope : ScopeIntern,
+	override val name  : StringIntern,
+	val imports        : ArrayList<DllImportSymbol>
+) : Symbol
 
 class VarSymbol(
 	override val scope   : ScopeIntern,
@@ -58,3 +62,39 @@ class ResSymbol(
 	override var pos     : Int,
 	var size             : Int
 ) : PosSymbol
+
+class IntSymbol(
+	override val scope : ScopeIntern,
+	override val name  : StringIntern,
+	var value          : Long
+) : Symbol
+
+class ConstIntSymbol(
+	override val scope    : ScopeIntern,
+	override val name     : StringIntern,
+	override var resolved : Boolean = false,
+	var value             : Long = 0L
+) : ConstSymbol {
+	lateinit var node: ConstNode
+	override var resolving = false
+}
+
+class EnumEntrySymbol(
+	override val scope: ScopeIntern,
+	override val name: StringIntern,
+	override var resolved: Boolean = false,
+	var value: Long = 0L
+) : ConstSymbol {
+	lateinit var parent: EnumSymbol
+	override var resolving = false
+}
+
+class EnumSymbol(
+	override val scope     : ScopeIntern,
+	override val name      : StringIntern,
+	override val thisScope : ScopeIntern,
+	val entries            : List<EnumEntrySymbol>
+) : ScopedSymbol {
+	lateinit var node: EnumNode
+}
+

@@ -1,7 +1,5 @@
 package eyre
 
-import eyre.util.NativeWriter
-
 
 
 class Linker(private val context: CompilerContext) {
@@ -182,13 +180,13 @@ class Linker(private val context: CompilerContext) {
 
 			val iltPos = writer.pos
 
-			writer.zero(dll.symbols.size * 8 + 8)
+			writer.zero(dll.imports.size * 8 + 8)
 
 			val iatPos = writer.pos
 
-			writer.zero(dll.symbols.size * 8 + 8)
+			writer.zero(dll.imports.size * 8 + 8)
 
-			for((importIndex, import) in dll.symbols.withIndex()) {
+			for((importIndex, import) in dll.imports.withIndex()) {
 				writer.i32(iltPos + importIndex * 8, writer.pos - offset)
 				writer.i32(iatPos + importIndex * 8, writer.pos - offset)
 				writer.i16(0)
@@ -236,10 +234,13 @@ class Linker(private val context: CompilerContext) {
 
 		if(node is SymProviderNode) {
 			val symbol = node.symbol ?: error("Unresolved symbol")
-			if(symbol is PosSymbol) {
-				return symbol.address.toLong()
-			} else {
-				error("Non-positional symbols are not yet supported")
+
+			return when(symbol) {
+				is PosSymbol       -> symbol.address.toLong()
+				is IntSymbol       -> symbol.value
+				is ConstIntSymbol  -> symbol.value
+				is EnumEntrySymbol -> symbol.value
+				else               -> error("Invalid symbol: $symbol")
 			}
 		}
 

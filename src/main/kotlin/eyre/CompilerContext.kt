@@ -7,6 +7,8 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val symbols = SymbolTable()
 
+	val constSymbols = ArrayList<Symbol>()
+
 	val dlls = ArrayList<DllSymbol>()
 
 	var entryPoint: PosSymbol? = null

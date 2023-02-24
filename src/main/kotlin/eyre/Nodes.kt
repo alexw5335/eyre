@@ -12,6 +12,8 @@ interface SymProviderNode : AstNode {
 
 object ScopeEndNode : AstNode
 
+object NullNode : AstNode
+
 class NamespaceNode(val symbol: Namespace) : AstNode
 
 class IntNode(val value: Long) : AstNode
@@ -39,6 +41,14 @@ class VarNode(val symbol: VarSymbol, val parts: List<VarPart>) : AstNode
 class ResNode(val symbol: ResSymbol, val size: AstNode) : AstNode
 
 class SegRegNode(val value: SegReg) : AstNode
+
+class RefNode(val left: SymProviderNode, val right: SymNode) : SymProviderNode { override val symbol get() = right.symbol }
+
+class ConstNode(val symbol: ConstIntSymbol, val value: AstNode) : AstNode
+
+class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode)
+
+class EnumNode(val symbol: EnumSymbol, val entries: List<EnumEntryNode>) : AstNode
 
 class InsNode(
 	val mnemonic : Mnemonic,
@@ -89,6 +99,15 @@ val AstNode.printString: String get() = when(this) {
 
 	is VarNode -> "var ${symbol.name} ${parts.joinToString { "${it.width.varString} ${it.nodes.joinToString { it2 -> it2.printString }}" }}"
 	is ResNode -> "var ${symbol.name} res ${size.printString}"
+	is RefNode -> "${left.printString}::${right.printString}"
+	is ConstNode -> "const ${symbol.name} = ${value.printString}"
+
+	is EnumNode -> buildString {
+		appendLine("enum ${symbol.name} {")
+		for(e in entries)
+			appendLine("\t${e.symbol.name} = ${e.value.printString}")
+		append('}')
+	}
 
 	else             -> toString()
 }

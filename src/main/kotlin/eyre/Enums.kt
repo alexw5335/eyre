@@ -2,13 +2,14 @@ package eyre
 
 
 
-enum class Width(val string: String, val varString: String, val bytes: Int) {
+enum class Width(val varString: String, val bytes: Int) {
 
-	BIT8("byte", "db", 1),
-	BIT16("word", "dw", 2),
-	BIT32("dword", "dd", 4),
-	BIT64("qword", "dq", 8);
+	BYTE("db", 1),
+	WORD("dw", 2),
+	DWORD("dd", 4),
+	QWORD("dq", 8);
 
+	val string = name.lowercase()
 	val bit = 1 shl ordinal
 	val min = -(1 shl ((bytes shl 3) - 1))
 	val max = (1 shl ((bytes shl 3) - 1)) - 1
@@ -37,78 +38,78 @@ enum class SegReg {
 
 enum class Register(val value: Int, val width: Width, val flags: Int) {
 
-	RAX(0, Width.BIT64, 2),
-	RCX(1, Width.BIT64, 0),
-	RDX(2, Width.BIT64, 0),
-	RBX(3, Width.BIT64, 0),
-	RSP(4, Width.BIT64, 4),
-	RBP(5, Width.BIT64, 0),
-	RSI(6, Width.BIT64, 0),
-	RDI(7, Width.BIT64, 0),
-	R8 (0, Width.BIT64, 1),
-	R9 (1, Width.BIT64, 1),
-	R10(2, Width.BIT64, 1),
-	R11(3, Width.BIT64, 1),
-	R12(4, Width.BIT64, 1),
-	R13(5, Width.BIT64, 1),
-	R14(6, Width.BIT64, 1),
-	R15(7, Width.BIT64, 1),
+	RAX(0, Width.QWORD, 2),
+	RCX(1, Width.QWORD, 0),
+	RDX(2, Width.QWORD, 0),
+	RBX(3, Width.QWORD, 0),
+	RSP(4, Width.QWORD, 4),
+	RBP(5, Width.QWORD, 0),
+	RSI(6, Width.QWORD, 0),
+	RDI(7, Width.QWORD, 0),
+	R8 (0, Width.QWORD, 1),
+	R9 (1, Width.QWORD, 1),
+	R10(2, Width.QWORD, 1),
+	R11(3, Width.QWORD, 1),
+	R12(4, Width.QWORD, 1),
+	R13(5, Width.QWORD, 1),
+	R14(6, Width.QWORD, 1),
+	R15(7, Width.QWORD, 1),
 
-	EAX (0, Width.BIT32, 2),
-	ECX (1, Width.BIT32, 0),
-	EDX (2, Width.BIT32, 0),
-	EBX (3, Width.BIT32, 0),
-	ESP (4, Width.BIT32, 4),
-	EBP (5, Width.BIT32, 0),
-	ESI (6, Width.BIT32, 0),
-	EDI (7, Width.BIT32, 0),
-	R8D (0, Width.BIT32, 1),
-	R9D (1, Width.BIT32, 1),
-	R10D(2, Width.BIT32, 1),
-	R11D(3, Width.BIT32, 1),
-	R12D(4, Width.BIT32, 1),
-	R13D(5, Width.BIT32, 1),
-	R14D(6, Width.BIT32, 1),
-	R15D(7, Width.BIT32, 1),
+	EAX (0, Width.DWORD, 2),
+	ECX (1, Width.DWORD, 0),
+	EDX (2, Width.DWORD, 0),
+	EBX (3, Width.DWORD, 0),
+	ESP (4, Width.DWORD, 4),
+	EBP (5, Width.DWORD, 0),
+	ESI (6, Width.DWORD, 0),
+	EDI (7, Width.DWORD, 0),
+	R8D (0, Width.DWORD, 1),
+	R9D (1, Width.DWORD, 1),
+	R10D(2, Width.DWORD, 1),
+	R11D(3, Width.DWORD, 1),
+	R12D(4, Width.DWORD, 1),
+	R13D(5, Width.DWORD, 1),
+	R14D(6, Width.DWORD, 1),
+	R15D(7, Width.DWORD, 1),
 
-	AX  (0, Width.BIT16, 2),
-	CX  (1, Width.BIT16, 0),
-	DX  (2, Width.BIT16, 0),
-	BX  (3, Width.BIT16, 0),
-	SP  (4, Width.BIT16, 4),
-	BP  (5, Width.BIT16, 0),
-	SI  (6, Width.BIT16, 0),
-	DI  (7, Width.BIT16, 0),
-	R8W (0, Width.BIT16, 1),
-	R9W (1, Width.BIT16, 1),
-	R10W(2, Width.BIT16, 1),
-	R11W(3, Width.BIT16, 1),
-	R12W(4, Width.BIT16, 1),
-	R13W(5, Width.BIT16, 1),
-	R14W(6, Width.BIT16, 1),
-	R15W(7, Width.BIT16, 1),
+	AX  (0, Width.WORD, 2),
+	CX  (1, Width.WORD, 0),
+	DX  (2, Width.WORD, 0),
+	BX  (3, Width.WORD, 0),
+	SP  (4, Width.WORD, 4),
+	BP  (5, Width.WORD, 0),
+	SI  (6, Width.WORD, 0),
+	DI  (7, Width.WORD, 0),
+	R8W (0, Width.WORD, 1),
+	R9W (1, Width.WORD, 1),
+	R10W(2, Width.WORD, 1),
+	R11W(3, Width.WORD, 1),
+	R12W(4, Width.WORD, 1),
+	R13W(5, Width.WORD, 1),
+	R14W(6, Width.WORD, 1),
+	R15W(7, Width.WORD, 1),
 
-	AL  (0, Width.BIT8, 2),
-	CL  (1, Width.BIT8, 0),
-	DL  (2, Width.BIT8, 0),
-	BL  (3, Width.BIT8, 0),
-	AH  (4, Width.BIT8, 8),
-	CH  (5, Width.BIT8, 8),
-	DH  (6, Width.BIT8, 8),
-	BH  (7, Width.BIT8, 8),
-	R8B (0, Width.BIT8, 1),
-	R9B (1, Width.BIT8, 1),
-	R10B(2, Width.BIT8, 1),
-	R11B(3, Width.BIT8, 1),
-	R12B(4, Width.BIT8, 1),
-	R13B(5, Width.BIT8, 1),
-	R14B(6, Width.BIT8, 1),
-	R15B(7, Width.BIT8, 1),
+	AL  (0, Width.BYTE, 2),
+	CL  (1, Width.BYTE, 0),
+	DL  (2, Width.BYTE, 0),
+	BL  (3, Width.BYTE, 0),
+	AH  (4, Width.BYTE, 8),
+	CH  (5, Width.BYTE, 8),
+	DH  (6, Width.BYTE, 8),
+	BH  (7, Width.BYTE, 8),
+	R8B (0, Width.BYTE, 1),
+	R9B (1, Width.BYTE, 1),
+	R10B(2, Width.BYTE, 1),
+	R11B(3, Width.BYTE, 1),
+	R12B(4, Width.BYTE, 1),
+	R13B(5, Width.BYTE, 1),
+	R14B(6, Width.BYTE, 1),
+	R15B(7, Width.BYTE, 1),
 
-	SPL(4, Width.BIT8, 20),
-	BPL(5, Width.BIT8, 16),
-	SIL(6, Width.BIT8, 16),
-	DIL(7, Width.BIT8, 16);
+	SPL(4, Width.BYTE, 20),
+	BPL(5, Width.BYTE, 16),
+	SIL(6, Width.BYTE, 16),
+	DIL(7, Width.BYTE, 16);
 
 	val string = name.lowercase()
 
@@ -161,7 +162,8 @@ enum class BinaryOp(
 	val calculate       : (Long, Long) -> Long
 ) {
 
-	DOT(null, 5, { _, _ -> 0L }),
+	DOT(null, 6, { _, _ -> 0L }),
+	REF(null, 5, { _,_ -> 0L }),
 	MUL("*",  4, { a, b -> a * b }),
 	DIV("/",  4, { a, b -> a / b }),
 	ADD("+",  3, { a, b -> a + b }),
@@ -270,7 +272,7 @@ enum class CompoundOperands(vararg val operandsList: Operands) {
 
 
 
-class Encoding(
+data class Encoding(
 	val opcode    : Int,
 	val extension : Int,
 	val prefix    : Int,

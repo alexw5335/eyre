@@ -179,7 +179,7 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 	private fun checkO16(width: Width) {
-		if(width == Width.BIT16) writer.i8(0x66)
+		if(width == Width.WORD) writer.i8(0x66)
 	}
 
 	private fun checkWidths(width: Width, widths: Widths) {
@@ -373,15 +373,16 @@ class Assembler(private val context: CompilerContext) {
 		)
 
 		if(node is SymProviderNode) {
-			val symbol = node.symbol ?: error("Unresolved symbol")
-
-			if(symbol is PosSymbol) {
-				if(immRelocCount == 0 && !regValid)
-					error("First relocation (absolute or relative) must be positive and absolute")
-				immRelocCount++
-				return 0
-			} else {
-				error("Non-positional symbols not yet supported")
+			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {
+				is PosSymbol ->
+					if(immRelocCount++ == 0 && !regValid)
+						error("First relocation (absolute or relative) must be positive and absolute")
+					else
+						0
+				is IntSymbol       -> symbol.value
+				is ConstIntSymbol  -> symbol.value
+				is EnumEntrySymbol -> symbol.value
+				else               -> error("Invalid symbol: $symbol")
 			}
 		}
 
@@ -405,24 +406,24 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun writeImm(node: AstNode, width: Width, value: Long, hasImm64: Boolean = false) {
 		if(hasImmReloc) {
-			val relocWidth = if(width == Width.BIT64 && !hasImm64) Width.BIT32 else width
+			val relocWidth = if(width == Width.QWORD && !hasImm64) Width.DWORD else width
 			addDefaultRelocation(relocWidth, node)
 			writer.advance(relocWidth.bytes)
 			return
 		}
 
 		when {
-			width == Width.BIT8 -> {
+			width == Width.BYTE -> {
 				if(!value.isImm8) invalidEncoding()
 				writer.i8(value.toInt())
 			}
 
-			width == Width.BIT16 -> {
+			width == Width.WORD -> {
 				if(!value.isImm16) invalidEncoding()
 				writer.i16(value.toInt())
 			}
 
-			width == Width.BIT32 || !hasImm64 -> {
+			width == Width.DWORD || !hasImm64 -> {
 				if(!value.isImm32) invalidEncoding()
 				writer.i32(value.toInt())
 			}
@@ -447,12 +448,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun checkAso(width: Width) {
-		aso = if(width == Width.BIT32)
+		aso = if(width == Width.DWORD)
 			if(aso == 0)
 				error("Invalid effective address")
 			else
 				1
-		else if(width == Width.BIT64)
+		else if(width == Width.QWORD)
 			if(aso == 1)
 				error("Invalid effective address")
 			else
@@ -489,15 +490,16 @@ class Assembler(private val context: CompilerContext) {
 		}
 
 		if(node is SymProviderNode) {
-			val symbol = node.symbol ?: error("Unresolved symbol")
-
-			if(symbol is PosSymbol) {
-				if(immRelocCount == 0 && !regValid)
-					error("First relocation (absolute or relative) must be positive and absolute")
-				memRelocCount++
-				return 0
-			} else {
-				error("Non-positional symbols not yet supported")
+			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {
+				is PosSymbol ->
+					if(memRelocCount++ == 0 && !regValid)
+						error("First relocation (absolute or relative) must be positive and absolute")
+					else
+						0
+				is IntSymbol       -> symbol.value
+				is ConstIntSymbol  -> symbol.value
+				is EnumEntrySymbol -> symbol.value
+				else               -> error("Invalid symbol: $symbol")
 			}
 		}
 
@@ -554,7 +556,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun relocAndDisp(mod: Int, disp: Long, node: AstNode) {
 		if(hasMemReloc) {
-			addDefaultRelocation(Width.BIT32, node)
+			addDefaultRelocation(Width.DWORD, node)
 			writer.i32(0)
 		} else if(mod == 1) {
 			writer.i8(disp.toInt())
@@ -620,7 +622,7 @@ class Assembler(private val context: CompilerContext) {
 			writeRex(rexW, rexR, 0, 0)
 			writer.varLengthInt(opcode)
 			writeModRM(0b00, reg, 0b101)
-			addRelativeRelocation(Width.BIT32, node, immLength)
+			addRelativeRelocation(Width.DWORD, node, immLength)
 			writer.i32(0)
 		} else if(mod != 0) { // Absolute 32-bit
 			error("Absolute memory operands not yet supported")
@@ -790,7 +792,7 @@ class Assembler(private val context: CompilerContext) {
 				if(op1.width != op2.width) invalidEncoding()
 				if(imm.isImm8) {
 					encode2RR(Operands.CUSTOM1, op1.value, op2.value)
-					writeImm(op3, Width.BIT8, imm)
+					writeImm(op3, Width.BYTE, imm)
 				} else {
 					encode2RR(Operands.CUSTOM2, op1.value, op2.value)
 					writeImm(op3, op1.width, imm)
@@ -799,7 +801,7 @@ class Assembler(private val context: CompilerContext) {
 				if(op2.width != null && op2.width != op1.width) invalidEncoding()
 				if(imm.isImm8) {
 					encode2RM(Operands.CUSTOM1, op1.value, op2, 1)
-					writeImm(op3, Width.BIT8, imm)
+					writeImm(op3, Width.BYTE, imm)
 				} else {
 					encode2RM(Operands.CUSTOM2, op1.value, op2, op1.width.bytes)
 					writeImm(op3, op1.width, imm)
@@ -848,7 +850,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun customEncodeINT(node: InsNode) {
 		if(node.size != 1) invalidEncoding()
 		writer.i8(0xCD)
-		writeImm(node.op1!!, Width.BIT8)
+		writeImm(node.op1!!, Width.BYTE)
 	}
 
 
@@ -856,7 +858,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun customEncodeRET(node: InsNode) {
 		when(node.size) {
 			0    -> writer.i8(0xC3)
-			1    -> { writer.i8(0xC2); writeImm(node.op1!!, Width.BIT64) }
+			1    -> { writer.i8(0xC2); writeImm(node.op1!!, Width.QWORD) }
 			else -> invalidEncoding()
 		}
 	}
@@ -866,7 +868,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun customEncodeRETF(node: InsNode) {
 		when(node.size) {
 			0    -> writer.i8(0xCB)
-			1    -> { writer.i8(0xCA); writeImm(node.op1!!, Width.BIT64) }
+			1    -> { writer.i8(0xCA); writeImm(node.op1!!, Width.QWORD) }
 			else -> invalidEncoding()
 		}
 	}
@@ -878,14 +880,14 @@ class Assembler(private val context: CompilerContext) {
 		val op1 = node.op1!!
 		val op2 = node.op2!!
 
-		if(op1 !is RegNode || op1.value.width != Width.BIT64) invalidEncoding()
+		if(op1 !is RegNode || op1.value.width != Width.QWORD) invalidEncoding()
 
 		if(op2 is RegNode) {
-			if(op1.width != Width.BIT64 || op2.width != Width.BIT32)
+			if(op1.width != Width.QWORD || op2.width != Width.DWORD)
 				invalidEncoding()
 			encode2RR(Operands.CUSTOM1, op1.value, op2.value)
 		} else if(op2 is MemNode) {
-			if(op1.width != Width.BIT64 || op2.width != Width.BIT32)
+			if(op1.width != Width.QWORD || op2.width != Width.DWORD)
 				invalidEncoding()
 			encode2RM(Operands.CUSTOM1, op1.value, op2, 0)
 		} else {
@@ -904,15 +906,15 @@ class Assembler(private val context: CompilerContext) {
 
 		if(op2 is RegNode) {
 			when(op2.value.width) {
-				Width.BIT8  -> encode2RR(Operands.CUSTOM1, op1.value, op2.value)
-				Width.BIT16 -> encode2RR(Operands.CUSTOM2, op1.value, op2.value)
+				Width.BYTE  -> encode2RR(Operands.CUSTOM1, op1.value, op2.value)
+				Width.WORD -> encode2RR(Operands.CUSTOM2, op1.value, op2.value)
 				else        -> invalidEncoding()
 
 			}
 		} else if(op2 is MemNode) {
 			when(op2.width ?: invalidEncoding()) {
-				Width.BIT8  -> encode2RM(Operands.CUSTOM1, op1.value, op2, 0)
-				Width.BIT16 -> encode2RM(Operands.CUSTOM2, op1.value, op2, 0)
+				Width.BYTE  -> encode2RM(Operands.CUSTOM1, op1.value, op2, 0)
+				Width.WORD -> encode2RM(Operands.CUSTOM2, op1.value, op2, 0)
 				else        -> invalidEncoding()
 			}
 		}
@@ -933,9 +935,9 @@ class Assembler(private val context: CompilerContext) {
 			} else {
 				val imm = resolveImm(op2)
 
-				if(!hasImmReloc && imm.isImm8 && op1.value.width != Width.BIT8) {
+				if(!hasImmReloc && imm.isImm8 && op1.value.width != Width.BYTE) {
 					encode1R(Operands.CUSTOM2, op1.value)
-					writeImm(op2, Width.BIT8, imm)
+					writeImm(op2, Width.BYTE, imm)
 				} else if(op1.value.isA) {
 					encodeNone(Operands.CUSTOM1, op1.value.width)
 					writeImm(op2, op1.value.width, imm)
@@ -953,9 +955,9 @@ class Assembler(private val context: CompilerContext) {
 				val width = op1.width ?: invalidEncoding()
 				val imm = resolveImm(op2)
 
-				if(!hasImmReloc && imm.isImm8 && width != Width.BIT8) {
+				if(!hasImmReloc && imm.isImm8 && width != Width.BYTE) {
 					encode1M(Operands.CUSTOM2, op1, 1)
-					writeImm(op2, Width.BIT8, imm)
+					writeImm(op2, Width.BYTE, imm)
 				} else {
 					encode1M(Operands.R_I, op1, width.bytes)
 					writeImm(op2, width, imm)
@@ -984,7 +986,7 @@ class Assembler(private val context: CompilerContext) {
 					encode1R(Operands.CUSTOM2, op1.value)
 				else {
 					encode1R(Operands.CUSTOM1, op1.value)
-					writeImm(op2, Width.BIT8, imm)
+					writeImm(op2, Width.BYTE, imm)
 				}
 			}
 		} else if(op1 is MemNode) {
@@ -998,7 +1000,7 @@ class Assembler(private val context: CompilerContext) {
 					encode1M(Operands.CUSTOM2, op1, 0)
 				else {
 					encode1M(Operands.CUSTOM1, op1, 1)
-					writeImm(op2, Width.BIT8, imm)
+					writeImm(op2, Width.BYTE, imm)
 				}
 			}
 		} else {
@@ -1047,7 +1049,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeRel32(op1: AstNode) {
 		val imm = resolveImm(op1)
 		encodeNone(Operands.CUSTOM1)
-		if(hasImmReloc) addRelativeRelocation(Width.BIT32, op1, 0)
+		if(hasImmReloc) addRelativeRelocation(Width.DWORD, op1, 0)
 		else if(!imm.isImm32) invalidEncoding()
 		writer.i32(imm.toInt())
 	}
@@ -1057,7 +1059,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeRel8(op1: AstNode) {
 		val imm = resolveImm(op1)
 		encodeNone(Operands.CUSTOM1)
-		if(hasImmReloc) addRelativeRelocation(Width.BIT8, op1, 0)
+		if(hasImmReloc) addRelativeRelocation(Width.BYTE, op1, 0)
 		else if(!imm.isImm8) invalidEncoding()
 		writer.i8(imm.toInt())
 	}
@@ -1068,7 +1070,7 @@ class Assembler(private val context: CompilerContext) {
 		val imm = resolveImm(op1)
 		if(hasImmReloc) {
 			encodeNone(Operands.CUSTOM2)
-			addRelativeRelocation(Width.BIT32, op1, 0)
+			addRelativeRelocation(Width.DWORD, op1, 0)
 			writer.i32(0)
 		} else if(imm.isImm8) {
 			encodeNone(Operands.CUSTOM1)
@@ -1119,7 +1121,7 @@ class Assembler(private val context: CompilerContext) {
 			is MemNode -> encode1M(Operands.M, op1, 0)
 			else       ->
 				if(op1 is SymProviderNode && op1.symbol is DllImportSymbol)
-					encode1M(Operands.M, MemNode(Width.BIT64, op1), 0)
+					encode1M(Operands.M, MemNode(Width.QWORD, op1), 0)
 				else
 					encodeRel32(op1)
 		}
@@ -1180,7 +1182,7 @@ class Assembler(private val context: CompilerContext) {
 				Register.EAX -> writer.i8(opcode2 + 1)
 				else         -> invalidEncoding()
 			}
-			writeImm(op2, Width.BIT8)
+			writeImm(op2, Width.BYTE)
 		}
 	}
 
@@ -1260,7 +1262,7 @@ class Assembler(private val context: CompilerContext) {
 
 				if(hasImmReloc) {
 					writer.i8(0x68)
-					addDefaultRelocation(Width.BIT32, op1)
+					addDefaultRelocation(Width.DWORD, op1)
 					writer.i32(0)
 				} else if(imm.isImm8) {
 					writer.i8(0x6A)

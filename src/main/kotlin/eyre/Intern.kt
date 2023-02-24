@@ -71,7 +71,7 @@ object StringInterner : Interner<String, StringIntern>() {
 	val EMPTY  = add("")
 	val RES    = add("res")
 	val MAIN   = add("main")
-	val SIZEOF = add("sizeof")
+	val SIZE   = add("size")
 	val FS     = add("fs")
 	val GS     = add("gs")
 

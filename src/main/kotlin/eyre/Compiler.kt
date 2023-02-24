@@ -19,7 +19,6 @@ class Compiler(private val context: CompilerContext) {
 			parser.parse(srcFile)
 			printNodes(srcFile)
 			printSymbols()
-			println()
 		}
 
 		val resolver = Resolver(context)
@@ -31,10 +30,8 @@ class Compiler(private val context: CompilerContext) {
 		val linker = Linker(context)
 		linker.link()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
-
 		//dumpbin()
-
-		disassemble()
+		//disassemble()
 	}
 
 
@@ -134,10 +131,16 @@ class Compiler(private val context: CompilerContext) {
 
 		for(symbol in context.symbols.getAll()) {
 			when(symbol) {
-				is LabelSymbol     -> print("Label       ")
-				is Namespace       -> print("Namespace   ")
+				is LabelSymbol     -> print("LABEL       ")
+				is Namespace       -> print("NAMESPACE   ")
 				is DllSymbol       -> print("DLL         ")
-				is DllImportSymbol -> print("DLL import  ")
+				is DllImportSymbol -> print("DLL IMPORT  ")
+				is VarSymbol       -> print("VAR         ")
+				is ResSymbol       -> print("RES         ")
+				is ConstIntSymbol  -> print("CONST       ")
+				is EnumSymbol      -> print("ENUM        ")
+				is EnumEntrySymbol -> print("ENUM ENTRY  ")
+				else               -> print("?           ")
 			}
 
 			if(symbol.scope.isNotEmpty) {
@@ -147,6 +150,8 @@ class Compiler(private val context: CompilerContext) {
 
 			println(symbol.name)
 		}
+
+		println()
 	}
 
 

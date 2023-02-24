@@ -46,7 +46,7 @@ enum class SymToken(
 	LEFT_BRACE    ("{"),
 	RIGHT_BRACE   ("}"),
 	PERIOD        (".", binaryOp = BinaryOp.DOT),
-	REFERENCE     ("::", firstSymbol = COLON);
+	REFERENCE     ("::", binaryOp = BinaryOp.REF, firstSymbol = COLON);
 
 	companion object { val values = values() }
 }

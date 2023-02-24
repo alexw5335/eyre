@@ -1,12 +1,28 @@
 namespace main
 
-main:
-	push  fs
-	push  gs
-	pushw fs
-	pushw gs
+dllimport Kernel32 {
+	WriteFile
+	ExitProcess
+}
 
-	pop fs
-	pop gs
-	popw fs
-	popw gs
+enum TestEnum {
+	ENTRY_A
+	ENTRY_B
+	ENTRY_C,
+	STDOUT = -11
+}
+
+const STDOUT = STDOUT2 - 1
+const STDOUT2 = -10
+
+var string db "This is a test", 0
+
+main:
+	sub rsp, 56
+	mov ecx, TestEnum.STDOUT
+	lea rdx, [string]
+	mov r8d, string::size
+	mov r9, [rsp + 40]
+	mov qword [rsp + 32], 0
+	call WriteFile
+	call ExitProcess

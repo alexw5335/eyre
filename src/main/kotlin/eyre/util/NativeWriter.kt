@@ -313,9 +313,9 @@ class NativeWriter(bytes: ByteArray) {
 		if(value !in width) error("Value out of range")
 
 		when(width) {
-			Width.BIT8  -> i8(value)
-			Width.BIT16 -> i16(value)
-			Width.BIT32 -> i32(value)
+			Width.BYTE  -> i8(value)
+			Width.WORD -> i16(value)
+			Width.DWORD -> i32(value)
 			else        -> error("Value out of range")
 		}
 	}
@@ -326,10 +326,10 @@ class NativeWriter(bytes: ByteArray) {
 		if(value !in width) error("Value out of range")
 
 		when(width) {
-			Width.BIT8  -> i8(value.toInt())
-			Width.BIT16 -> i16(value.toInt())
-			Width.BIT32 -> i32(value.toInt())
-			Width.BIT64 -> i64(value)
+			Width.BYTE  -> i8(value.toInt())
+			Width.WORD -> i16(value.toInt())
+			Width.DWORD -> i32(value.toInt())
+			Width.QWORD -> i64(value)
 		}
 	}
 

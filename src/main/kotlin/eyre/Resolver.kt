@@ -26,6 +26,10 @@ class Resolver(private val context: CompilerContext) {
 	fun resolve() {
 		pushScope(ScopeInterner.EMPTY)
 		context.srcFiles.forEach(::resolveFile)
+		for(symbol in context.constSymbols) when(symbol) {
+			is ConstIntSymbol -> resolveConst(symbol.node)
+			is EnumSymbol -> resolveEnum(symbol.node)
+		}
 	}
 
 
@@ -48,10 +52,12 @@ class Resolver(private val context: CompilerContext) {
 					resolveSymbols(node.op3 ?: continue)
 					resolveSymbols(node.op4 ?: continue)
 				}
+				is ConstNode  -> resolveSymbols(node.value)
+				is VarNode    -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
+				is ResNode    -> resolveSymbols(node.size)
 				else -> continue
 			}
 		}
-
 	}
 
 
@@ -63,9 +69,26 @@ class Resolver(private val context: CompilerContext) {
 			is MemNode    -> resolveSymbols(node.value)
 			is SymNode    -> node.symbol = resolveSymbol(node.name)
 			is DotNode    -> node.right.symbol = resolveDot(node)
-			is VarNode    -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
-			is ResNode    -> resolveSymbols(node.size)
+			is RefNode    -> resolveRef(node)
 			else          -> { }
+		}
+	}
+
+
+
+	private fun resolveRef(node: RefNode) {
+		resolveSymbols(node.left)
+		val left = node.left.symbol!!
+		val name = node.right.name
+
+		if(left is VarSymbol) {
+			if(name == StringInterner.SIZE) {
+				node.right.symbol = IntSymbol(ScopeInterner.EMPTY, name, left.size.toLong())
+			} else {
+				error("Invalid var reference")
+			}
+		} else {
+			error("Invalid var reference")
 		}
 	}
 
@@ -96,5 +119,59 @@ class Resolver(private val context: CompilerContext) {
 			?: error("Unresolved symbol: ${node.right.name}")
 	}
 
+
+
+	private fun resolveConst(node: ConstNode) {
+		val symbol = node.symbol
+		if(symbol.resolved) return
+		if(symbol.resolving) error("Circular const dependency")
+		symbol.resolving = true
+		symbol.value = resolveConstRec(node.value)
+		symbol.resolving = false
+		symbol.resolved = true
+	}
+
+
+
+	private fun resolveEnum(node: EnumNode) {
+		for(n in node.entries) {
+			val symbol = n.symbol
+			if(symbol.resolved) continue
+			if(symbol.resolving) error("Circular const dependency")
+			symbol.resolving = true
+			symbol.value = resolveConstRec(n.value)
+			symbol.resolving = false
+			symbol.resolved = true
+		}
+	}
+
+
+
+	private fun resolveConstRec(node: AstNode): Long {
+		if(node is IntNode) return node.value
+
+		if(node is UnaryNode) return node.op.calculate(resolveConstRec(node.node))
+
+		if(node is BinaryNode)
+			return node.op.calculate(resolveConstRec(node.left), resolveConstRec(node.right))
+
+		if(node is SymProviderNode) {
+			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {
+				is ConstIntSymbol -> {
+					if(!symbol.resolved) resolveConst(symbol.node)
+					return symbol.value
+				}
+				is EnumEntrySymbol -> {
+					if(!symbol.resolved)
+						resolveEnum(symbol.parent.node)
+					symbol.value
+				}
+				is IntSymbol -> symbol.value
+				else -> error("Invalid symbol: $symbol")
+			}
+		}
+
+		error("Invalid integer constant node: $node")
+	}
 
 }

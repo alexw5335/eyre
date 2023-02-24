@@ -57,6 +57,10 @@ class Parser(private val context: CompilerContext) {
 		val existing = context.symbols.add(symbol)
 		if(existing != null)
 			error("Symbol redefinition: ${symbol.name}")
+		when(symbol) {
+			is ConstIntSymbol -> if(!symbol.resolved) context.constSymbols.add(symbol)
+			is EnumSymbol     -> context.constSymbols.add(symbol)
+		}
 	}
 
 
@@ -168,6 +172,11 @@ class Parser(private val context: CompilerContext) {
 
 			atom = if(op == BinaryOp.DOT)
 				DotNode(atom, parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node"))
+			else if(op == BinaryOp.REF)
+				RefNode(
+					atom as? SymProviderNode ?: error("Invalid reference"),
+					parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node")
+				)
 			else
 				BinaryNode(op, atom, parseExpression(op.precedence + 1))
 		}
@@ -260,10 +269,8 @@ class Parser(private val context: CompilerContext) {
 		val dllName = id()
 		expect(SymToken.LEFT_BRACE)
 
-		val thisScope = addScope(dllName)
-
 		val dllSymbol = context.dlls.firstOrNull { it.name == dllName }
-			?: DllSymbol(currentScope, dllName, thisScope, ArrayList()).also(context.dlls::add)
+			?: DllSymbol(currentScope, dllName, ArrayList()).also(context.dlls::add)
 
 		addSymbol(dllSymbol)
 
@@ -276,9 +283,9 @@ class Parser(private val context: CompilerContext) {
 			val importName = id()
 			expectTerminator()
 			if(next == SymToken.COMMA) pos++
-			val importSymbol = DllImportSymbol(thisScope, importName, Section.IDATA, 0)
+			val importSymbol = DllImportSymbol(currentScope, importName, Section.IDATA, 0)
 			addSymbol(importSymbol)
-			dllSymbol.symbols.add(importSymbol)
+			dllSymbol.imports.add(importSymbol)
 		}
 	}
 
@@ -331,6 +338,66 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun parseConst() {
+		val name = id()
+		expect(SymToken.EQUALS)
+		val value = parseExpression()
+		val symbol = ConstIntSymbol(currentScope, name, false, 0L)
+		val node = ConstNode(symbol, value)
+		symbol.node = node
+		addSymbol(symbol)
+		addNode(node)
+	}
+
+
+
+	private fun parseEnum(isBitmask: Boolean) {
+		val enumName = id()
+		var current = if(isBitmask) 1L else 0L
+		val scope = addScope(enumName)
+
+		if(tokens[pos] != SymToken.LEFT_BRACE) return
+		pos++
+		if(tokens[pos] == SymToken.RIGHT_BRACE) return
+		val entries = ArrayList<EnumEntryNode>()
+		val entrySymbols = ArrayList<EnumEntrySymbol>()
+
+		while(pos < tokens.size) {
+			if(tokens[pos] == SymToken.RIGHT_BRACE) break
+
+			val name = id()
+
+			val symbol: EnumEntrySymbol
+			val entry: EnumEntryNode
+
+			if(tokens[pos] == SymToken.EQUALS) {
+				pos++
+				symbol = EnumEntrySymbol(scope, name, false, 0L)
+				entry = EnumEntryNode(symbol, parseExpression())
+			} else {
+				symbol = EnumEntrySymbol(scope, name, true, current)
+				entry = EnumEntryNode(symbol, IntNode(current))
+				current += if(isBitmask) current else 1
+			}
+
+			addSymbol(symbol)
+			entries.add(entry)
+			entrySymbols.add(symbol)
+
+			if(!atNewline() && (tokens[pos] != SymToken.COMMA || tokens[++pos] !is IdToken)) break
+		}
+
+		expect(SymToken.RIGHT_BRACE)
+		val symbol = EnumSymbol(currentScope, enumName, scope, entrySymbols)
+		addSymbol(symbol)
+		val node = EnumNode(symbol, entries)
+		addNode(node)
+		symbol.node = node
+		for(child in entrySymbols) child.parent = symbol
+	}
+
+
+
 	private fun parseId(id: StringIntern) {
 		if(next == SymToken.COLON) {
 			pos++
@@ -345,6 +412,9 @@ class Parser(private val context: CompilerContext) {
 				Keyword.NAMESPACE -> parseNamespace()
 				Keyword.DLLIMPORT -> parseDllImport()
 				Keyword.VAR       -> parseVar()
+				Keyword.CONST     -> parseConst()
+				Keyword.ENUM      -> parseEnum(false)
+				Keyword.BITMASK   -> parseEnum(true)
 				else              -> error("Invalid keyword: $id")
 			}
 		}

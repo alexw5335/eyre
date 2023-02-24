@@ -11,8 +11,8 @@ main:
 	sub rsp, 56
 	mov ecx, -11
 	lea rdx, [string]
-	mov r8d, 8
+	mov r8d, string.data::size
 	mov r9, [rsp + 40]
 	mov qword [rsp + 32], 0
-	call Kernel32.WriteFile
-	call Kernel32.ExitProcess
+	call WriteFile
+	call ExitProcess
