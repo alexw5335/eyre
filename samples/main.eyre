@@ -5,21 +5,11 @@ dllimport Kernel32 {
 	ExitProcess
 }
 
-enum TestEnum {
-	ENTRY_A
-	ENTRY_B
-	ENTRY_C,
-	STDOUT = -11
-}
-
-const STDOUT = STDOUT2 - 1
-const STDOUT2 = -10
-
-var string db "This is a test", 0
+var string db "This is a test\0"
 
 main:
 	sub rsp, 56
-	mov ecx, TestEnum.STDOUT
+	mov ecx, -11
 	lea rdx, [string]
 	mov r8d, string::size
 	mov r9, [rsp + 40]

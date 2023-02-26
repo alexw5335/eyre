@@ -372,11 +372,11 @@ class Parser(private val context: CompilerContext) {
 
 			if(tokens[pos] == SymToken.EQUALS) {
 				pos++
-				symbol = EnumEntrySymbol(scope, name, false, 0L)
+				symbol = EnumEntrySymbol(scope, name, entries.size, false, 0L)
 				entry = EnumEntryNode(symbol, parseExpression())
 			} else {
-				symbol = EnumEntrySymbol(scope, name, true, current)
-				entry = EnumEntryNode(symbol, IntNode(current))
+				symbol = EnumEntrySymbol(scope, name, entries.size, true, current)
+				entry = EnumEntryNode(symbol, NullNode)
 				current += if(isBitmask) current else 1
 			}
 

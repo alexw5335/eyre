@@ -104,8 +104,15 @@ val AstNode.printString: String get() = when(this) {
 
 	is EnumNode -> buildString {
 		appendLine("enum ${symbol.name} {")
-		for(e in entries)
-			appendLine("\t${e.symbol.name} = ${e.value.printString}")
+		for(e in entries) {
+			append('\t')
+			append(e.symbol.name)
+			if(e.value != NullNode) {
+				append(" = ")
+				append(e.value.printString)
+			}
+			appendLine()
+		}
 		append('}')
 	}
 

@@ -82,6 +82,7 @@ class ConstIntSymbol(
 class EnumEntrySymbol(
 	override val scope: ScopeIntern,
 	override val name: StringIntern,
+	val ordinal: Int,
 	override var resolved: Boolean = false,
 	var value: Long = 0L
 ) : ConstSymbol {

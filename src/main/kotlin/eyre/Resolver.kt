@@ -121,6 +121,13 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun resolve(symbol: ConstSymbol) {
+		if(symbol.resolved) return
+		if(symbol.resolving) error("Circular const dependency")
+	}
+
+
+
 	private fun resolveConst(node: ConstNode) {
 		val symbol = node.symbol
 		if(symbol.resolved) return
