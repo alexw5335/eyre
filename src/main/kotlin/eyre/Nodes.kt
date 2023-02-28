@@ -44,7 +44,7 @@ class SegRegNode(val value: SegReg) : AstNode
 
 class RefNode(val left: SymProviderNode, val right: SymNode) : SymProviderNode { override val symbol get() = right.symbol }
 
-class ConstNode(val symbol: ConstIntSymbol, val value: AstNode) : AstNode
+class ConstNode(val symbol: ConstSymbol, val value: AstNode) : AstNode
 
 class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode)
 
@@ -58,6 +58,25 @@ class InsNode(
 	val op3      : AstNode?,
 	val op4      : AstNode?
 ) : AstNode
+
+
+
+/*
+Helper functions
+ */
+
+
+
+fun UnaryNode.calculate(function: (AstNode, Boolean) -> Long, validity: Boolean) = op.calculate(
+	function(node, validity && (op == UnaryOp.POS))
+)
+
+
+
+fun BinaryNode.calculate(function: (AstNode, Boolean) -> Long, validity: Boolean) = op.calculate(
+	function(left, validity && (op == BinaryOp.ADD || op == BinaryOp.SUB)),
+	function(right, validity && (op == BinaryOp.ADD))
+)
 
 
 

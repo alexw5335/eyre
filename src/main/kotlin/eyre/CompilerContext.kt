@@ -9,7 +9,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val constSymbols = ArrayList<Symbol>()
 
-	val dlls = ArrayList<DllSymbol>()
+	val dlls = HashMap<StringIntern, DllSymbol>()
 
 	var entryPoint: PosSymbol? = null
 

@@ -169,7 +169,7 @@ class Linker(private val context: CompilerContext) {
 		writer.i32(idataDirPos + 4, dlls.size * 20 + 20)
 		writer.zero(idtsSize)
 
-		for((dllIndex, dll) in dlls.withIndex()) {
+		for((dllIndex, dll) in dlls.values.withIndex()) {
 			val idtPos = idtsPos + dllIndex * 20
 			val dllNamePos = writer.pos
 
@@ -222,24 +222,13 @@ class Linker(private val context: CompilerContext) {
 
 	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long {
 		if(node is IntNode) return node.value
-
-		if(node is UnaryNode) return node.op.calculate(
-			resolveImmRec(node.node, regValid && node.op == UnaryOp.POS)
-		)
-
-		if(node is BinaryNode) return node.op.calculate(
-			resolveImmRec(node.left, regValid && node.op.isLeftRegValid),
-			resolveImmRec(node.right, regValid && node.op.isRightRegValid)
-		)
+		if(node is UnaryNode) return node.calculate(::resolveImmRec, regValid)
+		if(node is BinaryNode) return node.calculate(::resolveImmRec, regValid)
 
 		if(node is SymProviderNode) {
-			val symbol = node.symbol ?: error("Unresolved symbol")
-
-			return when(symbol) {
+			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {
 				is PosSymbol       -> symbol.address.toLong()
-				is IntSymbol       -> symbol.value
-				is ConstIntSymbol  -> symbol.value
-				is EnumEntrySymbol -> symbol.value
+				is IntSymbol       -> symbol.intValue
 				else               -> error("Invalid symbol: $symbol")
 			}
 		}

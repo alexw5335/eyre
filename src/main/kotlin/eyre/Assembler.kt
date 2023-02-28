@@ -362,15 +362,8 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long {
 		if(node is IntNode) return node.value
-
-		if(node is UnaryNode) return node.op.calculate(
-			resolveImmRec(node.node, regValid && node.op == UnaryOp.POS)
-		)
-
-		if(node is BinaryNode) return node.op.calculate(
-			resolveImmRec(node.left, regValid && node.op.isLeftRegValid),
-			resolveImmRec(node.right, regValid && node.op.isRightRegValid)
-		)
+		if(node is UnaryNode) return node.calculate(::resolveImmRec, regValid)
+		if(node is BinaryNode) return node.calculate(::resolveImmRec, regValid)
 
 		if(node is SymProviderNode) {
 			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {
@@ -379,9 +372,7 @@ class Assembler(private val context: CompilerContext) {
 						error("First relocation (absolute or relative) must be positive and absolute")
 					else
 						0
-				is IntSymbol       -> symbol.value
-				is ConstIntSymbol  -> symbol.value
-				is EnumEntrySymbol -> symbol.value
+				is IntSymbol       -> symbol.intValue
 				else               -> error("Invalid symbol: $symbol")
 			}
 		}
@@ -466,10 +457,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun resolveMemRec(node: AstNode, regValid: Boolean): Long {
 		if(node is IntNode) return node.value
-
-		if(node is UnaryNode) return node.op.calculate(
-			resolveMemRec(node.node, regValid && node.op == UnaryOp.POS)
-		)
+		if(node is UnaryNode) return node.calculate(::resolveMemRec, regValid)
 
 		if(node is BinaryNode) {
 			val regNode = node.left as? RegNode ?: node.right as? RegNode
@@ -483,10 +471,7 @@ class Assembler(private val context: CompilerContext) {
 				return 0
 			}
 
-			return node.op.calculate(
-				resolveMemRec(node.left, regValid && node.op.isLeftRegValid),
-				resolveMemRec(node.right, regValid && node.op.isRightRegValid)
-			)
+			return node.calculate(::resolveMemRec, regValid)
 		}
 
 		if(node is SymProviderNode) {
@@ -496,9 +481,7 @@ class Assembler(private val context: CompilerContext) {
 						error("First relocation (absolute or relative) must be positive and absolute")
 					else
 						0
-				is IntSymbol       -> symbol.value
-				is ConstIntSymbol  -> symbol.value
-				is EnumEntrySymbol -> symbol.value
+				is IntSymbol       -> symbol.intValue
 				else               -> error("Invalid symbol: $symbol")
 			}
 		}
@@ -510,7 +493,6 @@ class Assembler(private val context: CompilerContext) {
 			if(baseReg != null) {
 				if(indexReg != null)
 					invalidEncoding()
-
 				indexReg = node.value
 				indexScale = 1
 			} else {

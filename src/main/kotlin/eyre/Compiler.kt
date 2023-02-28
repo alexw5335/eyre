@@ -137,7 +137,7 @@ class Compiler(private val context: CompilerContext) {
 				is DllImportSymbol -> print("DLL IMPORT  ")
 				is VarSymbol       -> print("VAR         ")
 				is ResSymbol       -> print("RES         ")
-				is ConstIntSymbol  -> print("CONST       ")
+				is ConstSymbol     -> print("CONST       ")
 				is EnumSymbol      -> print("ENUM        ")
 				is EnumEntrySymbol -> print("ENUM ENTRY  ")
 				else               -> print("?           ")

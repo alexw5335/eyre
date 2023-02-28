@@ -56,12 +56,30 @@ class Parser(private val context: CompilerContext) {
 	private fun addSymbol(symbol: Symbol) {
 		val existing = context.symbols.add(symbol)
 		if(existing != null)
-			error("Symbol redefinition: ${symbol.name}")
-		when(symbol) {
-			is ConstIntSymbol -> if(!symbol.resolved) context.constSymbols.add(symbol)
-			is EnumSymbol     -> context.constSymbols.add(symbol)
-		}
+			error("Symbol redefinition: ${symbol.name}. Original: ${existing.scope}.${existing.name}, new: ${symbol.scope}.${symbol.name}")
+		//when(symbol) {
+		//	is ConstIntSymbol -> if(!symbol.resolved) context.constSymbols.add(symbol)
+		//	is EnumSymbol     -> context.constSymbols.add(symbol)
+		//}
 	}
+
+
+	private fun<T : Symbol> T.add(): T { addSymbol(this); return this }
+	private fun<T : AstNode> T.add(): T { addNode(this); return this }
+
+	private fun SymBase(
+		name      : StringIntern,
+		thisScope : ScopeIntern = currentScope,
+		resolved  : Boolean = true
+	) = SymBase(currentScope, name, thisScope, resolved)
+
+	private fun SymBase(
+		name: StringIntern,
+		section: Section,
+		pos: Int = 0
+	) = SymBase(currentScope, name, section = section, pos = pos)
+
+
 
 
 
@@ -170,15 +188,14 @@ class Parser(private val context: CompilerContext) {
 			if(op.precedence < precedence) break
 			pos++
 
-			atom = if(op == BinaryOp.DOT)
-				DotNode(atom, parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node"))
-			else if(op == BinaryOp.REF)
-				RefNode(
+			atom = when(op) {
+				BinaryOp.DOT -> DotNode(atom, parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node"))
+				BinaryOp.REF -> RefNode(
 					atom as? SymProviderNode ?: error("Invalid reference"),
 					parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node")
 				)
-			else
-				BinaryNode(op, atom, parseExpression(op.precedence + 1))
+				else -> BinaryNode(op, atom, parseExpression(op.precedence + 1))
+			}
 		}
 
 		return atom
@@ -244,7 +261,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseNamespace() {
 		val name = id()
 		val thisScope = addScope(name)
-		val namespace = Namespace(currentScope, name, thisScope)
+		val namespace = Namespace(SymBase(name, thisScope))
 		addSymbol(namespace)
 
 		if(next == SymToken.LEFT_BRACE) {
@@ -269,10 +286,9 @@ class Parser(private val context: CompilerContext) {
 		val dllName = id()
 		expect(SymToken.LEFT_BRACE)
 
-		val dllSymbol = context.dlls.firstOrNull { it.name == dllName }
-			?: DllSymbol(currentScope, dllName, ArrayList()).also(context.dlls::add)
-
-		addSymbol(dllSymbol)
+		val dll: DllSymbol = context.dlls.getOrPut(dllName) {
+			DllSymbol(SymBase(dllName), ArrayList())
+		}.add()
 
 		while(pos < tokens.size) {
 			if(next == SymToken.RIGHT_BRACE) {
@@ -283,9 +299,8 @@ class Parser(private val context: CompilerContext) {
 			val importName = id()
 			expectTerminator()
 			if(next == SymToken.COMMA) pos++
-			val importSymbol = DllImportSymbol(currentScope, importName, Section.IDATA, 0)
-			addSymbol(importSymbol)
-			dllSymbol.imports.add(importSymbol)
+			val importSymbol = DllImportSymbol(SymBase(importName, Section.IDATA)).add()
+			dll.imports.add(importSymbol)
 		}
 	}
 
@@ -297,9 +312,8 @@ class Parser(private val context: CompilerContext) {
 
 		if(initialiser == StringInterner.RES) {
 			val size = parseExpression()
-			val symbol = ResSymbol(currentScope, name, Section.DATA, 0, 0)
-			addSymbol(symbol)
-			addNode(ResNode(symbol, size))
+			val symbol = ResSymbol(SymBase(name, Section.DATA)).add()
+			ResNode(symbol, size).add()
 			return
 		}
 
@@ -330,10 +344,8 @@ class Parser(private val context: CompilerContext) {
 
 		pos--
 		if(parts.isEmpty()) error("Expecting variable initialiser")
-		val symbol = VarSymbol(currentScope, name, Section.DATA, 0, size)
-		addSymbol(symbol)
-		val node = VarNode(symbol, parts)
-		addNode(node)
+		val symbol = VarSymbol(SymBase(name, Section.DATA), size).add()
+		VarNode(symbol, parts).add()
 	}
 
 
@@ -342,11 +354,9 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		expect(SymToken.EQUALS)
 		val value = parseExpression()
-		val symbol = ConstIntSymbol(currentScope, name, false, 0L)
-		val node = ConstNode(symbol, value)
+		val symbol = ConstSymbol(SymBase(name)).add()
+		val node = ConstNode(symbol, value).add()
 		symbol.node = node
-		addSymbol(symbol)
-		addNode(node)
 	}
 
 
@@ -354,7 +364,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseEnum(isBitmask: Boolean) {
 		val enumName = id()
 		var current = if(isBitmask) 1L else 0L
-		val scope = addScope(enumName)
+		val thisScope = addScope(enumName)
 
 		if(tokens[pos] != SymToken.LEFT_BRACE) return
 		pos++
@@ -372,15 +382,16 @@ class Parser(private val context: CompilerContext) {
 
 			if(tokens[pos] == SymToken.EQUALS) {
 				pos++
-				symbol = EnumEntrySymbol(scope, name, entries.size, false, 0L)
+				symbol = EnumEntrySymbol(SymBase(thisScope, name, resolved = false), entries.size).add()
 				entry = EnumEntryNode(symbol, parseExpression())
 			} else {
-				symbol = EnumEntrySymbol(scope, name, entries.size, true, current)
+				symbol = EnumEntrySymbol(SymBase(thisScope, name, resolved = true), entries.size, current).add()
 				entry = EnumEntryNode(symbol, NullNode)
 				current += if(isBitmask) current else 1
 			}
 
-			addSymbol(symbol)
+			symbol.node = entry
+
 			entries.add(entry)
 			entrySymbols.add(symbol)
 
@@ -388,12 +399,11 @@ class Parser(private val context: CompilerContext) {
 		}
 
 		expect(SymToken.RIGHT_BRACE)
-		val symbol = EnumSymbol(currentScope, enumName, scope, entrySymbols)
-		addSymbol(symbol)
-		val node = EnumNode(symbol, entries)
-		addNode(node)
+		val symbol = EnumSymbol(SymBase(enumName, thisScope), entrySymbols).add()
+		val node = EnumNode(symbol, entries).add()
 		symbol.node = node
-		for(child in entrySymbols) child.parent = symbol
+		for(child in entrySymbols)
+			child.parent = symbol
 	}
 
 
@@ -401,7 +411,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseId(id: StringIntern) {
 		if(next == SymToken.COLON) {
 			pos++
-			val symbol = LabelSymbol(currentScope, id, Section.TEXT, 0)
+			val symbol = LabelSymbol(SymBase(id, Section.TEXT))
 			addSymbol(symbol)
 			addNode(LabelNode(symbol))
 			return
