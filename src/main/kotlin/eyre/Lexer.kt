@@ -78,6 +78,21 @@ class Lexer {
 
 
 
+	private fun addSymbolAdv(symbol: SymToken) {
+		pos++
+		terminators.set(tokens.size)
+		tokens.add(symbol)
+	}
+
+
+
+	private fun addSymbol(symbol: SymToken) {
+		terminators.set(tokens.size)
+		tokens.add(symbol)
+	}
+
+
+
 
 	private fun lexerError(string: String): Nothing {
 		System.err.println("Lexer error at ${srcFile.path}:$lineCount")
@@ -293,43 +308,79 @@ class Lexer {
 		private operator fun<T> Array<T>.set(char: Char, value: T) = set(char.code, value)
 
 		init {
+			// Whitespace
 			charMap['\n'] = Lexer::onNewline
 			charMap[' ']  = { }
 			charMap['\t'] = { }
 			charMap['\r'] = { }
 
-			for(s in SymToken.values) {
-				val firstChar = s.string[0]
+			// Single symbols
+			charMap['('] = { addSymbol(SymToken.LPAREN) }
+			charMap[')'] = { addSymbol(SymToken.RPAREN) }
+			charMap['+'] = { addSymbol(SymToken.PLUS) }
+			charMap['-'] = { addSymbol(SymToken.MINUS) }
+			charMap['*'] = { addSymbol(SymToken.ASTERISK) }
+			charMap['['] = { addSymbol(SymToken.LBRACKET) }
+			charMap[']'] = { addSymbol(SymToken.RBRACKET) }
+			charMap['{'] = { addSymbol(SymToken.LBRACE) }
+			charMap['}'] = { addSymbol(SymToken.RBRACE) }
+			charMap['.'] = { addSymbol(SymToken.PERIOD) }
+			charMap[';'] = { addSymbol(SymToken.SEMICOLON) }
+			charMap['^'] = { addSymbol(SymToken.CARET) }
+			charMap['~'] = { addSymbol(SymToken.TILDE) }
+			charMap[','] = { addSymbol(SymToken.COMMA) }
+			charMap['?'] = { addSymbol(SymToken.QUESTION) }
 
-				if(s.string.length == 1) {
-					charMap[firstChar] = {
-						terminators.set(tokens.size)
-						addToken(s)
-					}
-					continue
+			// Compound symbols
+			charMap['&'] = { when(chars[pos]) {
+				'&'  -> addSymbolAdv(SymToken.LOGIC_AND)
+				else -> addSymbol(SymToken.AMPERSAND)
+			} }
+			charMap['|'] = { when(chars[pos]) {
+				'|'  -> addSymbolAdv(SymToken.LOGIC_OR)
+				else -> addSymbol(SymToken.PIPE)
+			} }
+			charMap[':'] = { when(chars[pos]) {
+				':'  -> addSymbolAdv(SymToken.REFERENCE)
+				else -> addSymbol(SymToken.COLON)
+			} }
+			charMap['<'] = { when(chars[pos]) {
+				'<'  -> addSymbolAdv(SymToken.SHL)
+				'='  -> addSymbolAdv(SymToken.LTE)
+				else -> addSymbol(SymToken.LT)
+			} }
+			charMap['='] = { when(chars[pos]) {
+				'='  -> addSymbolAdv(SymToken.EQUALITY)
+				else -> addSymbol(SymToken.EQUALS)
+			} }
+			charMap['!'] = { when(chars[pos]) {
+				'='  -> addSymbolAdv(SymToken.INEQUALITY)
+				else -> SymToken.EXCLAMATION
+			} }
+			charMap['>'] = { when(chars[pos]) {
+				'>' -> when(chars[++pos]) {
+					'>'  -> addSymbolAdv(SymToken.SAR)
+					else -> addSymbol(SymToken.SHR)
 				}
+				'='  -> addSymbolAdv(SymToken.GTE)
+				else -> addSymbol(SymToken.GT)
+			} }
 
-				val secondChar = s.string[1]
-
-				charMap[firstChar] = {
-					terminators.set(tokens.size)
-					if(chars[pos] == secondChar) {
-						addToken(s)
-						pos++
-					} else
-						addToken(s.firstSymbol ?: lexerError("Invalid symbol"))
-				}
-			}
-
+			// Complex symbols
 			charMap['"']  = Lexer::resolveDoubleApostrophe
 			charMap['\''] = Lexer::resolveSingleApostrophe
 			charMap['/']  = Lexer::resolveSlash
+
+			// Identifiers
 			charMap['_']  = Lexer::idStart
-			charMap['0']  = Lexer::zero
 			for(i in 65..90)  charMap[i] = Lexer::idStart
 			for(i in 97..122) charMap[i] = Lexer::idStart
+
+			// Number literals
+			charMap['0']  = Lexer::zero
 			for(i in 49..57)  charMap[i] = Lexer::digit
 
+			// Invalid chars
 			for(i in charMap.indices)
 				if(charMap[i] == null)
 					charMap[i] = { lexerError("Invalid char code: $i") }

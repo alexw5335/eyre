@@ -632,8 +632,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private val customEncodings = HashMap<Mnemonic, (InsNode) -> Unit>().also {
-		infix fun Mnemonic.custom(customEncoding: (InsNode) -> Unit) = it.put(this, customEncoding)
+	private fun InsNode.ensure0() { if(size != 0) invalidEncoding() }
+
+	private val customEncodings = HashMap<Mnemonic, (InsNode) -> Unit>().also { map ->
+		infix fun Mnemonic.custom(customEncoding: (InsNode) -> Unit) = map.put(this, customEncoding)
+
+		Mnemonic.HLT custom { it.ensure0(); writer.i8(0xF4) }
 
 		Mnemonic.MOV   custom ::customEncodeMOV
 

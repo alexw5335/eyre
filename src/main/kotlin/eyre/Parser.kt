@@ -153,9 +153,9 @@ class Parser(private val context: CompilerContext) {
 		}
 
 		if(token is SymToken) {
-			if(token == SymToken.LEFT_PAREN) {
+			if(token == SymToken.LPAREN) {
 				val expression = parseExpression()
-				expect(SymToken.RIGHT_PAREN)
+				expect(SymToken.RPAREN)
 				return expression
 			}
 
@@ -216,7 +216,7 @@ class Parser(private val context: CompilerContext) {
 		if(token is IdToken) {
 			if(token.value in StringInterner.widths) {
 				width = StringInterner.widths[token.value]
-				if(tokens[pos + 1] == SymToken.LEFT_BRACKET)
+				if(tokens[pos + 1] == SymToken.LBRACKET)
 					token = tokens[++pos]
 			} else if(token.value == StringInterner.FS)
 				return SegRegNode(SegReg.FS)
@@ -226,10 +226,10 @@ class Parser(private val context: CompilerContext) {
 				return parseExpression()
 		}
 
-		if(token == SymToken.LEFT_BRACKET) {
+		if(token == SymToken.LBRACKET) {
 			pos++
 			val value = parseExpression()
-			expect(SymToken.RIGHT_BRACKET)
+			expect(SymToken.RBRACKET)
 			return MemNode(width, value)
 		}
 
@@ -270,11 +270,11 @@ class Parser(private val context: CompilerContext) {
 		val namespace = Namespace(SymBase(name, thisScope))
 		addSymbol(namespace)
 
-		if(next == SymToken.LEFT_BRACE) {
+		if(next == SymToken.LBRACE) {
 			pos++
 			addNode(NamespaceNode(namespace))
 			parseScope(thisScope)
-			expect(SymToken.RIGHT_BRACE)
+			expect(SymToken.RBRACE)
 			addNode(ScopeEndNode)
 		} else {
 			expectTerminator()
@@ -290,14 +290,14 @@ class Parser(private val context: CompilerContext) {
 
 	private fun parseDllImport() {
 		val dllName = id()
-		expect(SymToken.LEFT_BRACE)
+		expect(SymToken.LBRACE)
 
 		val dll: DllSymbol = context.dlls.getOrPut(dllName) {
 			DllSymbol(SymBase(dllName), ArrayList())
 		}.add()
 
 		while(pos < tokens.size) {
-			if(next == SymToken.RIGHT_BRACE) {
+			if(next == SymToken.RBRACE) {
 				pos++
 				break
 			}
@@ -372,14 +372,14 @@ class Parser(private val context: CompilerContext) {
 		var current = if(isBitmask) 1L else 0L
 		val thisScope = addScope(enumName)
 
-		if(tokens[pos] != SymToken.LEFT_BRACE) return
+		if(tokens[pos] != SymToken.LBRACE) return
 		pos++
-		if(tokens[pos] == SymToken.RIGHT_BRACE) return
+		if(tokens[pos] == SymToken.RBRACE) return
 		val entries = ArrayList<EnumEntryNode>()
 		val entrySymbols = ArrayList<EnumEntrySymbol>()
 
 		while(pos < tokens.size) {
-			if(tokens[pos] == SymToken.RIGHT_BRACE) break
+			if(tokens[pos] == SymToken.RBRACE) break
 
 			val name = id()
 
@@ -404,7 +404,7 @@ class Parser(private val context: CompilerContext) {
 			if(!atNewline() && (tokens[pos] != SymToken.COMMA || tokens[++pos] !is IdToken)) break
 		}
 
-		expect(SymToken.RIGHT_BRACE)
+		expect(SymToken.RBRACE)
 		val symbol = EnumSymbol(SymBase(enumName, thisScope), entrySymbols).add()
 		val node = EnumNode(symbol, entries).add()
 		symbol.node = node
@@ -447,7 +447,7 @@ class Parser(private val context: CompilerContext) {
 		while(pos < tokens.size) {
 			when(val token = next()) {
 				is IdToken           -> parseId(token.value)
-				SymToken.RIGHT_BRACE -> { pos--; break }
+				SymToken.RBRACE -> { pos--; break }
 				is SymToken          -> if(token != SymToken.SEMICOLON) error(1, "Invalid symbol: ${token.string}")
 				EndToken             -> break
 				else                 -> error(1, "Invalid token: $token")

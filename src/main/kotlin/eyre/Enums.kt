@@ -150,9 +150,11 @@ enum class UnaryOp(
 
 	POS("+", { it }),
 	NEG("-", { -it }),
-	NOT("~", { it.inv() });
+	NOT("~", { it.inv() }),
+	LNOT("!", { if(it == 0L) 1L else 0L });
 
 }
+
 
 
 
@@ -162,21 +164,35 @@ enum class BinaryOp(
 	val calculate       : (Long, Long) -> Long
 ) {
 
-	DOT(null, 6, { _, _ -> 0L }),
-	REF(null, 5, { _,_ -> 0L }),
-	MUL("*",  4, { a, b -> a * b }),
-	DIV("/",  4, { a, b -> a / b }),
-	ADD("+",  3, { a, b -> a + b }),
-	SUB("-",  3, { a, b -> a - b }),
-	SHL("<<", 2, { a, b -> a shl b.toInt() }),
-	SHR(">>", 2, { a, b -> a shr b.toInt() }),
-	AND("&",  1, { a, b -> a and b }),
-	XOR("^",  1, { a, b -> a xor b }),
-	OR( "|",  1, { a, b -> a or b });
+	DOT (null,  9, { _, _ -> 0L }),
 
+	REF (null,  8, { _,_ -> 0L }),
 
-	val isLeftRegValid get() = this == ADD || this == SUB
-	val isRightRegValid get() = this == ADD
+	MUL ("*",   7, { a, b -> a * b }),
+	DIV ("/",   7, { a, b -> a / b }),
+
+	ADD ("+",   6, { a, b -> a + b }),
+	SUB ("-",   6, { a, b -> a - b }),
+
+	SHL ("<<",  5, { a, b -> a shl b.toInt() }),
+	SHR (">>",  5, { a, b -> a shr b.toInt() }),
+	SAR (">>>", 5, { a, b -> a ushr b.toInt() }),
+
+	GT  (">",   4, { a, b -> if(a > b) 1 else 0 }),
+	LT  ("<",   4, { a, b -> if(a < b) 1 else 0 }),
+	GTE (">=",  4, { a, b -> if(a >= b) 1 else 0 }),
+	LTE ("<=",  4, { a, b -> if(a <= b) 1 else 0 }),
+
+	EQ  ("==",  3, { a, b -> if(a == b) 1 else 0 }),
+	INEQ("!=",  3, { a, b -> if(a != b) 1 else 0 }),
+
+	AND ("&",   2, { a, b -> a and b }),
+	XOR ("^",   2, { a, b -> a xor b }),
+	OR  ("|",   2, { a, b -> a or b }),
+
+	LAND("&&",  1, { a, b -> if(a != 0L && b != 0L) 1 else 0 }),
+	LOR ("||",  1, { a, b -> if(a != 0L || b != 0L) 1 else 0 }),
+
 
 }
 
