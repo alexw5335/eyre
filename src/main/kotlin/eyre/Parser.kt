@@ -1,5 +1,6 @@
 package eyre
 
+import eyre.util.IntList
 import java.util.*
 
 class Parser(private val context: CompilerContext) {
@@ -46,6 +47,12 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	/*
+	Node and symbol creation
+	 */
+
+
+
 	private fun addNode(node: AstNode) {
 		nodes.add(node)
 		nodeLines.add(srcFile.tokenLines[pos - 1])
@@ -57,29 +64,28 @@ class Parser(private val context: CompilerContext) {
 		val existing = context.symbols.add(symbol)
 		if(existing != null)
 			error("Symbol redefinition: ${symbol.name}. Original: ${existing.scope}.${existing.name}, new: ${symbol.scope}.${symbol.name}")
-		//when(symbol) {
-		//	is ConstIntSymbol -> if(!symbol.resolved) context.constSymbols.add(symbol)
-		//	is EnumSymbol     -> context.constSymbols.add(symbol)
-		//}
 	}
 
 
 	private fun<T : Symbol> T.add(): T { addSymbol(this); return this }
+
 	private fun<T : AstNode> T.add(): T { addNode(this); return this }
+
+
 
 	private fun SymBase(
 		name      : StringIntern,
 		thisScope : ScopeIntern = currentScope,
 		resolved  : Boolean = true
-	) = SymBase(currentScope, name, thisScope, resolved)
+	) = SymBase(srcFile, currentScope, name, thisScope, resolved)
+
+
 
 	private fun SymBase(
 		name: StringIntern,
 		section: Section,
 		pos: Int = 0
-	) = SymBase(currentScope, name, section = section, pos = pos)
-
-
+	) = SymBase(srcFile, currentScope, name, section = section, pos = pos)
 
 
 
@@ -382,10 +388,10 @@ class Parser(private val context: CompilerContext) {
 
 			if(tokens[pos] == SymToken.EQUALS) {
 				pos++
-				symbol = EnumEntrySymbol(SymBase(thisScope, name, resolved = false), entries.size).add()
+				symbol = EnumEntrySymbol(SymBase(srcFile, thisScope, name, resolved = false), entries.size).add()
 				entry = EnumEntryNode(symbol, parseExpression())
 			} else {
-				symbol = EnumEntrySymbol(SymBase(thisScope, name, resolved = true), entries.size, current).add()
+				symbol = EnumEntrySymbol(SymBase(srcFile, thisScope, name, resolved = true), entries.size, current).add()
 				entry = EnumEntryNode(symbol, NullNode)
 				current += if(isBitmask) current else 1
 			}

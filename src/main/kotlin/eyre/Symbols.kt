@@ -2,17 +2,21 @@ package eyre
 
 
 
+class SrcPos(val file: SrcFile, val line: Int)
+
+
+
 class SymBase(
+	val file      : SrcFile?,
 	val scope     : ScopeIntern,
 	val name      : StringIntern,
 	val thisScope : ScopeIntern = scope,
 	var resolved  : Boolean = true,
-	var resolving : Boolean = false,
 	var section   : Section = Section.NONE,
 	var pos       : Int = 0
 ) {
 	companion object {
-		val EMPTY = SymBase(ScopeInterner.EMPTY, StringInterner.EMPTY)
+		val EMPTY = SymBase(null, ScopeInterner.EMPTY, StringInterner.EMPTY)
 	}
 }
 
@@ -20,10 +24,10 @@ class SymBase(
 
 interface Symbol {
 	val base: SymBase
+	val file get() = base.file
 	val scope get() = base.scope
 	val name get() = base.name
 	var resolved get() = base.resolved; set(v) { base.resolved = v }
-	var resolving get() = base.resolving; set(v) { base.resolving = v }
 }
 
 

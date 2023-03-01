@@ -1,5 +1,7 @@
 package eyre
 
+import eyre.util.BitList
+import eyre.util.IntList
 import java.nio.file.Path
 
 class SrcFile(val path: Path, val relPath: Path) {

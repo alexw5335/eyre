@@ -93,6 +93,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun assemble0(node: InsNode) { when(node.mnemonic) {
+		else -> invalidEncoding()
+	}}
+
+
+
 	private fun assemble1(node: InsNode) {
 		when(val op1 = node.op1) {
 			is RegNode -> encode1R(Operands.R, op1.value)
@@ -620,7 +626,9 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	// Custom encodings
+	/*
+	Custom encodings
+	 */
 
 
 
@@ -857,6 +865,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	/*
+	MOV custom encodings
+	 */
+
+
+
 	private fun customEncodeMOVSXD(node: InsNode) {
 		if(node.size != 2) invalidEncoding()
 		val op1 = node.op1!!
@@ -889,18 +903,54 @@ class Assembler(private val context: CompilerContext) {
 		if(op2 is RegNode) {
 			when(op2.value.width) {
 				Width.BYTE  -> encode2RR(Operands.CUSTOM1, op1.value, op2.value)
-				Width.WORD -> encode2RR(Operands.CUSTOM2, op1.value, op2.value)
+				Width.WORD  -> encode2RR(Operands.CUSTOM2, op1.value, op2.value)
 				else        -> invalidEncoding()
 
 			}
 		} else if(op2 is MemNode) {
 			when(op2.width ?: invalidEncoding()) {
 				Width.BYTE  -> encode2RM(Operands.CUSTOM1, op1.value, op2, 0)
-				Width.WORD -> encode2RM(Operands.CUSTOM2, op1.value, op2, 0)
+				Width.WORD  -> encode2RM(Operands.CUSTOM2, op1.value, op2, 0)
 				else        -> invalidEncoding()
 			}
 		}
 	}
+
+
+
+	private fun customEncodeMOV(node: InsNode) {
+		if(node.size != 2) invalidEncoding()
+		val op1 = node.op1!!
+		val op2 = node.op2!!
+
+		if(op1 is RegNode) {
+			if(op2 is RegNode) {
+				encodeExact2RR(op1.value, op2.value)
+			} else if(op2 is MemNode) {
+				encodeExact2RM(op1.value, op2)
+			} else {
+				val imm = resolveImm(op2)
+				encode1O(Operands.CUSTOM1, op1.value)
+				writeImm(op2, op1.width, imm, true)
+			}
+		} else if(op1 is MemNode) {
+			if(op2 is RegNode) {
+				encodeExact2RM(op2.value, op1)
+			} else {
+				val width = op1.width ?: invalidEncoding()
+				encode1M(Operands.M_I, op1, width.bytes)
+				writeImm(op2, width)
+			}
+		} else {
+			invalidEncoding()
+		}
+	}
+
+
+
+	/*
+	ADD/OR/CMP... ROL/ROR/SHL... custom encodings
+	 */
 
 
 
@@ -992,42 +1042,15 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun customEncodeMOV(node: InsNode) {
-		if(node.size != 2) invalidEncoding()
-		val op1 = node.op1!!
-		val op2 = node.op2!!
-
-		if(op1 is RegNode) {
-			if(op2 is RegNode) {
-				encodeExact2RR(op1.value, op2.value)
-			} else if(op2 is MemNode) {
-				encodeExact2RM(op1.value, op2)
-			} else {
-				val imm = resolveImm(op2)
-				encode1O(Operands.CUSTOM1, op1.value)
-				writeImm(op2, op1.width, imm, true)
-			}
-		} else if(op1 is MemNode) {
-			if(op2 is RegNode) {
-				encodeExact2RM(op2.value, op1)
-			} else {
-				val width = op1.width ?: invalidEncoding()
-				encode1M(Operands.M_I, op1, width.bytes)
-				writeImm(op2, width)
-			}
-		} else {
-			invalidEncoding()
-		}
-	}
-
-
-
 	/*
 	REL custom encodings
 	 */
 
 
 
+	/**
+	 * Note: REL32 operand must be the first custom operand.
+	 */
 	private fun encodeRel32(op1: AstNode) {
 		val imm = resolveImm(op1)
 		encodeNone(Operands.CUSTOM1)
@@ -1038,6 +1061,9 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	/**
+	 * Note: REL8 operand must be the first custom operand.
+	 */
 	private fun encodeRel8(op1: AstNode) {
 		val imm = resolveImm(op1)
 		encodeNone(Operands.CUSTOM1)
@@ -1048,6 +1074,9 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	/**
+	 * Node: REL8 must be the first custom operand and REL32 must be the second custom operand.
+	 */
 	private fun encodeRel8OrRel32(op1: AstNode) {
 		val imm = resolveImm(op1)
 		if(hasImmReloc) {

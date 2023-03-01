@@ -31,12 +31,15 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveFile(srcFile: SrcFile) {
+		if(srcFile.resolved)
+			return
 		if(srcFile.resolving)
 			error("Circular dependency found. Currently resolving files: ${context.srcFiles.filter { it.resolving }}")
-		else if(srcFile.resolved)
-			return
 
 		srcFile.resolving = true
+
+		val prev = scopeStackSize
+		scopeStackSize = 0
 
 		for(node in srcFile.nodes) {
 			when(node) {
@@ -54,6 +57,10 @@ class Resolver(private val context: CompilerContext) {
 				else -> continue
 			}
 		}
+
+		scopeStackSize = prev
+		srcFile.resolving = false
+		srcFile.resolved = true
 	}
 
 
@@ -123,25 +130,9 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun<T : Symbol> T.doResolve(block: T.() -> Unit) {
-		if(resolving) error("Circular const dependency")
-		resolving = true
-		block(this)
-		resolving = false
-		resolved = true
-	}
-
-
-
 	private fun resolveConstIntSymbol(symbol: IntSymbol): Long {
 		if(symbol.resolved) return symbol.intValue
-
-		when(symbol) {
-			is ConstSymbol     -> symbol.doResolve { intValue = resolveConstInt(symbol.node.value) }
-			is EnumEntrySymbol -> symbol.doResolve { intValue = resolveConstInt(symbol.node.value) }
-			else               -> error("Invalid int symbol")
-		}
-
+		resolveFile(symbol.file ?: error("Missing file"))
 		return symbol.intValue
 	}
 
@@ -158,12 +149,6 @@ class Resolver(private val context: CompilerContext) {
 		}
 
 		else -> error("Invalid integer constant node: $node")
-	}
-
-
-
-	private fun resolveEnum(node: EnumNode) {
-
 	}
 
 

@@ -1,4 +1,4 @@
-package eyre
+package eyre.util
 
 class IntList(array: IntArray) {
 
