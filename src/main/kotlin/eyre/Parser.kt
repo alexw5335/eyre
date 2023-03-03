@@ -45,6 +45,10 @@ class Parser(private val context: CompilerContext) {
 	private fun id() = (tokens[pos++] as? IdToken)?.value
 		?: error("Expecting identifier, found: $prev")
 
+	private fun currentLine() = srcFile.tokenLines[pos]
+	
+	private fun pos(pos: Int = this.pos) = SrcPos(srcFile, srcFile.tokenLines[pos])
+
 
 
 	/*
@@ -53,9 +57,8 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun<T : AstNode> T.create(): T{
-		srcFile = this@Parser.srcFile
-		srcLine = srcFile.tokenLines[pos - 1]
+	private fun<T : AstNode> T.setPos(pos: Int = this@Parser.pos): T {
+		srcPos = SrcPos(this@Parser.srcFile, this@Parser.srcFile.tokenLines[pos])
 		return this
 	}
 
@@ -86,15 +89,15 @@ class Parser(private val context: CompilerContext) {
 		name      : StringIntern,
 		thisScope : ScopeIntern = currentScope,
 		resolved  : Boolean = true
-	) = SymBase(srcFile, currentScope, name, thisScope, resolved)
+	) = SymBase(currentScope, name, thisScope, resolved)
 
 
 
 	private fun SymBase(
-		name: StringIntern,
-		section: Section,
-		pos: Int = 0
-	) = SymBase(srcFile, currentScope, name, section = section, pos = pos)
+		name    : StringIntern,
+		section : Section,
+		pos     : Int = 0
+	) = SymBase(currentScope, name, section = section, pos = pos)
 
 
 
@@ -143,7 +146,7 @@ class Parser(private val context: CompilerContext) {
 		parseScope()
 
 		if(currentNamespace != null)
-			addNode(ScopeEndNode)
+			ScopeEndNode().setPos().add()
 
 		srcFile.nodes = ArrayList(nodes)
 		srcFile.nodeLines = nodeLines.array()
@@ -168,7 +171,7 @@ class Parser(private val context: CompilerContext) {
 				return expression
 			}
 
-			return UnaryNode(token.unaryOp ?: error("Unexpected symbol: $token"), parseAtom().create())
+			return UnaryNode(token.unaryOp ?: error("Unexpected symbol: $token"), parseAtom().setPos())
 		}
 
 		if(token is IntToken)
@@ -186,7 +189,7 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseExpression(precedence: Int = 0): AstNode {
-		var atom = parseAtom().create()
+		var atom = parseAtom().setPos()
 
 		while(true) {
 			val token = next
@@ -210,7 +213,7 @@ class Parser(private val context: CompilerContext) {
 					parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node")
 				)
 				else -> BinaryNode(op, atom, parseExpression(op.precedence + 1))
-			}.create()
+			}.setPos()
 		}
 
 		return atom
@@ -280,15 +283,15 @@ class Parser(private val context: CompilerContext) {
 
 		if(next == SymToken.LBRACE) {
 			pos++
-			NamespaceNode(namespace).create().add()
+			NamespaceNode(namespace).setPos().add()
 			parseScope(thisScope)
 			expect(SymToken.RBRACE)
-			ScopeEndNode.add()
+			ScopeEndNode().setPos().add()
 		} else {
 			expectTerminator()
 			if(currentNamespace != null)
-				ScopeEndNode.add()
-			NamespaceNode(namespace).create().add()
+				ScopeEndNode().setPos().add()
+			NamespaceNode(namespace).setPos().add()
 			parseScope(thisScope)
 			currentNamespace = namespace
 		}
@@ -321,6 +324,7 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseVar() {
+		val line = srcFile.tokenLines[pos - 1]
 		val name = id()
 		var initialiser = id()
 
@@ -359,7 +363,7 @@ class Parser(private val context: CompilerContext) {
 		pos--
 		if(parts.isEmpty()) error("Expecting variable initialiser")
 		val symbol = VarSymbol(SymBase(name, Section.DATA), size).add()
-		VarNode(symbol, parts).create().add()
+		VarNode(symbol, parts).setPos(line).add()
 	}
 
 
@@ -376,6 +380,7 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseEnum(isBitmask: Boolean) {
+		val enumLine = currentLine()
 		val enumName = id()
 		var current = if(isBitmask) 1L else 0L
 		val thisScope = addScope(enumName)
@@ -389,6 +394,8 @@ class Parser(private val context: CompilerContext) {
 		while(pos < tokens.size) {
 			if(tokens[pos] == SymToken.RBRACE) break
 
+			val line = currentLine()
+
 			val name = id()
 
 			val symbol: EnumEntrySymbol
@@ -396,25 +403,25 @@ class Parser(private val context: CompilerContext) {
 
 			if(tokens[pos] == SymToken.EQUALS) {
 				pos++
-				symbol = EnumEntrySymbol(SymBase(srcFile, thisScope, name, resolved = false), entries.size).add()
+				symbol = EnumEntrySymbol(SymBase(thisScope, name, resolved = false), entries.size).add()
 				entry = EnumEntryNode(symbol, parseExpression())
 			} else {
-				symbol = EnumEntrySymbol(SymBase(srcFile, thisScope, name, resolved = true), entries.size, current).add()
-				entry = EnumEntryNode(symbol, NullNode)
+				symbol = EnumEntrySymbol(SymBase(thisScope, name, resolved = true), entries.size, current).add()
+				entry = EnumEntryNode(symbol, null)
 				current += if(isBitmask) current else 1
 			}
 
 			symbol.node = entry
-
 			entries.add(entry)
 			entrySymbols.add(symbol)
+			entry.setPos(line)
 
 			if(!atNewline() && (tokens[pos] != SymToken.COMMA || tokens[++pos] !is IdToken)) break
 		}
 
 		expect(SymToken.RBRACE)
 		val symbol = EnumSymbol(SymBase(enumName, thisScope), entrySymbols).add()
-		val node = EnumNode(symbol, entries).add()
+		val node = EnumNode(symbol, entries).setPos(enumLine).add()
 		symbol.node = node
 		for(child in entrySymbols)
 			child.parent = symbol
@@ -424,10 +431,9 @@ class Parser(private val context: CompilerContext) {
 
 	private fun parseId(id: StringIntern) {
 		if(next == SymToken.COLON) {
+			val symbol = LabelSymbol(SymBase(id, Section.TEXT)).add()
+			LabelNode(symbol).setPos().add()
 			pos++
-			val symbol = LabelSymbol(SymBase(id, Section.TEXT))
-			addSymbol(symbol)
-			addNode(LabelNode(symbol))
 			return
 		}
 
@@ -444,8 +450,9 @@ class Parser(private val context: CompilerContext) {
 		}
 
 		if(id in StringInterner.mnemonics) {
+			val line = currentLine()
 			val mnemonic = StringInterner.mnemonics[id]
-			addNode(parseInstruction(mnemonic))
+			parseInstruction(mnemonic).setPos(line).add()
 		}
 	}
 

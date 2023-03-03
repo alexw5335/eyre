@@ -78,19 +78,17 @@ class Lexer {
 
 
 
-	private fun addSymbolAdv(symbol: SymToken) {
-		pos++
-		terminators.set(tokens.size)
-		tokens.add(symbol)
-	}
-
-
-
 	private fun addSymbol(symbol: SymToken) {
 		terminators.set(tokens.size)
-		tokens.add(symbol)
+		addToken(symbol)
 	}
 
+
+
+	private fun addSymbolAdv(symbol: SymToken) {
+		addSymbol(symbol)
+		pos++
+	}
 
 
 

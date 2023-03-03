@@ -2,12 +2,7 @@ package eyre
 
 
 
-class SrcPos(val file: SrcFile, val line: Int)
-
-
-
 class SymBase(
-	val file      : SrcFile?,
 	val scope     : ScopeIntern,
 	val name      : StringIntern,
 	val thisScope : ScopeIntern = scope,
@@ -15,18 +10,21 @@ class SymBase(
 	var section   : Section = Section.NONE,
 	var pos       : Int = 0
 ) {
+
+	var srcNode: AstNode? = null
+
 	companion object {
-		val EMPTY = SymBase(null, ScopeInterner.EMPTY, StringInterner.EMPTY)
+		val EMPTY = SymBase(ScopeInterner.EMPTY, StringInterner.EMPTY)
 	}
+
 }
 
 
 
 interface Symbol {
 	val base: SymBase
-	val file get() = base.file
-	val scope get() = base.scope
-	val name get() = base.name
+	val scope    get() = base.scope
+	val name     get() = base.name
 	var resolved get() = base.resolved; set(v) { base.resolved = v }
 }
 
@@ -42,6 +40,7 @@ interface PosSymbol : Symbol {
 	var section get() = base.section; set(v) { base.section = v }
 	var pos get() = base.pos; set(v) { base.pos = v }
 }
+
 
 
 interface IntSymbol : Symbol {

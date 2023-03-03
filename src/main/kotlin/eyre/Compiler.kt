@@ -15,7 +15,7 @@ class Compiler(private val context: CompilerContext) {
 
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
-			printTokens(srcFile)
+			//printTokens(srcFile)
 			parser.parse(srcFile)
 			printNodes(srcFile)
 			//printSymbols()

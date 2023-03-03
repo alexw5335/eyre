@@ -3,15 +3,12 @@ package eyre
 
 
 sealed class AstNode {
-	lateinit var srcFile: SrcFile
-	var srcLine: Int = 0
+	lateinit var srcPos: SrcPos
 }
 
 
 
-object ScopeEndNode : AstNode()
-
-object NullNode : AstNode()
+class ScopeEndNode : AstNode()
 
 class NamespaceNode(val symbol: Namespace) : AstNode()
 
@@ -39,7 +36,7 @@ class SegRegNode(val value: SegReg) : AstNode()
 
 class ConstNode(val symbol: ConstSymbol, val value: AstNode) : AstNode()
 
-class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode) : AstNode()
+class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode?) : AstNode()
 
 class EnumNode(val symbol: EnumSymbol, val entries: List<EnumEntryNode>) : AstNode()
 
@@ -132,7 +129,7 @@ val AstNode.printString: String get() = when(this) {
 
 	is EnumEntryNode -> buildString {
 		append(symbol.name)
-		if(value != NullNode) {
+		if(value != null) {
 			append(" = ")
 			append(value.printString)
 		}
