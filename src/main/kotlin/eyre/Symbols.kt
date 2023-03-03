@@ -5,10 +5,7 @@ package eyre
 class SymBase(
 	val scope     : ScopeIntern,
 	val name      : StringIntern,
-	val thisScope : ScopeIntern = scope,
 	var resolved  : Boolean = true,
-	var section   : Section = Section.NONE,
-	var pos       : Int = 0
 ) {
 
 	var srcNode: AstNode? = null
@@ -31,14 +28,13 @@ interface Symbol {
 
 
 interface ScopedSymbol : Symbol {
-	val thisScope get() = base.thisScope
+	val thisScope: ScopeIntern
 }
 
 
 
 interface PosSymbol : Symbol {
-	var section get() = base.section; set(v) { base.section = v }
-	var pos get() = base.pos; set(v) { base.pos = v }
+	val pos: SectionPos?
 }
 
 
@@ -47,41 +43,88 @@ interface IntSymbol : Symbol {
 	var intValue: Long
 }
 
+
+
+private class IntSymbolImpl(
+	override val base: SymBase,
+	override var intValue: Long
+) : IntSymbol
+
+
+
 fun IntSymbol(base: SymBase, intValue: Long): IntSymbol {
-	class IntSymbolImpl(override val base: SymBase, override var intValue: Long) : IntSymbol
 	return IntSymbolImpl(base, intValue)
 }
 
 
 
-class Namespace(override val base: SymBase) : ScopedSymbol
+class Namespace(
+	override val base: SymBase,
+	override val thisScope: ScopeIntern
+) : ScopedSymbol
 
-class LabelSymbol(override val base: SymBase) : PosSymbol
 
-class DllImportSymbol(override val base: SymBase) : PosSymbol
 
-class DllSymbol(override val base: SymBase, val imports: MutableList<DllImportSymbol>) : Symbol
-
-class VarSymbol(override val base: SymBase, val size: Int) : PosSymbol
-
-class ResSymbol(override val base: SymBase, var size: Int = 0) : PosSymbol
-
-class ConstSymbol(override val base: SymBase, override var intValue: Long = 0L): IntSymbol {
-	lateinit var node: ConstNode
+class LabelSymbol(
+	override val base: SymBase
+) : PosSymbol {
+	override var pos = SectionPos()
 }
+
+
+
+class DllImportSymbol(
+	override val base: SymBase
+) : PosSymbol {
+	override var pos = SectionPos()
+}
+
+
+
+class DllSymbol(
+	override val base: SymBase,
+	val imports: MutableList<DllImportSymbol>
+) : Symbol
+
+
+
+class VarSymbol(
+	override val base: SymBase,
+	val size: Int
+) : PosSymbol {
+	override var pos = SectionPos()
+}
+
+
+
+class ResSymbol(
+	override val base: SymBase,
+	var size: Int
+) : PosSymbol {
+	override var pos = SectionPos()
+}
+
+
+
+class ConstSymbol(
+	override val base: SymBase,
+	override var intValue: Long = 0L
+): IntSymbol
+
+
 
 class EnumEntrySymbol(
 	override var base     : SymBase,
 	val ordinal           : Int,
-	override var intValue : Long = 0L
+	override var intValue : Long
 ) : IntSymbol {
 	lateinit var parent: EnumSymbol
-	lateinit var node: EnumEntryNode
 }
 
+
+
 class EnumSymbol(
-	override val base : SymBase,
-	val entries       : List<EnumEntrySymbol>
-) : ScopedSymbol {
-	lateinit var node: EnumNode
-}
+	override val base      : SymBase,
+	override val thisScope : ScopeIntern,
+	val entries            : List<EnumEntrySymbol>
+) : ScopedSymbol
