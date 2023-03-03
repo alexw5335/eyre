@@ -53,6 +53,14 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun<T : AstNode> T.create(): T{
+		srcFile = this@Parser.srcFile
+		srcLine = srcFile.tokenLines[pos - 1]
+		return this
+	}
+
+
+
 	private fun addNode(node: AstNode) {
 		nodes.add(node)
 		nodeLines.add(srcFile.tokenLines[pos - 1])
@@ -65,6 +73,7 @@ class Parser(private val context: CompilerContext) {
 		if(existing != null)
 			error("Symbol redefinition: ${symbol.name}. Original: ${existing.scope}.${existing.name}, new: ${symbol.scope}.${symbol.name}")
 	}
+
 
 
 	private fun<T : Symbol> T.add(): T { addSymbol(this); return this }
@@ -159,7 +168,7 @@ class Parser(private val context: CompilerContext) {
 				return expression
 			}
 
-			return UnaryNode(token.unaryOp ?: error("Unexpected symbol: $token"), parseAtom())
+			return UnaryNode(token.unaryOp ?: error("Unexpected symbol: $token"), parseAtom().create())
 		}
 
 		if(token is IntToken)
@@ -177,7 +186,7 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseExpression(precedence: Int = 0): AstNode {
-		var atom = parseAtom()
+		var atom = parseAtom().create()
 
 		while(true) {
 			val token = next
@@ -201,7 +210,7 @@ class Parser(private val context: CompilerContext) {
 					parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node")
 				)
 				else -> BinaryNode(op, atom, parseExpression(op.precedence + 1))
-			}
+			}.create()
 		}
 
 		return atom
@@ -267,20 +276,19 @@ class Parser(private val context: CompilerContext) {
 	private fun parseNamespace() {
 		val name = id()
 		val thisScope = addScope(name)
-		val namespace = Namespace(SymBase(name, thisScope))
-		addSymbol(namespace)
+		val namespace = Namespace(SymBase(name, thisScope)).add()
 
 		if(next == SymToken.LBRACE) {
 			pos++
-			addNode(NamespaceNode(namespace))
+			NamespaceNode(namespace).create().add()
 			parseScope(thisScope)
 			expect(SymToken.RBRACE)
-			addNode(ScopeEndNode)
+			ScopeEndNode.add()
 		} else {
 			expectTerminator()
 			if(currentNamespace != null)
-				addNode(ScopeEndNode)
-			addNode(NamespaceNode(namespace))
+				ScopeEndNode.add()
+			NamespaceNode(namespace).create().add()
 			parseScope(thisScope)
 			currentNamespace = namespace
 		}
@@ -292,7 +300,7 @@ class Parser(private val context: CompilerContext) {
 		val dllName = id()
 		expect(SymToken.LBRACE)
 
-		val dll: DllSymbol = context.dlls.getOrPut(dllName) {
+		val dll = context.dlls.getOrPut(dllName) {
 			DllSymbol(SymBase(dllName), ArrayList())
 		}.add()
 
@@ -351,7 +359,7 @@ class Parser(private val context: CompilerContext) {
 		pos--
 		if(parts.isEmpty()) error("Expecting variable initialiser")
 		val symbol = VarSymbol(SymBase(name, Section.DATA), size).add()
-		VarNode(symbol, parts).add()
+		VarNode(symbol, parts).create().add()
 	}
 
 

@@ -14,6 +14,8 @@ data class StringToken(val value: StringIntern) : Token
 
 data class IdToken(val value: StringIntern) : Token
 
+object ErrorToken : Token { override fun toString() = "ERROR" }
+
 
 
 enum class SymToken(

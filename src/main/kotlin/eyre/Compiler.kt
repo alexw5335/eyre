@@ -15,21 +15,21 @@ class Compiler(private val context: CompilerContext) {
 
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
-			//printTokens(srcFile)
+			printTokens(srcFile)
 			parser.parse(srcFile)
 			printNodes(srcFile)
-			printSymbols()
+			//printSymbols()
 		}
 
-		val resolver = Resolver(context)
-		resolver.resolve()
+		//val resolver = Resolver(context)
+		//resolver.resolve()
 
-		val assembler = Assembler(context)
-		assembler.assemble()
+		//val assembler = Assembler(context)
+		//assembler.assemble()
 
-		val linker = Linker(context)
-		linker.link()
-		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
+		//val linker = Linker(context)
+		//linker.link()
+		//Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
 		//dumpbin()
 		//disassemble()
 	}
@@ -101,6 +101,7 @@ class Compiler(private val context: CompilerContext) {
 				is StringToken -> println("STRING   ${newline}${terminator}   \"${token.value}\"")
 				is IdToken     -> println("ID       ${newline}${terminator}   ${token.value}")
 				is SymToken    -> println("SYM      ${newline}${terminator}   ${token.string}")
+				is ErrorToken  -> println("ERROR")
 			}
 		}
 
@@ -112,11 +113,10 @@ class Compiler(private val context: CompilerContext) {
 	private fun printNodes(srcFile: SrcFile) {
 		printHeader("NODES (${srcFile.relPath}):")
 
-		for((index, node) in srcFile.nodes.withIndex()) {
-			val line = srcFile.nodeLines[index]
+		for(node in srcFile.nodes) {
 			print("Line ")
-			print(line)
-			for(i in 0 until (5 - line.toString().length))
+			print(node.srcLine)
+			for(i in 0 until (5 - node.srcLine.toString().length))
 				print(' ')
 			println(node.printString)
 		}
