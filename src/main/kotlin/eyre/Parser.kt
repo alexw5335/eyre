@@ -45,7 +45,7 @@ class Parser(private val context: CompilerContext) {
 	private fun id() = (tokens[pos++] as? IdToken)?.value
 		?: error("Expecting identifier, found: $prev")
 	
-	private fun srcPos(pos: Int = this.pos) = SrcPos(srcFile, srcFile.tokenLines[pos])
+	private fun SrcPos(pos: Int = this.pos) = SrcPos(srcFile, srcFile.tokenLines[pos])
 
 
 
@@ -55,8 +55,8 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun<T : AstNode> T.setPos(pos: Int = this@Parser.pos): T {
-		srcPos = SrcPos(this@Parser.srcFile, this@Parser.srcFile.tokenLines[pos])
+	private fun<T : AstNode> T.srcPos(srcPos: SrcPos = SrcPos()): T {
+		this.srcPos = srcPos
 		return this
 	}
 
@@ -80,17 +80,6 @@ class Parser(private val context: CompilerContext) {
 	private fun<T : Symbol> T.add(): T { addSymbol(this); return this }
 
 	private fun<T : AstNode> T.add(): T { addNode(this); return this }
-
-
-
-/*	private fun SymBase(
-		pos  : Int,
-		name : StringIntern
-	) = SymBase(
-		SrcPos(srcFile, srcFile.tokenLines[pos]),
-		currentScope,
-		name
-	)*/
 
 
 
@@ -139,7 +128,7 @@ class Parser(private val context: CompilerContext) {
 		parseScope()
 
 		if(currentNamespace != null)
-			ScopeEndNode().setPos().add()
+			ScopeEndNode().srcPos().add()
 
 		srcFile.nodes = ArrayList(nodes)
 		srcFile.nodeLines = nodeLines.array()
@@ -154,7 +143,7 @@ class Parser(private val context: CompilerContext) {
 			val id = token.value
 			if(id in StringInterner.registers)
 				return RegNode(StringInterner.registers[id])
-			return SymNode(id)
+			return SymNode(id).srcPos()
 		}
 
 		if(token is SymToken) {
@@ -164,17 +153,17 @@ class Parser(private val context: CompilerContext) {
 				return expression
 			}
 
-			return UnaryNode(token.unaryOp ?: error("Unexpected symbol: $token"), parseAtom().setPos())
+			return UnaryNode(token.unaryOp ?: error("Unexpected symbol: $token"), parseAtom()).srcPos()
 		}
 
 		if(token is IntToken)
-			return IntNode(token.value)
+			return IntNode(token.value).srcPos()
 
 		if(token is StringToken)
-			return StringNode(token.value)
+			return StringNode(token.value).srcPos()
 
 		if(token is CharToken)
-			return IntNode(token.value.code.toLong())
+			return IntNode(token.value.code.toLong()).srcPos()
 
 		error("Unexpected token: $token")
 	}
@@ -182,7 +171,7 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseExpression(precedence: Int = 0): AstNode {
-		var atom = parseAtom().setPos()
+		var atom = parseAtom()
 
 		while(true) {
 			val token = next
@@ -206,7 +195,7 @@ class Parser(private val context: CompilerContext) {
 					parseExpression(op.precedence + 1) as? SymNode ?: error("Invalid node")
 				)
 				else -> BinaryNode(op, atom, parseExpression(op.precedence + 1))
-			}.setPos()
+			}.srcPos()
 		}
 
 		return atom
@@ -247,22 +236,22 @@ class Parser(private val context: CompilerContext) {
 		if(atNewline() || next == EndToken)
 			return InsNode(mnemonic, 0, null, null, null, null)
 
-		val op1 = parseOperand()
+		val op1 = parseOperand().srcPos()
 		if(next != SymToken.COMMA)
 			return InsNode(mnemonic, 1, op1, null, null, null)
 		pos++
 
-		val op2 = parseOperand()
+		val op2 = parseOperand().srcPos()
 		if(next != SymToken.COMMA)
 			return InsNode(mnemonic, 2, op1, op2, null, null)
 		pos++
 
-		val op3 = parseOperand()
+		val op3 = parseOperand().srcPos()
 		if(next != SymToken.COMMA)
 			return InsNode(mnemonic, 3, op1, op2, op3, null)
 		pos++
 
-		val op4 = parseOperand()
+		val op4 = parseOperand().srcPos()
 		expectTerminator()
 		return InsNode(mnemonic, 4, op1, op2, op3, op4)
 	}
@@ -270,22 +259,22 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseNamespace() {
-		val srcPos = srcPos()
+		val srcPos = SrcPos()
 		val name = id()
 		val thisScope = addScope(name)
 		val namespace = Namespace(SymBase(srcPos, currentScope, name), thisScope).add()
 
 		if(next == SymToken.LBRACE) {
 			pos++
-			NamespaceNode(namespace).setPos().add()
+			NamespaceNode(namespace).srcPos().add()
 			parseScope(thisScope)
 			expect(SymToken.RBRACE)
-			ScopeEndNode().setPos().add()
+			ScopeEndNode().srcPos().add()
 		} else {
 			expectTerminator()
 			if(currentNamespace != null)
-				ScopeEndNode().setPos().add()
-			NamespaceNode(namespace).setPos().add()
+				ScopeEndNode().srcPos().add()
+			NamespaceNode(namespace).srcPos().add()
 			parseScope(thisScope)
 			currentNamespace = namespace
 		}
@@ -294,7 +283,7 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseDllImport() {
-		val srcPos = srcPos()
+		val srcPos = SrcPos()
 		val dllName = id()
 		expect(SymToken.LBRACE)
 
@@ -308,7 +297,7 @@ class Parser(private val context: CompilerContext) {
 				break
 			}
 
-			val srcPos2 = srcPos()
+			val srcPos2 = SrcPos()
 			val importName = id()
 			expectTerminator()
 			if(next == SymToken.COMMA) pos++
@@ -320,14 +309,14 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseVar() {
-		val line = srcFile.tokenLines[pos - 1]
+		val srcPos = SrcPos()
 		val name = id()
 		var initialiser = id()
 
 		if(initialiser == StringInterner.RES) {
 			val size = parseExpression()
-			val symbol = ResSymbol(SymBase(name, Section.DATA)).add()
-			ResNode(symbol, size).add()
+			val symbol = ResSymbol(SymBase(srcPos, currentScope, name)).add()
+			ResNode(symbol, size).srcPos(srcPos).add()
 			return
 		}
 
@@ -358,14 +347,14 @@ class Parser(private val context: CompilerContext) {
 
 		pos--
 		if(parts.isEmpty()) error("Expecting variable initialiser")
-		val symbol = VarSymbol(SymBase(name, Section.DATA), size).add()
-		VarNode(symbol, parts).setPos(line).add()
+		val symbol = VarSymbol(SymBase(srcPos, currentScope, name), size).add()
+		VarNode(symbol, parts).srcPos(srcPos).add()
 	}
 
 
 
 	private fun parseConst() {
-		val srcPos = srcPos()
+		val srcPos = SrcPos()
 		val name = id()
 		expect(SymToken.EQUALS)
 		val value = parseExpression()
@@ -376,10 +365,10 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseEnum(isBitmask: Boolean) {
-		val enumSrcPos = srcPos()
+		val enumSrcPos = SrcPos()
 		val enumName = id()
 		var current = if(isBitmask) 1L else 0L
-		val thisScope = addScope(enumName)
+		val scope = addScope(enumName)
 
 		if(tokens[pos] != SymToken.LBRACE) return
 		pos++
@@ -390,47 +379,53 @@ class Parser(private val context: CompilerContext) {
 		while(pos < tokens.size) {
 			if(tokens[pos] == SymToken.RBRACE) break
 
-			val srcPos = srcPos()
+			val srcPos = SrcPos()
 			val name = id()
 			val symbol: EnumEntrySymbol
-			val entry: EnumEntryNode
+			val node: EnumEntryNode
 
-			val base = SymBase(srcPos, thisScope, name)
+			val base = SymBase(srcPos, scope, name)
 
 			if(tokens[pos] == SymToken.EQUALS) {
 				pos++
 				symbol = EnumEntrySymbol(base, entries.size, 0).add()
 				symbol.resolved = false
-				entry = EnumEntryNode(symbol, parseExpression())
+				node = EnumEntryNode(symbol, parseExpression())
 			} else {
 				symbol = EnumEntrySymbol(base, entries.size, current).add()
 				symbol.resolved = true
-				entry = EnumEntryNode(symbol, null)
+				node = EnumEntryNode(symbol, null)
 				current += if(isBitmask) current else 1
 			}
 
-			entries.add(entry)
+			entries.add(node)
 			entrySymbols.add(symbol)
-			entry.srcPos = srcPos
+			node.srcPos = srcPos
 
-			if(!atNewline() && (tokens[pos] != SymToken.COMMA || tokens[++pos] !is IdToken)) break
+			if(!atNewline() && next != SymToken.COMMA)
+				break
 		}
 
 		expect(SymToken.RBRACE)
-		val symbol = EnumSymbol(SymBase(enumName, thisScope), entrySymbols).add()
-		val node = EnumNode(symbol, entries).setPos(enumLine).add()
-		symbol.node = node
+		val symbol = EnumSymbol(SymBase(enumSrcPos, currentScope, enumName), scope, entrySymbols).add()
+		EnumNode(symbol, entries).add()
 		for(child in entrySymbols)
 			child.parent = symbol
 	}
 
 
 
+	private fun parseLabel(id: StringIntern) {
+		val srcPos = SrcPos(1)
+		val symbol = LabelSymbol(SymBase(srcPos, currentScope, id)).add()
+		LabelNode(symbol).srcPos(srcPos).add()
+	}
+
+
+
 	private fun parseId(id: StringIntern) {
 		if(next == SymToken.COLON) {
-			val symbol = LabelSymbol(SymBase(id, Section.TEXT)).add()
-			LabelNode(symbol).setPos().add()
-			pos++
+			parseLabel(id)
 			return
 		}
 
@@ -447,9 +442,9 @@ class Parser(private val context: CompilerContext) {
 		}
 
 		if(id in StringInterner.mnemonics) {
-			val line = currentLine()
+			val srcPos = SrcPos()
 			val mnemonic = StringInterner.mnemonics[id]
-			parseInstruction(mnemonic).setPos(line).add()
+			parseInstruction(mnemonic).add().srcPos = srcPos
 		}
 	}
 

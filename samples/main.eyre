@@ -5,23 +5,4 @@ dllimport Kernel32 {
 	ExitProcess
 }
 
-enum MyEnum {
-	A
-	B
-	C = 8
-}
-
-var string db "This is a test\0"
-
 main:
-	sub rsp, 56
-
-	mov byte [string], MyEnum.C + 0x30
-
-	mov ecx, -11
-	lea rdx, [string]
-	mov r8d, string::size
-	mov r9, [rsp + 40]
-	mov qword [rsp + 32], 0
-	call WriteFile
-	call ExitProcess

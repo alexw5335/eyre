@@ -2,7 +2,8 @@ package eyre
 
 
 
-sealed class AstNode {
+sealed class AstNode() {
+	constructor(symbol: Symbol) : this() { this.srcPos = symbol.srcPos!! }
 	lateinit var srcPos: SrcPos
 }
 
@@ -38,7 +39,7 @@ class ConstNode(val symbol: ConstSymbol, val value: AstNode) : AstNode()
 
 class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode?) : AstNode()
 
-class EnumNode(val symbol: EnumSymbol, val entries: List<EnumEntryNode>) : AstNode()
+class EnumNode(val symbol: EnumSymbol, val entries: ArrayList<EnumEntryNode>) : AstNode()
 
 class InsNode(
 	val mnemonic : Mnemonic,

@@ -115,8 +115,8 @@ class Compiler(private val context: CompilerContext) {
 
 		for(node in srcFile.nodes) {
 			print("Line ")
-			print(node.srcLine)
-			for(i in 0 until (5 - node.srcLine.toString().length))
+			print(node.srcPos.line)
+			for(i in 0 until (5 - node.srcPos.line.toString().length))
 				print(' ')
 			println(node.printString)
 		}

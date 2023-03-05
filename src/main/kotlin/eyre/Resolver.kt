@@ -132,7 +132,7 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun resolveConstIntSymbol(symbol: IntSymbol): Long {
 		if(symbol.resolved) return symbol.intValue
-		resolveFile(symbol.file ?: error("Missing file"))
+		resolveFile(symbol.srcPos?.file ?: error("Missing file"))
 		return symbol.intValue
 	}
 

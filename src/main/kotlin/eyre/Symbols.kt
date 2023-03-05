@@ -21,6 +21,7 @@ class SymBase(
 
 interface Symbol {
 	val base: SymBase
+	val srcPos   get() = base.srcPos
 	val scope    get() = base.scope
 	val name     get() = base.name
 	var resolved get() = base.resolved; set(v) { base.resolved = v }
@@ -35,7 +36,8 @@ interface ScopedSymbol : Symbol {
 
 
 interface PosSymbol : Symbol {
-	val pos: SectionPos?
+	var section: Section
+	var pos: Int
 }
 
 
@@ -67,9 +69,10 @@ class Namespace(
 
 
 class LabelSymbol(
-	override val base: SymBase
+	override val base: SymBase,
 ) : PosSymbol {
-	override var pos = SectionPos()
+	override var section = Section.TEXT
+	override var pos = 0
 }
 
 
@@ -77,7 +80,8 @@ class LabelSymbol(
 class DllImportSymbol(
 	override val base: SymBase
 ) : PosSymbol {
-	override var pos = SectionPos()
+	override var section = Section.IDATA
+	override var pos = 0
 }
 
 
@@ -93,16 +97,18 @@ class VarSymbol(
 	override val base: SymBase,
 	val size: Int
 ) : PosSymbol {
-	override var pos = SectionPos()
+	override var section = Section.DATA
+	override var pos = 0
 }
 
 
 
 class ResSymbol(
 	override val base: SymBase,
-	var size: Int
+	var size: Int = 0
 ) : PosSymbol {
-	override var pos = SectionPos()
+	override var section = Section.DATA
+	override var pos = 0
 }
 
 
