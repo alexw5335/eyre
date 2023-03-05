@@ -3,15 +3,16 @@ package eyre
 
 
 class SymBase(
+	val srcPos    : SrcPos?,
 	val scope     : ScopeIntern,
 	val name      : StringIntern,
-	var resolved  : Boolean = true,
 ) {
 
-	var srcNode: AstNode? = null
+	// Only used by compile-time constants that may be referenced by other constants
+	var resolved = false
 
 	companion object {
-		val EMPTY = SymBase(ScopeInterner.EMPTY, StringInterner.EMPTY)
+		val EMPTY = SymBase(null, ScopeInterner.EMPTY, StringInterner.EMPTY)
 	}
 
 }
