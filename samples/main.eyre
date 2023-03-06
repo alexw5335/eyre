@@ -1,8 +1,1 @@
-namespace main
-
-dllimport Kernel32 {
-	WriteFile
-	ExitProcess
-}
-
 main:

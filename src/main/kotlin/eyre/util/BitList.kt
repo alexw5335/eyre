@@ -1,7 +1,5 @@
 package eyre.util
 
-import eyre.util.BitArray
-
 class BitList(array: BitArray) {
 
 

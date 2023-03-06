@@ -1,7 +1,5 @@
 package eyre.util
 
-import eyre.Width
-import eyre.swapEndian
 import java.nio.charset.Charset
 import kotlin.math.max
 import kotlin.math.min
@@ -299,38 +297,6 @@ class NativeWriter(bytes: ByteArray) {
 	fun advanceTo(pos: Int) {
 		ensureCapacity(pos - this.pos)
 		this.pos = pos
-	}
-
-
-
-	/*
-	Temp
-	 */
-
-
-
-	fun writeWidth(width: Width, value: Int) {
-		if(value !in width) error("Value out of range")
-
-		when(width) {
-			Width.BYTE  -> i8(value)
-			Width.WORD -> i16(value)
-			Width.DWORD -> i32(value)
-			else        -> error("Value out of range")
-		}
-	}
-
-
-
-	fun writeWidth(width: Width, value: Long) {
-		if(value !in width) error("Value out of range")
-
-		when(width) {
-			Width.BYTE  -> i8(value.toInt())
-			Width.WORD -> i16(value.toInt())
-			Width.DWORD -> i32(value.toInt())
-			Width.QWORD -> i64(value)
-		}
 	}
 
 

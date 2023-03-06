@@ -17,7 +17,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	var bssSize = 0
 
-	val relocations = ArrayList<Relocation>()
+	val relocs = ArrayList<Reloc>()
 
 	val linkWriter = NativeWriter()
 

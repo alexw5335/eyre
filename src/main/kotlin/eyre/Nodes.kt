@@ -2,8 +2,7 @@ package eyre
 
 
 
-sealed class AstNode() {
-	constructor(symbol: Symbol) : this() { this.srcPos = symbol.srcPos!! }
+sealed class AstNode {
 	lateinit var srcPos: SrcPos
 }
 
@@ -15,7 +14,9 @@ class NamespaceNode(val symbol: Namespace) : AstNode()
 
 class IntNode(val value: Long) : AstNode()
 
-class RegNode(val value: Register) : AstNode() { val width get() = value.width }
+class RegNode(val value: Register) : AstNode() {
+	val width get() = value.width
+}
 
 class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode()
 
@@ -23,11 +24,11 @@ class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstN
 
 class StringNode(val value: StringIntern) : AstNode()
 
-class LabelNode(val symbol: LabelSymbol) : AstNode()
+data class LabelNode(val symbol: LabelSymbol) : AstNode()
 
 class MemNode(val width: Width?, val value: AstNode) : AstNode()
 
-class VarPart(val width: Width, val nodes: List<AstNode>)
+class VarPart(val width: Width, val nodes: List<AstNode>) : AstNode()
 
 class VarNode(val symbol: VarSymbol, val parts: List<VarPart>) : AstNode()
 
@@ -93,8 +94,33 @@ Formatting
 
 
 
+fun AstNode.getChildren(): List<AstNode> = when(this) {
+	is LabelNode,
+	is StringNode,
+	is IntNode,
+	is RegNode,
+	is SymNode,
+	is NamespaceNode,
+	is ScopeEndNode,
+	is SegRegNode    -> emptyList()
+	is UnaryNode     -> listOf(node)
+	is BinaryNode    -> listOf(left, right)
+	is MemNode       -> listOf(value)
+	is DotNode       -> listOf(left, right)
+	is InsNode       -> listOfNotNull(op1, op2, op3, op4)
+	is VarNode       -> parts
+	is VarPart       -> nodes
+	is ResNode       -> listOf(size)
+	is RefNode       -> listOf(left, right)
+	is ConstNode     -> listOf(value)
+	is EnumNode      -> entries
+	is EnumEntryNode -> listOfNotNull(value)
+}
+
+
+
 val AstNode.printString: String get() = when(this) {
-	is LabelNode     -> "label ${symbol.name}:"
+	is LabelNode     -> "label ${symbol.name}"
 	is StringNode    -> "\"${value.string}\""
 	is IntNode       -> value.toString()
 	is UnaryNode     -> "${op.symbol}${node.printString}"
