@@ -1,8 +1,5 @@
 package eyre
 
-import java.nio.file.Files
-import java.nio.file.Paths
-
 /**
  * Token and node lines aren't working properly
  */
@@ -17,9 +14,16 @@ class Compiler(private val context: CompilerContext) {
 			lexer.lex(srcFile)
 			printTokens(srcFile)
 			parser.parse(srcFile)
-			printNodes(srcFile)
+			//printNodes(srcFile)
+			printNodeTree(srcFile)
 		}
 	}
+
+
+
+	/*
+	Printing
+	 */
 
 
 
@@ -61,19 +65,64 @@ class Compiler(private val context: CompilerContext) {
 
 
 
-	private fun printNode(node: AstNode, prefix: String) {
-		println("Line ${node.srcPos.line}    ${node.printString}")
+	private fun printNodeTree(node: AstNode, prefix: String) {
+		println("Line ${node.srcPos.line}    $prefix${node.printString}")
 		for(n in node.getChildren())
-			printNode(n, prefix + '\t')
+			printNodeTree(n, "$prefix    ")
 	}
 
+
+
+	private fun printNodeTree(srcFile: SrcFile) {
+		printHeader("NODE TREE (${srcFile.relPath}):")
+
+		for(node in srcFile.nodes)
+			printNodeTree(node, "")
+	}
 
 
 	private fun printNodes(srcFile: SrcFile) {
 		printHeader("NODES (${srcFile.relPath}):")
 
-		for(node in srcFile.nodes)
-			printNode(node, "")
+		for(node in srcFile.nodes) {
+			print("Line ")
+			print(node.srcPos.line)
+			for(i in 0 until (5 - node.srcPos.line.toString().length))
+				print(' ')
+			println(node.printString)
+		}
+
+		println()
+	}
+
+
+
+	private fun printSymbols() {
+		printHeader("SYMBOLS")
+
+		for(symbol in context.symbols.getAll()) {
+			when(symbol) {
+				is LabelSymbol     -> print("LABEL       ")
+				is Namespace       -> print("NAMESPACE   ")
+				is DllSymbol       -> print("DLL         ")
+				is DllImportSymbol -> print("DLL IMPORT  ")
+				is VarSymbol       -> print("VAR         ")
+				is ResSymbol       -> print("RES         ")
+				is ConstSymbol     -> print("CONST       ")
+				is EnumSymbol      -> print("ENUM        ")
+				is EnumEntrySymbol -> print("ENUM ENTRY  ")
+				else               -> print("?           ")
+			}
+
+			if(symbol.scope.isNotEmpty) {
+				print(symbol.scope)
+				print('.')
+			}
+
+			println(symbol.name)
+		}
+
+		println()
 	}
 
 

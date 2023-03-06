@@ -124,9 +124,7 @@ class EnumEntrySymbol(
 	override var base     : SymBase,
 	val ordinal           : Int,
 	override var intValue : Long
-) : IntSymbol {
-	lateinit var parent: EnumSymbol
-}
+) : IntSymbol
 
 
 

@@ -1,1 +1,8 @@
-main:
+namespace main
+
+enum Testing {
+	A
+	B =
+	10
+	C
+}

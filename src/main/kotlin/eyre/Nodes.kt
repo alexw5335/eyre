@@ -2,70 +2,140 @@ package eyre
 
 
 
-sealed class AstNode {
-	lateinit var srcPos: SrcPos
+sealed interface AstNode {
+	val srcPos: SrcPos
 }
 
 
 
-class ScopeEndNode : AstNode()
+sealed class SymProviderNode : AstNode {
+	abstract val symbol: Symbol?
+}
 
-class NamespaceNode(val symbol: Namespace) : AstNode()
 
-class IntNode(val value: Long) : AstNode()
 
-class RegNode(val value: Register) : AstNode() {
+class ScopeEndNode(
+	override val srcPos: SrcPos
+): AstNode
+
+class NamespaceNode(
+	override val srcPos: SrcPos,
+	val symbol: Namespace
+) : AstNode
+
+class IntNode(
+	override val srcPos: SrcPos,
+	val value: Long
+) : AstNode
+
+class RegNode(
+	override val srcPos: SrcPos,
+	val value: Register
+) : AstNode {
 	val width get() = value.width
 }
 
-class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode()
+class UnaryNode(
+	override val srcPos: SrcPos,
+	val op: UnaryOp,
+	val node: AstNode
+) : AstNode
 
-class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode()
+class BinaryNode(
+	override val srcPos: SrcPos,
+	val op: BinaryOp,
+	val left: AstNode,
+	val right: AstNode
+) : AstNode
 
-class StringNode(val value: StringIntern) : AstNode()
+class StringNode(
+	override val srcPos: SrcPos,
+	val value: StringIntern
+) : AstNode
 
-data class LabelNode(val symbol: LabelSymbol) : AstNode()
+class LabelNode(
+	override val srcPos: SrcPos,
+	val symbol: LabelSymbol
+) : AstNode
 
-class MemNode(val width: Width?, val value: AstNode) : AstNode()
+class MemNode(
+	override val srcPos: SrcPos,
+	val width: Width?,
+	val value: AstNode
+) : AstNode
 
-class VarPart(val width: Width, val nodes: List<AstNode>) : AstNode()
+class VarPart(
+	override val srcPos: SrcPos,
+	val width: Width,
+	val nodes: List<AstNode>
+) : AstNode
 
-class VarNode(val symbol: VarSymbol, val parts: List<VarPart>) : AstNode()
+class VarNode(
+	override val srcPos: SrcPos,
+	val symbol: VarSymbol,
+	val parts: List<VarPart>
+) : AstNode
 
-class ResNode(val symbol: ResSymbol, val size: AstNode) : AstNode()
+class ResNode(
+	override val srcPos: SrcPos,
+	val symbol: ResSymbol,
+	val size: AstNode
+) : AstNode
 
-class SegRegNode(val value: SegReg) : AstNode()
+class SegRegNode(
+	override val srcPos: SrcPos,
+	val value: SegReg
+) : AstNode
 
-class ConstNode(val symbol: ConstSymbol, val value: AstNode) : AstNode()
+class ConstNode(
+	override val srcPos: SrcPos,
+	val symbol: ConstSymbol,
+	val value: AstNode
+) : AstNode
 
-class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode?) : AstNode()
+class EnumEntryNode(
+	override val srcPos: SrcPos,
+	val symbol: EnumEntrySymbol,
+	val value: AstNode?
+) : AstNode
 
-class EnumNode(val symbol: EnumSymbol, val entries: ArrayList<EnumEntryNode>) : AstNode()
+class EnumNode(
+	override val srcPos: SrcPos,
+	val symbol: EnumSymbol,
+	val entries: ArrayList<EnumEntryNode>
+) : AstNode
 
 class InsNode(
+	override val srcPos: SrcPos,
 	val mnemonic : Mnemonic,
 	val size     : Int,
 	val op1      : AstNode?,
 	val op2      : AstNode?,
 	val op3      : AstNode?,
 	val op4      : AstNode?
-) : AstNode()
+) : AstNode
 
-
-
-sealed class SymProviderNode : AstNode() {
-	abstract val symbol: Symbol?
-}
-
-class DotNode(val left: AstNode, val right: SymNode) : SymProviderNode() {
+class DotNode(
+	override val srcPos: SrcPos,
+	val left: AstNode,
+	val right: SymNode
+) : SymProviderNode() {
 	override val symbol get() = right.symbol
 }
 
-class RefNode(val left: SymProviderNode, val right: SymNode) : SymProviderNode() {
+class RefNode(
+	override val srcPos: SrcPos,
+	val left: SymProviderNode,
+	val right: SymNode
+) : SymProviderNode() {
 	override val symbol get() = right.symbol
 }
 
-class SymNode(val name: StringIntern, override var symbol: Symbol? = null) : SymProviderNode()
+class SymNode(
+	override val srcPos: SrcPos,
+	val name: StringIntern,
+	override var symbol: Symbol? = null
+) : SymProviderNode()
 
 
 
@@ -149,7 +219,8 @@ val AstNode.printString: String get() = when(this) {
 		append(op4.printString)
 	}
 
-	is VarNode -> "var ${symbol.name} ${parts.joinToString { "${it.width.varString} ${it.nodes.joinToString { it2 -> it2.printString }}" }}"
+	is VarPart -> "${width.varString} ${nodes.joinToString { it.printString }}"
+	is VarNode -> "var ${symbol.name} ${parts.joinToString { it.printString }}"
 	is ResNode -> "var ${symbol.name} res ${size.printString}"
 	is RefNode -> "${left.printString}::${right.printString}"
 	is ConstNode -> "const ${symbol.name} = ${value.printString}"
