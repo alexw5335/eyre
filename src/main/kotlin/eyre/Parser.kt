@@ -104,10 +104,12 @@ class Parser(private val context: CompilerContext) {
 		val token = next()
 
 		if(token is IdToken) {
-			val id = token.value
-			if(id in StringInterner.registers)
-				return RegNode(srcPos, StringInterner.registers[id])
-			return SymNode(srcPos, id)
+			return when(val id = token.value) {
+				in StringInterner.registers -> return RegNode(srcPos, StringInterner.registers[id])
+				StringInterner.FS -> return SegRegNode(srcPos, SegReg.FS)
+				StringInterner.GS -> return SegRegNode(srcPos, SegReg.GS)
+				else -> SymNode(srcPos, id)
+			}
 		}
 
 		if(token is SymToken) {
@@ -121,10 +123,10 @@ class Parser(private val context: CompilerContext) {
 		}
 
 		return when(token) {
-			is IntToken -> IntNode(srcPos, token.value)
+			is IntToken    -> IntNode(srcPos, token.value)
 			is StringToken -> StringNode(srcPos, token.value)
-			is CharToken -> IntNode(srcPos, token.value.code.toLong())
-			else -> error(srcPos, "Unexpected token: $token")
+			is CharToken   -> IntNode(srcPos, token.value.code.toLong())
+			else           -> error(srcPos, "Unexpected token: $token")
 		}
 	}
 
@@ -148,7 +150,31 @@ class Parser(private val context: CompilerContext) {
 			val op = token.binaryOp ?: break
 			if(op.precedence < precedence) break
 			pos++
-			atom = BinaryNode(SrcPos(1), op, atom, parseExpression(op.precedence + 1))
+
+			val pos = SrcPos(1)
+
+			val expression = parseExpression(op.precedence + 1)
+
+			atom = when(op) {
+				BinaryOp.DOT -> DotNode(
+					pos,
+					atom,
+					expression as? SymNode ?: error("Invalid node")
+				)
+
+				BinaryOp.REF -> RefNode(
+					pos,
+					atom as? SymProviderNode ?: error("Invalid reference"),
+					expression as? SymNode ?: error("Invalid node")
+				)
+
+				else -> BinaryNode(
+					pos,
+					op,
+					atom,
+					expression
+				)
+			}
 		}
 
 		return atom
@@ -162,7 +188,7 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseOperand(): AstNode {
+	private fun parseOperand(): OpNode {
 		var token = next
 		var width: Width? = null
 
@@ -171,12 +197,7 @@ class Parser(private val context: CompilerContext) {
 				width = StringInterner.widths[token.value]
 				if(tokens[pos + 1] == SymToken.LBRACKET)
 					token = tokens[++pos]
-			} else if(token.value == StringInterner.FS)
-				return SegRegNode(SrcPos(1), SegReg.FS)
-			else if(token.value == StringInterner.GS)
-				return SegRegNode(SrcPos(1), SegReg.GS)
-			else
-				return parseExpression()
+			}
 		}
 
 		if(token == SymToken.LBRACKET) {
@@ -186,7 +207,7 @@ class Parser(private val context: CompilerContext) {
 			return MemNode(SrcPos(2), width, value)
 		}
 
-		return parseExpression()
+		return (parseExpression() as? OpNode) ?: error("Invalid operand")
 	}
 
 
@@ -405,7 +426,7 @@ class Parser(private val context: CompilerContext) {
 			entries.add(node)
 			entrySymbols.add(symbol)
 
-			if(!atNewline() && next != SymToken.COMMA)
+			if(!atNewline() && next != SymToken.COMMA && next !is IdToken)
 				break
 		}
 
@@ -426,6 +447,8 @@ class Parser(private val context: CompilerContext) {
 		this.srcFile = srcFile
 		this.tokens = srcFile.tokens
 		scopeStackSize = 0
+		pos = 0
+		currentNamespace = null
 		nodes.clear()
 
 		parseScope()

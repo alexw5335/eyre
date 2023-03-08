@@ -42,6 +42,8 @@ class Lexer {
 		this.srcFile = srcFile
 		size = Files.size(srcFile.path).toInt() + 1
 
+		Arrays.fill(chars, Char(0))
+
 		if(chars.size <= size)
 			chars = CharArray(size * 2)
 

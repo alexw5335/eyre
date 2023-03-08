@@ -39,7 +39,18 @@ enum class Mnemonic {
 	DIV, IDIV, CLC, STC,
 	CLI, STI, CLD, STD,
 	INC, DEC, CALL, CALLF,
-	JMP, JMPF, RDRAND, RDSEED;
+	JMP, JMPF, RDRAND, RDSEED,
+	PAUSE, 
+	
+	SETO, SETNO, SETB, SETNAE, SETC, SETNB, SETAE, SETNC,
+	SETZ, SETE, SETNZ, SETNE, SETBE, SETNA, SETNBE, SETA,
+	SETS, SETNS, SETP, SETPE, SETNP, SETPO, SETL, SETNGE, 
+	SETNL, SETGE, SETLE, SETNG, SETNLE, SETG,
+
+	CMOVO, CMOVNO, CMOVB, CMOVNAE, CMOVC, CMOVNB, CMOVAE, CMOVNC,
+	CMOVZ, CMOVE, CMOVNZ, CMOVNE, CMOVBE, CMOVNA, CMOVNBE, CMOVA,
+	CMOVS, CMOVNS, CMOVP, CMOVPE, CMOVNP, CMOVPO, CMOVL, CMOVNGE,
+	CMOVNL, CMOVGE, CMOVLE, CMOVNG, CMOVNLE, CMOVG;
 
 	val string = name.lowercase()
 
@@ -70,6 +81,15 @@ enum class Width(val varString: String, val bytes: Int) {
 @JvmInline
 value class Widths(val value: Int) {
 	operator fun contains(width: Width) = value and width.bit != 0
+	companion object {
+		val ALL    = Widths(0b1111)
+		val NO8    = Widths(0b1110)
+		val NO832  = Widths(0b1010)
+		val NO864  = Widths(0b0110)
+		val ONLY64 = Widths(0b1000)
+		val ONLY8  = Widths(0b0001)
+		val NO816  = Widths(0b0011)
+	}
 }
 
 
@@ -181,11 +201,14 @@ enum class Section {
 	/** .text, initialised | code, execute | read */
 	TEXT,
 
-	/** .data, initialised, read | write*/
+	/** .data, initialised, read | write */
 	DATA,
 
 	/** .idata, initialised, read */
-	IDATA;
+	IDATA,
+
+	/** .bss, uninitialised, read | write */
+	BSS;
 
 }
 
@@ -293,7 +316,7 @@ class SrcFile(val path: Path, val relPath: Path) {
 	lateinit var terminators : BitList
 
 	// Valid after the parser has been called
-	lateinit var nodes       : List<AstNode>
+	lateinit var nodes: List<AstNode>
 
 	// Used by the resolver
 	var resolving = false
@@ -319,7 +342,7 @@ class Reloc(
 
 
 enum class RelocType {
-	ABGSOLUTE,
+	ABS,
 	RIP,
-	DEFAULT
+	LINK
 }

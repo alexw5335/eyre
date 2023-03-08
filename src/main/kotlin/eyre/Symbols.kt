@@ -107,7 +107,7 @@ class ResSymbol(
 	override val base: SymBase,
 	var size: Int = 0
 ) : PosSymbol {
-	override var section = Section.DATA
+	override var section = Section.BSS
 	override var pos = 0
 }
 

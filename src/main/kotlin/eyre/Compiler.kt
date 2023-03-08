@@ -1,5 +1,8 @@
 package eyre
 
+import java.nio.file.Files
+import java.nio.file.Paths
+
 /**
  * Token and node lines aren't working properly
  */
@@ -12,11 +15,62 @@ class Compiler(private val context: CompilerContext) {
 
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
-			printTokens(srcFile)
+			//printTokens(srcFile)
 			parser.parse(srcFile)
-			//printNodes(srcFile)
-			printNodeTree(srcFile)
+			printNodes(srcFile)
+			//printNodeTree(srcFile)
 		}
+
+		printSymbols()
+		Resolver(context).resolve()
+		Assembler(context).assemble()
+		Linker(context).link()
+		disassemble()
+		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
+		dumpbin()
+		disassemble()
+
+	}
+
+
+
+	/*
+	Binary
+	 */
+
+
+
+	private fun run(vararg params: String) {
+		val process = Runtime.getRuntime().exec(params)
+		process.waitFor()
+		process.errorReader().readText().let {
+			if(it.isNotEmpty()) {
+				print("\u001B[31m$it\\u001B[0m")
+				error("Process failed")
+			}
+		}
+
+		process.inputReader().readText().let {
+			if(it.isNotEmpty()) print(it)
+		}
+	}
+
+
+
+	private fun dumpbin() {
+		printHeader("DUMPBIN")
+		run("dumpbin", "/ALL", "test.exe")
+	}
+
+
+
+	private fun disassemble() {
+		//val pos = context.sections[Section.TEXT.ordinal]!!.pos
+		//val size = context.sections[Section.TEXT.ordinal]!!.size
+		//Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
+		Files.write(Paths.get("test.bin"), context.textWriter.getTrimmedBytes())
+		printHeader("DISASSEMBLY")
+		run("ndisasm", "-b64", "test.bin")
 	}
 
 
@@ -78,6 +132,7 @@ class Compiler(private val context: CompilerContext) {
 
 		for(node in srcFile.nodes)
 			printNodeTree(node, "")
+		println()
 	}
 
 

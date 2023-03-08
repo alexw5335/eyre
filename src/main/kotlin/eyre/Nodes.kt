@@ -6,10 +6,12 @@ sealed interface AstNode {
 	val srcPos: SrcPos
 }
 
+sealed interface OpNode : AstNode
 
 
-sealed class SymProviderNode : AstNode {
-	abstract val symbol: Symbol?
+
+sealed interface SymProviderNode : AstNode {
+	val symbol: Symbol?
 }
 
 
@@ -26,12 +28,12 @@ class NamespaceNode(
 class IntNode(
 	override val srcPos: SrcPos,
 	val value: Long
-) : AstNode
+) : AstNode, OpNode
 
 class RegNode(
 	override val srcPos: SrcPos,
 	val value: Register
-) : AstNode {
+) : OpNode {
 	val width get() = value.width
 }
 
@@ -39,19 +41,19 @@ class UnaryNode(
 	override val srcPos: SrcPos,
 	val op: UnaryOp,
 	val node: AstNode
-) : AstNode
+) : AstNode, OpNode
 
 class BinaryNode(
 	override val srcPos: SrcPos,
 	val op: BinaryOp,
 	val left: AstNode,
 	val right: AstNode
-) : AstNode
+) : AstNode, OpNode
 
 class StringNode(
 	override val srcPos: SrcPos,
 	val value: StringIntern
-) : AstNode
+) : AstNode, OpNode
 
 class LabelNode(
 	override val srcPos: SrcPos,
@@ -62,7 +64,7 @@ class MemNode(
 	override val srcPos: SrcPos,
 	val width: Width?,
 	val value: AstNode
-) : AstNode
+) : OpNode
 
 class VarPart(
 	override val srcPos: SrcPos,
@@ -85,7 +87,7 @@ class ResNode(
 class SegRegNode(
 	override val srcPos: SrcPos,
 	val value: SegReg
-) : AstNode
+) : OpNode
 
 class ConstNode(
 	override val srcPos: SrcPos,
@@ -109,17 +111,17 @@ class InsNode(
 	override val srcPos: SrcPos,
 	val mnemonic : Mnemonic,
 	val size     : Int,
-	val op1      : AstNode?,
-	val op2      : AstNode?,
-	val op3      : AstNode?,
-	val op4      : AstNode?
+	val op1      : OpNode?,
+	val op2      : OpNode?,
+	val op3      : OpNode?,
+	val op4      : OpNode?
 ) : AstNode
 
 class DotNode(
 	override val srcPos: SrcPos,
 	val left: AstNode,
 	val right: SymNode
-) : SymProviderNode() {
+) : SymProviderNode, OpNode {
 	override val symbol get() = right.symbol
 }
 
@@ -127,7 +129,7 @@ class RefNode(
 	override val srcPos: SrcPos,
 	val left: SymProviderNode,
 	val right: SymNode
-) : SymProviderNode() {
+) : SymProviderNode, OpNode {
 	override val symbol get() = right.symbol
 }
 
@@ -135,7 +137,7 @@ class SymNode(
 	override val srcPos: SrcPos,
 	val name: StringIntern,
 	override var symbol: Symbol? = null
-) : SymProviderNode()
+) : SymProviderNode, OpNode
 
 
 
