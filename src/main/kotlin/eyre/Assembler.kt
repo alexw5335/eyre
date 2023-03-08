@@ -752,6 +752,23 @@ class Assembler(private val context: CompilerContext) {
 		SHR -> encodeROL(5, node)
 		SAR -> encodeROL(7, node)
 
+		CMOVO     -> encodeCMOVCC(0x400F, op1.asReg, op2)
+		CMOVNO    -> encodeCMOVCC(0x410F, op1.asReg, op2)
+		CMOVB, CMOVNAE, CMOVC  -> encodeCMOVCC(0x420F, op1.asReg, op2)
+		CMOVNB, CMOVAE, CMOVNC -> encodeCMOVCC(0x430F, op1.asReg, op2)
+		CMOVZ, CMOVE   -> encodeCMOVCC(0x440F, op1.asReg, op2)
+		CMOVNZ, CMOVNE -> encodeCMOVCC(0x450F, op1.asReg, op2)
+		CMOVBE, CMOVNA -> encodeCMOVCC(0x460F, op1.asReg, op2)
+		CMOVNBE, CMOVA -> encodeCMOVCC(0x470F, op1.asReg, op2)
+		CMOVS          -> encodeCMOVCC(0x480F, op1.asReg, op2)
+		CMOVNS         -> encodeCMOVCC(0x440F, op1.asReg, op2)
+		CMOVP, CMOVPE  -> encodeCMOVCC(0x4A0F, op1.asReg, op2)
+		CMOVNP, CMOVPO -> encodeCMOVCC(0x4B0F, op1.asReg, op2)
+		CMOVL, CMOVNGE -> encodeCMOVCC(0x4C0F, op1.asReg, op2)
+		CMOVNL, CMOVGE -> encodeCMOVCC(0x4D0F, op1.asReg, op2)
+		CMOVLE, CMOVNG -> encodeCMOVCC(0x4E0F, op1.asReg, op2)
+		CMOVNLE, CMOVG -> encodeCMOVCC(0x4F0F, op1.asReg, op2)
+
 		else -> invalidEncoding()
 	}}
 
@@ -770,6 +787,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun encodeCMOVCC(opcode: Int, op1: Register, op2: OpNode) {
+		encode2RRM(opcode, Widths.NO8, op1, op2)
+	}
+	
+	
+	
 	private fun encodeSETCC(opcode: Int, node: InsNode) {
 		encode1RM(opcode, Widths.ONLY8, 0, node.op1!!)
 	}

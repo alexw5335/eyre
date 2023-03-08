@@ -15,7 +15,7 @@ class Compiler(private val context: CompilerContext) {
 
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
-			//printTokens(srcFile)
+			printTokens(srcFile)
 			parser.parse(srcFile)
 			printNodes(srcFile)
 			//printNodeTree(srcFile)
@@ -25,11 +25,9 @@ class Compiler(private val context: CompilerContext) {
 		Resolver(context).resolve()
 		Assembler(context).assemble()
 		Linker(context).link()
-		disassemble()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
-		dumpbin()
+		// dumpbin()
 		disassemble()
-
 	}
 
 
@@ -65,12 +63,13 @@ class Compiler(private val context: CompilerContext) {
 
 
 	private fun disassemble() {
-		//val pos = context.sections[Section.TEXT.ordinal]!!.pos
-		//val size = context.sections[Section.TEXT.ordinal]!!.size
-		//Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
-		Files.write(Paths.get("test.bin"), context.textWriter.getTrimmedBytes())
+		val pos = context.sections[Section.TEXT.ordinal]!!.pos
+		val size = context.sections[Section.TEXT.ordinal]!!.size
+		Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
+		//Files.write(Paths.get("test.bin"), context.textWriter.getTrimmedBytes())
 		printHeader("DISASSEMBLY")
 		run("ndisasm", "-b64", "test.bin")
+		println()
 	}
 
 
