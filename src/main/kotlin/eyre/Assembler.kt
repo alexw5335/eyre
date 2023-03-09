@@ -1065,7 +1065,7 @@ class Assembler(private val context: CompilerContext) {
 				if(op1 is SymProviderNode && op1.symbol is DllImportSymbol)
 					encode1M(0xFF, Widths.ONLY64, 2, MemNode(op1.srcPos, QWORD, op1), 0)
 				else
-					encodeRel32(0xE7, op1)
+					encodeRel32(0xE8, op1)
 			}
 		}
 	}
@@ -1275,6 +1275,21 @@ class Assembler(private val context: CompilerContext) {
 			}
 		} else {
 			invalidEncoding()
+		}
+	}
+
+
+
+	/*
+	Pseudo-mnemonics
+	 */
+
+
+
+	private fun encodeDllCall(node: InsNode) {
+		val name = node.op1 as? SymNode
+		for(dll in context.dlls.values) {
+			if(dll.imports.)
 		}
 	}
 

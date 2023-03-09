@@ -2,7 +2,9 @@ package eyre
 
 import eyre.util.BitList
 import eyre.util.IntList
+import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.nameWithoutExtension
 
 
 
@@ -50,7 +52,9 @@ enum class Mnemonic {
 	CMOVO, CMOVNO, CMOVB, CMOVNAE, CMOVC, CMOVNB, CMOVAE, CMOVNC,
 	CMOVZ, CMOVE, CMOVNZ, CMOVNE, CMOVBE, CMOVNA, CMOVNBE, CMOVA,
 	CMOVS, CMOVNS, CMOVP, CMOVPE, CMOVNP, CMOVPO, CMOVL, CMOVNGE,
-	CMOVNL, CMOVGE, CMOVLE, CMOVNG, CMOVNLE, CMOVG;
+	CMOVNL, CMOVGE, CMOVLE, CMOVNG, CMOVNLE, CMOVG,
+
+	DLLCALL;
 
 	val string = name.lowercase()
 
@@ -346,3 +350,7 @@ enum class RelocType {
 	RIP,
 	LINK
 }
+
+
+
+class InbuiltDll(val name: String, val exports: Set<String>)

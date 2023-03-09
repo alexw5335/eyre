@@ -7,11 +7,14 @@ dllimport Kernel32 {
 
 var string db "Message\0"
 
+var message res 8
+
 main:
 	sub rsp, 56
+	mov byte [message], 0x30
 	mov ecx, -11
-	lea rdx, [string]
-	mov r8d, string::size
+	lea rdx, [message]
+	mov r8d, 1
 	mov r9, [rsp + 40]
 	mov qword [rsp + 32], 0
 	call WriteFile

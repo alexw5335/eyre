@@ -24,6 +24,10 @@ class NativeWriter(bytes: ByteArray) {
 
 	fun getTrimmedBytes(pos: Int, count: Int) = bytes.copyOfRange(pos, pos + count)
 
+	val isEmpty get() = pos == 0
+
+	val isNotEmpty get() = pos > 0
+
 
 
 	/*
@@ -202,6 +206,15 @@ class NativeWriter(bytes: ByteArray) {
 	 */
 
 
+	fun bytes(pos: Int, writer: NativeWriter, srcPos: Int = 0, length: Int = writer.pos) {
+		System.arraycopy(writer.bytes, srcPos, bytes, pos, length)
+	}
+
+	fun bytes(writer: NativeWriter, srcPos: Int = 0, length: Int = writer.pos) {
+		ensureCapacity(length)
+		System.arraycopy(writer.bytes, srcPos, bytes, pos, length)
+		pos += length
+	}
 
 	fun bytes(pos: Int, array: ByteArray, srcPos: Int = 0, length: Int = array.size) {
 		System.arraycopy(array, srcPos, bytes, pos, length)

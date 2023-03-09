@@ -55,25 +55,30 @@ class Resolver(private val context: CompilerContext) {
 
 		for(node in srcFile.nodes) {
 			when(node) {
-				is NamespaceNode   -> pushScope(node.symbol.thisScope)
-				is ScopeEndNode    -> popScope()
-				is InsNode -> {
-					resolveSymbols(node.op1 ?: continue)
-					resolveSymbols(node.op2 ?: continue)
-					resolveSymbols(node.op3 ?: continue)
-					resolveSymbols(node.op4 ?: continue)
-				}
-				is ConstNode  -> resolveConst(node)
-				is EnumNode   -> resolveEnum(node)
-				is VarNode    -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
-				is ResNode    -> resolveSymbols(node.size)
-				else -> continue
+				is NamespaceNode -> pushScope(node.symbol.thisScope)
+				is ScopeEndNode  -> popScope()
+				is InsNode       -> resolveInstruction(node)
+				is ConstNode     -> resolveConst(node)
+				is EnumNode      -> resolveEnum(node)
+				is VarNode       -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
+				is ResNode       -> resolveRes(node)
+				else             -> continue
 			}
 		}
 
 		scopeStackSize = prev
 		srcFile.resolving = false
 		srcFile.resolved = true
+	}
+
+
+
+	private fun resolveInstruction(node: InsNode) {
+		if(node.mnemonic == Mnemonic.DLLCALL) return
+		resolveSymbols(node.op1 ?: return)
+		resolveSymbols(node.op2 ?: return)
+		resolveSymbols(node.op3 ?: return)
+		resolveSymbols(node.op4 ?: return)
 	}
 
 
@@ -105,6 +110,15 @@ class Resolver(private val context: CompilerContext) {
 		}
 
 		error("Unresolved symbol: $name")
+	}
+
+
+
+	private fun resolveRes(node: ResNode) {
+		if(node.symbol.resolved) return
+		resolveSymbols(node.size)
+		node.symbol.size = resolveInt(node.size).toInt()
+		node.symbol.resolved = true
 	}
 
 

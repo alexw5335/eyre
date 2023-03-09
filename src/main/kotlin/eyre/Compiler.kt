@@ -63,8 +63,8 @@ class Compiler(private val context: CompilerContext) {
 
 
 	private fun disassemble() {
-		val pos = context.sections[Section.TEXT.ordinal]!!.pos
-		val size = context.sections[Section.TEXT.ordinal]!!.size
+		val pos = context.sections[Section.TEXT]!!.pos
+		val size = context.sections[Section.TEXT]!!.size
 		Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
 		//Files.write(Paths.get("test.bin"), context.textWriter.getTrimmedBytes())
 		printHeader("DISASSEMBLY")

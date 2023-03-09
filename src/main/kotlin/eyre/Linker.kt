@@ -1,5 +1,7 @@
 package eyre
 
+import eyre.util.NativeWriter
+
 class Linker(private val context: CompilerContext) {
 
 
@@ -13,7 +15,7 @@ class Linker(private val context: CompilerContext) {
 
 	private var nextSectionPos = 0
 
-	private val Section.data get() = sections[ordinal] ?: error("Invalid section: $this")
+	private val Section.data get() = sections[this] ?: error("Invalid section: $this")
 
 
 
@@ -68,31 +70,21 @@ class Linker(private val context: CompilerContext) {
 
 
 	private fun writeSection(
+		section   : Section,
 		name      : String,
 		flags     : Int,
-		bytes     : ByteArray?,
 		size      : Int,
-		section   : Section
+		extraSize : Int,
 	) {
-		val virtualAddress = nextSectionRva   // Must be aligned to sectionAlignment
-		val rawDataPos     = nextSectionPos   // Must be aligned to fileAlignment
-		val rawDataSize    = size.roundToFile // Must be aligned to fileAlignment
-		val virtualSize    = size             // No alignment requirement, may be smaller than rawDataSize
+		val rawDataSize = size.roundToFile  // Must be aligned to fileAlignment
+		val virtualSize = size + extraSize  // No alignment requirement
+		val rawDataPos = if(size != 0) nextSectionPos else 0 // Must be aligned to fileAlignment
+		val virtualAddress = nextSectionRva // Must be aligned to sectionAlignment
 
-		writer.seek(rawDataPos)
-
-		if(bytes != null)
-			writer.bytes(bytes, length = size)
-		else
-			writer.advance(size)
 		nextSectionPos += rawDataSize
 		nextSectionRva += virtualSize.roundToSection
 
-		writer.zeroTo(nextSectionPos)
-
-		writer.seek(sectionHeadersPos + numSections * 40)
-		numSections++
-
+		writer.seek(sectionHeadersPos + numSections++ * 40)
 		writer.ascii64(name)
 		writer.i32(virtualSize)
 		writer.i32(virtualAddress)
@@ -100,38 +92,27 @@ class Linker(private val context: CompilerContext) {
 		writer.i32(rawDataPos)
 		writer.zero(12)
 		writer.i32(flags)
-
 		writer.seek(nextSectionPos)
 
-		sections[section.ordinal] = SectionData(size = virtualSize, rva = virtualAddress, pos = rawDataPos)
+		sections[section] = SectionData(virtualSize, virtualAddress, rawDataPos)
 	}
 
 
 
 	private fun writeSections() {
-		writeSection(
-			".text",
-			0x60000020,
-			context.textWriter.getTrimmedBytes(),
-			context.textWriter.pos,
-			Section.TEXT
-		)
+		if(context.textWriter.isNotEmpty) {
+			writer.bytes(context.textWriter)
+			writeSection(Section.TEXT, ".text", 0x60000020, context.textWriter.pos, 0)
+		}
 
-		if(context.dataWriter.pos != 0) writeSection(
-			".data",
-			0xC0_00_00_40L.toInt(),
-			context.dataWriter.getTrimmedBytes(),
-			context.dataWriter.pos,
-			Section.DATA
-		)
+		if(context.dataWriter.isNotEmpty) {
+			writer.bytes(context.dataWriter)
+			writeSection(Section.DATA, ".data", 0xC0000040L.toInt(), context.dataWriter.pos, 0)
+		}
 
-		if(context.bssSize != 0) writeSection(
-			".bss",
-			0xC0_00_00_80L.toInt(),
-			null,
-			context.bssSize,
-			Section.BSS
-		)
+		if(context.bssSize > 0) {
+			writeSection(Section.BSS, ".bss", 0xC0000080L.toInt(), 0, context.bssSize)
+		}
 	}
 
 
@@ -203,14 +184,9 @@ class Linker(private val context: CompilerContext) {
 			writer.i32(idtPos + 16, iatPos - offset)
 		}
 
-		writeSection(
-			".idata",
-			0x40000040,
-			null,
-			writer.pos - idtsPos,
-			Section.IDATA
-		)
+		writeSection(Section.IDATA, ".idata", 0x40000040, writer.pos - idtsPos, 0)
 	}
+
 
 
 	// Relocations

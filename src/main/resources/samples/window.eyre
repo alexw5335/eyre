@@ -1,0 +1,163 @@
+namespace main
+
+dllimport Kernel32 {
+	ExitProcess
+	WriteFile
+}
+
+dllimport user32 {
+	MessageBoxA
+	DefWindowProcA
+	PostQuitMessage
+	TranslateMessage
+	GetMessageA
+	DispatchMessageA
+	LoadCursorA
+	ShowWindow
+	RegisterClassA
+	CreateWindowExA
+}
+
+var finishedMsg db "finished"
+var fatalMsg db "fatal error"
+var className db "my class", 0
+var windowName db "my window", 0
+var cursor res 8
+var class res 72
+var hwnd res 8
+var msg res 56
+
+window_proc:
+	sub rsp, 40
+	cmp rdx, 2
+	je wm_destroy
+	call DefWindowProcA
+	add rsp, 40
+	ret
+wm_destroy:
+	mov rcx, 0
+	call PostQuitMessage
+	add rsp, 40
+	ret
+
+cycle:
+	sub rsp, 40
+loop:
+	lea rcx, [msg]
+	xor edx, edx
+	xor r8, r8
+	xor r9, r9
+	call GetMessageA
+	cmp rax, 0
+	je wm_quit
+	lea rcx, [msg]
+	call TranslateMessage
+	lea rcx, [msg]
+	call DispatchMessageA
+	jmp loop
+wm_quit:
+	add rsp, 40
+	ret
+
+
+
+main:
+	sub rsp, 40
+	call create_cursor
+	call create_class
+	call create_window
+	call show_window
+	call cycle
+	call finished
+
+
+
+create_class:
+	sub rsp, 40
+	lea rax, [className]
+	mov [class + 64], rax
+	lea rax, [window_proc]
+	mov [class + 8], rax
+	mov rax, [cursor]
+	mov [class + 40], rax
+	lea rcx, [class]
+	call RegisterClassA
+	cmp rax, 0
+	je fatal
+	add rsp, 40
+	ret
+
+
+
+create_window:
+	sub rsp, 32 + 64 + 8
+
+	xor ecx, ecx
+	lea rdx, [className]
+	lea r8, [windowName]
+	mov r9d, 13565952
+	mov qword [rsp + 32 + 56], 0
+	mov qword [rsp + 32 + 48], 0
+	mov qword [rsp + 32 + 40], 0
+	mov qword [rsp + 32 + 32], 0
+	mov qword [rsp + 32 + 24], 600
+	mov qword [rsp + 32 + 16], 600
+	mov qword [rsp + 32 + 8], 0
+	mov qword [rsp + 32 + 0], 0
+	call CreateWindowExA
+	mov [hwnd], rax
+	cmp rax, 0
+	je fatal
+
+	add rsp, 32 + 64 + 8
+	ret
+
+
+
+show_window:
+	sub rsp, 40
+	mov rcx, [hwnd]
+	mov edx, 1
+	call ShowWindow
+	add rsp, 40
+	ret
+
+
+
+create_cursor:
+	sub rsp, 40
+	xor ecx, ecx
+	mov edx, 32512
+	call LoadCursorA
+	mov [cursor], rax
+	cmp rax, 0
+	je fatal
+	add rsp, 40
+	ret
+
+
+
+fatal:
+	sub rsp, 40
+	lea rcx, [fatalMsg]
+	mov edx, fatalMsg::size
+	call print
+	call ExitProcess
+
+finished:
+	sub rsp, 40
+	lea rcx, [finishedMsg]
+	mov edx, finishedMsg::size
+	call print
+	call ExitProcess
+
+print:
+	sub rsp, 56
+	mov r8, rdx
+	mov rdx, rcx
+	mov ecx, -11
+	lea r9, [rsp + 40]
+	mov qword [rsp + 32], 0
+	call WriteFile
+	add rsp, 56
+	ret
