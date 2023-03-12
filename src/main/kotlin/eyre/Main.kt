@@ -19,5 +19,10 @@ private fun Compiler(directory: String, vararg files: String): Compiler {
 		SrcFile(path, relPath)
 	}
 
-	return Compiler(CompilerContext(srcFiles))
+	val context = CompilerContext(srcFiles)
+	context.loadDllDefFromResources("kernel32")
+	context.loadDllDefFromResources("user32")
+	context.loadDllDefFromResources("gdi32")
+
+	return Compiler(context)
 }

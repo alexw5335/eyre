@@ -71,6 +71,12 @@ class NativeWriter(bytes: ByteArray) {
 
 
 
+	fun align(alignment: Int) {
+		zero(pos.mod(alignment))
+	}
+
+
+
 	fun varLengthInt(value: Int) {
 		ensureCapacity(4)
 		Unsafe.instance.putInt(bytes, pos + 16L, value)

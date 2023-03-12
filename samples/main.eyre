@@ -1,0 +1,86 @@
+namespace main
+
+
+
+const bufferCapacity = 512
+var buffer res bufferCapacity
+var bufferPos dd 0
+var msg db "Message"
+
+
+
+// rcx: src
+// rdx: size
+append:
+	mov rsi, rcx
+	lea rdi, [buffer]
+	add edi, [bufferPos]
+	mov ecx, edx
+	rep movsb
+	add [bufferPos], edx
+	ret
+
+
+
+
+// rcx: int
+// edx: radix
+int_length:
+	// r8: 10
+	// eax: number
+	// edx: 0
+	// ecx: counter
+	mov r8d, edx
+	mov rax, rcx
+	xor ecx, ecx
+loop:
+	add cl, 1
+	cdq
+	idiv r8
+	cmp rax, 0
+	jnz loop
+	mov rax, rcx
+	ret
+
+
+
+main:
+	sub rsp, 40
+
+	#debug "main1"
+	mov ecx, 1234
+
+	#debug "main2"
+	mov edx, 10
+
+	#debug "main3"
+	call int_length
+
+	lea rcx, [buffer]
+	add al, '0'
+	mov byte [rcx], al
+	mov edx, 1
+	call print
+
+	//lea rcx, [msg]
+	//mov edx, msg::size
+	//call append
+
+	//lea rcx, [buffer]
+	//mov edx, dword [bufferPos]
+	//call print
+
+	dllcall ExitProcess
+
+
+
+print:
+	sub rsp, 56
+	mov r8, rdx
+	mov rdx, rcx
+	mov ecx, -11
+	lea r9, [rsp + 40]
+	mov qword [rsp + 32], 0
+	dllcall WriteFile
+	add rsp, 56
+	ret

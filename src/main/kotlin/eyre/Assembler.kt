@@ -24,11 +24,13 @@ class Assembler(private val context: CompilerContext) {
 					is LabelNode -> handleLabel(node)
 					is VarNode   -> handleVar(node)
 					is ResNode   -> handleRes(node)
+					is DebugLabelNode -> handleDebugLabelNode(node)
 					else         -> { }
 				}
 			}
 		}
 	}
+
 
 
 	private fun invalidEncoding(): Nothing = error("Invalid encoding")
@@ -42,6 +44,8 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun handleInstruction(node: InsNode) {
+		node.prefix?.let { byte(it.value) }
+
 		when {
 			node.op1 == null -> assemble0(node)
 			node.op2 == null -> assemble1(node, node.op1)
@@ -88,6 +92,12 @@ class Assembler(private val context: CompilerContext) {
 				error("Redeclaration of entry point")
 			context.entryPoint = node.symbol
 		}
+	}
+
+
+
+	private fun handleDebugLabelNode(node: DebugLabelNode) {
+		node.symbol.pos = writer.pos
 	}
 
 
@@ -671,16 +681,18 @@ class Assembler(private val context: CompilerContext) {
 		NOP    -> encode1RM(0x1F0F, Widths.NO864, 0, op1)
 		RET    -> { byte(0xC2); writeImm(op1, QWORD) }
 		RETF   -> { byte(0xCA); writeImm(op1, QWORD) }
-		INT    -> { byte(0xCD); writeImm(op1, BYTE)}
-		LOOP   -> encodeRel8(0xE2, op1)
-		LOOPE  -> encodeRel8(0xE1, op1)
-		LOOPNE -> encodeRel8(0xE0, op1)
-		JECXZ  -> { byte(0x67); encodeRel8(0xE3, op1) }
-		JRCXZ  -> encodeRel8(0xE3, op1)
-		CALL   -> encodeCALL(node)
-		CALLF  -> encode1M(0xFF, Widths.NO8, 3, op1.asMem, 0)
-		JMP    -> encodeJMP(node)
-		JMPF   -> encode1M(0xFF, Widths.NO8, 5, op1.asMem, 0)
+		INT    -> { byte(0xCD); writeImm(op1, BYTE) }
+
+		LOOP    -> encodeRel8(0xE2, op1)
+		LOOPE   -> encodeRel8(0xE1, op1)
+		LOOPNE  -> encodeRel8(0xE0, op1)
+		JECXZ   -> { byte(0x67); encodeRel8(0xE3, op1) }
+		JRCXZ   -> encodeRel8(0xE3, op1)
+		CALL    -> encodeCALL(op1)
+		CALLF   -> encode1M(0xFF, Widths.NO8, 3, op1.asMem, 0)
+		JMP     -> encodeJMP(op1)
+		JMPF    -> encode1M(0xFF, Widths.NO8, 5, op1.asMem, 0)
+		DLLCALL -> encodeDLLCALL(node)
 		
 		JO     -> encodeJCC(0x70, node)
 		JNO    -> encodeJCC(0x71, node)
@@ -1027,7 +1039,6 @@ class Assembler(private val context: CompilerContext) {
 			writer.varLengthInt(opcode2)
 			addRelReloc(DWORD, op1, 0)
 			dword(0)
-			writer.i32(0)
 		} else if(imm.isImm8) {
 			byte(opcode1)
 			byte(imm.toInt())
@@ -1057,8 +1068,8 @@ class Assembler(private val context: CompilerContext) {
 	 *     FF/2  CALL   RM     0001
 	 *     FF/3  CALLF  M      0111
 	 */
-	private fun encodeCALL(node: InsNode) {
-		when(val op1 = node.op1!!) {
+	private fun encodeCALL(op1: OpNode) {
+		when(op1) {
 			is RegNode -> encode1R(0xFF, Widths.ONLY64, 2, op1.value)
 			is MemNode -> encode1M(0xFF, Widths.ONLY64, 2, op1, 0)
 			else -> {
@@ -1079,8 +1090,8 @@ class Assembler(private val context: CompilerContext) {
 	 *    FF/4  JMP   RM     0001
 	 *    FF/5  JMPF  M      0111
 	 */
-	private fun encodeJMP(node: InsNode) {
-		when(val op1 = node.op1!!) {
+	private fun encodeJMP(op1: OpNode) {
+		when(op1) {
 			is RegNode -> encode1R(0xFF, Widths.ONLY64, 4, op1.value)
 			is MemNode -> encode1M(0xFF, Widths.ONLY64, 4, op1, 0)
 			else       -> encodeRel8OrRel32(0xEB, 0xE9, op1)
@@ -1267,7 +1278,7 @@ class Assembler(private val context: CompilerContext) {
 			}
 		} else if(op1 is MemNode) {
 			if(op2 is RegNode) {
-				encode2RM(0x8A, Widths.ALL, op2.value, op1, 0)
+				encode2RM(0x88, Widths.ALL, op2.value, op1, 0)
 			} else {
 				val width = op1.width ?: invalidEncoding()
 				encode1M(0xC6, Widths.ALL, 0, op1, width.bytes)
@@ -1286,11 +1297,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encodeDllCall(node: InsNode) {
-		val name = node.op1 as? SymNode
-		for(dll in context.dlls.values) {
-			if(dll.imports.)
-		}
+	private fun encodeDLLCALL(node: InsNode) {
+		if(node.size != 1) invalidEncoding()
+		val op1 = node.op1 as? SymNode ?: invalidEncoding()
+		op1.symbol = context.getDllImport(op1.name)
+		if(op1.symbol == null) error("Unrecognised dll import: ${op1.name}")
+		encodeCALL(op1)
 	}
 
 

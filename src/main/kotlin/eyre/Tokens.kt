@@ -53,6 +53,7 @@ enum class SymToken(
 	RBRACKET   ("]"),
 	LBRACE     ("{"),
 	RBRACE     ("}"),
+	HASH       ("#"),
 	PERIOD     (".", BinaryOp.DOT),
 	REFERENCE  ("::", BinaryOp.REF);
 

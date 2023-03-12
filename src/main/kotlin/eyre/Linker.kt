@@ -1,7 +1,5 @@
 package eyre
 
-import eyre.util.NativeWriter
-
 class Linker(private val context: CompilerContext) {
 
 
@@ -28,6 +26,7 @@ class Linker(private val context: CompilerContext) {
 		writer.i16(0x8664)     // machine
 		writer.i16(1)          // numSections    (fill in later)
 		writer.i32(0)          // timeDateStamp
+		println(writer.pos)
 		writer.i32(0)          // pSymbolTable
 		writer.i32(0)          // numSymbols
 		writer.i16(0xF0)       // optionalHeaderSize
@@ -60,8 +59,8 @@ class Linker(private val context: CompilerContext) {
 		writer.i64(0x1000)     // heapCommit
 		writer.i32(0)          // loaderFlags
 		writer.i32(16)         // numDataDirectories
-		writer.advance(16 * 8)     // dataDirectories (fill in later)
-		writer.seek(0x200)         // section headers (fill in later)
+		writer.advance(16 * 8) // dataDirectories (fill in later)
+		writer.seek(0x200)     // section headers (fill in later)
 
 		nextSectionPos = fileAlignment
 		nextSectionRva = sectionAlignment
@@ -121,6 +120,7 @@ class Linker(private val context: CompilerContext) {
 		writeHeaders()
 		writeSections()
 		writeImports()
+		writeSymbolTable()
 		val finalSize = writer.pos
 		context.relocs.forEach { it.writeRelocation() }
 
@@ -140,8 +140,33 @@ class Linker(private val context: CompilerContext) {
 
 
 
+	private fun writeSymbolTable() {
+		if(context.debugLabels.isEmpty()) return
+		val pos = nextSectionPos
+		writer.seek(nextSectionPos)
+
+		for(label in context.debugLabels) {
+			val name = label.name.string
+			if(name.length > 8) error("Debug names longer than 8 bytes not yet supported")
+			if(name[0].isDigit()) error("Debug names cannot start with digits")
+			writer.ascii64(name)
+			writer.i32(label.pos)
+			writer.i16(1)
+			writer.i16(0)
+			writer.i8(2)
+			writer.i8(0)
+		}
+
+		writer.align(fileAlignment)
+		writer.i32(symbolTablePosPos, pos)
+		writer.i32(numSymbolsPos, context.debugLabels.size)
+	}
+
+
+
+
 	private fun writeImports() {
-		val dlls = context.dlls
+		val dlls = context.dllImports.values
 		if(dlls.isEmpty()) return
 
 		val idtsRva = nextSectionRva
@@ -153,7 +178,7 @@ class Linker(private val context: CompilerContext) {
 		writer.i32(idataDirPos + 4, dlls.size * 20 + 20)
 		writer.zero(idtsSize)
 
-		for((dllIndex, dll) in dlls.values.withIndex()) {
+		for((dllIndex, dll) in dlls.withIndex()) {
 			val idtPos = idtsPos + dllIndex * 20
 			val dllNamePos = writer.pos
 
@@ -170,7 +195,7 @@ class Linker(private val context: CompilerContext) {
 
 			writer.zero(dll.imports.size * 8 + 8)
 
-			for((importIndex, import) in dll.imports.withIndex()) {
+			for((importIndex, import) in dll.imports.values.withIndex()) {
 				writer.i32(iltPos + importIndex * 8, writer.pos - offset)
 				writer.i32(iatPos + importIndex * 8, writer.pos - offset)
 				writer.i16(0)
@@ -253,6 +278,10 @@ private const val imageSizePos = 144
 private const val idataDirPos = 208
 
 private const val sectionHeadersPos = 328
+
+private const val symbolTablePosPos = 76
+
+private const val numSymbolsPos = 80
 
 private val Int.roundToFile get() = (this + fileAlignment - 1) and -fileAlignment
 

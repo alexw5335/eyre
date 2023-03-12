@@ -2,9 +2,7 @@ package eyre
 
 import eyre.util.BitList
 import eyre.util.IntList
-import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.nameWithoutExtension
 
 
 
@@ -73,7 +71,6 @@ enum class Width(val varString: String, val bytes: Int) {
 	val bit = 1 shl ordinal
 	val min = -(1 shl ((bytes shl 3) - 1))
 	val max = (1 shl ((bytes shl 3) - 1)) - 1
-	val immLength = bytes.coerceAtMost(4)
 
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
@@ -101,6 +98,23 @@ value class Widths(val value: Int) {
 enum class SegReg {
 	FS,
 	GS;
+}
+
+
+
+enum class FpuReg(val value: Int) {
+
+	ST0(0),
+	ST1(1),
+	ST2(2),
+	ST3(3),
+	ST4(4),
+	ST5(5),
+	ST6(6),
+	ST7(7);
+
+	val string = name.lowercase()
+
 }
 
 
@@ -297,8 +311,7 @@ enum class Keyword {
 	FLAGS,
 	STRUCT,
 	PROC,
-	BITMASK,
-	DLLIMPORT;
+	BITMASK;
 
 	val string = name.lowercase()
 
@@ -353,4 +366,6 @@ enum class RelocType {
 
 
 
-class InbuiltDll(val name: String, val exports: Set<String>)
+class DllImports(val name: StringIntern, val imports: HashMap<StringIntern, DllImportSymbol>)
+
+class DllDef(val name: StringIntern, val exports: Set<StringIntern>)

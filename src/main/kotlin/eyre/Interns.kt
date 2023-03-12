@@ -13,7 +13,7 @@ interface Intern {
 
 
 
-class InternRange<T>(private val range: IntRange, private val elements: Array<T>) {
+data class InternRange<T>(private val range: IntRange, private val elements: Array<T>) {
 	operator fun contains(intern: StringIntern) = intern.id in range
 	operator fun get(intern: StringIntern) = elements[intern.id - range.first]
 }
@@ -63,7 +63,7 @@ object StringInterner : Interner<String, StringIntern>() {
 	operator fun get(key: String) = map[key]
 
 	private fun<T> createRange(elements: Array<T>, supplier: (T) -> String): InternRange<T> {
-		val range = IntRange(count, count + elements.size)
+		val range = IntRange(count, count + elements.size - 1)
 		for(e in elements) add(supplier(e))
 		return InternRange(range, elements)
 	}
@@ -74,6 +74,7 @@ object StringInterner : Interner<String, StringIntern>() {
 	val SIZE   = add("size")
 	val FS     = add("fs")
 	val GS     = add("gs")
+	val DEBUG  = add("debug")
 
 	val keywords     = createRange(Keyword.values(), Keyword::string)
 	val widths       = createRange(Width.values(), Width::string)
@@ -81,6 +82,7 @@ object StringInterner : Interner<String, StringIntern>() {
 	val registers    = createRange(Register.values(), Register::string)
 	val prefixes     = createRange(Prefix.values(), Prefix::string)
 	val mnemonics    = createRange(Mnemonic.values(), Mnemonic::string)
+	val fpuRegisters = createRange(FpuReg.values(), FpuReg::string)
 
 }
 

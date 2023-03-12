@@ -10,6 +10,7 @@ class Compiler(private val context: CompilerContext) {
 
 
 	fun compile() {
+
 		val lexer = Lexer()
 		val parser = Parser(context)
 
@@ -158,7 +159,6 @@ class Compiler(private val context: CompilerContext) {
 			when(symbol) {
 				is LabelSymbol     -> print("LABEL       ")
 				is Namespace       -> print("NAMESPACE   ")
-				is DllSymbol       -> print("DLL         ")
 				is DllImportSymbol -> print("DLL IMPORT  ")
 				is VarSymbol       -> print("VAR         ")
 				is ResSymbol       -> print("RES         ")

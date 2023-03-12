@@ -89,6 +89,11 @@ class SegRegNode(
 	val value: SegReg
 ) : OpNode
 
+class FpuRegNode(
+	override val srcPos: SrcPos,
+	val value: FpuReg
+) : OpNode
+
 class ConstNode(
 	override val srcPos: SrcPos,
 	val symbol: ConstSymbol,
@@ -109,6 +114,7 @@ class EnumNode(
 
 class InsNode(
 	override val srcPos: SrcPos,
+	val prefix   : Prefix?,
 	val mnemonic : Mnemonic,
 	val size     : Int,
 	val op1      : OpNode?,
@@ -138,6 +144,11 @@ class SymNode(
 	val name: StringIntern,
 	override var symbol: Symbol? = null
 ) : SymProviderNode, OpNode
+
+class DebugLabelNode(
+	override val srcPos: SrcPos,
+	val symbol: DebugLabelSymbol
+) : AstNode
 
 
 
@@ -171,9 +182,11 @@ fun AstNode.getChildren(): List<AstNode> = when(this) {
 	is StringNode,
 	is IntNode,
 	is RegNode,
+	is FpuRegNode,
 	is SymNode,
 	is NamespaceNode,
 	is ScopeEndNode,
+	is DebugLabelNode,
 	is SegRegNode    -> emptyList()
 	is UnaryNode     -> listOf(node)
 	is BinaryNode    -> listOf(left, right)
@@ -192,20 +205,23 @@ fun AstNode.getChildren(): List<AstNode> = when(this) {
 
 
 val AstNode.printString: String get() = when(this) {
-	is LabelNode     -> "label ${symbol.name}"
-	is StringNode    -> "\"${value.string}\""
-	is IntNode       -> value.toString()
-	is UnaryNode     -> "${op.symbol}${node.printString}"
-	is BinaryNode    -> "(${left.printString} ${op.symbol} ${right.printString})"
-	is DotNode       -> "(${left.printString}.${right.printString})"
-	is RegNode       -> value.string
-	is SymNode       -> "$name"
-	is NamespaceNode -> "namespace ${symbol.name}"
-	is ScopeEndNode  -> "scope end"
-	is MemNode       -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
-	is SegRegNode    -> value.name.lowercase()
+	is LabelNode      -> "label ${symbol.name}"
+	is StringNode     -> "\"${value.string}\""
+	is IntNode        -> value.toString()
+	is UnaryNode      -> "${op.symbol}${node.printString}"
+	is BinaryNode     -> "(${left.printString} ${op.symbol} ${right.printString})"
+	is DotNode        -> "(${left.printString}.${right.printString})"
+	is RegNode        -> value.string
+	is SymNode        -> "$name"
+	is NamespaceNode  -> "namespace ${symbol.name}"
+	is ScopeEndNode   -> "scope end"
+	is MemNode        -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
+	is SegRegNode     -> value.name.lowercase()
+	is FpuRegNode     -> value.string
+	is DebugLabelNode -> "#debug \"${symbol.name}\""
 
 	is InsNode -> buildString {
+		if(prefix != null) append("${prefix.string} ")
 		append(mnemonic.string)
 		if(op1 == null) return@buildString
 		append(' ')

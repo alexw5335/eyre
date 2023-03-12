@@ -77,19 +77,21 @@ class LabelSymbol(
 
 
 
-class DllImportSymbol(
+class DebugLabelSymbol(
 	override val base: SymBase
 ) : PosSymbol {
-	override var section = Section.IDATA
+	override var section = Section.TEXT
 	override var pos = 0
 }
 
 
 
-class DllSymbol(
+class DllImportSymbol(
 	override val base: SymBase,
-	val imports: MutableList<DllImportSymbol>
-) : Symbol
+) : PosSymbol {
+	override var section = Section.IDATA
+	override var pos = 0
+}
 
 
 

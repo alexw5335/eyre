@@ -212,29 +212,29 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseInstruction(mnemonic: Mnemonic): InsNode {
+	private fun parseInstruction(prefix: Prefix?, mnemonic: Mnemonic): InsNode {
 		val srcPos = SrcPos(1)
 		if(atNewline() || next == EndToken)
-			return InsNode(srcPos, mnemonic, 0, null, null, null, null)
+			return InsNode(srcPos, prefix, mnemonic, 0, null, null, null, null)
 
 		val op1 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(srcPos, mnemonic, 1, op1, null, null, null)
+			return InsNode(srcPos, prefix, mnemonic, 1, op1, null, null, null)
 		pos++
 
 		val op2 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(srcPos, mnemonic, 2, op1, op2, null, null)
+			return InsNode(srcPos, prefix, mnemonic, 2, op1, op2, null, null)
 		pos++
 
 		val op3 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(srcPos, mnemonic, 3, op1, op2, op3, null)
+			return InsNode(srcPos, prefix, mnemonic, 3, op1, op2, op3, null)
 		pos++
 
 		val op4 = parseOperand()
 		expectTerminator()
-		return InsNode(srcPos, mnemonic, 4, op1, op2, op3, op4)
+		return InsNode(srcPos, prefix, mnemonic, 4, op1, op2, op3, op4)
 	}
 
 
@@ -299,45 +299,28 @@ class Parser(private val context: CompilerContext) {
 		if(id in StringInterner.keywords) {
 			when(StringInterner.keywords[id]) {
 				Keyword.NAMESPACE -> parseNamespace()
-				Keyword.DLLIMPORT -> parseDllImport()
 				Keyword.VAR       -> parseVar()
 				Keyword.CONST     -> parseConst()
 				Keyword.ENUM      -> parseEnum(false)
 				Keyword.BITMASK   -> parseEnum(true)
 				else              -> error("Invalid keyword: $id")
 			}
+			return
+		}
+
+		if(id in StringInterner.prefixes) {
+			val next = id()
+			if(next !in StringInterner.mnemonics) error("Invalid prefix: $next")
+			parseInstruction(StringInterner.prefixes[id], StringInterner.mnemonics[next]).add()
+			return
 		}
 
 		if(id in StringInterner.mnemonics) {
-			val mnemonic = StringInterner.mnemonics[id]
-			parseInstruction(mnemonic).add()
+			parseInstruction(null, StringInterner.mnemonics[id]).add()
+			return
 		}
-	}
 
-
-
-	private fun parseDllImport() {
-		val srcPos = SrcPos()
-		val dllName = id()
-		expect(SymToken.LBRACE)
-
-		val dll = context.dlls.getOrPut(dllName) {
-			DllSymbol(SymBase(srcPos, currentScope, dllName), java.util.ArrayList())
-		}.add()
-
-		while(pos < tokens.size) {
-			if(next == SymToken.RBRACE) {
-				pos++
-				break
-			}
-
-			val srcPos2 = SrcPos()
-			val importName = id()
-			expectTerminator()
-			if(next == SymToken.COMMA) pos++
-			val importSymbol = DllImportSymbol(SymBase(srcPos2, currentScope, importName)).add()
-			dll.imports.add(importSymbol)
-		}
+		error("Unexpected identifier: $id")
 	}
 
 
@@ -437,6 +420,22 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun parseHash() {
+		val srcPos = SrcPos()
+
+		when(val directive = id()) {
+			StringInterner.DEBUG -> {
+				val name = next() as? StringToken ?: error("Expecting string literal")
+				val symbol = DebugLabelSymbol(SymBase(srcPos, currentScope, name.value))
+				DebugLabelNode(srcPos, symbol).add()
+				context.debugLabels.add(symbol)
+			}
+			else -> error("Invalid directive: $directive")
+		}
+	}
+
+
+
 	/*
 	Parsing
 	 */
@@ -466,8 +465,9 @@ class Parser(private val context: CompilerContext) {
 			when(val token = next()) {
 				is IdToken       -> parseId(token.value)
 				SymToken.RBRACE  -> { pos--; break }
-				is SymToken      -> if(token != SymToken.SEMICOLON) error(1, "Invalid symbol: ${token.string}")
+				SymToken.HASH    -> parseHash()
 				EndToken         -> break
+				is SymToken      -> if(token != SymToken.SEMICOLON) error(1, "Invalid symbol: ${token.string}")
 				else             -> error(1, "Invalid token: $token")
 			}
 		}

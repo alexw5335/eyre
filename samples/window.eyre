@@ -1,23 +1,5 @@
 namespace main
 
-dllimport Kernel32 {
-	ExitProcess
-	WriteFile
-}
-
-dllimport user32 {
-	MessageBoxA
-	DefWindowProcA
-	PostQuitMessage
-	TranslateMessage
-	GetMessageA
-	DispatchMessageA
-	LoadCursorA
-	ShowWindow
-	RegisterClassA
-	CreateWindowExA
-}
-
 var finishedMsg db "finished"
 var fatalMsg db "fatal error"
 var className db "my class", 0

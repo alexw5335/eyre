@@ -330,6 +330,7 @@ class Lexer {
 			charMap['~'] = { addSymbol(SymToken.TILDE) }
 			charMap[','] = { addSymbol(SymToken.COMMA) }
 			charMap['?'] = { addSymbol(SymToken.QUESTION) }
+			charMap['#'] = { addSymbol(SymToken.HASH) }
 
 			// Compound symbols
 			charMap['&'] = { when(chars[pos]) {
