@@ -18,17 +18,17 @@ class Compiler(private val context: CompilerContext) {
 			lexer.lex(srcFile)
 			//printTokens(srcFile)
 			parser.parse(srcFile)
-			printNodes(srcFile)
+			//printNodes(srcFile)
 			//printNodeTree(srcFile)
 		}
 
-		printSymbols()
+		//printSymbols()
 		Resolver(context).resolve()
 		Assembler(context).assemble()
 		Linker(context).link()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
 		// dumpbin()
-		disassemble()
+		//disassemble()
 	}
 
 
@@ -56,6 +56,7 @@ class Compiler(private val context: CompilerContext) {
 
 
 
+
 	private fun dumpbin() {
 		printHeader("DUMPBIN")
 		run("dumpbin", "/ALL", "test.exe")
@@ -66,10 +67,10 @@ class Compiler(private val context: CompilerContext) {
 	private fun disassemble() {
 		val pos = context.sections[Section.TEXT]!!.pos
 		val size = context.sections[Section.TEXT]!!.size
-		Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
-		//Files.write(Paths.get("test.bin"), context.textWriter.getTrimmedBytes())
+		val bytes = context.linkWriter.getTrimmedBytes(pos, size)
+		Files.write(Paths.get("test.bin"), bytes)
 		printHeader("DISASSEMBLY")
-		run("ndisasm", "-b64", "test.bin")
+		run("ndisasm", "-b64", "test.exe", "-e", "$pos", "-k", "$size,100000")
 		println()
 	}
 
@@ -169,12 +170,7 @@ class Compiler(private val context: CompilerContext) {
 				else               -> print("?           ")
 			}
 
-			if(symbol.scope.isNotEmpty) {
-				print(symbol.scope)
-				print('.')
-			}
-
-			println(symbol.name)
+			println(symbol.qualifiedName)
 		}
 
 		println()

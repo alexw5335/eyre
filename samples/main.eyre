@@ -1,10 +1,10 @@
-namespace main.print
+namespace main.std
 
 
 
 const bufferCapacity = 512
 var buffer res bufferCapacity
-var bufferPos dd 0
+var bufferPos dq 0
 var msg db "Message"
 
 
@@ -14,7 +14,7 @@ var msg db "Message"
 proc append {
 	mov rsi, rcx
 	lea rdi, [buffer]
-	add edi, [bufferPos]
+	add rdi, [bufferPos]
 	mov ecx, edx
 	rep movsb
 	add [bufferPos], edx
@@ -23,9 +23,77 @@ proc append {
 
 
 
+// rcx: value
+// rdx: radix
+proc appendInt {
+	sub rsp, 40
+
+	lea r9, [buffer]
+	add r9, [bufferPos]
+
+	cmp rcx, 0
+	jae positive
+	mov byte [r9], '-'
+	add qword [bufferPos], 1
+	add r9, 1
+positive:
+	call appendIntRaw
+	add rsp, 40
+	ret
+}
+
+
 
 // rcx: value
-// edx: radix
+// rdx: radix
+proc appendIntRaw {
+	cmp rcx, 0
+	jne nonZero
+	lea r9, [buffer]
+	add r9, [bufferPos]
+	mov byte [r9], '0'
+	add qword [bufferPos], 1
+	ret
+nonZero:
+	push rsi
+	mov rsi, rdx
+	xor r10, r10
+	xor r11, r11
+	mov r9, [bufferPos]
+	lea r9, [buffer]
+	add r9, [bufferPos]
+	mov rax, rcx
+loop1:
+	cqo
+	idiv rsi
+	add r10, 1
+	cmp rax, 0
+	jnz loop1
+    mov rax, rcx
+loop2:
+	cqo
+	idiv rsi
+	cmp dl, 9
+	jbe decimal
+	add dl, 'A' - '0' - 10
+decimal:
+	add dl, '0'
+	add r11, 1
+	mov r8, r10
+	sub r8, r11
+	mov [r9 + r8], dl
+	cmp rax, 0
+	jnz loop2
+	add [bufferPos], r11
+	pop rsi
+	ret
+}
+
+
+
+
+// rcx: value
+// rdx: radix
 proc intLength {
 	mov r8d, edx
 	mov rax, rcx
@@ -58,18 +126,38 @@ proc print {
 
 
 
-main:
+proc intLengthTest {
 	sub rsp, 40
 	mov ecx, 1234
+    mov edx, 10
+    call intLength
+    lea rcx, [buffer]
+    add al, '0'
+    mov byte [rcx], al
+    mov edx, 1
+    call print
+    add rsp, 40
+    ret
+}
+
+
+
+proc appendIntTest {
+	sub rsp, 40
+	mov rcx, 4294967173
 	mov edx, 10
-	call intLength
-
+	call appendIntRaw
 	lea rcx, [buffer]
-	add al, '0'
-	mov byte [rcx], al
-	mov edx, 1
+	mov rdx, [bufferPos]
 	call print
+	add rsp, 40
+	ret
+}
 
+
+
+proc main {
+	sub rsp, 40
+	call appendIntTest
 	dllcall ExitProcess
-
-
+}

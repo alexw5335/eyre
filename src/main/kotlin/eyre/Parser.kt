@@ -11,15 +11,13 @@ class Parser(private val context: CompilerContext) {
 
 	private var pos = 0
 
-	private var scopeStack = IntArray(64)
-
-	private var scopeStackSize = 0
-
 	private var currentScope = ScopeInterner.EMPTY
 
 	private val nodes = ArrayList<AstNode>()
 
 	private var currentNamespace: Namespace? = null // Only single-line namespaces
+
+	private val scopeBuilder = IntList(8)
 
 
 
@@ -247,17 +245,9 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private val scopeBuilder = IntList(8)
-
-	private fun parseScopeValue(): ScopeIntern {
-		scopeBuilder.reset()
-	}
-
-
-
 	private fun parseNamespace() {
 		val srcPos    = SrcPos()
-		val thisScope = parseScopeValue()
+		val thisScope = parseScopeName()
 		val name      = thisScope.last
 		val namespace = Namespace(SymBase(srcPos, currentScope, name), thisScope).add()
 		val node      = NamespaceNode(srcPos, namespace)
@@ -387,7 +377,7 @@ class Parser(private val context: CompilerContext) {
 		val enumSrcPos = SrcPos()
 		val enumName = id()
 		var current = if(isBitmask) 1L else 0L
-		val scope = addScope(enumName)
+		val scope = ScopeInterner.add(currentScope, enumName)
 
 		if(tokens[pos] != SymToken.LBRACE) return
 		pos++
@@ -450,7 +440,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseProc() {
 		val srcPos = SrcPos()
 		val name = id()
-		val scope = addScope(name)
+		val scope = ScopeInterner.add(currentScope, name)
 		val symbol = ProcSymbol(SymBase(srcPos, currentScope, name), scope).add()
 		ProcNode(srcPos, symbol).add()
 		expect(SymToken.LBRACE)
@@ -470,12 +460,11 @@ class Parser(private val context: CompilerContext) {
 	fun parse(srcFile: SrcFile) {
 		this.srcFile = srcFile
 		this.tokens = srcFile.tokens
-		scopeStackSize = 0
 		pos = 0
 		currentNamespace = null
 		nodes.clear()
 
-		parseScope()
+		parseScopeInternal()
 
 		if(currentNamespace != null)
 			ScopeEndNode(SrcPos()).add()
@@ -485,7 +474,36 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseScope() {
+	/*
+	Scope
+	 */
+
+
+
+	private fun parseScopeName(): ScopeIntern {
+		scopeBuilder.reset()
+
+		do {
+			scopeBuilder.add(id().id)
+		} while(next() == SymToken.PERIOD)
+
+		pos--
+
+		return ScopeInterner.add(currentScope, scopeBuilder.array, scopeBuilder.size)
+	}
+
+
+
+	private fun parseScope(scope: ScopeIntern) {
+		val prevScope = currentScope
+		currentScope = scope
+		parseScopeInternal()
+		currentScope = prevScope
+	}
+
+
+
+	private fun parseScopeInternal() {
 		while(pos < tokens.size) {
 			when(val token = next()) {
 				is IdToken       -> parseId(token.value)
@@ -496,27 +514,6 @@ class Parser(private val context: CompilerContext) {
 				else             -> error(1, "Invalid token: $token")
 			}
 		}
-	}
-
-
-
-	private fun parseScope(scope: ScopeIntern) {
-		val prevScope = currentScope
-		currentScope = scope
-		scopeStackSize++
-		parseScope()
-		scopeStackSize--
-		currentScope = prevScope
-	}
-
-
-
-	private fun addScope(name: StringIntern): ScopeIntern {
-		if(scopeStackSize >= scopeStack.size)
-			scopeStack = scopeStack.copyOf(scopeStackSize * 2)
-		scopeStack[scopeStackSize] = name.id
-		val hash = currentScope.hash * 31 + name.id
-		return ScopeInterner.add(scopeStack.copyOf(scopeStackSize + 1), hash)
 	}
 
 

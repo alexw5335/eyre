@@ -25,12 +25,15 @@ interface Symbol {
 	val scope    get() = base.scope
 	val name     get() = base.name
 	var resolved get() = base.resolved; set(v) { base.resolved = v }
+
+	val qualifiedName get() = if(scope.isEmpty) "$name" else "$scope.$name"
 }
 
 
 
 interface ScopedSymbol : Symbol {
 	val thisScope: ScopeIntern
+	override val qualifiedName get() = "$thisScope"
 }
 
 

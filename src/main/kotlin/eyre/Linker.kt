@@ -26,7 +26,6 @@ class Linker(private val context: CompilerContext) {
 		writer.i16(0x8664)     // machine
 		writer.i16(1)          // numSections    (fill in later)
 		writer.i32(0)          // timeDateStamp
-		println(writer.pos)
 		writer.i32(0)          // pSymbolTable
 		writer.i32(0)          // numSymbols
 		writer.i16(0xF0)       // optionalHeaderSize

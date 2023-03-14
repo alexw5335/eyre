@@ -94,13 +94,20 @@ object ScopeInterner : Interner<IntArray, ScopeIntern>() {
 
 	fun add(key: IntArray, hash: Int) = map[key] ?: addInternal(key, ScopeIntern(count++, hash, key))
 
-	val EMPTY = add(IntArray(0), 0)
-	val NULL = add(intArrayOf(StringInterner.NULL.id), StringInterner.NULL.id)
+	fun add(key: IntArray) = add(key, key.contentHashCode())
 
-	fun append(base: ScopeIntern, array: IntArray) {
-		var hash = base.hash
-		for(i in array) hash = hash * 31 + i
-		add(base.array + array, hash)
+	fun add(base: ScopeIntern, addition: Intern): ScopeIntern {
+		val array = base.array.copyOf(base.array.size + 1)
+		array[base.array.size] = addition.id
+		return add(array)
 	}
+
+	fun add(base: ScopeIntern, addition: IntArray, size: Int): ScopeIntern {
+		val array = base.array.copyOf(base.array.size + size)
+		for(i in 0 until size) array[base.array.size + i] = addition[i]
+		return add(array)
+	}
+
+	val EMPTY = add(IntArray(0), 0)
 
 }

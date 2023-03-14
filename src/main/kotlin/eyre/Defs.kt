@@ -69,8 +69,8 @@ enum class Width(val varString: String, val bytes: Int) {
 
 	val string = name.lowercase()
 	val bit = 1 shl ordinal
-	val min = -(1 shl ((bytes shl 3) - 1))
-	val max = (1 shl ((bytes shl 3) - 1)) - 1
+	val min: Long = -(1L shl ((bytes shl 3) - 1))
+	val max: Long = (1L shl ((bytes shl 3) - 1)) - 1
 
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
