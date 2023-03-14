@@ -1,5 +1,7 @@
 package eyre
 
+import eyre.util.IntList
+
 class Parser(private val context: CompilerContext) {
 
 
@@ -245,12 +247,20 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private val scopeBuilder = IntList(8)
+
+	private fun parseScopeValue(): ScopeIntern {
+		scopeBuilder.reset()
+	}
+
+
+
 	private fun parseNamespace() {
-		val srcPos = SrcPos()
-		val name = id()
-		val thisScope = addScope(name)
+		val srcPos    = SrcPos()
+		val thisScope = parseScopeValue()
+		val name      = thisScope.last
 		val namespace = Namespace(SymBase(srcPos, currentScope, name), thisScope).add()
-		val node = NamespaceNode(srcPos, namespace)
+		val node      = NamespaceNode(srcPos, namespace)
 
 		if(next == SymToken.LBRACE) {
 			pos++
@@ -303,6 +313,7 @@ class Parser(private val context: CompilerContext) {
 				Keyword.CONST     -> parseConst()
 				Keyword.ENUM      -> parseEnum(false)
 				Keyword.BITMASK   -> parseEnum(true)
+				Keyword.PROC      -> parseProc()
 				else              -> error("Invalid keyword: $id")
 			}
 			return
@@ -432,6 +443,20 @@ class Parser(private val context: CompilerContext) {
 			}
 			else -> error("Invalid directive: $directive")
 		}
+	}
+
+
+
+	private fun parseProc() {
+		val srcPos = SrcPos()
+		val name = id()
+		val scope = addScope(name)
+		val symbol = ProcSymbol(SymBase(srcPos, currentScope, name), scope).add()
+		ProcNode(srcPos, symbol).add()
+		expect(SymToken.LBRACE)
+		parseScope(scope)
+		expect(SymToken.RBRACE)
+		ScopeEndNode(SrcPos()).add()
 	}
 
 

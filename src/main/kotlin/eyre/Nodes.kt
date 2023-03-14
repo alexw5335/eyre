@@ -60,6 +60,11 @@ class LabelNode(
 	val symbol: LabelSymbol
 ) : AstNode
 
+class ProcNode(
+	override val srcPos: SrcPos,
+	val symbol: ProcSymbol
+) : AstNode
+
 class MemNode(
 	override val srcPos: SrcPos,
 	val width: Width?,
@@ -187,6 +192,7 @@ fun AstNode.getChildren(): List<AstNode> = when(this) {
 	is NamespaceNode,
 	is ScopeEndNode,
 	is DebugLabelNode,
+	is ProcNode      -> emptyList()
 	is SegRegNode    -> emptyList()
 	is UnaryNode     -> listOf(node)
 	is BinaryNode    -> listOf(left, right)
@@ -219,6 +225,7 @@ val AstNode.printString: String get() = when(this) {
 	is SegRegNode     -> value.name.lowercase()
 	is FpuRegNode     -> value.string
 	is DebugLabelNode -> "#debug \"${symbol.name}\""
+	is ProcNode       -> "proc ${symbol.name}"
 
 	is InsNode -> buildString {
 		if(prefix != null) append("${prefix.string} ")

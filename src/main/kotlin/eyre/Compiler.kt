@@ -16,7 +16,7 @@ class Compiler(private val context: CompilerContext) {
 
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
-			printTokens(srcFile)
+			//printTokens(srcFile)
 			parser.parse(srcFile)
 			printNodes(srcFile)
 			//printNodeTree(srcFile)
@@ -165,6 +165,7 @@ class Compiler(private val context: CompilerContext) {
 				is ConstSymbol     -> print("CONST       ")
 				is EnumSymbol      -> print("ENUM        ")
 				is EnumEntrySymbol -> print("ENUM ENTRY  ")
+				is ProcSymbol      -> print("PROC        ")
 				else               -> print("?           ")
 			}
 

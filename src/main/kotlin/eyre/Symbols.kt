@@ -68,8 +68,18 @@ class Namespace(
 
 
 
-class LabelSymbol(
+class ProcSymbol(
 	override val base: SymBase,
+	override val thisScope: ScopeIntern
+) : ScopedSymbol, PosSymbol {
+	override var section = Section.TEXT
+	override var pos = 0
+}
+
+
+
+class LabelSymbol(
+	override val base: SymBase
 ) : PosSymbol {
 	override var section = Section.TEXT
 	override var pos = 0

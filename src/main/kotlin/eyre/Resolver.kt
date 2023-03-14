@@ -56,6 +56,7 @@ class Resolver(private val context: CompilerContext) {
 		for(node in srcFile.nodes) {
 			when(node) {
 				is NamespaceNode -> pushScope(node.symbol.thisScope)
+				is ProcNode      -> pushScope(node.symbol.thisScope)
 				is ScopeEndNode  -> popScope()
 				is InsNode       -> resolveInstruction(node)
 				is ConstNode     -> resolveConst(node)

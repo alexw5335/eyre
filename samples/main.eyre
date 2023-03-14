@@ -1,4 +1,4 @@
-namespace main
+namespace main.print
 
 
 
@@ -9,9 +9,9 @@ var msg db "Message"
 
 
 
-// rcx: src
+// rcx: data
 // rdx: size
-append:
+proc append {
 	mov rsi, rcx
 	lea rdi, [buffer]
 	add edi, [bufferPos]
@@ -19,17 +19,14 @@ append:
 	rep movsb
 	add [bufferPos], edx
 	ret
+}
 
 
 
 
-// rcx: int
+// rcx: value
 // edx: radix
-int_length:
-	// r8: 10
-	// eax: number
-	// edx: 0
-	// ecx: counter
+proc intLength {
 	mov r8d, edx
 	mov rax, rcx
 	xor ecx, ecx
@@ -41,40 +38,13 @@ loop:
 	jnz loop
 	mov rax, rcx
 	ret
+}
 
 
 
-main:
-	sub rsp, 40
-
-	#debug "main1"
-	mov ecx, 1234
-
-	#debug "main2"
-	mov edx, 10
-
-	#debug "main3"
-	call int_length
-
-	lea rcx, [buffer]
-	add al, '0'
-	mov byte [rcx], al
-	mov edx, 1
-	call print
-
-	//lea rcx, [msg]
-	//mov edx, msg::size
-	//call append
-
-	//lea rcx, [buffer]
-	//mov edx, dword [bufferPos]
-	//call print
-
-	dllcall ExitProcess
-
-
-
-print:
+// rcx: data
+// rdx: length
+proc print {
 	sub rsp, 56
 	mov r8, rdx
 	mov rdx, rcx
@@ -84,3 +54,22 @@ print:
 	dllcall WriteFile
 	add rsp, 56
 	ret
+}
+
+
+
+main:
+	sub rsp, 40
+	mov ecx, 1234
+	mov edx, 10
+	call intLength
+
+	lea rcx, [buffer]
+	add al, '0'
+	mov byte [rcx], al
+	mov edx, 1
+	call print
+
+	dllcall ExitProcess
+
+

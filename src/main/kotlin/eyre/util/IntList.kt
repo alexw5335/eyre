@@ -1,5 +1,7 @@
 package eyre.util
 
+import java.util.*
+
 class IntList(array: IntArray) {
 
 	constructor(initialCapacity: Int = 512) : this(IntArray(initialCapacity))
@@ -16,6 +18,15 @@ class IntList(array: IntArray) {
 	private fun ensureCapacity() {
 		if(size >= array.size)
 			array = array.copyOf(size shl 2)
+	}
+
+	fun reset() {
+		size = 0
+	}
+
+	fun clear() {
+		Arrays.fill(array, 0)
+		size = 0
 	}
 
 	fun add(value: Int) {

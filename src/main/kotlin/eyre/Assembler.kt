@@ -21,7 +21,8 @@ class Assembler(private val context: CompilerContext) {
 			for(node in srcFile.nodes) {
 				when(node) {
 					is InsNode   -> handleInstruction(node)
-					is LabelNode -> handleLabel(node)
+					is LabelNode -> handleLabel(node.symbol)
+					is ProcNode  -> handleLabel(node.symbol)
 					is VarNode   -> handleVar(node)
 					is ResNode   -> handleRes(node)
 					is DebugLabelNode -> handleDebugLabelNode(node)
@@ -85,12 +86,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleLabel(node: LabelNode) {
-		node.symbol.pos = writer.pos
-		if(node.symbol.name == StringInterner.MAIN) {
+	private fun handleLabel(symbol: PosSymbol) {
+		symbol.pos = writer.pos
+		if(symbol.name == StringInterner.MAIN) {
 			if(context.entryPoint != null)
 				error("Redeclaration of entry point")
-			context.entryPoint = node.symbol
+			context.entryPoint = symbol
 		}
 	}
 
