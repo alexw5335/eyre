@@ -10,6 +10,22 @@ var msg db "Message"
 
 
 // rcx: data
+// rdx: length
+proc print {
+	sub rsp, 56
+	mov r8, rdx
+	mov rdx, rcx
+	mov ecx, -11
+	lea r9, [rsp + 40]
+	mov qword [rsp + 32], 0
+	dllcall WriteFile
+	add rsp, 56
+	ret
+}
+
+
+
+// rcx: data
 // rdx: size
 proc append {
 	mov rsi, rcx
@@ -31,8 +47,8 @@ proc appendInt {
 	lea r9, [buffer]
 	add r9, [bufferPos]
 
-	cmp rcx, 0
-	jae positive
+	test rcx, rcx
+	jns positive
 	mov byte [r9], '-'
 	add qword [bufferPos], 1
 	add r9, 1
@@ -73,6 +89,10 @@ loop1:
 loop2:
 	cqo
 	idiv rsi
+	test rdx, rdx
+	jns positive
+	neg rdx
+positive:
 	cmp dl, 9
 	jbe decimal
 	add dl, 'A' - '0' - 10
@@ -91,62 +111,11 @@ decimal:
 
 
 
-
-// rcx: value
-// rdx: radix
-proc intLength {
-	mov r8d, edx
-	mov rax, rcx
-	xor ecx, ecx
-loop:
-	add cl, 1
-	cdq
-	idiv r8
-	cmp rax, 0
-	jnz loop
-	mov rax, rcx
-	ret
-}
-
-
-
-// rcx: data
-// rdx: length
-proc print {
-	sub rsp, 56
-	mov r8, rdx
-	mov rdx, rcx
-	mov ecx, -11
-	lea r9, [rsp + 40]
-	mov qword [rsp + 32], 0
-	dllcall WriteFile
-	add rsp, 56
-	ret
-}
-
-
-
-proc intLengthTest {
-	sub rsp, 40
-	mov ecx, 1234
-    mov edx, 10
-    call intLength
-    lea rcx, [buffer]
-    add al, '0'
-    mov byte [rcx], al
-    mov edx, 1
-    call print
-    add rsp, 40
-    ret
-}
-
-
-
 proc appendIntTest {
 	sub rsp, 40
-	mov rcx, 4294967173
-	mov edx, 10
-	call appendIntRaw
+	mov rcx, -0b101011
+	mov edx, 2
+	call appendInt
 	lea rcx, [buffer]
 	mov rdx, [bufferPos]
 	call print
