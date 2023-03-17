@@ -1,5 +1,7 @@
 package eyre
 
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -28,7 +30,7 @@ class Compiler(private val context: CompilerContext) {
 		Linker(context).link()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
 		// dumpbin()
-		disassemble()
+		//disassemble()
 	}
 
 
@@ -41,7 +43,13 @@ class Compiler(private val context: CompilerContext) {
 
 	private fun run(vararg params: String) {
 		val process = Runtime.getRuntime().exec(params)
-		process.waitFor()
+		val reader = BufferedReader(InputStreamReader(process.inputStream))
+
+		while(true) {
+			val line = reader.readLine()
+			println(line ?: break)
+		}
+
 		process.errorReader().readText().let {
 			if(it.isNotEmpty()) {
 				print("\u001B[31m$it\\u001B[0m")
@@ -49,9 +57,7 @@ class Compiler(private val context: CompilerContext) {
 			}
 		}
 
-		process.inputReader().readText().let {
-			if(it.isNotEmpty()) print(it)
-		}
+		process.waitFor()
 	}
 
 
@@ -65,12 +71,22 @@ class Compiler(private val context: CompilerContext) {
 
 
 	private fun disassemble() {
-		val pos = context.sections[Section.TEXT]!!.pos
-		val size = context.sections[Section.TEXT]!!.size
-		val bytes = context.linkWriter.getTrimmedBytes(pos, size)
-		Files.write(Paths.get("test.bin"), bytes)
+		val sectionPos = context.sections[Section.TEXT]!!.pos
+
 		printHeader("DISASSEMBLY")
-		run("ndisasm", "-b64", "test.exe", "-e", "$pos", "-k", "$size,100000")
+
+		for(symbol in context.symbols.getAll()) {
+			if(symbol !is ProcSymbol) continue
+
+			val pos = sectionPos + symbol.pos
+			val size = symbol.size
+
+			println()
+			printHeader("${symbol.qualifiedName} ($pos, $size)")
+			Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
+			run("ndisasm", "-b64", "test.bin")
+		}
+
 		println()
 	}
 

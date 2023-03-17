@@ -1,25 +1,38 @@
-namespace main.std
-
-
+namespace string
 
 const bufferCapacity = 512
 var buffer res bufferCapacity
 var bufferPos dq 0
-var msg db "Message"
 
 
 
-// rcx: data
-// rdx: length
-proc print {
-	sub rsp, 56
-	mov r8, rdx
-	mov rdx, rcx
-	mov ecx, -11
-	lea r9, [rsp + 40]
-	mov qword [rsp + 32], 0
-	dllcall WriteFile
-	add rsp, 56
+// rcx: int
+proc printInt {
+	sub rsp, 40
+	mov edx, 10
+	call appendInt
+	call newline
+	call printBuffer
+	call reset
+	add rsp, 40
+	ret
+}
+
+
+
+proc reset {
+	mov qword [bufferPos], 0
+}
+
+
+
+// No args
+proc printBuffer {
+	sub rsp, 40
+	lea rcx, [buffer]
+	mov rdx, [bufferPos]
+	call stdlib.print
+	add rsp, 40
 	ret
 }
 
@@ -39,14 +52,38 @@ proc append {
 
 
 
+// no params
+proc newline {
+	lea rcx, [buffer]
+	add rcx, [bufferPos]
+	mov byte [rcx], '\n'
+	add qword [bufferPos], 1
+	ret
+}
+
+
+
+// rcx: string (null-terminated or of length 8)
+proc appendRegString {
+    bsr rax, rcx
+    add rax, 7
+    and rax, -8
+    shr rax, 3 // length in rax
+    lea rdx, [buffer]
+    add rdx, [bufferPos]
+    mov [rdx], rcx
+    add [bufferPos], rax
+    ret
+}
+
+
+
 // rcx: value
 // rdx: radix
 proc appendInt {
 	sub rsp, 40
-
 	lea r9, [buffer]
 	add r9, [bufferPos]
-
 	test rcx, rcx
 	jns positive
 	mov byte [r9], '-'
@@ -107,26 +144,4 @@ decimal:
 	add [bufferPos], r11
 	pop rsi
 	ret
-}
-
-
-
-proc appendIntTest {
-	sub rsp, 40
-	mov rcx, -0b101011
-	mov edx, 2
-	call appendInt
-	lea rcx, [buffer]
-	mov rdx, [bufferPos]
-	call print
-	add rsp, 40
-	ret
-}
-
-
-
-proc main {
-	sub rsp, 40
-	call appendIntTest
-	dllcall ExitProcess
 }

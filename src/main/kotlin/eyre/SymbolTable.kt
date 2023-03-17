@@ -63,7 +63,7 @@ class SymbolTable {
 			var n2 = n.next
 			while(n2 != null) {
 				n2.value?.let(::add)
-				n2 = n.next
+				n2 = n2.next
 			}
 		}
 	}

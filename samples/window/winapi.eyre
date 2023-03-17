@@ -1,0 +1,132 @@
+namespace winapi
+
+
+
+struct PaintStruct {
+	0   8   hdc
+	16  4   erase
+	20  4   left
+	24  4   top
+	28  4   right
+	32  4   bottom
+	36  4   restore
+	40  4   incUpdate
+	44  32  reserved
+	76
+}
+
+
+
+struct Message {
+	0   8  hwnd
+	8   4  message
+	16  8  wParam
+	24  8  lParam
+	32  4  time
+	36  4  x
+	40  4  y
+	44  4  reserved
+	56
+}
+
+
+
+struct WndClassA {
+	0   4  style
+	8   8  wndProc
+	16  4  cbClsExtra
+	20  4  cbWndExtra
+	24  8  hInstance
+	32  8  hIcon
+	40  8  hCursor
+	48  8  hbrBackground
+	56  8  menuName
+	64  8  className
+	72
+}
+
+
+
+enum Colour {
+	WINDOW_TEXT 8
+	WINDOW 5
+	HOT_LIGHT 26
+	HIGHLIGHT_TEXT 14
+	HIGHLIGHT 13
+	GREY_TEXT 17
+	BUTTON_TEXT 18
+	_3D_FACE 15
+}
+
+
+
+enum MsgType {
+	NULL 0
+	CREATE 1
+	DESTROY 2
+	MOVE 3
+	SIZE 5
+	ACTIVATE 6
+	SET_FOCUS 7
+	KILL_FOCUS 8
+	ENABLE 10
+	SET_REDRAW 11
+	SET_TEST 12
+	GET_TEXT 13
+	GET_TEXT_LENGTH 14
+	PAINT 15
+	CLOSE 16
+	QUERY_END_SESSION 17
+	QUIT 18
+	QUERY_OPEN 19
+	ERASE_BACKGROUND 20
+	SYS_COLOUR_CHANGE 21
+	END_SESSION 22
+	SHOW_WINDOW 24
+	CTL_COLOUR 25
+	WIN_INI_CHANGE 26
+	DEV_MODE_CHANGE 27
+	ACTIVATE_APP 28
+	FONT_CHANGE 29
+	TIME_CHANGE 30
+	CANCEL_MODE 31
+	SET_CURSOR 32
+	MOUSE_ACTIVATE 33
+	CHILD_ACTIVATE 34
+	QUEUE_SYNC 35
+	GET_MIN_MAX_INFO 36
+	PAINT_ICON 38
+	ICON_ERASE_BACKGROUND 39
+	INPUT 255
+	KEY_DOWN 256
+	KEY_FIRST 256
+	KEY_UP 257
+	CHAR 258
+	DEAD_CHAR 259
+	SYS_KEY_DOWN 260
+	SYS_KEY_UP 261
+	SYS_CHAR 262
+	SYS_DEAD_CHAR 263
+	UNI_CHAR 265
+	KEY_LAST 265
+}
+
+
+
+enum Cursor {
+	STARTING   32650
+	ARROW      32512
+	CROSS      32515
+	HAND       32649
+	HELP       32651
+	IBEAM      32513
+	NO         32648
+	SIZE       32640
+	SIZE_ALL   32646
+	SIZE_NESW  32643
+	SIZE_NS    32645
+	SIZE_NWSE  32642
+	SIZE_WE    32644
+	UP_ARROW   32516
+	WAIT       32514
+}

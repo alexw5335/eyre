@@ -49,6 +49,10 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun SymBase(srcPos: SrcPos, name: StringIntern) = SymBase(srcPos, currentScope, name)
+
+
+
 	private fun<T : AstNode> T.add(): T {
 		nodes.add(this)
 		return this
@@ -257,11 +261,11 @@ class Parser(private val context: CompilerContext) {
 			node.add()
 			parseScope(thisScope)
 			expect(SymToken.RBRACE)
-			ScopeEndNode(SrcPos()).add()
+			ScopeEndNode(SrcPos(), namespace).add()
 		} else {
 			expectTerminator()
 			if(currentNamespace != null)
-				ScopeEndNode(SrcPos()).add()
+				ScopeEndNode(SrcPos(), currentNamespace!!).add()
 			node.add()
 			parseScope(thisScope)
 			currentNamespace = namespace
@@ -304,6 +308,8 @@ class Parser(private val context: CompilerContext) {
 				Keyword.ENUM      -> parseEnum(false)
 				Keyword.BITMASK   -> parseEnum(true)
 				Keyword.PROC      -> parseProc()
+				Keyword.IMPORT    -> parseImport()
+				Keyword.STRUCT    -> parseStruct()
 				else              -> error("Invalid keyword: $id")
 			}
 			return
@@ -394,12 +400,18 @@ class Parser(private val context: CompilerContext) {
 			val node: EnumEntryNode
 
 			val base = SymBase(srcPos, scope, name)
+			val token = tokens[pos]
 
-			if(tokens[pos] == SymToken.EQUALS) {
+			if(token == SymToken.EQUALS) {
 				pos++
 				symbol = EnumEntrySymbol(base, entries.size, 0).add()
 				symbol.resolved = false
 				node = EnumEntryNode(srcPos, symbol, parseExpression())
+			} else if(token is IntToken) {
+				pos++
+				symbol = EnumEntrySymbol(base, entries.size, token.value).add()
+				symbol.resolved = true
+				node = EnumEntryNode(srcPos, symbol, null)
 			} else {
 				symbol = EnumEntrySymbol(base, entries.size, current).add()
 				symbol.resolved = true
@@ -440,13 +452,63 @@ class Parser(private val context: CompilerContext) {
 	private fun parseProc() {
 		val srcPos = SrcPos()
 		val name = id()
-		val scope = ScopeInterner.add(currentScope, name)
+		val scope = createScope(name)
 		val symbol = ProcSymbol(SymBase(srcPos, currentScope, name), scope).add()
 		ProcNode(srcPos, symbol).add()
 		expect(SymToken.LBRACE)
 		parseScope(scope)
 		expect(SymToken.RBRACE)
-		ScopeEndNode(SrcPos()).add()
+		ScopeEndNode(SrcPos(), symbol).add()
+	}
+
+
+
+	private fun parseImport() {
+		val srcPos = SrcPos()
+		val value = parseExpression()
+		if(value !is SymProviderNode) error("Expecting symbol reference")
+		ImportNode(srcPos, value).add()
+	}
+
+
+
+	private fun parseStruct() {
+		val structSrcPos = SrcPos()
+		val structName = id()
+		val scope = createScope(structName)
+		val memberSymbols = ArrayList<MemberSymbol>()
+		val memberNodes = ArrayList<MemberNode>()
+		var structSize = 0
+
+		expect(SymToken.LBRACE)
+
+		while(true) {
+			val srcPos = SrcPos()
+
+			val offset = (next() as? IntToken)?.value ?: error("Expecting struct member offset")
+			if(offset !in 0..Int.MAX_VALUE) error("Struct member offset out of bounds")
+
+			if(next !is IntToken) {
+				structSize = offset.toInt()
+				expect(SymToken.RBRACE)
+				break
+			}
+
+			val size = (next() as? IntToken)?.value ?: error("Expecting struct member size")
+			if(size !in 0..Int.MAX_VALUE) error("Struct member size out of bounds")
+
+			val name = id()
+			val symbol = MemberSymbol(SymBase(srcPos, scope, name), offset.toInt(), size.toInt()).add()
+			val node = MemberNode(srcPos, symbol)
+			symbol.resolved = true
+			memberSymbols.add(symbol)
+			memberNodes.add(node)
+			expectTerminator()
+		}
+
+		val symbol = StructSymbol(SymBase(structSrcPos, structName), scope, memberSymbols, structSize).add()
+		StructNode(structSrcPos, symbol, memberNodes).add()
+		for(s in memberSymbols) s.parent = symbol
 	}
 
 
@@ -467,7 +529,7 @@ class Parser(private val context: CompilerContext) {
 		parseScopeInternal()
 
 		if(currentNamespace != null)
-			ScopeEndNode(SrcPos()).add()
+			ScopeEndNode(SrcPos(), currentNamespace!!).add()
 
 		srcFile.nodes = ArrayList(nodes)
 	}
@@ -500,6 +562,11 @@ class Parser(private val context: CompilerContext) {
 		parseScopeInternal()
 		currentScope = prevScope
 	}
+
+
+
+	private fun createScope(name: StringIntern) =
+		ScopeInterner.add(currentScope, name)
 
 
 

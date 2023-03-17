@@ -52,6 +52,8 @@ enum class Mnemonic {
 	CMOVS, CMOVNS, CMOVP, CMOVPE, CMOVNP, CMOVPO, CMOVL, CMOVNGE,
 	CMOVNL, CMOVGE, CMOVLE, CMOVNG, CMOVNLE, CMOVG,
 
+	BSR, BSF,
+
 	DLLCALL;
 
 	val string = name.lowercase()

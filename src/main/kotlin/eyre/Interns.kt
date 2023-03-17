@@ -4,7 +4,7 @@ import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
 
-
+// Rename StringIntern to Name and ScopeIntern to Scope?
 interface Intern {
 	val id: Int
 	val isEmpty get() = id == 0

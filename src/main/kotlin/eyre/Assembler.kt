@@ -25,6 +25,7 @@ class Assembler(private val context: CompilerContext) {
 					is ProcNode  -> handleLabel(node.symbol)
 					is VarNode   -> handleVar(node)
 					is ResNode   -> handleRes(node)
+					is ScopeEndNode -> handleScopeEnd(node)
 					is DebugLabelNode -> handleDebugLabelNode(node)
 					else         -> { }
 				}
@@ -103,6 +104,13 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun handleScopeEnd(node: ScopeEndNode) {
+		if(node.symbol is ProcSymbol)
+			node.symbol.size = writer.pos - node.symbol.pos
+	}
+
+
+
 	/*
 	Relocations
 	 */
@@ -175,6 +183,7 @@ class Assembler(private val context: CompilerContext) {
 		is IntNode         -> node.value
 		is UnaryNode       -> node.calculate(::resolveImmRec, regValid)
 		is BinaryNode      -> node.calculate(::resolveImmRec, regValid)
+		is StringNode      -> node.value.string.ascii64()
 		is SymProviderNode -> resolveImmSym(node, regValid)
 		else               -> error("Invalid imm node: $node")
 	}
@@ -498,7 +507,8 @@ class Assembler(private val context: CompilerContext) {
 		widths: Widths,
 		op1: Register,
 		op2: Register,
-		mismatch: Boolean = false
+		op2CanBeMem: Boolean,
+		mismatch: Boolean = false,
 	) {
 		val width = op1.width
 		if(!mismatch && op1.width != op2.width) invalidEncoding()
@@ -506,7 +516,10 @@ class Assembler(private val context: CompilerContext) {
 		checkO16(width)
 		writeRex(rexW(widths, width), op2.rex, 0, op1.rex)
 		writeOpcode(opcode, widths, width)
-		writeModRM(0b11, op2.value, op1.value)
+		if(op2CanBeMem)
+			writeModRM(0b11, op1.value, op2.value)
+		else
+			writeModRM(0b11, op2.value, op1.value)
 	}
 
 
@@ -581,7 +594,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun encode2RRM(opcode: Int, widths: Widths, op1: Register, op2: OpNode) {
 		when(op2) {
-			is RegNode -> encode2RR(opcode, widths, op1, op2.value)
+			is RegNode -> encode2RR(opcode, widths, op1, op2.value, true)
 			is MemNode -> encode2RM(opcode, widths, op1, op2, 0)
 			else -> invalidEncoding()
 		}
@@ -591,7 +604,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun encode2RMR(opcode: Int, widths: Widths, op1: OpNode, op2: Register) {
 		when(op1) {
-			is RegNode -> encode2RR(opcode, widths, op1.value, op2)
+			is RegNode -> encode2RR(opcode, widths, op1.value, op2, false)
 			is MemNode -> encode2RM(opcode, widths, op2, op1, 0)
 			else -> invalidEncoding()
 		}
@@ -782,6 +795,9 @@ class Assembler(private val context: CompilerContext) {
 		CMOVLE, CMOVNG -> encodeCMOVCC(0x4E0F, op1.asReg, op2)
 		CMOVNLE, CMOVG -> encodeCMOVCC(0x4F0F, op1.asReg, op2)
 
+		BSR -> encode2RRM(0xBD0F, Widths.NO8, op1.asReg, op2)
+		BSF -> encode2RRM(0xBC0F, Widths.NO8, op1.asReg, op2)
+
 		else -> invalidEncoding()
 	}}
 
@@ -846,7 +862,7 @@ class Assembler(private val context: CompilerContext) {
 					op1.width != op2.width -> invalidEncoding()
 					op1.value.isA          -> encode1O(0x90, Widths.NO8, op2.value)
 					op2.value.isA          -> encode1O(0x90, Widths.NO8, op1.value)
-					else                   -> encode2RR(0x86, Widths.ALL, op1.value, op2.value)
+					else                   -> encode2RR(0x86, Widths.ALL, op1.value, op2.value, false)
 				}
 				is MemNode -> encode2RM(0x86, Widths.ALL, op1.value, op2, 0)
 				else       -> invalidEncoding()
@@ -870,10 +886,10 @@ class Assembler(private val context: CompilerContext) {
 
 		if(op2 is RegNode) {
 			if(imm.isImm8) {
-				encode2RR(0x6B, Widths.NO8, op1, op2.value)
+				encode2RR(0x6B, Widths.NO8, op1, op2.value, true)
 				writeImm(op3, BYTE, imm)
 			} else {
-				encode2RR(0x69, Widths.NO8, op1, op2.value)
+				encode2RR(0x69, Widths.NO8, op1, op2.value, true)
 				writeImm(op3, op1.width, imm)
 			}
 		} else if(op2 is MemNode) {
@@ -899,7 +915,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeTEST(op1: OpNode, op2: OpNode) {
 		if(op1 is RegNode) {
 			if(op2 is RegNode) {
-				encode2RR(0x84, Widths.ALL, op1.value, op2.value)
+				encode2RR(0x84, Widths.ALL, op1.value, op2.value, false)
 			} else if(op1.value.isA) {
 				encodeNone(0xA8, Widths.ALL, op1.width)
 				writeImm(op2, op1.width)
@@ -1119,7 +1135,7 @@ class Assembler(private val context: CompilerContext) {
 
 		if(op1 is RegNode) {
 			if(op2 is RegNode) {
-				encode2RR(start + 0, Widths.ALL, op1.value, op2.value)
+				encode2RR(start + 0, Widths.ALL, op1.value, op2.value, false)
 			} else if(op2 is MemNode) {
 				encode2RM(start + 2, Widths.ALL, op1.value, op2, 0)
 			} else {
@@ -1269,7 +1285,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeMOV(op1: OpNode, op2: OpNode) {
 		if(op1 is RegNode) {
 			if(op2 is RegNode) {
-				encode2RR(0x88, Widths.ALL, op1.value, op2.value)
+				encode2RR(0x88, Widths.ALL, op1.value, op2.value, false)
 			} else if(op2 is MemNode) {
 				encode2RM(0x8A, Widths.ALL, op1.value, op2, 0)
 			} else {

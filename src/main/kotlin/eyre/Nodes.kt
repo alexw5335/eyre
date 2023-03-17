@@ -16,8 +16,14 @@ sealed interface SymProviderNode : AstNode {
 
 
 
+class ImportNode(
+	override val srcPos: SrcPos,
+	val import: SymProviderNode
+) : AstNode
+
 class ScopeEndNode(
-	override val srcPos: SrcPos
+	override val srcPos: SrcPos,
+	val symbol: ScopedSymbol
 ): AstNode
 
 class NamespaceNode(
@@ -155,6 +161,17 @@ class DebugLabelNode(
 	val symbol: DebugLabelSymbol
 ) : AstNode
 
+class MemberNode(
+	override val srcPos: SrcPos,
+	val symbol: MemberSymbol
+) : AstNode
+
+class StructNode(
+	override val srcPos: SrcPos,
+	val symbol: StructSymbol,
+	val members: List<MemberNode>
+) : AstNode
+
 
 
 /*
@@ -191,21 +208,24 @@ fun AstNode.getChildren(): List<AstNode> = when(this) {
 	is SymNode,
 	is NamespaceNode,
 	is ScopeEndNode,
-	is DebugLabelNode,
-	is ProcNode      -> emptyList()
-	is SegRegNode    -> emptyList()
-	is UnaryNode     -> listOf(node)
-	is BinaryNode    -> listOf(left, right)
-	is MemNode       -> listOf(value)
-	is DotNode       -> listOf(left, right)
-	is InsNode       -> listOfNotNull(op1, op2, op3, op4)
-	is VarNode       -> parts
-	is VarPart       -> nodes
-	is ResNode       -> listOf(size)
-	is RefNode       -> listOf(left, right)
-	is ConstNode     -> listOf(value)
-	is EnumNode      -> entries
-	is EnumEntryNode -> listOfNotNull(value)
+	is ProcNode,
+	is SegRegNode,
+	is DebugLabelNode -> emptyList()
+	is ImportNode     -> listOf(import)
+	is UnaryNode      -> listOf(node)
+	is BinaryNode     -> listOf(left, right)
+	is MemNode        -> listOf(value)
+	is DotNode        -> listOf(left, right)
+	is InsNode        -> listOfNotNull(op1, op2, op3, op4)
+	is VarNode        -> parts
+	is VarPart        -> nodes
+	is ResNode        -> listOf(size)
+	is RefNode        -> listOf(left, right)
+	is ConstNode      -> listOf(value)
+	is EnumNode       -> entries
+	is EnumEntryNode  -> listOfNotNull(value)
+	is StructNode     -> members
+	is MemberNode     -> emptyList()
 }
 
 
@@ -226,6 +246,23 @@ val AstNode.printString: String get() = when(this) {
 	is FpuRegNode     -> value.string
 	is DebugLabelNode -> "#debug \"${symbol.name}\""
 	is ProcNode       -> "proc ${symbol.name}"
+
+	is MemberNode     -> "${symbol.offset}  ${symbol.size}  ${symbol.name}"
+
+	is StructNode -> buildString {
+		append("struct ")
+		append(symbol.name)
+		append(" {")
+		append('\n')
+		for(member in members) {
+			append('\t')
+			append(member.printString)
+			append('\n')
+		}
+		append('\t')
+		append(symbol.size)
+		append("\n}")
+	}
 
 	is InsNode -> buildString {
 		if(prefix != null) append("${prefix.string} ")
@@ -252,10 +289,11 @@ val AstNode.printString: String get() = when(this) {
 
 	is EnumEntryNode -> buildString {
 		append(symbol.name)
-		if(value != null) {
-			append(" = ")
+		append(" = ")
+		if(value != null)
 			append(value.printString)
-		}
+		else
+			append(symbol.intValue)
 	}
 
 	is EnumNode -> buildString {

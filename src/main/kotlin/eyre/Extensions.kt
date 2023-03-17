@@ -43,3 +43,12 @@ val Long.isImm32 get() = this in Int.MIN_VALUE..Int.MAX_VALUE
 val Int.isImm8 get() = this in Byte.MIN_VALUE..Byte.MAX_VALUE
 
 val Int.isImm16 get() = this in Short.MIN_VALUE..Short.MAX_VALUE
+
+
+
+fun String.ascii64(): Long {
+	var value = 0L
+	for(i in indices)
+		value = value or (this[i].code.toLong() shl (i shl 3))
+	return value
+}

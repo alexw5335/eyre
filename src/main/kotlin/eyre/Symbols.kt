@@ -31,6 +31,13 @@ interface Symbol {
 
 
 
+interface Type : ScopedSymbol {
+	val size: Int
+	val properties: HashMap<StringIntern, Symbol>
+}
+
+
+
 interface ScopedSymbol : Symbol {
 	val thisScope: ScopeIntern
 	override val qualifiedName get() = "$thisScope"
@@ -54,13 +61,35 @@ interface IntSymbol : Symbol {
 private class IntSymbolImpl(
 	override val base: SymBase,
 	override var intValue: Long
-) : IntSymbol
+) : IntSymbol {
+	init { resolved = true }
+}
 
 
 
 fun IntSymbol(base: SymBase, intValue: Long): IntSymbol {
 	return IntSymbolImpl(base, intValue)
 }
+
+
+
+class MemberSymbol(
+	override val base: SymBase,
+	val offset: Int,
+	val size: Int
+) : IntSymbol {
+	override var intValue = offset.toLong()
+	lateinit var parent: StructSymbol
+}
+
+
+
+class StructSymbol(
+	override val base: SymBase,
+	override val thisScope: ScopeIntern,
+	val members: List<MemberSymbol>,
+	val size: Int
+) : ScopedSymbol
 
 
 
@@ -77,6 +106,7 @@ class ProcSymbol(
 ) : ScopedSymbol, PosSymbol {
 	override var section = Section.TEXT
 	override var pos = 0
+	var size = 0
 }
 
 

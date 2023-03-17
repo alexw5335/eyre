@@ -1,0 +1,145 @@
+namespace main
+
+
+
+var cursor dq 0
+var class res winapi.WndClassA::size
+var className db "myClass"
+var hwnd dq 0
+var windowName db "My Window"
+var msg res winapi.Message::size
+var paintStruct res winapi.PaintStruct::size
+
+
+
+proc wndProc {
+	sub rsp, 40
+	cmp edx, winapi.MsgType.DESTROY
+	je destroy
+	cmp edx, winapi.MsgType.PAINT
+	je paint
+	dllcall DefWindowProcA
+	jmp end
+destroy:
+	xor ecx, ecx
+	dllcall PostQuitMessage
+	jmp end
+paint:
+	mov rcx, [hwnd]
+	lea rdx, [paintStruct]
+	dllcall BeginPaint
+	mov rcx, rax
+	lea rdx, [paintStruct + winapi.PaintStruct.left]
+	mov r8d, winapi.Colour.WINDOW + 1
+	dllcall FillRect
+	mov rcx, [hwnd]
+	lea rdx, [paintStruct]
+	dllcall EndPaint
+	jmp end
+end:
+	add rsp, 40
+	ret
+}
+
+
+
+proc createCursor {
+	sub rsp, 40
+	xor ecx, ecx
+	mov edx, winapi.Cursor.ARROW
+	dllcall LoadCursorA
+	cmp rax, 0
+	je stdlib.fatal
+	mov [cursor], rax
+	add rsp, 40
+	ret
+}
+
+
+
+proc createClass {
+	sub rsp, 40
+	lea rax, [className]
+	mov [class + winapi.WndClassA.className], rax
+	lea rax, [wndProc]
+	mov [class + winapi.WndClassA.wndProc], rax
+	mov rax, [cursor]
+	mov [class + winapi.WndClassA.hCursor], rax
+	lea rcx, [class]
+	dllcall RegisterClassA
+	cmp rax, 0
+	je stdlib.fatal
+	add rsp, 40
+	ret
+}
+
+
+
+proc createWindow {
+	sub rsp, 32 + 64 + 8
+
+	xor ecx, ecx
+    lea rdx, [className]
+    lea r8, [windowName]
+    mov r9d, 13565952
+    mov qword [rsp + 32 + 56], 0
+    mov qword [rsp + 32 + 48], 0
+    mov qword [rsp + 32 + 40], 0
+    mov qword [rsp + 32 + 32], 0
+    mov qword [rsp + 32 + 24], 600
+    mov qword [rsp + 32 + 16], 600
+    mov qword [rsp + 32 + 8], 0
+    mov qword [rsp + 32 + 0], 0
+    dllcall CreateWindowExA
+    mov [hwnd], rax
+    cmp rax, 0
+    je stdlib.fatal
+
+	add rsp, 32 + 64 + 8
+	ret
+}
+
+
+
+proc showWindow {
+	sub rsp, 40
+	mov rcx, [hwnd]
+	mov edx, 1
+	dllcall ShowWindow
+	add rsp, 40
+	ret
+}
+
+
+
+proc windowCycle {
+	sub rsp, 40
+loop:
+	lea rcx, [msg]
+    xor edx, edx
+    xor r8, r8
+    xor r9, r9
+    dllcall GetMessageA
+    cmp rax, 0
+    je end
+    lea rcx, [msg]
+    dllcall TranslateMessage
+    lea rcx, [msg]
+    dllcall DispatchMessageA
+    jmp loop
+end:
+	add rsp, 40
+	ret
+}
+
+
+
+proc main {
+	sub rsp, 40
+	call createCursor
+	call createClass
+	call createWindow
+	call showWindow
+	call windowCycle
+	call stdlib.exit
+}

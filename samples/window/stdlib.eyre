@@ -1,0 +1,41 @@
+namespace stdlib
+
+
+
+// rcx: data
+// rdx: length
+proc print {
+	sub rsp, 56
+	mov r8, rdx
+	mov rdx, rcx
+	mov ecx, -11
+	lea r9, [rsp + 40]
+	mov qword [rsp + 32], 0
+	dllcall WriteFile
+	add rsp, 56
+	ret
+}
+
+
+
+// No parameters
+proc fatal {
+	var string db "Fatal error"
+	sub rsp, 40
+	lea rcx, [string]
+	mov edx, string::size
+	call print
+	dllcall ExitProcess
+}
+
+
+
+// No parameters
+proc exit {
+	var string db "Finished"
+	sub rsp, 40
+	lea rcx, [string]
+	mov edx, string::size
+	call print
+	dllcall ExitProcess
+}

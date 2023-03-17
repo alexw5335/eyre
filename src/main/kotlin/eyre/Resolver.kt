@@ -179,6 +179,12 @@ class Resolver(private val context: CompilerContext) {
 					else -> error("Invalid enum reference")
 				}
 			}
+			is StructSymbol -> {
+				when(name) {
+					StringInterner.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
+					else -> error("Invlaid struct reference")
+				}
+			}
 			else -> error("Invalid reference")
 		}
 	}
@@ -187,7 +193,7 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun resolveIntSymbol(symbol: IntSymbol): Long {
 		if(symbol.resolved) return symbol.intValue
-		val file = symbol.srcPos?.file ?: error("Unresolved symbol")
+		val file = symbol.srcPos?.file ?: error("Unresolved symbol: ${symbol.qualifiedName}")
 		if(file.resolving) error("Invalid const ordering: ${symbol.name}")
 		resolveFile(file)
 		if(!symbol.resolved) error("Unresolved symbol")
