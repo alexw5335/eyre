@@ -4,15 +4,15 @@ package eyre
 
 class SymBase(
 	val srcPos    : SrcPos?,
-	val scope     : ScopeIntern,
-	val name      : StringIntern,
+	val scope     : Scope,
+	val name      : Name,
 ) {
 
 	// Only used by compile-time constants that may be referenced by other constants
 	var resolved = false
 
 	companion object {
-		val EMPTY = SymBase(null, ScopeInterner.EMPTY, StringInterner.EMPTY)
+		val EMPTY = SymBase(null, Scopes.EMPTY, Names.EMPTY)
 	}
 
 }
@@ -33,13 +33,13 @@ interface Symbol {
 
 interface Type : ScopedSymbol {
 	val size: Int
-	val properties: HashMap<StringIntern, Symbol>
+	val properties: HashMap<Name, Symbol>
 }
 
 
 
 interface ScopedSymbol : Symbol {
-	val thisScope: ScopeIntern
+	val thisScope: Scope
 	override val qualifiedName get() = "$thisScope"
 }
 
@@ -86,7 +86,7 @@ class MemberSymbol(
 
 class StructSymbol(
 	override val base: SymBase,
-	override val thisScope: ScopeIntern,
+	override val thisScope: Scope,
 	val members: List<MemberSymbol>,
 	val size: Int
 ) : ScopedSymbol
@@ -95,14 +95,14 @@ class StructSymbol(
 
 class Namespace(
 	override val base: SymBase,
-	override val thisScope: ScopeIntern
+	override val thisScope: Scope
 ) : ScopedSymbol
 
 
 
 class ProcSymbol(
 	override val base: SymBase,
-	override val thisScope: ScopeIntern
+	override val thisScope: Scope
 ) : ScopedSymbol, PosSymbol {
 	override var section = Section.TEXT
 	override var pos = 0
@@ -175,6 +175,6 @@ class EnumEntrySymbol(
 
 class EnumSymbol(
 	override val base      : SymBase,
-	override val thisScope : ScopeIntern,
+	override val thisScope : Scope,
 	val entries            : List<EnumEntrySymbol>
 ) : ScopedSymbol

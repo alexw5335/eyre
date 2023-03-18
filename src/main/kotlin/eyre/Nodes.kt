@@ -58,7 +58,7 @@ class BinaryNode(
 
 class StringNode(
 	override val srcPos: SrcPos,
-	val value: StringIntern
+	val value: Name
 ) : AstNode, OpNode
 
 class LabelNode(
@@ -152,7 +152,7 @@ class RefNode(
 
 class SymNode(
 	override val srcPos: SrcPos,
-	val name: StringIntern,
+	val name: Name,
 	override var symbol: Symbol? = null
 ) : SymProviderNode, OpNode
 

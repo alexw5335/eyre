@@ -10,9 +10,9 @@ data class IntToken(val value: Long) : Token
 
 data class CharToken(val value: Char) : Token
 
-data class StringToken(val value: StringIntern) : Token
+data class StringToken(val value: Name) : Token
 
-data class IdToken(val value: StringIntern) : Token
+data class IdToken(val value: Name) : Token
 
 
 

@@ -139,7 +139,7 @@ class Lexer {
 			}
 		}
 
-		addToken(StringToken(StringInterner.add(stringBuilder.toString())))
+		addToken(StringToken(Names.add(stringBuilder.toString())))
 	}
 
 
@@ -295,7 +295,7 @@ class Lexer {
 		}
 
 		val string = String(chars, startPos, pos - startPos)
-		val intern = StringInterner.add(string)
+		val intern = Names.add(string)
 		addToken(IdToken(intern))
 	}
 

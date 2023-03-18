@@ -4,23 +4,21 @@ import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
 
-// Rename StringIntern to Name and ScopeIntern to Scope?
 interface Intern {
 	val id: Int
 	val isEmpty get() = id == 0
-	val isNotEmpty get() = id != 0
 }
 
 
 
-data class InternRange<T>(private val range: IntRange, private val elements: Array<T>) {
-	operator fun contains(intern: StringIntern) = intern.id in range
-	operator fun get(intern: StringIntern) = elements[intern.id - range.first]
+class InternRange<T>(private val range: IntRange, private val elements: Array<T>) {
+	operator fun contains(intern: Name) = intern.id in range
+	operator fun get(intern: Name) = elements[intern.id - range.first]
 }
 
 
 
-class StringIntern(override val id: Int, val hash: Int, val string: String) : Intern {
+class Name(override val id: Int, val hash: Int, val string: String) : Intern {
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
 	override fun toString() = string
@@ -28,11 +26,11 @@ class StringIntern(override val id: Int, val hash: Int, val string: String) : In
 
 
 
-class ScopeIntern(override val id: Int, val hash: Int, val array: IntArray) : Intern {
-	val last get() = StringInterner[array.last()]
+class Scope(override val id: Int, val hash: Int, val array: IntArray) : Intern {
+	val last get() = Names[array.last()]
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
-	override fun toString() = array.joinToString(transform = { StringInterner[it].string }, separator = ".")
+	override fun toString() = array.joinToString(transform = { Names[it].string }, separator = ".")
 }
 
 
@@ -41,7 +39,7 @@ abstract class Interner<K, V : Intern> {
 
 	protected var count = 0
 
-	protected val list = ArrayList<V>()
+	private val list = ArrayList<V>()
 
 	protected val map = HashMap<K, V>()
 
@@ -57,9 +55,9 @@ abstract class Interner<K, V : Intern> {
 
 
 
-object StringInterner : Interner<String, StringIntern>() {
+object Names : Interner<String, Name>() {
 
-	fun add(key: String) = map[key] ?: addInternal(key, StringIntern(count++, key.hashCode(), key))
+	fun add(key: String) = map[key] ?: addInternal(key, Name(count++, key.hashCode(), key))
 
 	operator fun get(key: String) = map[key]
 
@@ -77,6 +75,7 @@ object StringInterner : Interner<String, StringIntern>() {
 	val GS     = add("gs")
 	val DEBUG  = add("debug")
 	val NULL   = add("null")
+	val COUNT  = add("count")
 
 	val keywords     = createRange(Keyword.values(), Keyword::string)
 	val widths       = createRange(Width.values(), Width::string)
@@ -90,19 +89,19 @@ object StringInterner : Interner<String, StringIntern>() {
 
 
 
-object ScopeInterner : Interner<IntArray, ScopeIntern>() {
+object Scopes : Interner<IntArray, Scope>() {
 
-	fun add(key: IntArray, hash: Int) = map[key] ?: addInternal(key, ScopeIntern(count++, hash, key))
+	fun add(key: IntArray, hash: Int) = map[key] ?: addInternal(key, Scope(count++, hash, key))
 
 	fun add(key: IntArray) = add(key, key.contentHashCode())
 
-	fun add(base: ScopeIntern, addition: Intern): ScopeIntern {
+	fun add(base: Scope, addition: Intern): Scope {
 		val array = base.array.copyOf(base.array.size + 1)
 		array[base.array.size] = addition.id
 		return add(array)
 	}
 
-	fun add(base: ScopeIntern, addition: IntArray, size: Int): ScopeIntern {
+	fun add(base: Scope, addition: IntArray, size: Int): Scope {
 		val array = base.array.copyOf(base.array.size + size)
 		for(i in 0 until size) array[base.array.size + i] = addition[i]
 		return add(array)

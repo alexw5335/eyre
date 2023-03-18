@@ -40,7 +40,7 @@ class SymbolTable {
 
 
 
-	fun get(scope: ScopeIntern, name: StringIntern): Symbol? {
+	fun get(scope: Scope, name: Name): Symbol? {
 		val hash = scope.id * 31 + name.id
 		var node = nodes[hash and (nodes.size - 1)]
 

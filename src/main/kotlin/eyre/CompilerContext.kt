@@ -1,10 +1,6 @@
 package eyre
 
 import eyre.util.NativeWriter
-import java.nio.file.Path
-import java.nio.file.Paths
-import kotlin.io.path.nameWithoutExtension
-import kotlin.io.path.readLines
 
 class CompilerContext(val srcFiles: List<SrcFile>) {
 
@@ -35,9 +31,9 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 
 
-	val dllImports = HashMap<StringIntern, DllImports>()
+	val dllImports = HashMap<Name, DllImports>()
 
-	private val dllDefs = HashMap<StringIntern, DllDef>()
+	private val dllDefs = HashMap<Name, DllDef>()
 
 
 
@@ -45,14 +41,14 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 		val path = "/defs/$name.txt"
 		val stream = this::class.java.getResourceAsStream(path)
 			?: error("Could not load dll def: $path")
-		val exports = stream.reader().readLines().map(StringInterner::add).toSet()
-		val nameIntern = StringInterner.add(name)
+		val exports = stream.reader().readLines().map(Names::add).toSet()
+		val nameIntern = Names.add(name)
 		dllDefs[nameIntern] = DllDef(nameIntern, exports)
 	}
 
 
 
-	fun getDllImport(name: StringIntern): DllImportSymbol? {
+	fun getDllImport(name: Name): DllImportSymbol? {
 		for(dll in dllImports.values)
 			dll.imports[name]?.let { return it }
 
@@ -62,7 +58,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 			return dllImports.getOrPut(def.name) {
 				DllImports(def.name, HashMap())
 			}.imports.getOrPut(name) {
-				DllImportSymbol(SymBase(null, ScopeInterner.EMPTY, name))
+				DllImportSymbol(SymBase(null, Scopes.EMPTY, name))
 			}
 		}
 

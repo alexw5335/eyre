@@ -11,7 +11,7 @@ class Parser(private val context: CompilerContext) {
 
 	private var pos = 0
 
-	private var currentScope = ScopeInterner.EMPTY
+	private var currentScope = Scopes.EMPTY
 
 	private val nodes = ArrayList<AstNode>()
 
@@ -49,7 +49,7 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun SymBase(srcPos: SrcPos, name: StringIntern) = SymBase(srcPos, currentScope, name)
+	private fun SymBase(srcPos: SrcPos, name: Name) = SymBase(srcPos, currentScope, name)
 
 
 
@@ -109,9 +109,9 @@ class Parser(private val context: CompilerContext) {
 
 		if(token is IdToken) {
 			return when(val id = token.value) {
-				in StringInterner.registers -> return RegNode(srcPos, StringInterner.registers[id])
-				StringInterner.FS -> return SegRegNode(srcPos, SegReg.FS)
-				StringInterner.GS -> return SegRegNode(srcPos, SegReg.GS)
+				in Names.registers -> return RegNode(srcPos, Names.registers[id])
+				Names.FS -> return SegRegNode(srcPos, SegReg.FS)
+				Names.GS -> return SegRegNode(srcPos, SegReg.GS)
 				else -> SymNode(srcPos, id)
 			}
 		}
@@ -197,8 +197,8 @@ class Parser(private val context: CompilerContext) {
 		var width: Width? = null
 
 		if(token is IdToken) {
-			if(token.value in StringInterner.widths) {
-				width = StringInterner.widths[token.value]
+			if(token.value in Names.widths) {
+				width = Names.widths[token.value]
 				if(tokens[pos + 1] == SymToken.LBRACKET)
 					token = tokens[++pos]
 			}
@@ -274,7 +274,7 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseLabel(id: StringIntern) {
+	private fun parseLabel(id: Name) {
 		val srcPos = SrcPos(1)
 		pos++
 		val symbol = LabelSymbol(SymBase(srcPos, currentScope, id)).add()
@@ -294,14 +294,14 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseId(id: StringIntern) {
+	private fun parseId(id: Name) {
 		if(next == SymToken.COLON) {
 			parseLabel(id)
 			return
 		}
 
-		if(id in StringInterner.keywords) {
-			when(StringInterner.keywords[id]) {
+		if(id in Names.keywords) {
+			when(Names.keywords[id]) {
 				Keyword.NAMESPACE -> parseNamespace()
 				Keyword.VAR       -> parseVar()
 				Keyword.CONST     -> parseConst()
@@ -315,15 +315,15 @@ class Parser(private val context: CompilerContext) {
 			return
 		}
 
-		if(id in StringInterner.prefixes) {
+		if(id in Names.prefixes) {
 			val next = id()
-			if(next !in StringInterner.mnemonics) error("Invalid prefix: $next")
-			parseInstruction(StringInterner.prefixes[id], StringInterner.mnemonics[next]).add()
+			if(next !in Names.mnemonics) error("Invalid prefix: $next")
+			parseInstruction(Names.prefixes[id], Names.mnemonics[next]).add()
 			return
 		}
 
-		if(id in StringInterner.mnemonics) {
-			parseInstruction(null, StringInterner.mnemonics[id]).add()
+		if(id in Names.mnemonics) {
+			parseInstruction(null, Names.mnemonics[id]).add()
 			return
 		}
 
@@ -337,7 +337,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		var initialiser = id()
 
-		if(initialiser == StringInterner.RES) {
+		if(initialiser == Names.RES) {
 			val size = parseExpression()
 			val symbol = ResSymbol(SymBase(srcPos, currentScope, name)).add()
 			ResNode(srcPos, symbol, size).add()
@@ -348,8 +348,8 @@ class Parser(private val context: CompilerContext) {
 		var size = 0
 
 		while(true) {
-			if(initialiser !in StringInterner.varWidths) break
-			val width = StringInterner.varWidths[initialiser]
+			if(initialiser !in Names.varWidths) break
+			val width = Names.varWidths[initialiser]
 			val values = ArrayList<AstNode>()
 			val srcPos2 = SrcPos(1)
 
@@ -383,7 +383,7 @@ class Parser(private val context: CompilerContext) {
 		val enumSrcPos = SrcPos()
 		val enumName = id()
 		var current = if(isBitmask) 1L else 0L
-		val scope = ScopeInterner.add(currentScope, enumName)
+		val scope = Scopes.add(currentScope, enumName)
 
 		if(tokens[pos] != SymToken.LBRACE) return
 		pos++
@@ -437,7 +437,7 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = SrcPos()
 
 		when(val directive = id()) {
-			StringInterner.DEBUG -> {
+			Names.DEBUG -> {
 				val name = next() as? StringToken ?: error("Expecting string literal")
 				val symbol = DebugLabelSymbol(SymBase(srcPos, currentScope, name.value))
 				DebugLabelNode(srcPos, symbol).add()
@@ -542,7 +542,7 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseScopeName(): ScopeIntern {
+	private fun parseScopeName(): Scope {
 		scopeBuilder.reset()
 
 		do {
@@ -551,12 +551,12 @@ class Parser(private val context: CompilerContext) {
 
 		pos--
 
-		return ScopeInterner.add(currentScope, scopeBuilder.array, scopeBuilder.size)
+		return Scopes.add(currentScope, scopeBuilder.array, scopeBuilder.size)
 	}
 
 
 
-	private fun parseScope(scope: ScopeIntern) {
+	private fun parseScope(scope: Scope) {
 		val prevScope = currentScope
 		currentScope = scope
 		parseScopeInternal()
@@ -565,8 +565,8 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun createScope(name: StringIntern) =
-		ScopeInterner.add(currentScope, name)
+	private fun createScope(name: Name) =
+		Scopes.add(currentScope, name)
 
 
 

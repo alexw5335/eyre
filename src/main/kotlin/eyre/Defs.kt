@@ -368,6 +368,6 @@ enum class RelocType {
 
 
 
-class DllImports(val name: StringIntern, val imports: HashMap<StringIntern, DllImportSymbol>)
+class DllImports(val name: Name, val imports: HashMap<Name, DllImportSymbol>)
 
-class DllDef(val name: StringIntern, val exports: Set<StringIntern>)
+class DllDef(val name: Name, val exports: Set<Name>)

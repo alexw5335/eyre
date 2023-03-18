@@ -81,7 +81,7 @@ proc createWindow {
 	xor ecx, ecx
     lea rdx, [className]
     lea r8, [windowName]
-    mov r9d, 13565952
+    mov r9d, winapi.WindowStyle.OVERLAPPEDWINDOW
     mov qword [rsp + 32 + 56], 0
     mov qword [rsp + 32 + 48], 0
     mov qword [rsp + 32 + 40], 0

@@ -3,7 +3,7 @@ package eyre
 class Resolver(private val context: CompilerContext) {
 
 
-	private var scopeStack = arrayOfNulls<ScopeIntern>(64)
+	private var scopeStack = arrayOfNulls<Scope>(64)
 
 	private var scopeStackSize = 0
 
@@ -15,7 +15,7 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun pushScope(scope: ScopeIntern) {
+	private fun pushScope(scope: Scope) {
 		if(scopeStackSize >= scopeStack.size)
 			scopeStack = scopeStack.copyOf(scopeStackSize * 2)
 		scopeStack[scopeStackSize++] = scope
@@ -36,7 +36,7 @@ class Resolver(private val context: CompilerContext) {
 
 
 	fun resolve() {
-		pushScope(ScopeInterner.EMPTY)
+		pushScope(Scopes.EMPTY)
 		context.srcFiles.forEach(::resolveFile)
 	}
 
@@ -60,7 +60,11 @@ class Resolver(private val context: CompilerContext) {
 				is ScopeEndNode  -> popScope()
 				is InsNode       -> resolveInstruction(node)
 				is ConstNode     -> resolveConst(node)
-				is EnumNode      -> resolveEnum(node)
+				is EnumNode      -> {
+					pushScope(node.symbol.thisScope)
+					resolveEnum(node)
+					popScope()
+				}
 				is VarNode       -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
 				is ResNode       -> resolveRes(node)
 				else             -> continue
@@ -104,10 +108,14 @@ class Resolver(private val context: CompilerContext) {
 	/**
 	 * Resolves a symbol given a name
 	 */
-	private fun resolveSymbol(name: StringIntern): Symbol {
+	private fun resolveSymbol(name: Name): Symbol {
 		for(i in scopeStackSize - 1 downTo 0) {
 			val scope = scopeStack[i]!!
 			context.symbols.get(scope, name)?.let { return it }
+		}
+
+		for(i in scopeStackSize - 1 downTo 0) {
+			println(scopeStack[i])
 		}
 
 		error("Unresolved symbol: $name")
@@ -169,19 +177,19 @@ class Resolver(private val context: CompilerContext) {
 		when(left) {
 			is VarSymbol -> {
 				when(name) {
-					StringInterner.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
+					Names.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
 					else -> error("Invalid var reference")
 				}
 			}
 			is EnumSymbol -> {
 				when(name) {
-					StringInterner.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.entries.size.toLong())
+					Names.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.entries.size.toLong())
 					else -> error("Invalid enum reference")
 				}
 			}
 			is StructSymbol -> {
 				when(name) {
-					StringInterner.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
+					Names.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
 					else -> error("Invlaid struct reference")
 				}
 			}

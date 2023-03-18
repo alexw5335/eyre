@@ -89,7 +89,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun handleLabel(symbol: PosSymbol) {
 		symbol.pos = writer.pos
-		if(symbol.name == StringInterner.MAIN) {
+		if(symbol.name == Names.MAIN) {
 			if(context.entryPoint != null)
 				error("Redeclaration of entry point")
 			context.entryPoint = symbol
