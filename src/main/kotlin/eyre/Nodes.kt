@@ -6,6 +6,8 @@ sealed interface AstNode {
 	val srcPos: SrcPos
 }
 
+
+
 sealed interface OpNode : AstNode
 
 
@@ -83,7 +85,7 @@ class VarPart(
 	val nodes: List<AstNode>
 ) : AstNode
 
-class VarNode(
+class VarDefNode(
 	override val srcPos: SrcPos,
 	val symbol: VarSymbol,
 	val parts: List<VarPart>
@@ -217,7 +219,7 @@ fun AstNode.getChildren(): List<AstNode> = when(this) {
 	is MemNode        -> listOf(value)
 	is DotNode        -> listOf(left, right)
 	is InsNode        -> listOfNotNull(op1, op2, op3, op4)
-	is VarNode        -> parts
+	is VarDefNode        -> parts
 	is VarPart        -> nodes
 	is ResNode        -> listOf(size)
 	is RefNode        -> listOf(left, right)
@@ -282,7 +284,7 @@ val AstNode.printString: String get() = when(this) {
 	}
 
 	is VarPart -> "${width.varString} ${nodes.joinToString { it.printString }}"
-	is VarNode -> "var ${symbol.name} ${parts.joinToString { it.printString }}"
+	is VarDefNode -> "var ${symbol.name} ${parts.joinToString { it.printString }}"
 	is ResNode -> "var ${symbol.name} res ${size.printString}"
 	is RefNode -> "${left.printString}::${right.printString}"
 	is ConstNode -> "const ${symbol.name} = ${value.printString}"

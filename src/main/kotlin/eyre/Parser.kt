@@ -374,7 +374,7 @@ class Parser(private val context: CompilerContext) {
 		if(parts.isEmpty())
 			error("Expecting variable initialiser")
 		val symbol = VarSymbol(SymBase(srcPos, currentScope, name), size).add()
-		VarNode(srcPos, symbol, parts).add()
+		VarDefNode(srcPos, symbol, parts).add()
 	}
 
 
@@ -545,13 +545,15 @@ class Parser(private val context: CompilerContext) {
 	private fun parseScopeName(): Scope {
 		scopeBuilder.reset()
 
+		var scope = currentScope
+
 		do {
-			scopeBuilder.add(id().id)
+			scope = Scopes.add(scope, id())
 		} while(next() == SymToken.PERIOD)
 
 		pos--
 
-		return Scopes.add(currentScope, scopeBuilder.array, scopeBuilder.size)
+		return scope
 	}
 
 

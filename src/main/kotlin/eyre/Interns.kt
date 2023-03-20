@@ -59,7 +59,7 @@ object Names : Interner<String, Name>() {
 
 	fun add(key: String) = map[key] ?: addInternal(key, Name(count++, key.hashCode(), key))
 
-	operator fun get(key: String) = map[key]
+	operator fun get(key: String) = map[key] ?: addInternal(key, Name(count++, key.hashCode(), key))
 
 	private fun<T> createRange(elements: Array<T>, supplier: (T) -> String): InternRange<T> {
 		val range = IntRange(count, count + elements.size - 1)

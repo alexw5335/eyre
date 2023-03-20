@@ -65,7 +65,7 @@ class Resolver(private val context: CompilerContext) {
 					resolveEnum(node)
 					popScope()
 				}
-				is VarNode       -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
+				is VarDefNode       -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
 				is ResNode       -> resolveRes(node)
 				else             -> continue
 			}

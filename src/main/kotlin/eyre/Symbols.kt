@@ -31,16 +31,49 @@ interface Symbol {
 
 
 
-interface Type : ScopedSymbol {
+interface Type : Symbol {
 	val size: Int
-	val properties: HashMap<Name, Symbol>
+}
+
+
+
+abstract class IntegerType(name: String, override val size: Int) : Type {
+	override val base = SymBase(null, Scopes.EMPTY, Names[name])
+}
+
+
+
+interface TypedSymbol : Symbol {
+	val type: Type
+}
+
+
+
+class ArraySymbol(override val base: SymBase, override val type: Type): Type, TypedSymbol {
+	var count = 0
+	override val size get() = type.size * count
+}
+
+
+
+object ByteType : IntegerType("byte", 1)
+
+object WordType : IntegerType("word", 2)
+
+object DwordType : IntegerType("dword", 4)
+
+object QwordType : IntegerType("qword", 8)
+
+object VoidType : Type {
+	override val base = SymBase.EMPTY
+	override val size = 0
 }
 
 
 
 interface ScopedSymbol : Symbol {
+	// Should be the same as scope.name
 	val thisScope: Scope
-	override val qualifiedName get() = "$thisScope"
 }
 
 

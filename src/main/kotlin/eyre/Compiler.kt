@@ -11,6 +11,15 @@ import java.nio.file.Paths
 class Compiler(private val context: CompilerContext) {
 
 
+	private fun SymbolTable.addDefaultSymbols() {
+		add(ByteType)
+		add(WordType)
+		add(DwordType)
+		add(QwordType)
+	}
+
+
+
 	fun compile() {
 
 		val lexer = Lexer()

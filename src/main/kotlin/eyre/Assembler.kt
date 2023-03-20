@@ -23,7 +23,7 @@ class Assembler(private val context: CompilerContext) {
 					is InsNode   -> handleInstruction(node)
 					is LabelNode -> handleLabel(node.symbol)
 					is ProcNode  -> handleLabel(node.symbol)
-					is VarNode   -> handleVar(node)
+					is VarDefNode   -> handleVar(node)
 					is ResNode   -> handleRes(node)
 					is ScopeEndNode -> handleScopeEnd(node)
 					is DebugLabelNode -> handleDebugLabelNode(node)
@@ -68,7 +68,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleVar(node: VarNode) {
+	private fun handleVar(node: VarDefNode) {
 		dataWriter.align8()
 
 		node.symbol.pos = dataWriter.pos
