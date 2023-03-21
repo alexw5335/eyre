@@ -1,5 +1,7 @@
 package eyre
 
+import kotlin.math.max
+
 class Resolver(private val context: CompilerContext) {
 
 
@@ -123,6 +125,14 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun getSymbol(node: AstNode) =
+		(node as? SymProviderNode)?.symbol ?: error("Invalid symbol provider: $node")
+
+	private fun getType(node: AstNode) =
+		getSymbol(node) as? Type ?: error("Invalid type: $node")
+
+
+
 	private fun resolveRes(node: ResNode) {
 		if(node.symbol.resolved) return
 		resolveSymbols(node.size)
@@ -195,6 +205,62 @@ class Resolver(private val context: CompilerContext) {
 			}
 			else -> error("Invalid reference")
 		}
+	}
+
+
+
+	private fun resolveType(type: Type) {
+		when(type) {
+			is StructSymbol -> resolveStruct(type.node, type)
+			else -> error("Unhandled type: $type")
+		}
+	}
+
+
+
+	private fun resolveStruct(structNode: StructNode, structSymbol: StructSymbol) {
+		if(structSymbol.resolved) return
+
+		if(structSymbol.manual) {
+			for(member in structNode.members) {
+				if(member.type != null) {
+					resolveSymbols(member.type)
+					val type = getType(member.type)
+					resolveType(type)
+					member.symbol.type = type
+					member.symbol.size = type.size
+				}
+
+				member.symbol.resolved = true
+			}
+
+			structSymbol.resolved = true
+			return
+		}
+
+		var offset = 0
+		var maxAlignment = 0
+
+		for(member in structNode.members) {
+			if(member.type != null) {
+				resolveSymbols(member.type)
+				val type = getType(member.type)
+				resolveType(type)
+				val size = type.size
+				member.symbol.type = type
+				member.symbol.size = size
+				val alignment = size.coerceAtMost(8)
+				maxAlignment = max(alignment, maxAlignment)
+				offset = (offset + alignment - 1) and -alignment
+				member.symbol.offset = offset
+				offset += size
+			}
+
+			member.symbol.resolved = true
+		}
+
+		structSymbol.resolved = true
+		structSymbol.size = (offset + maxAlignment - 1) and -maxAlignment
 	}
 
 

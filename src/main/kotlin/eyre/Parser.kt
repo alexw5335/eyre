@@ -472,6 +472,14 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun parseInt(): Int {
+		val value = (next() as? IntToken)?.value ?: error("Expecting integer")
+		if(value !in 0..Int.MAX_VALUE) error("Signed 32-bit integer out of range")
+		return value.toInt()
+	}
+
+
+
 	private fun parseStruct() {
 		val structSrcPos = SrcPos()
 		val structName = id()
@@ -482,33 +490,62 @@ class Parser(private val context: CompilerContext) {
 
 		expect(SymToken.LBRACE)
 
-		while(true) {
+		var manual = false
+		var offset = 0
+
+		while(next != SymToken.RBRACE) {
 			val srcPos = SrcPos()
 
-			val offset = (next() as? IntToken)?.value ?: error("Expecting struct member offset")
-			if(offset !in 0..Int.MAX_VALUE) error("Struct member offset out of bounds")
-
-			if(next !is IntToken) {
-				structSize = offset.toInt()
-				expect(SymToken.RBRACE)
+			if(tokens[pos + 1] == SymToken.COLON) {
+				if(memberNodes.isNotEmpty() && !manual)
+					error("All members of a manual struct must specify an offset")
+				manual = true
+				offset = parseInt()
+				pos++
+			} else if(tokens[pos + 1] == SymToken.SEMICOLON) {
+				if(!manual) error("Struct size can only be specified by manual structs")
+				structSize = parseInt()
+				pos++
 				break
+			} else if(manual) {
+				error("All members of a manual struct must specify an offset")
 			}
 
-			val size = (next() as? IntToken)?.value ?: error("Expecting struct member size")
-			if(size !in 0..Int.MAX_VALUE) error("Struct member size out of bounds")
+			val symbol: MemberSymbol
+			val node: MemberNode
 
-			val name = id()
-			val symbol = MemberSymbol(SymBase(srcPos, scope, name), offset.toInt(), size.toInt()).add()
-			val node = MemberNode(srcPos, symbol)
-			symbol.resolved = true
-			memberSymbols.add(symbol)
-			memberNodes.add(node)
+			if(next is IntToken) {
+				val size = parseInt()
+				val name = id()
+				symbol = MemberSymbol(SymBase(srcPos, scope, name), offset, size, null).add()
+				node = MemberNode(srcPos, symbol, null)
+			} else {
+				val type = parseExpression()
+				val name = id()
+				symbol = MemberSymbol(SymBase(srcPos, scope, name), offset, 0, null).add()
+				node = MemberNode(srcPos, symbol, type)
+			}
+
+			memberSymbols += symbol
+			memberNodes += node
 			expectTerminator()
 		}
 
-		val symbol = StructSymbol(SymBase(structSrcPos, structName), scope, memberSymbols, structSize).add()
-		StructNode(structSrcPos, symbol, memberNodes).add()
-		for(s in memberSymbols) s.parent = symbol
+		pos++
+
+		val symbol = StructSymbol(
+			SymBase(structSrcPos, structName),
+			scope,
+			memberSymbols,
+			structSize,
+			manual
+		).add()
+
+		val node = StructNode(structSrcPos, symbol, memberNodes).add()
+		symbol.node = node
+
+		for(s in memberSymbols)
+			s.parent = symbol
 	}
 
 

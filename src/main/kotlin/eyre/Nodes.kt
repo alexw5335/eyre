@@ -165,7 +165,8 @@ class DebugLabelNode(
 
 class MemberNode(
 	override val srcPos: SrcPos,
-	val symbol: MemberSymbol
+	val symbol: MemberSymbol,
+	val type: AstNode?
 ) : AstNode
 
 class StructNode(

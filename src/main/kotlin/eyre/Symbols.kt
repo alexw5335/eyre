@@ -108,8 +108,9 @@ fun IntSymbol(base: SymBase, intValue: Long): IntSymbol {
 
 class MemberSymbol(
 	override val base: SymBase,
-	val offset: Int,
-	val size: Int
+	var offset: Int,
+	var size: Int,
+	var type: Type?,
 ) : IntSymbol {
 	override var intValue = offset.toLong()
 	lateinit var parent: StructSymbol
@@ -121,8 +122,11 @@ class StructSymbol(
 	override val base: SymBase,
 	override val thisScope: Scope,
 	val members: List<MemberSymbol>,
-	val size: Int
-) : ScopedSymbol
+	override var size: Int,
+	val manual: Boolean
+) : Type, ScopedSymbol {
+	lateinit var node: StructNode
+}
 
 
 
