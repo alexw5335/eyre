@@ -20,13 +20,14 @@ proc printInt {
 
 
 
+// No params
 proc reset {
 	mov qword [bufferPos], 0
 }
 
 
 
-// No args
+// No params
 proc printBuffer {
 	sub rsp, 40
 	lea rcx, [buffer]

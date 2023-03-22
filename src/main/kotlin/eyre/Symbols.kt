@@ -10,6 +10,7 @@ class SymBase(
 
 	// Only used by compile-time constants that may be referenced by other constants
 	var resolved = false
+	var node: AstNode? = null
 
 	companion object {
 		val EMPTY = SymBase(null, Scopes.EMPTY, Names.EMPTY)
@@ -25,6 +26,7 @@ interface Symbol {
 	val scope    get() = base.scope
 	val name     get() = base.name
 	var resolved get() = base.resolved; set(v) { base.resolved = v }
+	val node     get() = base.node
 
 	val qualifiedName get() = if(scope.isEmpty) "$name" else "$scope.$name"
 }
@@ -124,9 +126,7 @@ class StructSymbol(
 	val members: List<MemberSymbol>,
 	override var size: Int,
 	val manual: Boolean
-) : Type, ScopedSymbol {
-	lateinit var node: StructNode
-}
+) : Type, ScopedSymbol
 
 
 
