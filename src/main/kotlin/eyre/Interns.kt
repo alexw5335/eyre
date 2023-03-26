@@ -70,11 +70,12 @@ object Names : Interner<String, Name>() {
 	val EMPTY  = add("")
 	val RES    = add("res")
 	val MAIN   = add("main")
-	val SIZE   = add("size")
 	val FS     = add("fs")
 	val GS     = add("gs")
 	val DEBUG  = add("debug")
 	val NULL   = add("null")
+	val VOID   = add("void")
+	val SIZE   = add("size")
 	val COUNT  = add("count")
 
 	val keywords     = createRange(Keyword.values(), Keyword::string)

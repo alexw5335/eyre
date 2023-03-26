@@ -3,45 +3,44 @@ namespace winapi
 
 
 struct PaintStruct {
-	0   8   hdc
-	16  4   erase
-	20  4   left
-	24  4   top
-	28  4   right
-	32  4   bottom
-	36  4   restore
-	40  4   incUpdate
-	44  32  reserved
+	0   qword     hdc
+	16  dword     erase
+	20  dword     left
+	24  dword     top
+	28  dword     right
+	32  dword     bottom
+	36  dword     restore
+	40  dword     incUpdate
+	44  byte[32]  reserved
 	76
 }
 
 
 
 struct Message {
-	0   8  hwnd
-	8   4  message
-	16  8  wParam
-	24  8  lParam
-	32  4  time
-	36  4  x
-	40  4  y
-	44  4  reserved
-	56
+	0   qword hwnd
+	8   dword  message
+	16  qword  wParam
+	24  qword  lParam
+	32  dword  time
+	36  dword  x
+	40  dword  y
+	44  dword  reserved
 }
 
 
 
 struct WndClassA {
-	0   4  style
-	8   8  wndProc
-	16  4  cbClsExtra
-	20  4  cbWndExtra
-	24  8  hInstance
-	32  8  hIcon
-	40  8  hCursor
-	48  8  hbrBackground
-	56  8  menuName
-	64  8  className
+	0   dword  style
+	8   qword  wndProc
+	16  dword  cbClsExtra
+	20  dword  cbWndExtra
+	24  qword  hInstance
+	32  qword  hIcon
+	40  qword  hCursor
+	48  qword  hbrBackground
+	56  qword  menuName
+	64  qword  className
 	72
 }
 

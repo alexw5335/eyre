@@ -61,13 +61,17 @@ class Resolver(private val context: CompilerContext) {
 				is ProcNode      -> pushScope(node.symbol.thisScope)
 				is ScopeEndNode  -> popScope()
 				is InsNode       -> resolveInstruction(node)
-				is ConstNode     -> resolveConst(node)
+
 				is EnumNode      -> {
+					if(node.symbol.resolved) continue
 					pushScope(node.symbol.thisScope)
-					resolveEnum(node)
+					resolveEnum(node, node.symbol)
 					popScope()
 				}
-				is VarDefNode       -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
+				is DbNode    -> for(part in node.parts) for(n in part.nodes) resolveSymbols(n)
+				is TypedefNode   -> if(!node.symbol.resolved) resolveTypedef(node, node.symbol)
+				is ConstNode     -> if(!node.symbol.resolved) resolveConst(node)
+				is StructNode    -> if(!node.symbol.resolved) resolveStruct(node, node.symbol)
 				is ResNode       -> resolveRes(node)
 				else             -> continue
 			}
@@ -76,6 +80,14 @@ class Resolver(private val context: CompilerContext) {
 		scopeStackSize = prev
 		srcFile.resolving = false
 		srcFile.resolved = true
+	}
+
+
+
+	private fun resolveTypedef(node: TypedefNode, symbol: TypedefSymbol) {
+		resolveSymbols(node.value)
+		val type = getType(node.value)
+		symbol.type = type
 	}
 
 
@@ -128,6 +140,8 @@ class Resolver(private val context: CompilerContext) {
 	private fun getSymbol(node: AstNode) =
 		(node as? SymProviderNode)?.symbol ?: error("Invalid symbol provider: $node")
 
+
+
 	private fun getType(node: AstNode) =
 		getSymbol(node) as? Type ?: error("Invalid type: $node")
 
@@ -151,18 +165,6 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun resolveEnum(node: EnumNode) {
-		for(i in 0 until node.entries.size) {
-			val symbol = node.symbol.entries[i]
-			if(symbol.resolved) continue
-			resolveSymbols(node.entries[i].value!!)
-			symbol.intValue = resolveInt(node.entries[i].value!!)
-			symbol.resolved = true
-		}
-	}
-
-
-
 	private fun resolveDot(node: DotNode): Symbol {
 		val scope = when(node.left) {
 			is SymNode -> resolveSymbol(node.left.name)
@@ -182,37 +184,34 @@ class Resolver(private val context: CompilerContext) {
 	private fun resolveRef(node: RefNode) {
 		resolveSymbols(node.left)
 		val left = node.left.symbol!!
-		val name = node.right.name
 
-		when(left) {
-			is VarSymbol -> {
-				when(name) {
-					Names.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
-					else -> error("Invalid var reference")
+		when(val name = node.right.name) {
+			Names.SIZE -> when(left) {
+				is DbSymbol -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
+				is Type -> {
+					resolveType(left)
+					node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
 				}
+				else -> error("Invalid reference: $name")
 			}
-			is EnumSymbol -> {
-				when(name) {
-					Names.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.entries.size.toLong())
-					else -> error("Invalid enum reference")
-				}
+
+			Names.COUNT -> when(left) {
+				is EnumSymbol -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.entries.size.toLong())
+				else -> error("Invalid reference: $name")
 			}
-			is StructSymbol -> {
-				when(name) {
-					Names.SIZE -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
-					else -> error("Invlaid struct reference")
-				}
-			}
-			else -> error("Invalid reference")
+
+			else -> error("Invalid reference: $name")
 		}
 	}
 
 
 
 	private fun resolveType(type: Type) {
+		if(type.resolved) return
 		when(type) {
-			is StructSymbol -> resolveStruct(type.node, type)
-			else -> error("Unhandled type: $type")
+			is StructSymbol  -> resolveStruct(type.node as StructNode, type)
+			is TypedefSymbol -> resolveTypedef(type.node as TypedefNode, type)
+			else             -> error("Unhandled type: $type")
 		}
 	}
 
@@ -223,14 +222,11 @@ class Resolver(private val context: CompilerContext) {
 
 		if(structSymbol.manual) {
 			for(member in structNode.members) {
-				if(member.type != null) {
-					resolveSymbols(member.type)
-					val type = getType(member.type)
-					resolveType(type)
-					member.symbol.type = type
-					member.symbol.size = type.size
-				}
-
+				resolveSymbols(member.type)
+				val type = getType(member.type)
+				resolveType(type)
+				member.symbol.type = type
+				member.symbol.size = type.size
 				member.symbol.resolved = true
 			}
 
@@ -242,21 +238,19 @@ class Resolver(private val context: CompilerContext) {
 		var maxAlignment = 0
 
 		for(member in structNode.members) {
-			if(member.type != null) {
-				resolveSymbols(member.type)
-				val type = getType(member.type)
-				resolveType(type)
-				val size = type.size
-				member.symbol.type = type
-				member.symbol.size = size
-				val alignment = size.coerceAtMost(8)
-				maxAlignment = max(alignment, maxAlignment)
-				offset = (offset + alignment - 1) and -alignment
-				member.symbol.offset = offset
-				offset += size
-			}
-
+			resolveSymbols(member.type)
+			val type = getType(member.type)
+			resolveType(type)
+			val size = type.size
+			member.symbol.type = type
+			member.symbol.size = size
+			val alignment = size.coerceAtMost(8)
+			maxAlignment = max(alignment, maxAlignment)
+			offset = (offset + alignment - 1) and -alignment
+			member.symbol.offset = offset
+			offset += size
 			member.symbol.resolved = true
+			member.symbol.intValue = member.symbol.offset.toLong()
 		}
 
 		structSymbol.resolved = true
@@ -265,13 +259,76 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun resolveConst(node: ConstNode, symbol: ConstSymbol){
+		resolveSymbols(node.value)
+		symbol.resolving = true
+		symbol.intValue = resolveInt(node.value)
+		symbol.resolving = false
+		symbol.resolved = true
+	}
+
+
+
 	private fun resolveIntSymbol(symbol: IntSymbol): Long {
 		if(symbol.resolved) return symbol.intValue
-		val file = symbol.srcPos?.file ?: error("Unresolved symbol: ${symbol.qualifiedName}")
-		if(file.resolving) error("Invalid const ordering: ${symbol.name}")
-		resolveFile(file)
+		if(symbol.resolving) error("Circular dependency: ${symbol.qualifiedName}")
+
+		when(symbol) {
+			is ConstSymbol -> {
+				resolveConst(symbol.node as ConstNode, symbol)
+			}
+
+			is MemberSymbol -> {
+				if(symbol.parent.resolving)
+					error("Circular dependency: ${symbol.qualifiedName}")
+				resolveStruct(symbol.parent.node as StructNode, symbol.parent)
+			}
+
+			is EnumEntrySymbol -> {
+				if(symbol.parent.resolving)
+					error("Circular dependency: ${symbol.qualifiedName}")
+				resolveEnum(symbol.parent.node as EnumNode, symbol.parent)
+			}
+
+			else -> {
+				error("Unhandled int symbol: $symbol")
+			}
+		}
+
 		if(!symbol.resolved) error("Unresolved symbol")
 		return symbol.intValue
+	}
+
+
+
+	private fun resolveEnum(enumNode: EnumNode, enumSymbol: EnumSymbol) {
+		var current = if(enumSymbol.isBitmask) 1L else 0L
+
+		for(node in enumNode.entries) {
+			val symbol = node.symbol
+			if(symbol.resolved) continue
+			if(symbol.resolving) error("Circular dependency")
+			symbol.resolving = true
+
+			if(node.value == null) {
+				symbol.intValue = current
+				current += if(enumSymbol.isBitmask)
+					current
+				else
+					1
+			} else {
+				resolveSymbols(node.value)
+				symbol.intValue = resolveInt(node.value)
+				current = symbol.intValue
+				if(enumSymbol.isBitmask && current.countOneBits() != 1)
+					error("Bitmask entry must be power of two: ${symbol.intValue}")
+			}
+
+			symbol.resolving = false
+			symbol.resolved = true
+		}
+
+		enumSymbol.resolved = true
 	}
 
 

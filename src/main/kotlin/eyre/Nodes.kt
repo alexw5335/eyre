@@ -26,12 +26,16 @@ class ImportNode(
 class ScopeEndNode(
 	override val srcPos: SrcPos,
 	val symbol: ScopedSymbol
-): AstNode
+): AstNode {
+	init { symbol.node = this }
+}
 
 class NamespaceNode(
 	override val srcPos: SrcPos,
 	val symbol: Namespace
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class IntNode(
 	override val srcPos: SrcPos,
@@ -66,12 +70,16 @@ class StringNode(
 class LabelNode(
 	override val srcPos: SrcPos,
 	val symbol: LabelSymbol
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class ProcNode(
 	override val srcPos: SrcPos,
 	val symbol: ProcSymbol
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class MemNode(
 	override val srcPos: SrcPos,
@@ -79,23 +87,49 @@ class MemNode(
 	val value: AstNode
 ) : OpNode
 
-class VarPart(
+class DbPart(
 	override val srcPos: SrcPos,
 	val width: Width,
 	val nodes: List<AstNode>
 ) : AstNode
 
-class VarDefNode(
+class DbNode(
+	override val srcPos: SrcPos,
+	val symbol: DbSymbol,
+	val parts: List<DbPart>
+) : AstNode {
+	init { symbol.node = this }
+}
+
+class TypeDbNode(
+	override val srcPos: SrcPos,
+	val value: AstNode
+) : AstNode
+
+
+class VarNode(
 	override val srcPos: SrcPos,
 	val symbol: VarSymbol,
-	val parts: List<VarPart>
-) : AstNode
+	val value: AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
+
+class TypedefNode(
+	override val srcPos: SrcPos,
+	val symbol: TypedefSymbol,
+	val value: AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class ResNode(
 	override val srcPos: SrcPos,
 	val symbol: ResSymbol,
 	val size: AstNode
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class SegRegNode(
 	override val srcPos: SrcPos,
@@ -111,18 +145,29 @@ class ConstNode(
 	override val srcPos: SrcPos,
 	val symbol: ConstSymbol,
 	val value: AstNode
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class EnumEntryNode(
 	override val srcPos: SrcPos,
 	val symbol: EnumEntrySymbol,
 	val value: AstNode?
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class EnumNode(
 	override val srcPos: SrcPos,
 	val symbol: EnumSymbol,
 	val entries: ArrayList<EnumEntryNode>
+) : AstNode {
+	init { symbol.node = this }
+}
+
+class BlockNode(
+	override val srcPos: SrcPos,
+	val receiver: SymProviderNode
 ) : AstNode
 
 class InsNode(
@@ -161,19 +206,25 @@ class SymNode(
 class DebugLabelNode(
 	override val srcPos: SrcPos,
 	val symbol: DebugLabelSymbol
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class MemberNode(
 	override val srcPos: SrcPos,
 	val symbol: MemberSymbol,
-	val type: AstNode?
-) : AstNode
+	val type: AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 class StructNode(
 	override val srcPos: SrcPos,
 	val symbol: StructSymbol,
 	val members: List<MemberNode>
-) : AstNode
+) : AstNode {
+	init { symbol.node = this }
+}
 
 
 
@@ -202,7 +253,7 @@ Formatting
 
 
 
-fun AstNode.getChildren(): List<AstNode> = when(this) {
+/*fun AstNode.getChildren(): List<AstNode> = when(this) {
 	is LabelNode,
 	is StringNode,
 	is IntNode,
@@ -229,7 +280,7 @@ fun AstNode.getChildren(): List<AstNode> = when(this) {
 	is EnumEntryNode  -> listOfNotNull(value)
 	is StructNode     -> members
 	is MemberNode     -> emptyList()
-}
+}*/
 
 
 
@@ -284,8 +335,8 @@ val AstNode.printString: String get() = when(this) {
 		append(op4.printString)
 	}
 
-	is VarPart -> "${width.varString} ${nodes.joinToString { it.printString }}"
-	is VarDefNode -> "var ${symbol.name} ${parts.joinToString { it.printString }}"
+	is DbPart -> "${width.varString} ${nodes.joinToString { it.printString }}"
+	is DbNode -> "var ${symbol.name} ${parts.joinToString { it.printString }}"
 	is ResNode -> "var ${symbol.name} res ${size.printString}"
 	is RefNode -> "${left.printString}::${right.printString}"
 	is ConstNode -> "const ${symbol.name} = ${value.printString}"

@@ -7,7 +7,7 @@ import kotlin.io.path.relativeTo
 
 
 fun main() {
-	Compiler("samples/window").compile()
+	Compiler("samples/testing").compile()
 }
 
 

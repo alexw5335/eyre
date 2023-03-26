@@ -21,7 +21,7 @@ class Compiler(private val context: CompilerContext) {
 
 
 	fun compile() {
-
+		context.symbols.addDefaultSymbols()
 		val lexer = Lexer()
 		val parser = Parser(context)
 
@@ -29,7 +29,7 @@ class Compiler(private val context: CompilerContext) {
 			lexer.lex(srcFile)
 			//printTokens(srcFile)
 			parser.parse(srcFile)
-			//printNodes(srcFile)
+			printNodes(srcFile)
 			//printNodeTree(srcFile)
 		}
 
@@ -39,7 +39,7 @@ class Compiler(private val context: CompilerContext) {
 		Linker(context).link()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
 		// dumpbin()
-		//disassemble()
+		disassemble()
 	}
 
 
@@ -145,7 +145,7 @@ class Compiler(private val context: CompilerContext) {
 
 
 
-	private fun printNodeTree(node: AstNode, prefix: String) {
+	/*private fun printNodeTree(node: AstNode, prefix: String) {
 		println("Line ${node.srcPos.line}    $prefix${node.printString}")
 		for(n in node.getChildren())
 			printNodeTree(n, "$prefix    ")
@@ -159,7 +159,7 @@ class Compiler(private val context: CompilerContext) {
 		for(node in srcFile.nodes)
 			printNodeTree(node, "")
 		println()
-	}
+	}*/
 
 
 	private fun printNodes(srcFile: SrcFile) {
@@ -186,7 +186,7 @@ class Compiler(private val context: CompilerContext) {
 				is LabelSymbol     -> print("LABEL       ")
 				is Namespace       -> print("NAMESPACE   ")
 				is DllImportSymbol -> print("DLL IMPORT  ")
-				is VarSymbol       -> print("VAR         ")
+				is DbSymbol       -> print("VAR         ")
 				is ResSymbol       -> print("RES         ")
 				is ConstSymbol     -> print("CONST       ")
 				is EnumSymbol      -> print("ENUM        ")

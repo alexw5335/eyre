@@ -49,7 +49,7 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun SymBase(srcPos: SrcPos, name: Name) = SymBase(srcPos, currentScope, name)
+	private fun SymBase(name: Name) = SymBase(currentScope, name)
 
 
 
@@ -253,7 +253,7 @@ class Parser(private val context: CompilerContext) {
 		val srcPos    = SrcPos()
 		val thisScope = parseScopeName()
 		val name      = thisScope.last
-		val namespace = Namespace(SymBase(srcPos, currentScope, name), thisScope).add()
+		val namespace = Namespace(SymBase(name), thisScope).add()
 		val node      = NamespaceNode(srcPos, namespace)
 
 		if(next == SymToken.LBRACE) {
@@ -277,7 +277,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseLabel(id: Name) {
 		val srcPos = SrcPos(1)
 		pos++
-		val symbol = LabelSymbol(SymBase(srcPos, currentScope, id)).add()
+		val symbol = LabelSymbol(SymBase(id)).add()
 		LabelNode(srcPos, symbol).add()
 	}
 
@@ -288,7 +288,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		expect(SymToken.EQUALS)
 		val value = parseExpression()
-		val symbol = ConstSymbol(SymBase(srcPos, currentScope, name)).add()
+		val symbol = ConstSymbol(SymBase(name)).add()
 		ConstNode(srcPos, symbol, value).add()
 	}
 
@@ -307,6 +307,7 @@ class Parser(private val context: CompilerContext) {
 				Keyword.CONST     -> parseConst()
 				Keyword.ENUM      -> parseEnum(false)
 				Keyword.BITMASK   -> parseEnum(true)
+				Keyword.TYPEDEF   -> parseTypedef()
 				Keyword.PROC      -> parseProc()
 				Keyword.IMPORT    -> parseImport()
 				Keyword.STRUCT    -> parseStruct()
@@ -339,12 +340,12 @@ class Parser(private val context: CompilerContext) {
 
 		if(initialiser == Names.RES) {
 			val size = parseExpression()
-			val symbol = ResSymbol(SymBase(srcPos, currentScope, name)).add()
+			val symbol = ResSymbol(SymBase(name)).add()
 			ResNode(srcPos, symbol, size).add()
 			return
 		}
 
-		val parts = ArrayList<VarPart>()
+		val parts = ArrayList<DbPart>()
 		var size = 0
 
 		while(true) {
@@ -366,15 +367,15 @@ class Parser(private val context: CompilerContext) {
 				pos++
 			}
 
-			parts.add(VarPart(srcPos2, width, values))
+			parts.add(DbPart(srcPos2, width, values))
 			initialiser = (tokens[pos++] as? IdToken)?.value ?: break
 		}
 
 		pos--
 		if(parts.isEmpty())
 			error("Expecting variable initialiser")
-		val symbol = VarSymbol(SymBase(srcPos, currentScope, name), size).add()
-		VarDefNode(srcPos, symbol, parts).add()
+		val symbol = DbSymbol(SymBase(name), size).add()
+		DbNode(srcPos, symbol, parts).add()
 	}
 
 
@@ -382,44 +383,28 @@ class Parser(private val context: CompilerContext) {
 	private fun parseEnum(isBitmask: Boolean) {
 		val enumSrcPos = SrcPos()
 		val enumName = id()
-		var current = if(isBitmask) 1L else 0L
 		val scope = Scopes.add(currentScope, enumName)
 
 		if(tokens[pos] != SymToken.LBRACE) return
 		pos++
 		if(tokens[pos] == SymToken.RBRACE) return
-		val entries = java.util.ArrayList<EnumEntryNode>()
-		val entrySymbols = java.util.ArrayList<EnumEntrySymbol>()
+		val entries = ArrayList<EnumEntryNode>()
+		val entrySymbols = ArrayList<EnumEntrySymbol>()
 
 		while(pos < tokens.size) {
 			if(tokens[pos] == SymToken.RBRACE) break
 
 			val srcPos = SrcPos()
 			val name = id()
-			val symbol: EnumEntrySymbol
-			val node: EnumEntryNode
+			val symbol = EnumEntrySymbol(SymBase(scope, name), entries.size, 0).add()
 
-			val base = SymBase(srcPos, scope, name)
-			val token = tokens[pos]
-
-			if(token == SymToken.EQUALS) {
-				pos++
-				symbol = EnumEntrySymbol(base, entries.size, 0).add()
-				symbol.resolved = false
-				node = EnumEntryNode(srcPos, symbol, parseExpression())
-			} else if(token is IntToken) {
-				pos++
-				symbol = EnumEntrySymbol(base, entries.size, token.value).add()
-				symbol.resolved = true
-				node = EnumEntryNode(srcPos, symbol, null)
-			} else {
-				symbol = EnumEntrySymbol(base, entries.size, current).add()
-				symbol.resolved = true
-				node = EnumEntryNode(srcPos, symbol, null)
-				current += if(isBitmask) current else 1
+			val node = when(val token = tokens[pos]) {
+				SymToken.EQUALS -> { pos++; parseExpression() }
+				is IntToken     -> { pos++; IntNode(srcPos, token.value) }
+				else            -> null
 			}
 
-			entries.add(node)
+			entries.add(EnumEntryNode(srcPos, symbol, node))
 			entrySymbols.add(symbol)
 
 			if(!atNewline() && next != SymToken.COMMA && next !is IdToken)
@@ -427,8 +412,11 @@ class Parser(private val context: CompilerContext) {
 		}
 
 		expect(SymToken.RBRACE)
-		val symbol = EnumSymbol(SymBase(enumSrcPos, currentScope, enumName), scope, entrySymbols).add()
+		val symbol = EnumSymbol(SymBase(enumName), scope, entrySymbols, isBitmask).add()
 		EnumNode(enumSrcPos, symbol, entries).add()
+
+		for(s in entrySymbols)
+			s.parent = symbol
 	}
 
 
@@ -439,7 +427,7 @@ class Parser(private val context: CompilerContext) {
 		when(val directive = id()) {
 			Names.DEBUG -> {
 				val name = next() as? StringToken ?: error("Expecting string literal")
-				val symbol = DebugLabelSymbol(SymBase(srcPos, currentScope, name.value))
+				val symbol = DebugLabelSymbol(SymBase(name.value))
 				DebugLabelNode(srcPos, symbol).add()
 				context.debugLabels.add(symbol)
 			}
@@ -453,7 +441,7 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = SrcPos()
 		val name = id()
 		val scope = createScope(name)
-		val symbol = ProcSymbol(SymBase(srcPos, currentScope, name), scope).add()
+		val symbol = ProcSymbol(SymBase(name), scope).add()
 		ProcNode(srcPos, symbol).add()
 		expect(SymToken.LBRACE)
 		parseScope(scope)
@@ -502,7 +490,7 @@ class Parser(private val context: CompilerContext) {
 				manual = true
 				offset = parseInt()
 				pos++
-			} else if(tokens[pos + 1] == SymToken.SEMICOLON) {
+			}  else if(tokens[pos + 1] == SymToken.SEMICOLON) {
 				if(!manual) error("Struct size can only be specified by manual structs")
 				structSize = parseInt()
 				pos++
@@ -514,17 +502,10 @@ class Parser(private val context: CompilerContext) {
 			val symbol: MemberSymbol
 			val node: MemberNode
 
-			if(next is IntToken) {
-				val size = parseInt()
-				val name = id()
-				symbol = MemberSymbol(SymBase(srcPos, scope, name), offset, size, null).add()
-				node = MemberNode(srcPos, symbol, null)
-			} else {
-				val type = parseExpression()
-				val name = id()
-				symbol = MemberSymbol(SymBase(srcPos, scope, name), offset, 0, null).add()
-				node = MemberNode(srcPos, symbol, type)
-			}
+			val type = parseAtom()
+			val name = id()
+			symbol = MemberSymbol(SymBase(scope, name), offset, 0, VoidType).add()
+			node = MemberNode(srcPos, symbol, type)
 
 			memberSymbols += symbol
 			memberNodes += node
@@ -534,18 +515,31 @@ class Parser(private val context: CompilerContext) {
 		pos++
 
 		val symbol = StructSymbol(
-			SymBase(structSrcPos, structName),
+			SymBase(structName),
 			scope,
 			memberSymbols,
 			structSize,
 			manual
 		).add()
 
-		val node = StructNode(structSrcPos, symbol, memberNodes).add()
-		symbol.node = node
+		for(member in memberSymbols)
+			member.parent = symbol
+
+		StructNode(structSrcPos, symbol, memberNodes).add()
 
 		for(s in memberSymbols)
 			s.parent = symbol
+	}
+
+
+
+	private fun parseTypedef() {
+		val srcPos = SrcPos()
+		val name = id()
+		expect(SymToken.EQUALS)
+		val value = parseExpression()
+		val symbol = TypedefSymbol(SymBase(name), VoidType).add()
+		TypedefNode(srcPos, symbol, value).add()
 	}
 
 

@@ -313,7 +313,8 @@ enum class Keyword {
 	FLAGS,
 	STRUCT,
 	PROC,
-	BITMASK;
+	BITMASK,
+	TYPEDEF;
 
 	val string = name.lowercase()
 

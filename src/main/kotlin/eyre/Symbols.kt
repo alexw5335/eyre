@@ -3,17 +3,15 @@ package eyre
 
 
 class SymBase(
-	val srcPos    : SrcPos?,
 	val scope     : Scope,
 	val name      : Name,
+	var resolved  : Boolean = false,
+	var resolving : Boolean = false,
+	var node      : AstNode? = null
 ) {
 
-	// Only used by compile-time constants that may be referenced by other constants
-	var resolved = false
-	var node: AstNode? = null
-
 	companion object {
-		val EMPTY = SymBase(null, Scopes.EMPTY, Names.EMPTY)
+		val EMPTY = SymBase(Scopes.EMPTY, Names.EMPTY)
 	}
 
 }
@@ -21,14 +19,17 @@ class SymBase(
 
 
 interface Symbol {
+
 	val base: SymBase
-	val srcPos   get() = base.srcPos
-	val scope    get() = base.scope
-	val name     get() = base.name
-	var resolved get() = base.resolved; set(v) { base.resolved = v }
-	val node     get() = base.node
+
+	val scope     get() = base.scope
+	val name      get() = base.name
+	var resolved  get() = base.resolved  ; set(v) { base.resolved = v }
+	var resolving get() = base.resolving ; set(v) { base.resolving = v }
+	var node      get() = base.node      ; set(v) { base.node = v }
 
 	val qualifiedName get() = if(scope.isEmpty) "$name" else "$scope.$name"
+
 }
 
 
@@ -40,7 +41,7 @@ interface Type : Symbol {
 
 
 abstract class IntegerType(name: String, override val size: Int) : Type {
-	override val base = SymBase(null, Scopes.EMPTY, Names[name])
+	override val base = SymBase(Scopes.EMPTY, Names[name], resolved = true)
 }
 
 
@@ -112,7 +113,7 @@ class MemberSymbol(
 	override val base: SymBase,
 	var offset: Int,
 	var size: Int,
-	var type: Type?,
+	var type: Type,
 ) : IntSymbol {
 	override var intValue = offset.toLong()
 	lateinit var parent: StructSymbol
@@ -175,13 +176,20 @@ class DllImportSymbol(
 
 
 
-class VarSymbol(
+class DbSymbol(
 	override val base: SymBase,
 	val size: Int
 ) : PosSymbol {
 	override var section = Section.DATA
 	override var pos = 0
 }
+
+
+
+class VarSymbol(
+	override val base: SymBase,
+	override var type: Type
+) : TypedSymbol
 
 
 
@@ -206,12 +214,24 @@ class EnumEntrySymbol(
 	override var base     : SymBase,
 	val ordinal           : Int,
 	override var intValue : Long
-) : IntSymbol
+) : IntSymbol {
+	lateinit var parent: EnumSymbol
+}
 
 
 
 class EnumSymbol(
 	override val base      : SymBase,
 	override val thisScope : Scope,
-	val entries            : List<EnumEntrySymbol>
+	val entries            : List<EnumEntrySymbol>,
+	val isBitmask          : Boolean
 ) : ScopedSymbol
+
+
+
+class TypedefSymbol(
+	override val base: SymBase,
+	var type: Type
+) : Type {
+	override val size get() = type.size
+}
