@@ -28,6 +28,22 @@ proc print {
 // var testing db MyStruct { scope = 1 }
 // var testing = MyStruct(rcx + rdx)
 
+// ResNode
+// var testing = MyStruct { }
+// var testing res MyStruct::size
+
+// DefNode
+// var testing = MyStruct { scope = 1 }
+// var testing db 0, 1, 0, 0
+
+// VarNode, receiver must be a type
+// var testing = MyStruct(rcx + rdx)
+
+var myStruct1: MyStruct = rcx + rdx + 10
+var myStruct2: MyStruct
+var myStruct3: MyStruct { a = 1 }
+
+
 
 var msg db "Message"
 

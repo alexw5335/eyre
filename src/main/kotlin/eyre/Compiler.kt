@@ -135,7 +135,7 @@ class Compiler(private val context: CompilerContext) {
 				is CharToken   -> println("CHAR     ${newline}${terminator}   \'${token.value}\'")
 				is IntToken    -> println("INT      ${newline}${terminator}   ${token.value}")
 				is StringToken -> println("STRING   ${newline}${terminator}   \"${token.value}\"")
-				is IdToken     -> println("ID       ${newline}${terminator}   ${token.value}")
+				is Name        -> println("ID       ${newline}${terminator}   ${token.string}")
 				is SymToken    -> println("SYM      ${newline}${terminator}   ${token.string}")
 			}
 		}

@@ -295,8 +295,7 @@ class Lexer {
 		}
 
 		val string = String(chars, startPos, pos - startPos)
-		val intern = Names.add(string)
-		addToken(IdToken(intern))
+		addToken(Names.add(string))
 	}
 
 

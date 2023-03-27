@@ -101,16 +101,11 @@ class DbNode(
 	init { symbol.node = this }
 }
 
-class TypeDbNode(
-	override val srcPos: SrcPos,
-	val value: AstNode
-) : AstNode
-
-
 class VarNode(
 	override val srcPos: SrcPos,
 	val symbol: VarSymbol,
-	val value: AstNode
+	val value: AstNode,
+	val type: SymProviderNode?
 ) : AstNode {
 	init { symbol.node = this }
 }
@@ -340,6 +335,17 @@ val AstNode.printString: String get() = when(this) {
 	is ResNode -> "var ${symbol.name} res ${size.printString}"
 	is RefNode -> "${left.printString}::${right.printString}"
 	is ConstNode -> "const ${symbol.name} = ${value.printString}"
+
+	is VarNode -> buildString {
+		append("var ")
+		append(symbol.name)
+		if(type != null) {
+			append(": ")
+			append(type.printString)
+		}
+		append(" = ")
+		append(value.printString)
+	}
 
 	is EnumEntryNode -> buildString {
 		append(symbol.name)

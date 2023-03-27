@@ -37,7 +37,7 @@ class Parser(private val context: CompilerContext) {
 
 	private fun atTerminator() = srcFile.terminators[pos]
 
-	private fun id() = (tokens[pos++] as? IdToken)?.value ?: error("Expecting identifier, found: $prev")
+	private fun id() = tokens[pos++] as? Name ?: error("Expecting identifier, found: $prev")
 
 	private fun SrcPos(offset: Int = 0) = SrcPos(srcFile, srcFile.tokenLines[pos - offset])
 
@@ -107,12 +107,12 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = SrcPos()
 		val token = next()
 
-		if(token is IdToken) {
-			return when(val id = token.value) {
-				in Names.registers -> return RegNode(srcPos, Names.registers[id])
+		if(token is Name) {
+			return when(token) {
+				in Names.registers -> return RegNode(srcPos, Names.registers[token])
 				Names.FS -> return SegRegNode(srcPos, SegReg.FS)
 				Names.GS -> return SegRegNode(srcPos, SegReg.GS)
-				else -> SymNode(srcPos, id)
+				else -> SymNode(srcPos, token)
 			}
 		}
 
@@ -196,9 +196,9 @@ class Parser(private val context: CompilerContext) {
 		var token = next
 		var width: Width? = null
 
-		if(token is IdToken) {
-			if(token.value in Names.widths) {
-				width = Names.widths[token.value]
+		if(token is Name) {
+			if(token in Names.widths) {
+				width = Names.widths[token]
 				if(tokens[pos + 1] == SymToken.LBRACKET)
 					token = tokens[++pos]
 			}
@@ -336,9 +336,19 @@ class Parser(private val context: CompilerContext) {
 	private fun parseVar() {
 		val srcPos = SrcPos()
 		val name = id()
-		var initialiser = id()
+		val first = next()
+		var type: AstNode? = null
 
-		if(initialiser == Names.RES) {
+		if(first == SymToken.COLON) {
+			type = parseExpression() as? SymProviderNode
+			expect(SymToken.EQUALS)
+			val value = parseExpression()
+			val symbol = VarSymbol(SymBase(name), VoidType).add()
+			VarNode(srcPos, symbol, value, type).add()
+			return
+		}
+
+		if(first == Names.RES) {
 			val size = parseExpression()
 			val symbol = ResSymbol(SymBase(name)).add()
 			ResNode(srcPos, symbol, size).add()
@@ -347,6 +357,8 @@ class Parser(private val context: CompilerContext) {
 
 		val parts = ArrayList<DbPart>()
 		var size = 0
+
+		var initialiser = first as? Name ?: error("Expecting variable initialiser")
 
 		while(true) {
 			if(initialiser !in Names.varWidths) break
@@ -368,7 +380,7 @@ class Parser(private val context: CompilerContext) {
 			}
 
 			parts.add(DbPart(srcPos2, width, values))
-			initialiser = (tokens[pos++] as? IdToken)?.value ?: break
+			initialiser = id()
 		}
 
 		pos--
@@ -407,7 +419,7 @@ class Parser(private val context: CompilerContext) {
 			entries.add(EnumEntryNode(srcPos, symbol, node))
 			entrySymbols.add(symbol)
 
-			if(!atNewline() && next != SymToken.COMMA && next !is IdToken)
+			if(!atNewline() && next != SymToken.COMMA && next !is Name)
 				break
 		}
 
@@ -606,7 +618,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseScopeInternal() {
 		while(pos < tokens.size) {
 			when(val token = next()) {
-				is IdToken       -> parseId(token.value)
+				is Name          -> parseId(token)
 				SymToken.RBRACE  -> { pos--; break }
 				SymToken.HASH    -> parseHash()
 				EndToken         -> break
