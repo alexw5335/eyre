@@ -17,8 +17,6 @@ class Parser(private val context: CompilerContext) {
 
 	private var currentNamespace: Namespace? = null // Only single-line namespaces
 
-	private val scopeBuilder = IntList(8)
-
 
 
 	/*
@@ -585,9 +583,29 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseScopeName(): Scope {
-		scopeBuilder.reset()
+	private var intBuilder = IntList()
 
+
+
+	private fun parseSym(): SymProviderNode {
+		val srcPos = SrcPos()
+
+		if(tokens[pos + 1] != SymToken.PERIOD)
+			return SymNode(srcPos, id())
+
+		intBuilder.reset()
+
+		do {
+			intBuilder += id().id
+		} while(next() == SymToken.PERIOD)
+
+		pos--
+		return SymDotNode(srcPos, NameArray(intBuilder.array()))
+	}
+
+
+
+	private fun parseScopeName(): Scope {
 		var scope = currentScope
 
 		do {

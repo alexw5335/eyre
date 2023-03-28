@@ -26,8 +26,16 @@ class Name(override val id: Int, val hash: Int, val string: String) : Intern, To
 
 
 
+@JvmInline
+value class NameArray(private val array: IntArray) {
+	operator fun get(index: Int) = Names[array[index]]
+	override fun toString() = array.joinToString(".") { this[it].string }
+}
+
+
+
 class Scope(override val id: Int, val hash: Int, val array: IntArray) : Intern {
-	val last get() = Names[array.last()]
+	val last get() = Names[array.size - 1]
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
 	override fun toString() = array.joinToString(transform = { Names[it].string }, separator = ".")

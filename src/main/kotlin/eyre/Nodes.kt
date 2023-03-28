@@ -101,10 +101,14 @@ class DbNode(
 	init { symbol.node = this }
 }
 
+enum class VarType {
+	RES, DB, ALIAS
+}
+
 class VarNode(
 	override val srcPos: SrcPos,
 	val symbol: VarSymbol,
-	val value: AstNode,
+	val value: AstNode?,
 	val type: SymProviderNode?
 ) : AstNode {
 	init { symbol.node = this }
@@ -176,6 +180,8 @@ class InsNode(
 	val op4      : OpNode?
 ) : AstNode
 
+
+
 class DotNode(
 	override val srcPos: SrcPos,
 	val left: AstNode,
@@ -195,6 +201,12 @@ class RefNode(
 class SymNode(
 	override val srcPos: SrcPos,
 	val name: Name,
+	override var symbol: Symbol? = null
+) : SymProviderNode, OpNode
+
+class SymDotNode(
+	override val srcPos: SrcPos,
+	val names: NameArray,
 	override var symbol: Symbol? = null
 ) : SymProviderNode, OpNode
 
@@ -343,8 +355,10 @@ val AstNode.printString: String get() = when(this) {
 			append(": ")
 			append(type.printString)
 		}
-		append(" = ")
-		append(value.printString)
+		if(value != null) {
+			append(" = ")
+			append(value.printString)
+		}
 	}
 
 	is EnumEntryNode -> buildString {
