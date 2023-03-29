@@ -95,21 +95,24 @@ class DbPart(
 
 class DbNode(
 	override val srcPos: SrcPos,
-	val symbol: DbSymbol,
+	val symbol: DbVarSymbol,
 	val parts: List<DbPart>
 ) : AstNode {
 	init { symbol.node = this }
 }
 
-enum class VarType {
-	RES, DB, ALIAS
-}
+class MemberInitNode(
+	override val srcPos: SrcPos,
+	val member: Name?,
+	val value: AstNode
+) : AstNode
 
 class VarNode(
 	override val srcPos: SrcPos,
 	val symbol: VarSymbol,
 	val value: AstNode?,
-	val type: SymProviderNode?
+	val type: SymProviderNode,
+	val inits: List<MemberInitNode>
 ) : AstNode {
 	init { symbol.node = this }
 }
@@ -124,7 +127,7 @@ class TypedefNode(
 
 class ResNode(
 	override val srcPos: SrcPos,
-	val symbol: ResSymbol,
+	val symbol: ResVarSymbol,
 	val size: AstNode
 ) : AstNode {
 	init { symbol.node = this }
@@ -315,14 +318,25 @@ val AstNode.printString: String get() = when(this) {
 		append(symbol.name)
 		append(" {")
 		append('\n')
-		for(member in members) {
+		if(symbol.manual) {
+			for(member in members) {
+				append('\t')
+				append(member.printString)
+				append('\n')
+			}
 			append('\t')
-			append(member.printString)
-			append('\n')
+			append(symbol.size)
+			append("\n}")
+		} else {
+			for(member in members) {
+				append('\t')
+				append(member.type.printString)
+				append(' ')
+				append(member.symbol.name)
+				append('\n')
+			}
+			append('}')
 		}
-		append('\t')
-		append(symbol.size)
-		append("\n}")
 	}
 
 	is InsNode -> buildString {
@@ -351,13 +365,21 @@ val AstNode.printString: String get() = when(this) {
 	is VarNode -> buildString {
 		append("var ")
 		append(symbol.name)
-		if(type != null) {
-			append(": ")
-			append(type.printString)
-		}
+		append(": ")
+		append(type.printString)
 		if(value != null) {
 			append(" = ")
 			append(value.printString)
+		}
+		if(inits.isNotEmpty()) {
+			append(" { ")
+			for(i in inits) {
+				append(i.member)
+				append(" = ")
+				append(i.value.printString)
+				append(", ")
+			}
+			append("} ")
 		}
 	}
 

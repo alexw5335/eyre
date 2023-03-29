@@ -176,27 +176,39 @@ class DllImportSymbol(
 
 
 
-class DbSymbol(
+sealed interface VarSymbol : TypedSymbol
+
+
+
+class VarSym(
 	override val base: SymBase,
-	val size: Int
-) : PosSymbol {
+	override var type: VoidType
+) : TypedSymbol, PosSymbol {
+	override var section = Section.DATA
+	override var pos = 0
+}
+
+class AliasVarSymbol(
+	override val base: SymBase,
+	override var type: Type = VoidType
+) : VarSymbol
+
+
+
+class DbVarSymbol(
+	override val base: SymBase,
+	override var type: Type = VoidType
+) : PosSymbol, TypedSymbol, VarSymbol {
 	override var section = Section.DATA
 	override var pos = 0
 }
 
 
-
-class VarSymbol(
+class ResVarSymbol(
 	override val base: SymBase,
-	override var type: Type
-) : TypedSymbol
-
-
-
-class ResSymbol(
-	override val base: SymBase,
+	override var type: Type = VoidType,
 	var size: Int = 0
-) : PosSymbol {
+) : PosSymbol, VarSymbol {
 	override var section = Section.BSS
 	override var pos = 0
 }

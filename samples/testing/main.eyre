@@ -1,15 +1,32 @@
 namespace main
 
 
-typedef i8 = byte
-typedef i16 = word
-typedef i32 = dword
-typedef i64 = qword
+struct Intern {
+	dword id
+	dword length
+	qword string
+}
 
 
 
-// rcx: data
-// rdx: length
+// typed res
+var intern1: Intern
+// typed db
+var intern2: Intern { id = 0, length = 0, string = 0 }
+// alias
+var intern3: Intern = rcx + rdx + 10
+// alias
+var intern4: Intern = intern3
+// res
+var intern4 res Intern::size
+// db
+var intern5
+	dq 0
+	dd 0
+	dq 0
+
+
+
 proc print {
 	sub rsp, 56
 	mov r8, rdx
@@ -23,52 +40,11 @@ proc print {
 }
 
 
-// ResNode, DefNode, VarNode
-// var testing res MyStruct
-// var testing db MyStruct { scope = 1 }
-// var testing = MyStruct(rcx + rdx)
-
-// ResNode
-// var testing = MyStruct { }
-// var testing res MyStruct::size
-
-// DefNode
-// var testing = MyStruct { scope = 1 }
-// var testing db 0, 1, 0, 0
-
-// VarNode, receiver must be a type
-// var testing = MyStruct(rcx + rdx)
-
-var myStruct1: MyStruct = rcx + rdx + 10
-var myStruct2: MyStruct
-var myStruct3: MyStruct { a = 1 }
-
-
-
-var msg db "Message"
-
-
 
 proc main {
 	sub rsp, 40
-	lea rcx, [msg]
-	mov byte [msg], MyStruct::size + '0'
-	mov edx, msg::size
+	lea rcx, [main]
+	mov edx, 1
 	call print
 	dllcall ExitProcess
-}
-
-
-
-enum MyEnum {
-	A
-	B
-	C
-}
-
-
-
-struct MyStruct {
-    i32 a
-    i32 b
 }

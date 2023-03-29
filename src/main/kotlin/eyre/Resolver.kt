@@ -84,6 +84,21 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun resolveVar(node: VarNode, symbol: VarSymbol) {
+		node.value?.let(::resolveSymbols)
+		resolveSymbols(node.type)
+		val type = getType(node.type)
+		resolveType(type)
+
+		when(symbol) {
+			is AliasVarSymbol -> symbol.type = type
+			is DbVarSymbol    -> symbol.type = type
+			is ResVarSymbol   -> symbol.type = type
+		}
+	}
+
+
+
 	private fun resolveTypedef(node: TypedefNode, symbol: TypedefSymbol) {
 		resolveSymbols(node.value)
 		val type = getType(node.value)
@@ -111,10 +126,22 @@ class Resolver(private val context: CompilerContext) {
 			is BinaryNode -> { resolveSymbols(node.left); resolveSymbols(node.right) }
 			is MemNode    -> resolveSymbols(node.value)
 			is SymNode    -> node.symbol = resolveSymbol(node.name)
+			is SymDotNode -> node.symbol = resolveSymbol(node.names)
 			is DotNode    -> node.right.symbol = resolveDot(node)
 			is RefNode    -> resolveRef(node)
 			else          -> { }
 		}
+	}
+
+
+
+	private fun resolveSymbol(names: NameArray): Symbol {
+		var left = resolveSymbol(names[0])
+		for(i in 0 until names.size) {
+			if(left !is ScopedSymbol) error("Expecting scoped symbol")
+			left = context.symbols.get(left.thisScope, names[i]) ?: error("Symbol not found")
+		}
+		return left
 	}
 
 
@@ -187,7 +214,7 @@ class Resolver(private val context: CompilerContext) {
 
 		when(val name = node.right.name) {
 			Names.SIZE -> when(left) {
-				is DbSymbol -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
+				//is DbVarSymbol -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
 				is Type -> {
 					resolveType(left)
 					node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())

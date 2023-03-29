@@ -335,20 +335,53 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = SrcPos()
 		val name = id()
 		val first = next()
-		var type: AstNode? = null
 
 		if(first == SymToken.COLON) {
-			type = parseExpression() as? SymProviderNode
-			expect(SymToken.EQUALS)
-			val value = parseExpression()
-			val symbol = VarSymbol(SymBase(name), VoidType).add()
-			VarNode(srcPos, symbol, value, type).add()
-			return
+			val type = parseSym()
+
+			if(next == SymToken.EQUALS) {
+				pos++
+				val value = parseExpression()
+				val symbol = AliasVarSymbol(SymBase(name))
+				VarNode(srcPos, symbol, value, type, emptyList()).add()
+				return
+			}
+
+			if(next == SymToken.LBRACE) {
+				pos++
+
+				val inits = ArrayList<MemberInitNode>()
+
+				while(next != SymToken.RBRACE) {
+					val srcPos2 = SrcPos()
+					val member = id()
+					expect(SymToken.EQUALS)
+					val memberValue = parseExpression()
+					expectTerminator()
+					if(next == SymToken.COMMA) pos++
+					inits.add(MemberInitNode(srcPos2, member, memberValue))
+				}
+
+				pos++
+
+				val symbol = DbVarSymbol(SymBase(name))
+				VarNode(srcPos, symbol, null, type, inits).add()
+
+				return
+			}
+
+			if(atTerminator()) {
+				val symbol = ResVarSymbol(SymBase(name))
+				VarNode(srcPos, symbol, null, type, emptyList()).add()
+				return
+			}
+
+			error("Invalid variable initialiser")
 		}
 
 		if(first == Names.RES) {
 			val size = parseExpression()
-			val symbol = ResSymbol(SymBase(name)).add()
+			val symbol = ResVarSymbol(SymBase(name)).add()
 			ResNode(srcPos, symbol, size).add()
 			return
 		}
@@ -384,8 +417,8 @@ class Parser(private val context: CompilerContext) {
 		pos--
 		if(parts.isEmpty())
 			error("Expecting variable initialiser")
-		val symbol = DbSymbol(SymBase(name), size).add()
-		DbNode(srcPos, symbol, parts).add()
+		//val symbol = DbVarSymbol(SymBase(name), size).add()
+		//DbNode(srcPos, symbol, parts).add()
 	}
 
 

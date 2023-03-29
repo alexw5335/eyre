@@ -27,7 +27,8 @@ class Name(override val id: Int, val hash: Int, val string: String) : Intern, To
 
 
 @JvmInline
-value class NameArray(private val array: IntArray) {
+value class NameArray(val array: IntArray) {
+	val size get() = array.size
 	operator fun get(index: Int) = Names[array[index]]
 	override fun toString() = array.joinToString(".") { this[it].string }
 }
