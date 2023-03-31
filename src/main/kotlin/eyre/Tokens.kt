@@ -47,7 +47,7 @@ enum class SymToken(
 	INEQUALITY ("!=", BinaryOp.INEQ),
 	EXCLAMATION("!", null, UnaryOp.LNOT),
 	QUESTION   ("?"),
-	LBRACKET   ("["),
+	LBRACKET   ("[", BinaryOp.ARR),
 	RBRACKET   ("]"),
 	LBRACE     ("{"),
 	RBRACE     ("}"),

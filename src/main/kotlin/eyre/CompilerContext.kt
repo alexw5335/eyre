@@ -21,8 +21,6 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val sections = HashMap<Section, SectionData>()
 
-	val debugLabels = ArrayList<DebugLabelSymbol>()
-
 
 
 	/*

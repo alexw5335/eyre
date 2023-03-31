@@ -36,7 +36,7 @@ value class NameArray(val array: IntArray) {
 
 
 class Scope(override val id: Int, val hash: Int, val array: IntArray) : Intern {
-	val last get() = Names[array.size - 1]
+	val last get() = Names[array[array.size - 1]]
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
 	override fun toString() = array.joinToString(transform = { Names[it].string }, separator = ".")

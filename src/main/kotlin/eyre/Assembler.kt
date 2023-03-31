@@ -20,14 +20,11 @@ class Assembler(private val context: CompilerContext) {
 		for(srcFile in context.srcFiles) {
 			for(node in srcFile.nodes) {
 				when(node) {
-					is InsNode   -> handleInstruction(node)
-					is LabelNode -> handleLabel(node.symbol)
-					is ProcNode  -> handleLabel(node.symbol)
-					is DbNode   -> handleVar(node)
-					is ResNode   -> handleRes(node)
-					is ScopeEndNode -> handleScopeEnd(node)
-					is DebugLabelNode -> handleDebugLabelNode(node)
-					else         -> { }
+					is InsNode        -> handleInstruction(node)
+					is LabelNode      -> handleLabel(node.symbol)
+					is ProcNode       -> handleLabel(node.symbol)
+					is ScopeEndNode   -> handleScopeEnd(node)
+					else              -> { }
 				}
 			}
 		}
@@ -56,34 +53,6 @@ class Assembler(private val context: CompilerContext) {
 			else             -> invalidEncoding()
 		}
 	}
-	
-	
-	
-	private fun handleRes(node: ResNode) {
-		val size = node.symbol.size
-		context.bssSize = (context.bssSize + 7) and -8
-		node.symbol.pos = context.bssSize
-		context.bssSize += size
-	}
-
-
-
-	private fun handleVar(node: DbNode) {
-		dataWriter.align8()
-
-		node.symbol.pos = dataWriter.pos
-		for(part in node.parts) {
-			for(value in part.nodes) {
-				if(value is StringNode) {
-					for(char in value.value.string) {
-						dataWriter.writeWidth(part.width, char.code)
-					}
-				} else {
-					dataWriter.writeWidth(part.width, resolveImm(value))
-				}
-			}
-		}
-	}
 
 
 
@@ -94,12 +63,6 @@ class Assembler(private val context: CompilerContext) {
 				error("Redeclaration of entry point")
 			context.entryPoint = symbol
 		}
-	}
-
-
-
-	private fun handleDebugLabelNode(node: DebugLabelNode) {
-		node.symbol.pos = writer.pos
 	}
 
 
@@ -162,9 +125,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private val hasImmReloc get() = immRelocCount > 0
 
-	private fun resolveImmSym(node: SymProviderNode, regValid: Boolean): Long {
-		val symbol = node.symbol ?: error("Unresolved symbol")
-
+	private fun resolveImmSym(symbol: Symbol?, regValid: Boolean): Long {
 		if(symbol is PosSymbol) {
 			if(immRelocCount++ == 0 && !regValid)
 				error("First relocation (absolute or relative) must be positive and absolute")
@@ -184,7 +145,7 @@ class Assembler(private val context: CompilerContext) {
 		is UnaryNode       -> node.calculate(::resolveImmRec, regValid)
 		is BinaryNode      -> node.calculate(::resolveImmRec, regValid)
 		is StringNode      -> node.value.string.ascii64()
-		is SymProviderNode -> resolveImmSym(node, regValid)
+		is SymNode         -> resolveImmSym(node.symbol, regValid)
 		else               -> error("Invalid imm node: $node")
 	}
 
@@ -198,7 +159,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun writeImm(node: AstNode, width: Width) {
-		writeImm(node, width, resolveImm(node))
+		writeImm(node, width, resolveImm(node), false)
 	}
 
 
@@ -217,7 +178,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 	/*
-	Memory
+	Memory operands
 	 */
 
 
@@ -285,7 +246,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun resolveMemSym(node: SymProviderNode, regValid: Boolean): Long {
+	private fun resolveMemSym(node: SymNode, regValid: Boolean): Long {
 		val symbol = node.symbol ?: error("Unresolved symbol")
 
 		if(symbol is PosSymbol) {
@@ -303,12 +264,12 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun resolveMemRec(node: AstNode, regValid: Boolean): Long = when(node) {
-		is IntNode         -> node.value
-		is UnaryNode       -> node.calculate(::resolveMemRec, regValid)
-		is BinaryNode      -> resolveMemBinary(node, regValid)
-		is RegNode         -> resolveMemReg(node.value, regValid)
-		is SymProviderNode -> resolveMemSym(node, regValid)
-		else               -> error("Invalid mem node: $node")
+		is IntNode    -> node.value
+		is UnaryNode  -> node.calculate(::resolveMemRec, regValid)
+		is BinaryNode -> resolveMemBinary(node, regValid)
+		is RegNode    -> resolveMemReg(node.value, regValid)
+		is SymNode    -> resolveMemSym(node, regValid)
+		else          -> error("Invalid mem node: $node")
 	}
 
 
@@ -349,6 +310,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private val OpNode.asReg get() = (this as? RegNode)?.value ?: invalidEncoding()
+
 	private val OpNode.asMem get() = this as? MemNode ?: invalidEncoding()
 
 	private fun byte(value: Int) = writer.i8(value)
@@ -1090,8 +1052,8 @@ class Assembler(private val context: CompilerContext) {
 			is RegNode -> encode1R(0xFF, Widths.ONLY64, 2, op1.value)
 			is MemNode -> encode1M(0xFF, Widths.ONLY64, 2, op1, 0)
 			else -> {
-				if(op1 is SymProviderNode && op1.symbol is DllImportSymbol)
-					encode1M(0xFF, Widths.ONLY64, 2, MemNode(op1.srcPos, QWORD, op1), 0)
+				if(op1 is SymNode && op1.symbol is DllImportSymbol)
+					encode1M(0xFF, Widths.ONLY64, 2, MemNode(QWORD, op1), 0)
 				else
 					encodeRel32(0xE8, op1)
 			}
@@ -1236,17 +1198,18 @@ class Assembler(private val context: CompilerContext) {
 		if(op1.width != QWORD)
 			invalidEncoding()
 
-		if(op2 is RegNode) {
-			if(op2.width != DWORD)
-				invalidEncoding()
-			encode2RR(0x63, Widths.NO8, op1, op2.value, true)
-		} else if(op2 is MemNode) {
-			if(op2.width != DWORD)
-				invalidEncoding()
-			encode2RM(0x63, Widths.NO8, op1, op2, 0, true)
-		} else {
-			invalidEncoding()
+		when(op2) {
+			is RegNode -> {
+				if(op2.width != DWORD) invalidEncoding()
+				encode2RR(0x63, Widths.NO8, op1, op2.value, true)
+			}
+			is MemNode -> {
+				if(op2.width != DWORD) invalidEncoding()
+				encode2RM(0x63, Widths.NO8, op1, op2, 0, true)
+			}
+			else -> invalidEncoding()
 		}
+
 	}
 
 
@@ -1283,26 +1246,26 @@ class Assembler(private val context: CompilerContext) {
 	 *     C6  MOV  RM_I  1111
 	 */
 	private fun encodeMOV(op1: OpNode, op2: OpNode) {
-		if(op1 is RegNode) {
-			if(op2 is RegNode) {
-				encode2RR(0x88, Widths.ALL, op1.value, op2.value, false)
-			} else if(op2 is MemNode) {
-				encode2RM(0x8A, Widths.ALL, op1.value, op2, 0)
-			} else {
-				val imm = resolveImm(op2)
-				encode1O(0xB0, Widths.ALL, op1.value)
-				writeImm(op2, op1.width, imm, true)
+		when(op1) {
+			is RegNode -> when(op2) {
+				is RegNode -> encode2RR(0x88, Widths.ALL, op1.value, op2.value, false)
+				is MemNode -> encode2RM(0x8A, Widths.ALL, op1.value, op2, 0)
+				else -> {
+					val imm = resolveImm(op2)
+					encode1O(0xB0, Widths.ALL, op1.value)
+					writeImm(op2, op1.width, imm, true)
+				}
 			}
-		} else if(op1 is MemNode) {
-			if(op2 is RegNode) {
-				encode2RM(0x88, Widths.ALL, op2.value, op1, 0)
-			} else {
-				val width = op1.width ?: invalidEncoding()
-				encode1M(0xC6, Widths.ALL, 0, op1, width.bytes)
-				writeImm(op2, width)
+			is MemNode -> when(op2) {
+				is RegNode -> encode2RM(0x88, Widths.ALL, op2.value, op1, 0)
+				is MemNode -> invalidEncoding()
+				else -> {
+					val width = op1.width ?: invalidEncoding()
+					encode1M(0xC6, Widths.ALL, 0, op1, width.bytes)
+					writeImm(op2, width)
+				}
 			}
-		} else {
-			invalidEncoding()
+			else -> invalidEncoding()
 		}
 	}
 
@@ -1316,7 +1279,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun encodeDLLCALL(node: InsNode) {
 		if(node.size != 1) invalidEncoding()
-		val op1 = node.op1 as? SymNode ?: invalidEncoding()
+		val op1 = node.op1 as? NameNode ?: invalidEncoding()
 		op1.symbol = context.getDllImport(op1.name)
 		if(op1.symbol == null) error("Unrecognised dll import: ${op1.name}")
 		encodeCALL(op1)

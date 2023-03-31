@@ -31,6 +31,7 @@ private fun Compiler(directory: String, files: List<String>): Compiler {
 	context.loadDllDefFromResources("kernel32")
 	context.loadDllDefFromResources("user32")
 	context.loadDllDefFromResources("gdi32")
+	context.loadDllDefFromResources("msvcrt")
 
 	return Compiler(context)
 }

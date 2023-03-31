@@ -27,19 +27,11 @@ class Compiler(private val context: CompilerContext) {
 
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
-			//printTokens(srcFile)
 			parser.parse(srcFile)
 			printNodes(srcFile)
-			//printNodeTree(srcFile)
 		}
 
-		//printSymbols()
-		Resolver(context).resolve()
-		Assembler(context).assemble()
-		Linker(context).link()
-		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
-		// dumpbin()
-		disassemble()
+		printSymbols()
 	}
 
 
@@ -115,64 +107,10 @@ class Compiler(private val context: CompilerContext) {
 
 
 
-	private fun printTokens(srcFile: SrcFile) {
-		printHeader("TOKENS (${srcFile.relPath}):")
-
-		for(i in 0 until srcFile.tokens.size) {
-			val line = srcFile.tokenLines[i]
-			print("Line ")
-			print(line)
-			for(j in 0 until (5 - line.toString().length))
-				print(' ')
-
-			val token = srcFile.tokens[i]
-
-			val newline = if(srcFile.newlines[i]) 'N' else ' '
-			val terminator = if(srcFile.terminators[i]) 'T' else ' '
-
-			when(token) {
-				is EndToken    -> println("EOF      ${newline}${terminator}")
-				is CharToken   -> println("CHAR     ${newline}${terminator}   \'${token.value}\'")
-				is IntToken    -> println("INT      ${newline}${terminator}   ${token.value}")
-				is StringToken -> println("STRING   ${newline}${terminator}   \"${token.value}\"")
-				is Name        -> println("ID       ${newline}${terminator}   ${token.string}")
-				is SymToken    -> println("SYM      ${newline}${terminator}   ${token.string}")
-			}
-		}
-
-		println()
-	}
-
-
-
-	/*private fun printNodeTree(node: AstNode, prefix: String) {
-		println("Line ${node.srcPos.line}    $prefix${node.printString}")
-		for(n in node.getChildren())
-			printNodeTree(n, "$prefix    ")
-	}
-
-
-
-	private fun printNodeTree(srcFile: SrcFile) {
-		printHeader("NODE TREE (${srcFile.relPath}):")
-
-		for(node in srcFile.nodes)
-			printNodeTree(node, "")
-		println()
-	}*/
-
-
 	private fun printNodes(srcFile: SrcFile) {
 		printHeader("NODES (${srcFile.relPath}):")
-
-		for(node in srcFile.nodes) {
-			print("Line ")
-			print(node.srcPos.line)
-			for(i in 0 until (5 - node.srcPos.line.toString().length))
-				print(' ')
+		for(node in srcFile.nodes)
 			println(node.printString)
-		}
-
 		println()
 	}
 
@@ -180,26 +118,15 @@ class Compiler(private val context: CompilerContext) {
 
 	private fun printSymbols() {
 		printHeader("SYMBOLS")
-
 		for(symbol in context.symbols.getAll()) {
-			when(symbol) {
-				is LabelSymbol     -> print("LABEL       ")
-				is Namespace       -> print("NAMESPACE   ")
-				is DllImportSymbol -> print("DLL IMPORT  ")
-				is DbVarSymbol       -> print("VAR         ")
-				is ResVarSymbol       -> print("RES         ")
-				is ConstSymbol     -> print("CONST       ")
-				is EnumSymbol      -> print("ENUM        ")
-				is EnumEntrySymbol -> print("ENUM ENTRY  ")
-				is ProcSymbol      -> print("PROC        ")
-				else               -> print("?           ")
-			}
-
+			print(symbol::class.simpleName)
+			print(' ')
 			println(symbol.qualifiedName)
 		}
-
 		println()
 	}
+
+
 
 
 }

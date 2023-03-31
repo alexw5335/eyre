@@ -140,7 +140,7 @@ class Linker(private val context: CompilerContext) {
 
 
 	private fun writeSymbolTable() {
-		if(context.debugLabels.isEmpty()) return
+/*		if(context.debugLabels.isEmpty()) return
 		val pos = nextSectionPos
 		writer.seek(nextSectionPos)
 
@@ -158,7 +158,7 @@ class Linker(private val context: CompilerContext) {
 
 		writer.align(fileAlignment)
 		writer.i32(symbolTablePosPos, pos)
-		writer.i32(numSymbolsPos, context.debugLabels.size)
+		writer.i32(numSymbolsPos, context.debugLabels.size)*/
 	}
 
 
@@ -226,7 +226,7 @@ class Linker(private val context: CompilerContext) {
 		if(node is UnaryNode) return node.calculate(::resolveImmRec, regValid)
 		if(node is BinaryNode) return node.calculate(::resolveImmRec, regValid)
 
-		if(node is SymProviderNode) {
+		if(node is SymNode) {
 			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {
 				is PosSymbol       -> symbol.address.toLong()
 				is IntSymbol       -> symbol.intValue
@@ -246,16 +246,22 @@ class Linker(private val context: CompilerContext) {
 
 
 	private fun Reloc.writeRelocation() {
-		if(type == RelocType.LINK) {
-			val value = resolveImm(node)
-			writer.seek(section.data.pos + pos)
-			writer.writeWidth(width, value)
-		} else if(type == RelocType.RIP) {
-			val value = resolveImm(node) - (section.data.rva + pos + width.bytes + offset)
-			writer.seek(section.data.pos + pos)
-			writer.writeWidth(width, value)
-		} else {
-			error("Absolute relocations not yet supported")
+		when(type) {
+			RelocType.LINK -> {
+				val value = resolveImm(node)
+				writer.seek(section.data.pos + pos)
+				writer.writeWidth(width, value)
+			}
+
+			RelocType.RIP -> {
+				val value = resolveImm(node) - (section.data.rva + pos + width.bytes + offset)
+				writer.seek(section.data.pos + pos)
+				writer.writeWidth(width, value)
+			}
+
+			RelocType.ABS -> {
+				error("Absolute relocations not yet supported")
+			}
 		}
 	}
 

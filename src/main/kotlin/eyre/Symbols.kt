@@ -2,6 +2,12 @@ package eyre
 
 
 
+/*
+Interfaces
+ */
+
+
+
 class SymBase(
 	val scope     : Scope,
 	val name      : Name,
@@ -40,14 +46,39 @@ interface Type : Symbol {
 
 
 
-abstract class IntegerType(name: String, override val size: Int) : Type {
-	override val base = SymBase(Scopes.EMPTY, Names[name], resolved = true)
+interface TypedSymbol : Symbol {
+	val type: Type
 }
 
 
 
-interface TypedSymbol : Symbol {
-	val type: Type
+interface ScopedSymbol : Symbol {
+	val thisScope: Scope
+}
+
+
+
+interface PosSymbol : Symbol {
+	var section: Section
+	var pos: Int
+}
+
+
+
+interface IntSymbol : Symbol {
+	var intValue: Long
+}
+
+
+
+/*
+Types
+ */
+
+
+
+abstract class IntegerType(name: String, override val size: Int) : Type {
+	override val base = SymBase(Scopes.EMPTY, Names[name], resolved = true)
 }
 
 
@@ -74,23 +105,9 @@ object VoidType : Type {
 
 
 
-interface ScopedSymbol : Symbol {
-	// Should be the same as scope.name
-	val thisScope: Scope
-}
-
-
-
-interface PosSymbol : Symbol {
-	var section: Section
-	var pos: Int
-}
-
-
-
-interface IntSymbol : Symbol {
-	var intValue: Long
-}
+/*
+Symbols
+ */
 
 
 
@@ -105,6 +122,16 @@ private class IntSymbolImpl(
 
 fun IntSymbol(base: SymBase, intValue: Long): IntSymbol {
 	return IntSymbolImpl(base, intValue)
+}
+
+
+
+class VarResSymbol(
+	override val base : SymBase,
+	override var type : Type = VoidType
+) : TypedSymbol, PosSymbol {
+	override var section = Section.BSS
+	override var pos = 0
 }
 
 
@@ -158,58 +185,10 @@ class LabelSymbol(
 
 
 
-class DebugLabelSymbol(
-	override val base: SymBase
-) : PosSymbol {
-	override var section = Section.TEXT
-	override var pos = 0
-}
-
-
-
 class DllImportSymbol(
 	override val base: SymBase,
 ) : PosSymbol {
 	override var section = Section.IDATA
-	override var pos = 0
-}
-
-
-
-sealed interface VarSymbol : TypedSymbol
-
-
-
-class VarSym(
-	override val base: SymBase,
-	override var type: VoidType
-) : TypedSymbol, PosSymbol {
-	override var section = Section.DATA
-	override var pos = 0
-}
-
-class AliasVarSymbol(
-	override val base: SymBase,
-	override var type: Type = VoidType
-) : VarSymbol
-
-
-
-class DbVarSymbol(
-	override val base: SymBase,
-	override var type: Type = VoidType
-) : PosSymbol, TypedSymbol, VarSymbol {
-	override var section = Section.DATA
-	override var pos = 0
-}
-
-
-class ResVarSymbol(
-	override val base: SymBase,
-	override var type: Type = VoidType,
-	var size: Int = 0
-) : PosSymbol, VarSymbol {
-	override var section = Section.BSS
 	override var pos = 0
 }
 

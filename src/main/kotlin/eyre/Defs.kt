@@ -242,18 +242,19 @@ enum class UnaryOp(
 	POS("+", { it }),
 	NEG("-", { -it }),
 	NOT("~", { it.inv() }),
-	LNOT("!", { if(it == 0L) 1L else 0L });
+	LNOT("!", { if(it == 0L) 1L else 0L }),
 
 }
 
 
 
 enum class BinaryOp(
-	val symbol          : String?,
-	val precedence      : Int,
-	val calculate       : (Long, Long) -> Long
+	val symbol     : String?,
+	val precedence : Int,
+	val calculate  : (Long, Long) -> Long
 ) {
 
+	ARR (null,  9, { _, _ -> 0L }),
 	DOT (null,  9, { _, _ -> 0L }),
 
 	REF (null,  8, { _,_ -> 0L }),
@@ -337,10 +338,6 @@ class SrcFile(val path: Path, val relPath: Path) {
 
 	// Valid after the parser has been called
 	lateinit var nodes: List<AstNode>
-
-	// Used by the resolver
-	var resolving = false
-	var resolved = false
 
 }
 

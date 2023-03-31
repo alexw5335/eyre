@@ -1,50 +1,10 @@
-namespace main
-
-
-struct Intern {
-	dword id
-	dword length
-	qword string
+namespace main {
+	typedef i8 = byte
+	typedef i16 = word
+	typedef i32 = dword
+	typedef i64 = qword
 }
 
 
 
-// typed res
-var intern1: Intern
-// typed db
-var intern2: Intern { id = 0, length = 0, string = 0 }
-// alias
-var intern3: Intern = rcx + rdx + 10
-// alias
-var intern4: Intern = intern3
-// res
-var intern4 res Intern::size
-// db
-var intern5
-	dq 0
-	dd 0
-	dq 0
-
-
-
-proc print {
-	sub rsp, 56
-	mov r8, rdx
-	mov rdx, rcx
-	mov ecx, -11
-	lea r9, [rsp + 40]
-	mov qword [rsp + 32], 0
-	dllcall WriteFile
-	add rsp, 56
-	ret
-}
-
-
-
-proc main {
-	sub rsp, 40
-	lea rcx, [main]
-	mov edx, 1
-	call print
-	dllcall ExitProcess
-}
+var myVar: main.i8[10]
