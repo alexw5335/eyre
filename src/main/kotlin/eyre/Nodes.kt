@@ -34,7 +34,7 @@ sealed interface OpNode : AstNode
 
 class ImportNode(val import: SymNode) : AstNode
 
-class ArrayNode(val receiver: AstNode, val index: AstNode) : SymNode {
+class ArrayNode(val receiver: AstNode, val index: AstNode?) : SymNode {
 	override var symbol: Symbol? = null
 }
 
@@ -92,7 +92,7 @@ class InsNode(
 	val op4      : OpNode?
 ) : AstNode
 
-class VarResNode(val symbol: VarResSymbol, val type: SymNode) : SymContainerNode(symbol)
+class VarResNode(val symbol: VarResSymbol, val type: AstNode) : SymContainerNode(symbol)
 
 
 
@@ -137,9 +137,10 @@ val AstNode.printString: String get() = when(this) {
 	is SegRegNode     -> value.name.lowercase()
 	is FpuRegNode     -> value.string
 	is VarResNode     -> "var ${symbol.name}: ${type.printString}"
-	is ArrayNode      -> "${receiver.printString}[${index.printString}]"
+	is ArrayNode      -> "${receiver.printString}[${index?.printString ?: ""}]"
 
 	is ConstNode -> "const ${symbol.name} = ${value.printString}"
+	is TypedefNode -> "typedef ${symbol.name} = ${value.printString}"
 
 
 	else -> toString()

@@ -144,15 +144,15 @@ class Parser(private val context: CompilerContext) {
 		while(true) {
 			val token = next
 
-			if(token !is SymToken)
-				if(!atTerminator())
-					error("Unexpected token: $token")
-				else
-					break
-
-			val op = token.binaryOp ?: break
+			val op = (token as? SymToken)?.binaryOp ?: break
 			if(op.precedence < precedence) break
 			pos++
+
+			if(op == BinaryOp.ARR && next == SymToken.RBRACKET) {
+				pos++
+				atom = ArrayNode(atom, null)
+				continue
+			}
 
 			val expression = parseExpression(op.precedence + 1)
 
@@ -267,6 +267,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		expect(SymToken.EQUALS)
 		val value = parseExpression()
+		expectTerminator()
 		val symbol = ConstSymbol(SymBase(name)).add()
 		ConstNode(symbol, value).add()
 	}
@@ -321,7 +322,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseVar() {
 		val name = id()
 		expect(SymToken.COLON)
-		val type = parseName()
+		val type = parseExpression()
 
 		if(atTerminator()) {
 			val symbol = VarResSymbol(SymBase(name)).add()
@@ -431,7 +432,7 @@ class Parser(private val context: CompilerContext) {
 			val symbol: MemberSymbol
 			val node: MemberNode
 
-			val type = parseAtom()
+			val type = parseExpression()
 			val name = id()
 			symbol   = MemberSymbol(SymBase(scope, name), offset, 0, VoidType).add()
 			node     = MemberNode(symbol, type)
@@ -466,6 +467,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		expect(SymToken.EQUALS)
 		val value = parseExpression()
+		expectTerminator()
 		val symbol = TypedefSymbol(SymBase(name), VoidType).add()
 		TypedefNode(symbol, value).add()
 	}

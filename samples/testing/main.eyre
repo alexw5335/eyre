@@ -1,5 +1,5 @@
 namespace main {
-	typedef i8 = byte
+	typedef i8 = byte[10]
 	typedef i16 = word
 	typedef i32 = dword
 	typedef i64 = qword
@@ -8,3 +8,6 @@ namespace main {
 
 
 var myVar: main.i8[10]
+
+const myConst = 1
+const myConst2 = myConst * 2

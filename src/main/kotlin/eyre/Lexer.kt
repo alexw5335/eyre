@@ -60,7 +60,7 @@ class Lexer {
 		}
 
 		terminators.set(tokens.size)
-		addToken(EndToken)
+		add(EndToken)
 		newlines.ensureCapacity(tokens.size)
 		terminators.ensureCapacity(tokens.size)
 
@@ -72,7 +72,7 @@ class Lexer {
 
 
 
-	private fun addToken(token: Token) {
+	private fun add(token: Token) {
 		tokens.add(token)
 		tokenLines.add(lineCount)
 		tokenLines[tokens.size] = lineCount
@@ -80,15 +80,15 @@ class Lexer {
 
 
 
-	private fun addSymbol(symbol: SymToken) {
+	private fun addTerm(token: Token) {
 		terminators.set(tokens.size)
-		addToken(symbol)
+		add(token)
 	}
 
 
 
-	private fun addSymbolAdv(symbol: SymToken) {
-		addSymbol(symbol)
+	private fun addAdv(symbol: Token) {
+		add(symbol)
 		pos++
 	}
 
@@ -139,7 +139,7 @@ class Lexer {
 			}
 		}
 
-		addToken(StringToken(Names.add(stringBuilder.toString())))
+		add(StringToken(Names.add(stringBuilder.toString())))
 	}
 
 
@@ -150,7 +150,7 @@ class Lexer {
 		if(char == '\\')
 			char = chars[pos++].escape
 
-		addToken(CharToken(char))
+		add(CharToken(char))
 
 		if(chars[pos++] != '\'')
 			lexerError("Unterminated char literal")
@@ -165,7 +165,7 @@ class Lexer {
 		}
 
 		if(chars[pos] != '*') {
-			addToken(SymToken.SLASH)
+			add(SymToken.SLASH)
 			return
 		}
 
@@ -257,7 +257,7 @@ class Lexer {
 
 	private fun digit() {
 		pos--
-		addToken(IntToken(readDecimal()))
+		add(IntToken(readDecimal()))
 		if(chars[pos].isLetterOrDigit()) lexerError("Invalid char in number literal: '${chars[pos]}'")
 	}
 
@@ -265,18 +265,18 @@ class Lexer {
 
 	private fun zero() {
 		if(chars[pos].isDigit()) {
-			addToken(IntToken(readDecimal()))
+			add(IntToken(readDecimal()))
 			return
 		}
 
 		if(!chars[pos].isLetter()) {
-			addToken(IntToken(0))
+			add(IntToken(0))
 			return
 		}
 
 		when(val base = chars[pos++]) {
-			'x'  -> addToken(IntToken(readHex()))
-			'b'  -> addToken(IntToken(readBinary()))
+			'x'  -> add(IntToken(readHex()))
+			'b'  -> add(IntToken(readBinary()))
 			else -> lexerError("Invalid integer base: $base")
 		}
 	}
@@ -295,7 +295,7 @@ class Lexer {
 		}
 
 		val string = String(chars, startPos, pos - startPos)
-		addToken(Names.add(string))
+		add(Names.add(string))
 	}
 
 
@@ -314,57 +314,57 @@ class Lexer {
 			charMap['\r'] = { }
 
 			// Single symbols
-			charMap['('] = { addSymbol(SymToken.LPAREN) }
-			charMap[')'] = { addSymbol(SymToken.RPAREN) }
-			charMap['+'] = { addSymbol(SymToken.PLUS) }
-			charMap['-'] = { addSymbol(SymToken.MINUS) }
-			charMap['*'] = { addSymbol(SymToken.ASTERISK) }
-			charMap['['] = { addSymbol(SymToken.LBRACKET) }
-			charMap[']'] = { addSymbol(SymToken.RBRACKET) }
-			charMap['{'] = { addSymbol(SymToken.LBRACE) }
-			charMap['}'] = { addSymbol(SymToken.RBRACE) }
-			charMap['.'] = { addSymbol(SymToken.PERIOD) }
-			charMap[';'] = { addSymbol(SymToken.SEMICOLON) }
-			charMap['^'] = { addSymbol(SymToken.CARET) }
-			charMap['~'] = { addSymbol(SymToken.TILDE) }
-			charMap[','] = { addSymbol(SymToken.COMMA) }
-			charMap['?'] = { addSymbol(SymToken.QUESTION) }
-			charMap['#'] = { addSymbol(SymToken.HASH) }
+			charMap['('] = { add(SymToken.LPAREN) }
+			charMap[')'] = { addTerm(SymToken.RPAREN) }
+			charMap['+'] = { add(SymToken.PLUS) }
+			charMap['-'] = { add(SymToken.MINUS) }
+			charMap['*'] = { add(SymToken.ASTERISK) }
+			charMap['['] = { add(SymToken.LBRACKET) }
+			charMap[']'] = { addTerm(SymToken.RBRACKET) }
+			charMap['{'] = { add(SymToken.LBRACE) }
+			charMap['}'] = { addTerm(SymToken.RBRACE) }
+			charMap['.'] = { add(SymToken.PERIOD) }
+			charMap[';'] = { addTerm(SymToken.SEMICOLON) }
+			charMap['^'] = { add(SymToken.CARET) }
+			charMap['~'] = { add(SymToken.TILDE) }
+			charMap[','] = { add(SymToken.COMMA) }
+			charMap['?'] = { add(SymToken.QUESTION) }
+			charMap['#'] = { add(SymToken.HASH) }
 
 			// Compound symbols
 			charMap['&'] = { when(chars[pos]) {
-				'&'  -> addSymbolAdv(SymToken.LOGIC_AND)
-				else -> addSymbol(SymToken.AMPERSAND)
-			} }
+				'&'  -> addAdv(SymToken.LOGIC_AND)
+				else -> add(SymToken.AMPERSAND)
+			}}
 			charMap['|'] = { when(chars[pos]) {
-				'|'  -> addSymbolAdv(SymToken.LOGIC_OR)
-				else -> addSymbol(SymToken.PIPE)
-			} }
+				'|'  -> addAdv(SymToken.LOGIC_OR)
+				else -> add(SymToken.PIPE)
+			}}
 			charMap[':'] = { when(chars[pos]) {
-				':'  -> addSymbolAdv(SymToken.REFERENCE)
-				else -> addSymbol(SymToken.COLON)
-			} }
+				':'  -> addAdv(SymToken.REFERENCE)
+				else -> add(SymToken.COLON)
+			}}
 			charMap['<'] = { when(chars[pos]) {
-				'<'  -> addSymbolAdv(SymToken.SHL)
-				'='  -> addSymbolAdv(SymToken.LTE)
-				else -> addSymbol(SymToken.LT)
-			} }
+				'<'  -> addAdv(SymToken.SHL)
+				'='  -> addAdv(SymToken.LTE)
+				else -> add(SymToken.LT)
+			}}
 			charMap['='] = { when(chars[pos]) {
-				'='  -> addSymbolAdv(SymToken.EQUALITY)
-				else -> addSymbol(SymToken.EQUALS)
-			} }
+				'='  -> addAdv(SymToken.EQUALITY)
+				else -> add(SymToken.EQUALS)
+			}}
 			charMap['!'] = { when(chars[pos]) {
-				'='  -> addSymbolAdv(SymToken.INEQUALITY)
+				'='  -> addAdv(SymToken.INEQUALITY)
 				else -> SymToken.EXCLAMATION
-			} }
+			}}
 			charMap['>'] = { when(chars[pos]) {
 				'>' -> when(chars[++pos]) {
-					'>'  -> addSymbolAdv(SymToken.SAR)
-					else -> addSymbol(SymToken.SHR)
+					'>'  -> addAdv(SymToken.SAR)
+					else -> add(SymToken.SHR)
 				}
-				'='  -> addSymbolAdv(SymToken.GTE)
-				else -> addSymbol(SymToken.GT)
-			} }
+				'='  -> addAdv(SymToken.GTE)
+				else -> addTerm(SymToken.GT)
+			}}
 
 			// Complex symbols
 			charMap['"']  = Lexer::resolveDoubleApostrophe

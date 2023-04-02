@@ -157,7 +157,6 @@ class StructSymbol(
 ) : Type, ScopedSymbol
 
 
-
 class Namespace(
 	override val base: SymBase,
 	override val thisScope: Scope
@@ -205,7 +204,7 @@ class EnumEntrySymbol(
 	override var base     : SymBase,
 	val ordinal           : Int,
 	override var intValue : Long
-) : IntSymbol {
+) : IntSymbol{
 	lateinit var parent: EnumSymbol
 }
 
@@ -216,7 +215,9 @@ class EnumSymbol(
 	override val thisScope : Scope,
 	val entries            : List<EnumEntrySymbol>,
 	val isBitmask          : Boolean
-) : ScopedSymbol
+) : Type, ScopedSymbol {
+	override var size = 0
+}
 
 
 
