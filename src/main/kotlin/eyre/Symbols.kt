@@ -138,23 +138,22 @@ class VarResSymbol(
 
 class MemberSymbol(
 	override val base: SymBase,
-	var offset: Int,
-	var size: Int,
-	var type: Type,
+	var type: Type = VoidType,
 ) : IntSymbol {
+	var size = 0
+	var offset = 0
 	override var intValue = offset.toLong()
-	lateinit var parent: StructSymbol
 }
 
 
 
 class StructSymbol(
-	override val base: SymBase,
-	override val thisScope: Scope,
-	val members: List<MemberSymbol>,
-	override var size: Int,
-	val manual: Boolean
-) : Type, ScopedSymbol
+	override val base      : SymBase,
+	override val thisScope : Scope,
+	val members            : List<MemberSymbol>
+) : Type, ScopedSymbol {
+	override var size = 0
+}
 
 
 class Namespace(
@@ -204,9 +203,7 @@ class EnumEntrySymbol(
 	override var base     : SymBase,
 	val ordinal           : Int,
 	override var intValue : Long
-) : IntSymbol{
-	lateinit var parent: EnumSymbol
-}
+) : IntSymbol
 
 
 

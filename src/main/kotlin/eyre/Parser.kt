@@ -365,11 +365,10 @@ class Parser(private val context: CompilerContext) {
 		}
 
 		expect(SymToken.RBRACE)
+
 		val symbol = EnumSymbol(SymBase(enumName), scope, entrySymbols, isBitmask).add()
 		EnumNode(symbol, entries).add()
-
-		for(s in entrySymbols)
-			s.parent = symbol
+		context.addParent(symbol)
 	}
 
 
@@ -406,35 +405,16 @@ class Parser(private val context: CompilerContext) {
 		val scope = createScope(structName)
 		val memberSymbols = ArrayList<MemberSymbol>()
 		val memberNodes = ArrayList<MemberNode>()
-		var structSize = 0
 
 		expect(SymToken.LBRACE)
 
-		var manual = false
-		var offset = 0
-
 		while(next != SymToken.RBRACE) {
-			if(tokens[pos + 1] == SymToken.COLON) {
-				if(memberNodes.isNotEmpty() && !manual)
-					error("All members of a manual struct must specify an offset")
-				manual = true
-				offset = parseInt()
-				pos++
-			}  else if(tokens[pos + 1] == SymToken.SEMICOLON) {
-				if(!manual) error("Struct size can only be specified by manual structs")
-				structSize = parseInt()
-				pos++
-				break
-			} else if(manual) {
-				error("All members of a manual struct must specify an offset")
-			}
-
 			val symbol: MemberSymbol
 			val node: MemberNode
 
 			val type = parseExpression()
 			val name = id()
-			symbol   = MemberSymbol(SymBase(scope, name), offset, 0, VoidType).add()
+			symbol   = MemberSymbol(SymBase(scope, name)).add()
 			node     = MemberNode(symbol, type)
 
 			memberSymbols += symbol
@@ -444,21 +424,9 @@ class Parser(private val context: CompilerContext) {
 
 		pos++
 
-		val symbol = StructSymbol(
-			SymBase(structName),
-			scope,
-			memberSymbols,
-			structSize,
-			manual
-		).add()
-
-		for(member in memberSymbols)
-			member.parent = symbol
-
+		val symbol = StructSymbol(SymBase(structName), scope, memberSymbols).add()
 		StructNode(symbol, memberNodes).add()
-
-		for(s in memberSymbols)
-			s.parent = symbol
+		context.addParent(symbol)
 	}
 
 

@@ -11,3 +11,10 @@ var myVar: main.i8[10]
 
 const myConst = 1
 const myConst2 = myConst * 2
+
+
+struct MyStruct {
+	main.i8 scope
+	main.i8 size
+	main.i8 name
+}

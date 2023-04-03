@@ -21,6 +21,10 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val sections = HashMap<Section, SectionData>()
 
+	val parentMap = HashMap<Scope, Symbol>()
+
+	fun addParent(parent: ScopedSymbol) = parentMap.put(parent.thisScope, parent)
+
 
 
 	/*

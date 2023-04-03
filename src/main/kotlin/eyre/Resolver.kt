@@ -1,5 +1,7 @@
 package eyre
 
+import kotlin.math.max
+
 class Resolver(private val context: CompilerContext) {
 
 
@@ -48,8 +50,10 @@ class Resolver(private val context: CompilerContext) {
 					is ProcNode      -> pushScope(node.symbol.thisScope)
 					is ScopeEndNode  -> popScope()
 					is InsNode       -> resolveIns(node)
+					is TypedefNode   -> if(!node.symbol.resolved) resolveTypedef(node.symbol)
 					is ConstNode     -> if(!node.symbol.resolved) resolveConst(node.symbol)
 					is EnumNode      -> if(!node.symbol.resolved) resolveEnum(node.symbol)
+					is StructNode    -> if(!node.symbol.resolved) resolveStruct(node.symbol)
 					else             -> continue
 				}
 			}
@@ -79,6 +83,24 @@ class Resolver(private val context: CompilerContext) {
 		is RefNode    -> resolveRef(node)
 		else          -> return
 	}}
+	
+	
+
+	private fun resolveArray(node: ArrayNode) {
+		val receiver = resolveSymbol(node.receiver)
+		val symbol = ArraySymbol(SymBase.EMPTY, )
+	}
+
+
+
+	private fun resolveSymbol(node: AstNode): Symbol = when(node) {
+		is NameNode  -> resolveName(node)
+		is DotNode   -> resolveDot(node)
+		is RefNode   -> resolveRef(node)
+		is ArrayNode -> resolve
+		else         -> error("Invalid node: $node")
+	}
+
 
 
 
@@ -138,6 +160,11 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private inline fun<reified T : ScopedSymbol> Symbol.parent() = 
+		context.parentMap[scope] as? T ?: error("Symbol has no parent of type ${T::class.simpleName}: $this")
+	
+	
+	
 	private fun Symbol.beginResolve(): Boolean {
 		if(resolved) return true
 		if(resolving) error("Circular dependency: $this")
@@ -151,8 +178,9 @@ class Resolver(private val context: CompilerContext) {
 		if(type.resolved) return
 
 		when(type) {
-			is EnumSymbol -> resolveEnum(type)
-			else          -> error("Invalid type: $type")
+			is EnumSymbol    -> resolveEnum(type)
+			is TypedefSymbol -> resolveTypedef(type)
+			else             -> error("Invalid type: $type")
 		}
 	}
 
@@ -163,6 +191,14 @@ class Resolver(private val context: CompilerContext) {
 		resolveNode(node.value)
 		symbol.intValue = resolveInt(node.value)
 		symbol.resolved = true
+	}
+
+
+
+	private fun resolveTypedef(symbol: TypedefSymbol) {
+		val node = symbol.node as TypedefNode
+		val type = resolveSymbol(node.value) as? Type ?: error("Invalid type")
+		symbol.type = type
 	}
 
 
@@ -204,7 +240,29 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveStruct(structSymbol: StructSymbol) {
+		val structNode = structSymbol.node as StructNode
+		var offset = 0
+		var maxAlignment = 0
 
+		for(member in structNode.members) {
+			val symbol = member.symbol
+			symbol.beginResolve()
+			val type = resolveSymbol(member.type) as? Type ?: error("Invalid type")
+			resolveType(type)
+			val size = type.size
+			symbol.type = type
+			symbol.size = size
+			val alignment = size.coerceAtMost(8)
+			maxAlignment = max(alignment, maxAlignment)
+			offset = (offset + alignment - 1) and -alignment
+			symbol.offset = offset
+			offset += size
+			symbol.intValue = symbol.offset.toLong()
+			symbol.resolved = true
+		}
+		
+		structSymbol.size = (offset + maxAlignment - 1) and -maxAlignment
+		structSymbol.resolved = true
 	}
 
 
@@ -214,14 +272,15 @@ class Resolver(private val context: CompilerContext) {
 	 */
 
 
-
+	
 	private fun resolveIntSymbol(symbol: Symbol): Long {
 		if(symbol !is IntSymbol) error("Invalid symbol: $symbol")
 		if(symbol.beginResolve()) return symbol.intValue
 
 		when(symbol) {
 			is ConstSymbol     -> resolveConst(symbol)
-			is EnumEntrySymbol -> resolveEnum(symbol.parent)
+			is EnumEntrySymbol -> resolveEnum(symbol.parent<EnumSymbol>())
+			is MemberSymbol    -> resolveStruct(symbol.parent<StructSymbol>())
 			else               -> error("Invalid symbol: $symbol")
 		}
 
