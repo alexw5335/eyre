@@ -74,6 +74,16 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun resolveArray(symbol: ArrayType): ArrayType {
+		val node = symbol.node as ArrayNode
+		val type = resolveType(node.receiver)
+		node.symbol = type
+		val count = resolveInt(node.index ?: error("Invalid array"))
+		return ArrayType(SymBase.EMPTY, type, count.toInt())
+	}
+
+
+
 	private fun resolveNode(node: AstNode) { when(node) {
 		is UnaryNode  -> resolveNode(node.node)
 		is BinaryNode -> { resolveNode(node.left); resolveNode(node.right) }
@@ -81,26 +91,18 @@ class Resolver(private val context: CompilerContext) {
 		is NameNode   -> resolveName(node)
 		is DotNode    -> resolveDot(node)
 		is RefNode    -> resolveRef(node)
+		is ArrayNode  -> resolveArray(node.symbol)
 		else          -> return
 	}}
-	
-	
-
-	private fun resolveArray(node: ArrayNode) {
-		val receiver = resolveSymbol(node.receiver)
-		val symbol = ArraySymbol(SymBase.EMPTY, )
-	}
-
 
 
 	private fun resolveSymbol(node: AstNode): Symbol = when(node) {
 		is NameNode  -> resolveName(node)
 		is DotNode   -> resolveDot(node)
 		is RefNode   -> resolveRef(node)
-		is ArrayNode -> resolve
+		is ArrayNode -> resolveArray(node)
 		else         -> error("Invalid node: $node")
 	}
-
 
 
 
@@ -174,14 +176,21 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun resolveType(type: Type) {
-		if(type.resolved) return
+	private fun resolveType(node: AstNode): Type {
+		val type = resolveSymbol(node)
+		if(type !is Type) error("Invalid type: $type")
+		if(type.beginResolve()) return type
 
 		when(type) {
 			is EnumSymbol    -> resolveEnum(type)
 			is TypedefSymbol -> resolveTypedef(type)
+			is StructSymbol  -> resolveStruct(type)
+			is ArrayType   -> resolveArray(type)
 			else             -> error("Invalid type: $type")
 		}
+
+		type.resolving = false
+		return type
 	}
 
 
@@ -197,8 +206,9 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun resolveTypedef(symbol: TypedefSymbol) {
 		val node = symbol.node as TypedefNode
-		val type = resolveSymbol(node.value) as? Type ?: error("Invalid type")
+		val type = resolveType(node.value)
 		symbol.type = type
+		symbol.resolved = true
 	}
 
 
@@ -247,8 +257,7 @@ class Resolver(private val context: CompilerContext) {
 		for(member in structNode.members) {
 			val symbol = member.symbol
 			symbol.beginResolve()
-			val type = resolveSymbol(member.type) as? Type ?: error("Invalid type")
-			resolveType(type)
+			val type = resolveType(member.type)
 			val size = type.size
 			symbol.type = type
 			symbol.size = size

@@ -83,8 +83,7 @@ abstract class IntegerType(name: String, override val size: Int) : Type {
 
 
 
-class ArraySymbol(override val base: SymBase, override val type: Type): Type, TypedSymbol {
-	var count = 0
+class ArrayType(override val base: SymBase, override val type: Type, var count: Int): Type, TypedSymbol {
 	override val size get() = type.size * count
 }
 

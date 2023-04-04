@@ -35,7 +35,7 @@ sealed interface OpNode : AstNode
 class ImportNode(val import: SymNode) : AstNode
 
 class ArrayNode(val receiver: AstNode, val index: AstNode?) : SymNode {
-	override var symbol: Symbol? = null
+	override var symbol: ArrayType? = null
 }
 
 class ScopeEndNode(val symbol: ScopedSymbol): SymContainerNode(symbol)
