@@ -1,14 +1,17 @@
 namespace winapi
 
 
+struct Rect {
+	i32 left
+	i32 top
+	i32 right
+	i32 bottom
+}
 
 struct PaintStruct {
 	i64    hdc
 	i32    erase
-	i32    left
-	i32    top
-	i32    right
-	i32    bottom
+	Rect   rect
 	i32    restore
 	i32    incUpdate
 	i8[32] reserved

@@ -12,10 +12,17 @@ class Compiler(private val context: CompilerContext) {
 
 
 	private fun SymbolTable.addDefaultSymbols() {
-		add(ByteType)
-		add(WordType)
-		add(DwordType)
-		add(QwordType)
+		fun Type.add() = add(this)
+		fun Type.alias(name: String) = add(TypedefSymbol(SymBase(Scopes.EMPTY, Names.add(name), true), this))
+
+		ByteType.add()
+		WordType.add()
+		DwordType.add()
+		QwordType.add()
+		ByteType.alias("i8")
+		WordType.alias("i16")
+		DwordType.alias("i32")
+		QwordType.alias("i64")
 	}
 
 
@@ -32,6 +39,7 @@ class Compiler(private val context: CompilerContext) {
 		}
 
 		Resolver(context).resolve()
+		printResolution()
 
 		printSymbols()
 	}
@@ -78,7 +86,7 @@ class Compiler(private val context: CompilerContext) {
 
 		printHeader("DISASSEMBLY")
 
-		for(symbol in context.symbols.getAll()) {
+		for(symbol in context.symbols) {
 			if(symbol !is ProcSymbol) continue
 
 			val pos = sectionPos + symbol.pos
@@ -120,7 +128,7 @@ class Compiler(private val context: CompilerContext) {
 
 	private fun printSymbols() {
 		printHeader("SYMBOLS")
-		for(symbol in context.symbols.getAll()) {
+		for(symbol in context.symbols) {
 			print(symbol::class.simpleName)
 			print(' ')
 			println(symbol.qualifiedName)
@@ -129,6 +137,24 @@ class Compiler(private val context: CompilerContext) {
 	}
 
 
+
+	private fun printResolution() {
+		printHeader("RESOLUTION")
+		for(symbol in context.symbols) {
+			when(symbol) {
+				is StructSymbol -> {
+					println("struct ${symbol.name} {")
+					for(m in symbol.members)
+						println("\t${m.offset} ${m.size} ${m.type.printString} ${m.name}")
+					println("\t${symbol.size}")
+					println("}")
+				}
+				is VarResSymbol -> println("var ${symbol.name}: ${symbol.type.printString} (size = ${symbol.type.size})")
+				is ConstSymbol -> println("const ${symbol.name} = ${symbol.intValue}")
+			}
+		}
+		println()
+	}
 
 
 }

@@ -322,7 +322,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseVar() {
 		val name = id()
 		expect(SymToken.COLON)
-		val type = parseExpression()
+		val type = parseType()
 
 		if(atTerminator()) {
 			val symbol = VarResSymbol(SymBase(name)).add()
@@ -412,7 +412,7 @@ class Parser(private val context: CompilerContext) {
 			val symbol: MemberSymbol
 			val node: MemberNode
 
-			val type = parseExpression()
+			val type = parseType()
 			val name = id()
 			symbol   = MemberSymbol(SymBase(scope, name)).add()
 			node     = MemberNode(symbol, type)
@@ -434,10 +434,10 @@ class Parser(private val context: CompilerContext) {
 	private fun parseTypedef() {
 		val name = id()
 		expect(SymToken.EQUALS)
-		val value = parseExpression()
+		val type = parseType()
 		expectTerminator()
 		val symbol = TypedefSymbol(SymBase(name), VoidType).add()
-		TypedefNode(symbol, value).add()
+		TypedefNode(symbol, type).add()
 	}
 
 
@@ -468,6 +468,31 @@ class Parser(private val context: CompilerContext) {
 	/*
 	Scope
 	 */
+
+
+
+	private fun parseType(): TypeNode {
+		var name: Name? = null
+		var names: Array<Name>? = null
+		var arrayCount: AstNode? = null
+
+		if(tokens[pos + 1] != SymToken.PERIOD) {
+			name = id()
+		} else {
+			nameBuilder.clear()
+			do { nameBuilder += id() } while(next() == SymToken.PERIOD)
+			pos--
+			names = nameBuilder.toTypedArray()
+		}
+
+		if(next == SymToken.LBRACKET) {
+			pos++
+			arrayCount = parseExpression()
+			expect(SymToken.RBRACKET)
+		}
+
+		return TypeNode(name, names, arrayCount)
+	}
 
 
 

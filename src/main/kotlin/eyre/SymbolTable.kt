@@ -1,9 +1,16 @@
 package eyre
 
-class SymbolTable {
+class SymbolTable : Iterable<Symbol> {
 
 
-	private class Node(var value: Symbol?, var next: Node?)
+	private data class Node(var value: Symbol?, var next: Node?) : Iterable<Node> {
+		override fun iterator() = object : Iterator<Node> {
+			override fun hasNext() = next != null
+			override fun next() = next!!
+		}
+	}
+
+
 
 	private val nodes = Array(1024) { Node(null, null) }
 
@@ -57,14 +64,40 @@ class SymbolTable {
 
 
 
-	fun getAll() = buildList {
-		for(n in nodes) {
-			n.value?.let(::add)
-			var n2 = n.next
-			while(n2 != null) {
-				n2.value?.let(::add)
-				n2 = n2.next
+	override fun iterator() = object : Iterator<Symbol> {
+		var index = 0
+		var next: Node? = null
+
+		init {
+			for(i in nodes.indices) {
+				if(nodes[i].value != null) {
+					index = i + 1
+					next = nodes[i]
+					break
+				}
 			}
+		}
+
+		override fun hasNext() = next != null && next!!.value != null
+
+		override fun next(): Symbol {
+			val value = next!!.value!!
+
+			if(next!!.next != null) {
+				next = next!!.next
+				return value
+			}
+
+			for(i in index until nodes.size) {
+				if(nodes[i].value != null) {
+					index = i + 1
+					next = nodes[i]
+					return value
+				}
+			}
+
+			next = null
+			return value
 		}
 	}
 

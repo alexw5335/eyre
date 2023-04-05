@@ -50,6 +50,7 @@ class Resolver(private val context: CompilerContext) {
 					is ProcNode      -> pushScope(node.symbol.thisScope)
 					is ScopeEndNode  -> popScope()
 					is InsNode       -> resolveIns(node)
+					is VarResNode    -> if(!node.symbol.resolved) resolveVarRes(node)
 					is TypedefNode   -> if(!node.symbol.resolved) resolveTypedef(node.symbol)
 					is ConstNode     -> if(!node.symbol.resolved) resolveConst(node.symbol)
 					is EnumNode      -> if(!node.symbol.resolved) resolveEnum(node.symbol)
@@ -64,22 +65,18 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun resolveVarRes(node: VarResNode) {
+		node.symbol.type = resolveType(node.type)
+	}
+
+
+
 	private fun resolveIns(node: InsNode) {
 		if(node.mnemonic == Mnemonic.DLLCALL) return
 		resolveNode(node.op1 ?: return)
 		resolveNode(node.op2 ?: return)
 		resolveNode(node.op3 ?: return)
 		resolveNode(node.op4 ?: return)
-	}
-
-
-
-	private fun resolveArray(symbol: ArrayType): ArrayType {
-		val node = symbol.node as ArrayNode
-		val type = resolveType(node.receiver)
-		node.symbol = type
-		val count = resolveInt(node.index ?: error("Invalid array"))
-		return ArrayType(SymBase.EMPTY, type, count.toInt())
 	}
 
 
@@ -91,16 +88,15 @@ class Resolver(private val context: CompilerContext) {
 		is NameNode   -> resolveName(node)
 		is DotNode    -> resolveDot(node)
 		is RefNode    -> resolveRef(node)
-		is ArrayNode  -> resolveArray(node.symbol)
 		else          -> return
 	}}
 
 
-	private fun resolveSymbol(node: AstNode): Symbol = when(node) {
+
+	private fun resolveSymbol(node: SymNode): Symbol = when(node) {
 		is NameNode  -> resolveName(node)
 		is DotNode   -> resolveDot(node)
 		is RefNode   -> resolveRef(node)
-		is ArrayNode -> resolveArray(node)
 		else         -> error("Invalid node: $node")
 	}
 
@@ -119,6 +115,17 @@ class Resolver(private val context: CompilerContext) {
 		}
 
 		error("Unresolved symbol: $name")
+	}
+
+
+
+	private fun resolveSymbol(names: Array<Name>): Symbol {
+		var symbol = resolveSymbol(names[0])
+		for(i in 1 until names.size) {
+			if(symbol !is ScopedSymbol) error("Invalid receiver: $symbol")
+			symbol = resolveSymbol(names[i])
+		}
+		return symbol
 	}
 
 
@@ -169,28 +176,47 @@ class Resolver(private val context: CompilerContext) {
 	
 	private fun Symbol.beginResolve(): Boolean {
 		if(resolved) return true
-		if(resolving) error("Circular dependency: $this")
+		if(resolving) error("Circular dependency: ${this.qualifiedName}")
 		resolving = true
 		return false
 	}
 
 
+	
+	private fun resolveType(node: TypeNode): Type {
+		val firstType = when {
+			node.name != null  -> resolveSymbol(node.name)
+			node.names != null -> resolveSymbol(node.names)
+			else               -> error("Invalid type node")
+		}
 
-	private fun resolveType(node: AstNode): Type {
-		val type = resolveSymbol(node)
-		if(type !is Type) error("Invalid type: $type")
-		if(type.beginResolve()) return type
+		if(firstType !is Type)
+			error("Invalid type: $firstType")
+
+		resolveType(firstType)
+
+		val type = if(node.arrayCount != null)
+			ArrayType(SymBase.empty(true), firstType, resolveInt(node.arrayCount).toInt())
+		else
+			firstType
+
+		resolveType(type)
+		return type
+	}
+
+
+
+	private fun resolveType(type: Type) {
+		if(type.beginResolve()) return
 
 		when(type) {
 			is EnumSymbol    -> resolveEnum(type)
 			is TypedefSymbol -> resolveTypedef(type)
 			is StructSymbol  -> resolveStruct(type)
-			is ArrayType   -> resolveArray(type)
 			else             -> error("Invalid type: $type")
 		}
 
 		type.resolving = false
-		return type
 	}
 
 
@@ -214,6 +240,7 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveEnum(enumSymbol: EnumSymbol) {
+		pushScope(enumSymbol.thisScope)
 		val enumNode = enumSymbol.node as EnumNode
 		var current = if(enumSymbol.isBitmask) 1L else 0L
 		var max = 0L
@@ -245,6 +272,7 @@ class Resolver(private val context: CompilerContext) {
 		}
 
 		enumSymbol.resolved = true
+		popScope()
 	}
 
 
@@ -303,7 +331,7 @@ class Resolver(private val context: CompilerContext) {
 		is IntNode    -> node.value
 		is UnaryNode  -> node.op.calculate(resolveInt(node.node))
 		is BinaryNode -> node.op.calculate(resolveInt(node.left), resolveInt(node.right))
-		is SymNode    -> resolveIntSymbol(node.symbol!!)
+		is SymNode    -> resolveIntSymbol(resolveSymbol(node))
 		else          -> error("Invalid node: $node")
 	}
 

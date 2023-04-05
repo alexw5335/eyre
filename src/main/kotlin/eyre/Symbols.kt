@@ -18,6 +18,7 @@ class SymBase(
 
 	companion object {
 		val EMPTY = SymBase(Scopes.EMPTY, Names.EMPTY)
+		fun empty(resolved: Boolean) = SymBase(Scopes.EMPTY, Names.EMPTY, resolved)
 	}
 
 }

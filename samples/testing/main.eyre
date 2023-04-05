@@ -1,3 +1,12 @@
 namespace main
 
-var myVar: qword[10]
+var myVar2: MyStruct[SIZE / 2]
+
+struct MyStruct {
+	i8[SIZE] memberA
+	i64 memberB
+}
+
+var myVar: i8[SIZE]
+
+const SIZE = 10

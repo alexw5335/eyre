@@ -86,6 +86,10 @@ object Names : Interner<String, Name>() {
 	val VOID   = add("void")
 	val SIZE   = add("size")
 	val COUNT  = add("count")
+	val I8     = add("i8")
+	val I16    = add("i16")
+	val I32    = add("i32")
+	val I64    = add("i64")
 
 	val keywords     = createRange(Keyword.values(), Keyword::string)
 	val widths       = createRange(Width.values(), Width::string)

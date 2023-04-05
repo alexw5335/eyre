@@ -1,4 +1,4 @@
-@file:Suppress("LeakingThis", "RecursivePropertyAccessor")
+@file:Suppress("LeakingThis")
 
 package eyre
 
@@ -32,10 +32,18 @@ sealed interface OpNode : AstNode
 
 
 
+/*
+Nodes
+ */
+
+
+
+class TypeNode(val name: Name?, val names: Array<Name>?, val arrayCount: AstNode?) : AstNode
+
 class ImportNode(val import: SymNode) : AstNode
 
 class ArrayNode(val receiver: AstNode, val index: AstNode?) : SymNode {
-	override var symbol: ArrayType? = null
+	override var symbol: Symbol? = null
 }
 
 class ScopeEndNode(val symbol: ScopedSymbol): SymContainerNode(symbol)
@@ -58,7 +66,7 @@ class ProcNode(val symbol: ProcSymbol) : SymContainerNode(symbol)
 
 class MemNode(val width: Width?, val value: AstNode) : OpNode
 
-class TypedefNode(val symbol: TypedefSymbol, val value: AstNode) : SymContainerNode(symbol)
+class TypedefNode(val symbol: TypedefSymbol, val value: TypeNode) : SymContainerNode(symbol)
 
 class SegRegNode(val value: SegReg) : OpNode
 
@@ -78,7 +86,7 @@ class DotNode(val left: AstNode, val right: SymNode) : SymNode by right, OpNode
 
 class RefNode(val left: SymNode, val right: SymNode) : SymNode by right, OpNode
 
-class MemberNode(val symbol: MemberSymbol, val type: AstNode) : SymContainerNode(symbol)
+class MemberNode(val symbol: MemberSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
 class StructNode(val symbol: StructSymbol, val members: List<MemberNode>) : SymContainerNode(symbol)
 
@@ -92,7 +100,7 @@ class InsNode(
 	val op4      : OpNode?
 ) : AstNode
 
-class VarResNode(val symbol: VarResSymbol, val type: AstNode) : SymContainerNode(symbol)
+class VarResNode(val symbol: VarResSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
 
 
@@ -112,36 +120,3 @@ fun BinaryNode.calculate(function: (AstNode, Boolean) -> Long, validity: Boolean
 	function(left, validity && (op == BinaryOp.ADD || op == BinaryOp.SUB)),
 	function(right, validity && (op == BinaryOp.ADD))
 )
-
-
-
-/*
-Formatting
- */
-
-
-
-val AstNode.printString: String get() = when(this) {
-	is LabelNode      -> "label ${symbol.name}"
-	is StringNode     -> "\"${value.string}\""
-	is IntNode        -> value.toString()
-	is UnaryNode      -> "${op.symbol}${node.printString}"
-	is BinaryNode     -> "(${left.printString} ${op.symbol} ${right.printString})"
-	is DotNode        -> "(${left.printString}.${right.printString})"
-	is RegNode        -> value.string
-	is NameNode       -> name.string
-	is NamesNode      -> names.joinToString(".")
-	is NamespaceNode  -> "namespace ${symbol.name}"
-	is ScopeEndNode   -> "scope end"
-	is MemNode        -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
-	is SegRegNode     -> value.name.lowercase()
-	is FpuRegNode     -> value.string
-	is VarResNode     -> "var ${symbol.name}: ${type.printString}"
-	is ArrayNode      -> "${receiver.printString}[${index?.printString ?: ""}]"
-
-	is ConstNode -> "const ${symbol.name} = ${value.printString}"
-	is TypedefNode -> "typedef ${symbol.name} = ${value.printString}"
-
-
-	else -> toString()
-}
