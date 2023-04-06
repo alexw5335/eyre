@@ -43,6 +43,7 @@ interface Symbol {
 
 interface Type : Symbol {
 	val size: Int
+	val alignment get() = size
 }
 
 
@@ -72,6 +73,23 @@ interface IntSymbol : Symbol {
 
 
 
+interface AnonSymbol : Symbol {
+	override val base get() = SymBase.EMPTY
+}
+
+
+
+class RefSymbol(val receiver: PosSymbol, val offset: Int, override val type: Type): AnonSymbol, PosSymbol, TypedSymbol {
+	override var pos
+		set(_) = error("Cannot set ref symbol pos")
+		get() = receiver.pos + offset
+	override var section
+		set(_) = error("Cannot set ref symbol section")
+		get() = receiver.section
+}
+
+
+
 /*
 Types
  */
@@ -84,8 +102,9 @@ abstract class IntegerType(name: String, override val size: Int) : Type {
 
 
 
-class ArrayType(override val base: SymBase, override val type: Type, var count: Int): Type, TypedSymbol {
+class ArraySymbol(override val base: SymBase, override val type: Type, var count: Int): Type, TypedSymbol {
 	override val size get() = type.size * count
+	override val alignment = type.alignment
 }
 
 
@@ -153,6 +172,7 @@ class StructSymbol(
 	val members            : List<MemberSymbol>
 ) : Type, ScopedSymbol {
 	override var size = 0
+	override var alignment = 0
 }
 
 

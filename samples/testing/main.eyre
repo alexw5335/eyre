@@ -1,12 +1,7 @@
 namespace main
 
-var myVar2: MyStruct[SIZE / 2]
+var paint: winapi.PaintStruct
 
-struct MyStruct {
-	i8[SIZE] memberA
-	i64 memberB
+proc main {
+	lea rax, [paint.rect.left]
 }
-
-var myVar: i8[SIZE]
-
-const SIZE = 10

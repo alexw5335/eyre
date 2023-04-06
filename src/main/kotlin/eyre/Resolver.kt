@@ -51,10 +51,10 @@ class Resolver(private val context: CompilerContext) {
 					is ScopeEndNode  -> popScope()
 					is InsNode       -> resolveIns(node)
 					is VarResNode    -> if(!node.symbol.resolved) resolveVarRes(node)
-					is TypedefNode   -> if(!node.symbol.resolved) resolveTypedef(node.symbol)
-					is ConstNode     -> if(!node.symbol.resolved) resolveConst(node.symbol)
-					is EnumNode      -> if(!node.symbol.resolved) resolveEnum(node.symbol)
-					is StructNode    -> if(!node.symbol.resolved) resolveStruct(node.symbol)
+					is TypedefNode   -> resolveTypedef(node.symbol)
+					is ConstNode     -> resolveConst(node.symbol)
+					is EnumNode      -> resolveEnum(node.symbol)
+					is StructNode    -> resolveStruct(node.symbol)
 					else             -> continue
 				}
 			}
@@ -123,7 +123,7 @@ class Resolver(private val context: CompilerContext) {
 		var symbol = resolveSymbol(names[0])
 		for(i in 1 until names.size) {
 			if(symbol !is ScopedSymbol) error("Invalid receiver: $symbol")
-			symbol = resolveSymbol(names[i])
+			symbol = context.symbols.get(symbol.thisScope, names[i]) ?: error("Unresolved symbol: ${names[i]}")
 		}
 		return symbol
 	}
@@ -131,19 +131,38 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveDot(node: DotNode): Symbol {
-		val scope = when(node.left) {
+		val receiver = when(node.left) {
 			is NameNode -> resolveSymbol(node.left.name)
 			is DotNode  -> resolveDot(node.left)
 			else        -> error("Invalid receiver: ${node.left.printString}")
 		}
 
-		if(scope !is ScopedSymbol)
-			error("Invalid receiver: $scope")
+		if(receiver is TypedSymbol) {
+			val receiverType = receiver.type
+			resolveType(receiverType)
+
+			if(receiverType !is ScopedSymbol || receiver !is PosSymbol)
+				error("Invalid receiver")
+
+			val right = context.symbols.get(
+				receiverType.thisScope,
+				(node.right as? NameNode)?.name ?: error("Invalid node")
+			)
+
+			if(right is MemberSymbol) {
+				return RefSymbol(receiver, right.offset, right.type)
+			} else {
+				error("Invalid symbol: $right")
+			}
+		}
+
+		if(receiver !is ScopedSymbol)
+			error("Invalid receiver: $receiver")
 
 		if(node.right !is NameNode)
 			error("Invalid node: ${node.right}")
 
-		return context.symbols.get(scope.thisScope, node.right.name)
+		return context.symbols.get(receiver.thisScope, node.right.name)
 			?: error("Unresolved symbol: ${node.right.name}")
 	}
 
@@ -182,6 +201,13 @@ class Resolver(private val context: CompilerContext) {
 	}
 
 
+
+	private fun Symbol.endResolve() {
+		resolving = false
+		resolved = true
+	}
+
+
 	
 	private fun resolveType(node: TypeNode): Type {
 		val firstType = when {
@@ -196,7 +222,7 @@ class Resolver(private val context: CompilerContext) {
 		resolveType(firstType)
 
 		val type = if(node.arrayCount != null)
-			ArrayType(SymBase.empty(true), firstType, resolveInt(node.arrayCount).toInt())
+			ArraySymbol(SymBase.empty(true), firstType, resolveInt(node.arrayCount).toInt())
 		else
 			firstType
 
@@ -207,39 +233,37 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveType(type: Type) {
-		if(type.beginResolve()) return
-
 		when(type) {
 			is EnumSymbol    -> resolveEnum(type)
 			is TypedefSymbol -> resolveTypedef(type)
 			is StructSymbol  -> resolveStruct(type)
-			else             -> error("Invalid type: $type")
 		}
-
-		type.resolving = false
 	}
 
 
 
 	private fun resolveConst(symbol: ConstSymbol) {
+		if(symbol.beginResolve()) return
 		val node = symbol.node as ConstNode
 		resolveNode(node.value)
 		symbol.intValue = resolveInt(node.value)
-		symbol.resolved = true
+		symbol.endResolve()
 	}
 
 
 
 	private fun resolveTypedef(symbol: TypedefSymbol) {
+		if(symbol.beginResolve()) return
 		val node = symbol.node as TypedefNode
 		val type = resolveType(node.value)
 		symbol.type = type
-		symbol.resolved = true
+		symbol.endResolve()
 	}
 
 
 
 	private fun resolveEnum(enumSymbol: EnumSymbol) {
+		if(enumSymbol.beginResolve()) return
 		pushScope(enumSymbol.thisScope)
 		val enumNode = enumSymbol.node as EnumNode
 		var current = if(enumSymbol.isBitmask) 1L else 0L
@@ -247,7 +271,6 @@ class Resolver(private val context: CompilerContext) {
 
 		for(node in enumNode.entries) {
 			val symbol = node.symbol
-			if(symbol.beginResolve()) continue
 
 			if(node.value == null) {
 				symbol.intValue = current
@@ -260,7 +283,6 @@ class Resolver(private val context: CompilerContext) {
 			}
 
 			max = max.coerceAtLeast(symbol.intValue)
-			symbol.resolving = false
 			symbol.resolved = true
 		}
 
@@ -271,25 +293,25 @@ class Resolver(private val context: CompilerContext) {
 			else        -> 8
 		}
 
-		enumSymbol.resolved = true
 		popScope()
+		enumSymbol.endResolve()
 	}
 
 
 
 	private fun resolveStruct(structSymbol: StructSymbol) {
+		if(structSymbol.beginResolve()) return
 		val structNode = structSymbol.node as StructNode
 		var offset = 0
 		var maxAlignment = 0
 
 		for(member in structNode.members) {
 			val symbol = member.symbol
-			symbol.beginResolve()
 			val type = resolveType(member.type)
 			val size = type.size
 			symbol.type = type
 			symbol.size = size
-			val alignment = size.coerceAtMost(8)
+			val alignment = type.alignment.coerceAtMost(8)
 			maxAlignment = max(alignment, maxAlignment)
 			offset = (offset + alignment - 1) and -alignment
 			symbol.offset = offset
@@ -297,9 +319,10 @@ class Resolver(private val context: CompilerContext) {
 			symbol.intValue = symbol.offset.toLong()
 			symbol.resolved = true
 		}
-		
+
 		structSymbol.size = (offset + maxAlignment - 1) and -maxAlignment
-		structSymbol.resolved = true
+		structSymbol.alignment = maxAlignment
+		structSymbol.endResolve()
 	}
 
 
@@ -312,16 +335,14 @@ class Resolver(private val context: CompilerContext) {
 	
 	private fun resolveIntSymbol(symbol: Symbol): Long {
 		if(symbol !is IntSymbol) error("Invalid symbol: $symbol")
-		if(symbol.beginResolve()) return symbol.intValue
 
 		when(symbol) {
 			is ConstSymbol     -> resolveConst(symbol)
-			is EnumEntrySymbol -> resolveEnum(symbol.parent<EnumSymbol>())
-			is MemberSymbol    -> resolveStruct(symbol.parent<StructSymbol>())
+			is EnumEntrySymbol -> if(!symbol.resolved) resolveEnum(symbol.parent<EnumSymbol>())
+			is MemberSymbol    -> if(!symbol.resolved) resolveStruct(symbol.parent<StructSymbol>())
 			else               -> error("Invalid symbol: $symbol")
 		}
 
-		symbol.resolving = false
 		return symbol.intValue
 	}
 
@@ -334,7 +355,6 @@ class Resolver(private val context: CompilerContext) {
 		is SymNode    -> resolveIntSymbol(resolveSymbol(node))
 		else          -> error("Invalid node: $node")
 	}
-
 
 
 }

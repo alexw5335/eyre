@@ -50,6 +50,6 @@ val AstNode.printString: String get() = when(this) {
 
 
 val Type.printString get(): String = when(this) {
-	is ArrayType -> "${type.printString}[$size]"
+	is ArraySymbol -> "${type.printString}[$size]"
 	else -> qualifiedName
 }
