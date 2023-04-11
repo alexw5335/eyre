@@ -98,10 +98,8 @@ class Linker(private val context: CompilerContext) {
 
 
 	private fun writeSections() {
-		if(context.textWriter.isNotEmpty) {
-			writer.bytes(context.textWriter)
-			writeSection(Section.TEXT, ".text", 0x60000020, context.textWriter.pos, 0)
-		}
+		writer.bytes(context.textWriter)
+		writeSection(Section.TEXT, ".text", 0x60000020, context.textWriter.pos, 0)
 
 		if(context.dataWriter.isNotEmpty) {
 			writer.bytes(context.dataWriter)

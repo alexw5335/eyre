@@ -2,6 +2,7 @@ package eyre
 
 import eyre.Mnemonic.*
 import eyre.Width.*
+import eyre.util.NativeWriter
 
 class Assembler(private val context: CompilerContext) {
 
@@ -9,6 +10,8 @@ class Assembler(private val context: CompilerContext) {
 	private val textWriter = context.textWriter
 
 	private val dataWriter = context.dataWriter
+
+	private val epilogueWriter = NativeWriter()
 
 	private var writer = textWriter
 
@@ -20,11 +23,13 @@ class Assembler(private val context: CompilerContext) {
 		for(srcFile in context.srcFiles) {
 			for(node in srcFile.nodes) {
 				when(node) {
-					is InsNode        -> handleInstruction(node)
-					is LabelNode      -> handleLabel(node.symbol)
-					is ProcNode       -> handleLabel(node.symbol)
-					is ScopeEndNode   -> handleScopeEnd(node)
-					else              -> { }
+					is InsNode       -> handleInstruction(node)
+					is LabelNode     -> handleLabel(node.symbol)
+					is ProcNode      -> handleProc(node)
+					is ScopeEndNode  -> handleScopeEnd(node)
+					is VarResNode    -> handleVarRes(node)
+					is VarDbNode     -> handleVarDb(node)
+					else             -> { }
 				}
 			}
 		}
@@ -56,6 +61,89 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun handleVarRes(node: VarResNode) {
+		val size = node.symbol.type.size
+		context.bssSize = (context.bssSize + 7) and -8
+		node.symbol.pos = context.bssSize
+		context.bssSize += size
+	}
+
+
+
+	private fun handleVarDb(node: VarDbNode) {
+		dataWriter.align8()
+
+		node.symbol.pos = dataWriter.pos
+		for(part in node.parts) {
+			for(value in part.nodes) {
+				if(value is StringNode) {
+					for(char in value.value.string) {
+						dataWriter.writeWidth(part.width, char.code)
+					}
+				} else {
+					dataWriter.writeWidth(part.width, resolveImm(value))
+				}
+			}
+		}
+	}
+
+
+
+	private fun handleProc(node: ProcNode) {
+		handleLabel(node.symbol)
+		if(node.stackNodes.isEmpty()) return
+		val registers = ArrayList<Register>()
+		var toAlloc = 0
+		var hasAlloc = false
+
+		for(n in node.stackNodes) {
+			if(n is RegNode) {
+				registers.add(n.value)
+			} else {
+				hasAlloc = true
+				toAlloc += resolveImm(n).toInt()
+			}
+		}
+
+		if(hasAlloc) {
+			if(toAlloc.isImm8) {
+				writer.i32(0xEC_83_48 or (toAlloc shl 24))
+			} else {
+				writer.i24(0xEC_81_48)
+				writer.i32(toAlloc)
+			}
+		}
+
+		for(r in registers) {
+			writeRex(0, 0, 0, r.rex)
+			writer.i8(0x50 + r.value)
+		}
+
+		val prevWriter = writer
+		writer = epilogueWriter
+
+		for(i in registers.size - 1 downTo 0) {
+			val r = registers[i]
+			writeRex(0, 0, 0, r.rex)
+			writer.i8(0x58 + r.value)
+		}
+
+		if(hasAlloc) {
+			if(toAlloc.isImm8) {
+				writer.i32(0xC4_83_48 or (toAlloc shl 24))
+			} else {
+				writer.i24(0xC4_81_48)
+				writer.i32(toAlloc)
+			}
+		}
+
+		writer.i8(0xC3)
+
+		writer = prevWriter
+	}
+
+
+
 	private fun handleLabel(symbol: PosSymbol) {
 		symbol.pos = writer.pos
 		if(symbol.name == Names.MAIN) {
@@ -68,8 +156,14 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun handleScopeEnd(node: ScopeEndNode) {
-		if(node.symbol is ProcSymbol)
+		if(node.symbol is ProcSymbol) {
+			if(node.symbol.hasStackNodes) {
+				encodeRETURN()
+				epilogueWriter.clear()
+			}
+
 			node.symbol.size = writer.pos - node.symbol.pos
+		}
 	}
 
 
@@ -257,6 +351,12 @@ class Assembler(private val context: CompilerContext) {
 		}
 
 		if(symbol is IntSymbol) return symbol.intValue
+
+		if(symbol is VarAliasSymbol)
+			return resolveMemRec((symbol.node as VarAliasNode).value, regValid)
+
+		if(symbol is AliasRefSymbol)
+			return resolveMemRec(symbol.value, regValid) + symbol.offset
 
 		invalidEncoding()
 	}
@@ -636,6 +736,7 @@ class Assembler(private val context: CompilerContext) {
 		CLD    -> byte(0xFC)
 		STD    -> byte(0xFD)
 		PAUSE  -> word(0x90F3)
+		RETURN -> encodeRETURN()
 		else   -> invalidEncoding()
 	}}
 
@@ -1278,11 +1379,19 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encodeDLLCALL(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
 		val op1 = node.op1 as? NameNode ?: invalidEncoding()
 		op1.symbol = context.getDllImport(op1.name)
 		if(op1.symbol == null) error("Unrecognised dll import: ${op1.name}")
 		encodeCALL(op1)
+	}
+
+
+
+	private fun encodeRETURN() {
+		if(epilogueWriter.isEmpty)
+			writer.i8(0xC3)
+		else
+			writer.bytes(epilogueWriter)
 	}
 
 

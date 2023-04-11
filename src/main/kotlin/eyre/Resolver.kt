@@ -5,9 +5,11 @@ import kotlin.math.max
 class Resolver(private val context: CompilerContext) {
 
 
-	private var scopeStack = arrayOfNulls<Scope>(64)
+	private var scopeStack = Array(64) { Scopes.EMPTY }
 
 	private var scopeStackSize = 0
+
+	private var importStack = Array(64) { ArrayList<Symbol>() }
 
 
 
@@ -18,15 +20,51 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun pushScope(scope: Scope) {
-		if(scopeStackSize >= scopeStack.size)
-			scopeStack = scopeStack.copyOf(scopeStackSize * 2)
 		scopeStack[scopeStackSize++] = scope
+
 	}
 
 
 
 	private fun popScope() {
+		importStack[scopeStackSize].clear()
 		scopeStackSize--
+	}
+
+
+
+	/*
+	Name resolution
+	 */
+
+
+
+	private fun resolveName(name: Name): Symbol {
+		for(i in scopeStackSize - 1 downTo 0) {
+			val scope = scopeStack[i]
+			context.symbols.get(scope, name)?.let { return it }
+		}
+
+		for(i in scopeStackSize - 1 downTo 0) {
+			for(import in importStack[i]) {
+				if(import is ScopedSymbol) {
+					context.symbols.get(import.thisScope, name)?.let { return it }
+				}
+			}
+		}
+
+		error("Unresolved symbol: $name")
+	}
+
+
+
+	private fun resolveNames(names: Array<Name>): Symbol {
+		var symbol = resolveName(names[0])
+		for(i in 1 until names.size) {
+			if(symbol !is ScopedSymbol) error("Invalid receiver: $symbol")
+			symbol = context.symbols.get(symbol.thisScope, names[i]) ?: error("Unresolved symbol: ${names[i]}")
+		}
+		return symbol
 	}
 
 
@@ -43,156 +81,256 @@ class Resolver(private val context: CompilerContext) {
 		for(srcFile in context.srcFiles) {
 			val prev = scopeStackSize
 			scopeStackSize = 1
-
-			for(node in srcFile.nodes) {
-				when(node) {
-					is NamespaceNode -> pushScope(node.symbol.thisScope)
-					is ProcNode      -> pushScope(node.symbol.thisScope)
-					is ScopeEndNode  -> popScope()
-					is InsNode       -> resolveIns(node)
-					is VarResNode    -> if(!node.symbol.resolved) resolveVarRes(node)
-					is TypedefNode   -> resolveTypedef(node.symbol)
-					is ConstNode     -> resolveConst(node.symbol)
-					is EnumNode      -> resolveEnum(node.symbol)
-					is StructNode    -> resolveStruct(node.symbol)
-					else             -> continue
-				}
-			}
-
+			for(node in srcFile.nodes)
+				resolveNode(node)
 			scopeStackSize = prev
 		}
-	}
 
-
-
-	private fun resolveVarRes(node: VarResNode) {
-		node.symbol.type = resolveType(node.type)
-	}
-
-
-
-	private fun resolveIns(node: InsNode) {
-		if(node.mnemonic == Mnemonic.DLLCALL) return
-		resolveNode(node.op1 ?: return)
-		resolveNode(node.op2 ?: return)
-		resolveNode(node.op3 ?: return)
-		resolveNode(node.op4 ?: return)
-	}
-
-
-
-	private fun resolveNode(node: AstNode) { when(node) {
-		is UnaryNode  -> resolveNode(node.node)
-		is BinaryNode -> { resolveNode(node.left); resolveNode(node.right) }
-		is MemNode    -> resolveNode(node.value)
-		is NameNode   -> resolveName(node)
-		is DotNode    -> resolveDot(node)
-		is RefNode    -> resolveRef(node)
-		else          -> return
-	}}
-
-
-
-	private fun resolveSymbol(node: SymNode): Symbol = when(node) {
-		is NameNode  -> resolveName(node)
-		is DotNode   -> resolveDot(node)
-		is RefNode   -> resolveRef(node)
-		else         -> error("Invalid node: $node")
+		for(srcFile in context.srcFiles)
+			for(node in srcFile.nodes)
+				resolveNode2(node)
 	}
 
 
 
 	/*
-	Symbol node resolution
+	Node symbol resolution
 	 */
 
 
 
-	private fun resolveSymbol(name: Name): Symbol {
-		for(i in scopeStackSize - 1 downTo 0) {
-			val scope = scopeStack[i]!!
-			context.symbols.get(scope, name)?.let { return it }
+	private fun resolveNode(node: AstNode) {
+		when(node) {
+			is ImportNode    -> {
+				importStack[scopeStackSize].add(resolveNames(node.names))
+			}
+			is NamespaceNode -> pushScope(node.symbol.thisScope)
+			is ProcNode      -> {
+				pushScope(node.symbol.thisScope)
+				node.stackNodes.forEach(::resolveNode)
+			}
+			is ScopeEndNode  -> popScope()
+			is InsNode -> {
+				if(node.mnemonic.isPseudo) return
+				resolveNode(node.op1 ?: return)
+				resolveNode(node.op2 ?: return)
+				resolveNode(node.op3 ?: return)
+				resolveNode(node.op4 ?: return)
+			}
+			is VarResNode -> node.symbol.type = resolveTypeNode(node.type)
+			is VarDbNode -> {
+				if(node.type != null) node.symbol.type = resolveTypeNode(node.type)
+				for(part in node.parts)
+					for(n in part.nodes)
+						resolveNode(n)
+			}
+			is VarAliasNode -> {
+				node.symbol.type = resolveTypeNode(node.type)
+				resolveNode(node.value)
+			}
+			is ConstNode -> resolveNode(node.value)
+			is StructNode ->
+				for(member in node.members)
+					member.symbol.type = resolveTypeNode(member.type)
+			is EnumNode -> {
+				pushScope(node.symbol.thisScope)
+				for(entry in node.entries)
+					entry.value?.let(::resolveNode)
+				popScope()
+			}
+			is TypedefNode -> node.symbol.type = resolveTypeNode(node.value)
+			is UnaryNode  -> resolveNode(node.node)
+			is BinaryNode -> { resolveNode(node.left); resolveNode(node.right) }
+			is MemNode    -> resolveNode(node.value)
+			is NameNode   -> resolveName(node)
+			is DotNode    -> resolveDot(node)
+			is RefNode    -> resolveNode(node.left)
+			else -> return
 		}
-
-		error("Unresolved symbol: $name")
 	}
 
 
 
-	private fun resolveSymbol(names: Array<Name>): Symbol {
-		var symbol = resolveSymbol(names[0])
-		for(i in 1 until names.size) {
-			if(symbol !is ScopedSymbol) error("Invalid receiver: $symbol")
-			symbol = context.symbols.get(symbol.thisScope, names[i]) ?: error("Unresolved symbol: ${names[i]}")
+	private fun resolveTypeNode(node: TypeNode): Type {
+		var symbol = when {
+			node.name != null  -> resolveName(node.name)
+			node.names != null -> resolveNames(node.names)
+			else               -> error("Invalid type node")
 		}
+
+		if(symbol !is Type) error("Invalid type: $symbol")
+
+		symbol = if(node.arrayCount != null)
+			ArraySymbol(SymBase(Scopes.EMPTY, Names.EMPTY, true), symbol)
+		else
+			symbol
+
+		node.symbol = symbol
+
+		return symbol as Type
+	}
+
+
+
+	private fun resolveDot(node: DotNode): Symbol? {
+		val receiver: Symbol? = when(node.left) {
+			is NameNode -> resolveName(node.left)
+			is DotNode  -> resolveDot(node.left)
+			else        -> error("Invalid receiver: ${node.left}")
+		}
+
+		if(receiver !is ScopedSymbol) return null
+
+		if(node.right !is NameNode) error("Invalid node: ${node.right}")
+
+		val symbol = context.symbols.get(receiver.thisScope, node.right.name)
+			?: error("Unresolved symbol: ${node.right.name}")
+
+		node.right.symbol = symbol
+
 		return symbol
 	}
 
 
 
-	private fun resolveDot(node: DotNode): Symbol {
-		val receiver = when(node.left) {
-			is NameNode -> resolveSymbol(node.left.name)
-			is DotNode  -> resolveDot(node.left)
-			else        -> error("Invalid receiver: ${node.left.printString}")
-		}
-
-		if(receiver is TypedSymbol) {
-			val receiverType = receiver.type
-			resolveType(receiverType)
-
-			if(receiverType !is ScopedSymbol || receiver !is PosSymbol)
-				error("Invalid receiver")
-
-			val right = context.symbols.get(
-				receiverType.thisScope,
-				(node.right as? NameNode)?.name ?: error("Invalid node")
-			)
-
-			if(right is MemberSymbol) {
-				return RefSymbol(receiver, right.offset, right.type)
-			} else {
-				error("Invalid symbol: $right")
-			}
-		}
-
-		if(receiver !is ScopedSymbol)
-			error("Invalid receiver: $receiver")
-
-		if(node.right !is NameNode)
-			error("Invalid node: ${node.right}")
-
-		return context.symbols.get(receiver.thisScope, node.right.name)
-			?: error("Unresolved symbol: ${node.right.name}")
-	}
-
-
-
 	private fun resolveName(node: NameNode): Symbol {
-		val symbol = resolveSymbol(node.name)
+		val symbol = resolveName(node.name)
 		node.symbol = symbol
 		return symbol
 	}
 
 
 
-	private fun resolveRef(node: AstNode): Symbol {
-		error("Invalid node: $node")
-	}
-
-
-
 	/*
-	Symbol resolution
+	Type resolution
 	 */
 
 
 
-	private inline fun<reified T : ScopedSymbol> Symbol.parent() = 
+	private fun resolveNode2(node: AstNode) {
+		when(node) {
+			is NamespaceNode -> pushScope(node.symbol.thisScope)
+			is ProcNode      -> {
+				pushScope(node.symbol.thisScope)
+				node.stackNodes.forEach(::resolveNode2)
+			}
+			is ScopeEndNode  -> popScope()
+
+			is InsNode -> {
+				if(node.mnemonic.isPseudo) return
+				resolveNode2(node.op1 ?: return)
+				resolveNode2(node.op2 ?: return)
+				resolveNode2(node.op3 ?: return)
+				resolveNode2(node.op4 ?: return)
+			}
+
+			is VarDbNode -> {
+				for(part in node.parts)
+					for(n in part.nodes)
+						resolveNode2(n)
+			}
+
+			is VarAliasNode -> resolveNode2(node.value)
+
+			is UnaryNode  -> resolveNode2(node.node)
+			is BinaryNode -> { resolveNode2(node.left); resolveNode2(node.right) }
+			is MemNode    -> resolveNode2(node.value)
+			is DotNode    -> resolveDot2(node)
+			is RefNode    -> {
+				resolveNode2(node.left)
+				val left = node.left.symbol!!
+
+				when(val name = node.right.name) {
+					Names.SIZE -> when(left) {
+						is VarDbSymbol ->
+							node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
+						is VarResSymbol -> {
+							resolveType(left.type)
+							node.right.symbol = IntSymbol(SymBase.EMPTY, left.type.size.toLong())
+						}
+						is Type -> {
+							resolveType(left)
+							node.right.symbol = IntSymbol(SymBase.EMPTY, left.size.toLong())
+						}
+					}
+
+					Names.COUNT -> when(left) {
+						is EnumSymbol -> node.right.symbol = IntSymbol(SymBase.EMPTY, left.entries.size.toLong())
+						else -> error("Invalid reference: $name")
+					}
+
+					else -> error("Invalid reference: $name")
+				}
+			}
+
+			is ConstNode   -> resolveConst(node.symbol)
+			is TypedefNode -> resolveTypedef(node.symbol)
+			is EnumNode    -> resolveEnum(node.symbol)
+			is StructNode  -> resolveStruct(node.symbol)
+
+			else -> return
+		}
+	}
+
+
+
+	private inline fun<reified T : ScopedSymbol> Symbol.parent() =
 		context.parentMap[scope] as? T ?: error("Symbol has no parent of type ${T::class.simpleName}: $this")
-	
-	
-	
+
+
+
+	private fun resolveDot2(node: DotNode): Symbol {
+		if(node.symbol != null) return node.symbol
+
+		val receiver: Symbol = when(node.left) {
+			is NameNode -> resolveName(node.left)
+			is DotNode  -> resolveDot2(node.left)
+			else        -> error("Invalid receiver: ${node.left}")
+		}
+
+		if(receiver is VarAliasSymbol) {
+			val receiverType = receiver.type
+
+			if(receiverType !is ScopedSymbol) error("")
+
+			val invoker = context.symbols.get(
+				receiverType.thisScope,
+				(node.right as? NameNode)?.name ?: error("Invalid node")
+			)
+
+			val symbol = when(invoker) {
+				is MemberSymbol -> AliasRefSymbol((receiver.node as VarAliasNode).value, invoker.offset)
+				else -> error("Invalid symbol: $invoker")
+			}
+
+			node.right.symbol = symbol
+
+			return symbol
+		}
+
+		if(receiver !is TypedSymbol || receiver !is PosSymbol) error("Invalid receiver")
+
+		val receiverType = receiver.type
+
+		if(receiverType !is ScopedSymbol) error("")
+
+		val invoker = context.symbols.get(
+			receiverType.thisScope,
+			(node.right as? NameNode)?.name ?: error("Invalid node")
+		)
+
+		val symbol = when(invoker) {
+			is MemberSymbol -> RefSymbol(receiver, invoker.offset, invoker.type)
+			else -> error("Invalid symbol: $invoker")
+		}
+
+		node.right.symbol = symbol
+
+		return symbol
+	}
+
+
+
 	private fun Symbol.beginResolve(): Boolean {
 		if(resolved) return true
 		if(resolving) error("Circular dependency: ${this.qualifiedName}")
@@ -208,32 +346,10 @@ class Resolver(private val context: CompilerContext) {
 	}
 
 
-	
-	private fun resolveType(node: TypeNode): Type {
-		val firstType = when {
-			node.name != null  -> resolveSymbol(node.name)
-			node.names != null -> resolveSymbol(node.names)
-			else               -> error("Invalid type node")
-		}
-
-		if(firstType !is Type)
-			error("Invalid type: $firstType")
-
-		resolveType(firstType)
-
-		val type = if(node.arrayCount != null)
-			ArraySymbol(SymBase.empty(true), firstType, resolveInt(node.arrayCount).toInt())
-		else
-			firstType
-
-		resolveType(type)
-		return type
-	}
-
-
 
 	private fun resolveType(type: Type) {
 		when(type) {
+			is ArraySymbol   -> resolveType(type.type)
 			is EnumSymbol    -> resolveEnum(type)
 			is TypedefSymbol -> resolveTypedef(type)
 			is StructSymbol  -> resolveStruct(type)
@@ -242,10 +358,10 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+
 	private fun resolveConst(symbol: ConstSymbol) {
 		if(symbol.beginResolve()) return
 		val node = symbol.node as ConstNode
-		resolveNode(node.value)
 		symbol.intValue = resolveInt(node.value)
 		symbol.endResolve()
 	}
@@ -254,9 +370,7 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun resolveTypedef(symbol: TypedefSymbol) {
 		if(symbol.beginResolve()) return
-		val node = symbol.node as TypedefNode
-		val type = resolveType(node.value)
-		symbol.type = type
+		resolveType(symbol.type)
 		symbol.endResolve()
 	}
 
@@ -307,7 +421,8 @@ class Resolver(private val context: CompilerContext) {
 
 		for(member in structNode.members) {
 			val symbol = member.symbol
-			val type = resolveType(member.type)
+			val type = symbol.type
+			resolveType(type)
 			val size = type.size
 			symbol.type = type
 			symbol.size = size
@@ -332,7 +447,7 @@ class Resolver(private val context: CompilerContext) {
 	 */
 
 
-	
+
 	private fun resolveIntSymbol(symbol: Symbol): Long {
 		if(symbol !is IntSymbol) error("Invalid symbol: $symbol")
 
@@ -352,7 +467,8 @@ class Resolver(private val context: CompilerContext) {
 		is IntNode    -> node.value
 		is UnaryNode  -> node.op.calculate(resolveInt(node.node))
 		is BinaryNode -> node.op.calculate(resolveInt(node.left), resolveInt(node.right))
-		is SymNode    -> resolveIntSymbol(resolveSymbol(node))
+		is DotNode    -> resolveIntSymbol(resolveDot2(node))
+		is SymNode    -> resolveIntSymbol(node.symbol!!)
 		else          -> error("Invalid node: $node")
 	}
 

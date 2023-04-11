@@ -79,6 +79,8 @@ interface AnonSymbol : Symbol {
 
 
 
+class AliasRefSymbol(val value: AstNode, val offset: Int) : AnonSymbol
+
 class RefSymbol(val receiver: PosSymbol, val offset: Int, override val type: Type): AnonSymbol, PosSymbol, TypedSymbol {
 	override var pos
 		set(_) = error("Cannot set ref symbol pos")
@@ -102,7 +104,8 @@ abstract class IntegerType(name: String, override val size: Int) : Type {
 
 
 
-class ArraySymbol(override val base: SymBase, override val type: Type, var count: Int): Type, TypedSymbol {
+class ArraySymbol(override val base: SymBase, override val type: Type): Type, TypedSymbol {
+	var count = 0
 	override val size get() = type.size * count
 	override val alignment = type.alignment
 }
@@ -153,6 +156,20 @@ class VarResSymbol(
 	override var pos = 0
 }
 
+class VarDbSymbol(
+	override val base : SymBase,
+	val size          : Int,
+	override var type : Type = VoidType
+) : TypedSymbol, PosSymbol {
+	override var section = Section.DATA
+	override var pos = 0
+}
+
+class VarAliasSymbol(
+	override val base : SymBase,
+	override var type : Type = VoidType
+) : TypedSymbol
+
 
 
 class MemberSymbol(
@@ -185,7 +202,8 @@ class Namespace(
 
 class ProcSymbol(
 	override val base: SymBase,
-	override val thisScope: Scope
+	override val thisScope: Scope,
+	val hasStackNodes: Boolean
 ) : ScopedSymbol, PosSymbol {
 	override var section = Section.TEXT
 	override var pos = 0

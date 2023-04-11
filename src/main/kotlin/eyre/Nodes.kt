@@ -38,9 +38,11 @@ Nodes
 
 
 
-class TypeNode(val name: Name?, val names: Array<Name>?, val arrayCount: AstNode?) : AstNode
+class TypeNode(val name: Name?, val names: Array<Name>?, val arrayCount: AstNode?) : SymNode {
+	override var symbol: Symbol? = null
+}
 
-class ImportNode(val import: SymNode) : AstNode
+class ImportNode(val names: Array<Name>) : AstNode
 
 class ArrayNode(val receiver: AstNode, val index: AstNode?) : SymNode {
 	override var symbol: Symbol? = null
@@ -62,7 +64,7 @@ class StringNode(val value: Name) : AstNode, OpNode
 
 class LabelNode(val symbol: LabelSymbol) : SymContainerNode(symbol)
 
-class ProcNode(val symbol: ProcSymbol) : SymContainerNode(symbol)
+class ProcNode(val symbol: ProcSymbol, val stackNodes: List<AstNode>) : SymContainerNode(symbol)
 
 class MemNode(val width: Width?, val value: AstNode) : OpNode
 
@@ -84,7 +86,7 @@ class NamesNode(val names: Array<Name>, override var symbol: Symbol? = null) : S
 
 class DotNode(val left: AstNode, val right: SymNode) : SymNode by right, OpNode
 
-class RefNode(val left: SymNode, val right: SymNode) : SymNode by right, OpNode
+class RefNode(val left: SymNode, val right: NameNode) : SymNode by right, OpNode
 
 class MemberNode(val symbol: MemberSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
@@ -101,6 +103,12 @@ class InsNode(
 ) : AstNode
 
 class VarResNode(val symbol: VarResSymbol, val type: TypeNode) : SymContainerNode(symbol)
+
+class DbPart(val width: Width, val nodes: List<AstNode>) : AstNode
+
+class VarDbNode(val symbol: VarDbSymbol, val type: TypeNode?, val parts: List<DbPart>) : SymContainerNode(symbol)
+
+class VarAliasNode(val symbol: VarAliasSymbol, val type: TypeNode, val value: AstNode) : SymContainerNode(symbol)
 
 
 

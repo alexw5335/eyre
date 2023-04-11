@@ -1,6 +1,7 @@
 package eyre.util
 
 import java.nio.charset.Charset
+import java.util.*
 import kotlin.math.max
 import kotlin.math.min
 
@@ -33,6 +34,18 @@ class NativeWriter(bytes: ByteArray) {
 	/*
 	Position
 	 */
+
+
+
+	fun reset() {
+		pos = 0
+	}
+
+
+
+	fun clear() {
+		Arrays.fill(bytes, 0)
+	}
 
 
 

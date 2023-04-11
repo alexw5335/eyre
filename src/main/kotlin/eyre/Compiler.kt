@@ -40,6 +40,11 @@ class Compiler(private val context: CompilerContext) {
 
 		Resolver(context).resolve()
 		//printResolution()
+		Assembler(context).assemble()
+		Linker(context).link()
+		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
+		//dumpbin()
+		disassemble()
 	}
 
 
@@ -54,10 +59,7 @@ class Compiler(private val context: CompilerContext) {
 		val process = Runtime.getRuntime().exec(params)
 		val reader = BufferedReader(InputStreamReader(process.inputStream))
 
-		while(true) {
-			val line = reader.readLine()
-			println(line ?: break)
-		}
+		while(true) println(reader.readLine() ?: break)
 
 		process.errorReader().readText().let {
 			if(it.isNotEmpty()) {

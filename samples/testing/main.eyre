@@ -1,7 +1,24 @@
 namespace main
 
-var paint: winapi.PaintStruct
 
-proc main {
-	lea rax, [paint.rect.left]
+
+// rcx: data
+// rdx: length
+proc print(56) {
+	mov r8, rdx
+	mov rdx, rcx
+	mov ecx, -11
+	lea r9, [rsp + 40]
+	mov qword [rsp + 32], 0
+	dllcall WriteFile
+}
+
+
+
+proc main(40) {
+	var message db "Message"
+	lea rcx, [message]
+	mov edx, message::size
+	call print
+	dllcall ExitProcess
 }

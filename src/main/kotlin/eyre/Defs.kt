@@ -6,7 +6,7 @@ import java.nio.file.Path
 
 
 
-enum class Mnemonic {
+enum class Mnemonic(val isPseudo: Boolean = false) {
 	ADD, OR, ADC, SBB, AND,
 	SUB, XOR, CMP, PUSH,
 	POP, PUSHW, POPW, MOVSXD,
@@ -54,7 +54,8 @@ enum class Mnemonic {
 
 	BSR, BSF,
 
-	DLLCALL;
+	DLLCALL(isPseudo = true),
+	RETURN(isPseudo = true);
 
 	val string = name.lowercase()
 

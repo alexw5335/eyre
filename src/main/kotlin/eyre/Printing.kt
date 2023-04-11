@@ -44,6 +44,26 @@ val AstNode.printString: String get() = when(this) {
 		append("}")
 	}
 
+	is VarDbNode -> buildString {
+		append("var ")
+		append(symbol.name)
+		if(type != null) {
+			append(": ")
+			append(type.printString)
+		}
+		for(part in parts) {
+			append("\n\t")
+			append(part.width.varString)
+			append(' ')
+			for((i, n) in part.nodes.withIndex()) {
+				append(n.printString)
+				if(i < part.nodes.size - 1)
+					append(", ")
+			}
+		}
+
+	}
+
 	else -> toString()
 }
 
