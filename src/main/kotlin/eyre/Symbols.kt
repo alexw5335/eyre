@@ -165,6 +165,14 @@ class VarDbSymbol(
 	override var pos = 0
 }
 
+class VarInitSymbol(
+	override val base: SymBase,
+	override var type: Type = VoidType
+) : TypedSymbol, PosSymbol {
+	override var section = Section.DATA
+	override var pos = 0
+}
+
 class VarAliasSymbol(
 	override val base : SymBase,
 	override var type : Type = VoidType

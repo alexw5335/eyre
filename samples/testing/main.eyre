@@ -2,23 +2,27 @@ namespace main
 
 
 
-// rcx: data
-// rdx: length
-proc print(56) {
-	mov r8, rdx
-	mov rdx, rcx
-	mov ecx, -11
-	lea r9, [rsp + 40]
-	mov qword [rsp + 32], 0
-	dllcall WriteFile
+struct Rect {
+	i32 top
+	i32 right
+	i32 bottom
+	i32 left
 }
 
 
 
+struct Rect2 {
+	Rect padding
+	Rect border
+	Rect margin
+}
+
+
+var rect: Rect { 10, 10, 10, 10, }
+var rec2: Rect2 { { 1, 1, 1, 1 }, { 2, 2, 2, 2 }, { 3, 3, 3, 3 } }
+
+
+
 proc main(40) {
-	var message db "Message"
-	lea rcx, [message]
-	mov edx, message::size
-	call print
 	dllcall ExitProcess
 }

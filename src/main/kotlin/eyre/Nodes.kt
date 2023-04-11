@@ -110,6 +110,10 @@ class VarDbNode(val symbol: VarDbSymbol, val type: TypeNode?, val parts: List<Db
 
 class VarAliasNode(val symbol: VarAliasSymbol, val type: TypeNode, val value: AstNode) : SymContainerNode(symbol)
 
+class VarInitNode(val symbol: VarInitSymbol, val type: TypeNode, val inits: List<AstNode>) : SymContainerNode(symbol)
+
+class EqualsNode(val left: SymNode, val right: AstNode) : AstNode
+
 
 
 /*

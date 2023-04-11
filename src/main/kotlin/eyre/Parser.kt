@@ -368,6 +368,14 @@ class Parser(private val context: CompilerContext) {
 			val symbol = VarAliasSymbol(SymBase(name)).add()
 			VarAliasNode(symbol, type ?: error("Expecting type"), value).add()
 			expectTerminator()
+		} else if(first == SymToken.LBRACE) {
+			pos++
+
+			while() {
+
+			}
+
+			expect(SymToken.RBRACE)
 		} else if(atTerminator()) {
 			val symbol = VarResSymbol(SymBase(name)).add()
 			VarResNode(symbol, type ?: error("Expecting type")).add()
