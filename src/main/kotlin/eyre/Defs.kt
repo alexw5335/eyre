@@ -252,38 +252,40 @@ enum class UnaryOp(
 enum class BinaryOp(
 	val symbol     : String?,
 	val precedence : Int,
-	val calculate  : (Long, Long) -> Long
+	val calculate  : (Long, Long) -> Long = { _, _ -> 0L }
 ) {
 
-	ARR (null,  9, { _, _ -> 0L }),
-	DOT (null,  9, { _, _ -> 0L }),
+	ARR (null,  10),
+	DOT (null,  10),
 
-	REF (null,  8, { _,_ -> 0L }),
+	REF (null,  9),
 
-	MUL ("*",   7, { a, b -> a * b }),
-	DIV ("/",   7, { a, b -> a / b }),
+	MUL ("*",   8, { a, b -> a * b }),
+	DIV ("/",   8, { a, b -> a / b }),
 
-	ADD ("+",   6, { a, b -> a + b }),
-	SUB ("-",   6, { a, b -> a - b }),
+	ADD ("+",   7, { a, b -> a + b }),
+	SUB ("-",   7, { a, b -> a - b }),
 
-	SHL ("<<",  5, { a, b -> a shl b.toInt() }),
-	SHR (">>",  5, { a, b -> a shr b.toInt() }),
-	SAR (">>>", 5, { a, b -> a ushr b.toInt() }),
+	SHL ("<<",  6, { a, b -> a shl b.toInt() }),
+	SHR (">>",  6, { a, b -> a shr b.toInt() }),
+	SAR (">>>", 6, { a, b -> a ushr b.toInt() }),
 
-	GT  (">",   4, { a, b -> if(a > b) 1 else 0 }),
-	LT  ("<",   4, { a, b -> if(a < b) 1 else 0 }),
-	GTE (">=",  4, { a, b -> if(a >= b) 1 else 0 }),
-	LTE ("<=",  4, { a, b -> if(a <= b) 1 else 0 }),
+	GT  (">",   5, { a, b -> if(a > b) 1 else 0 }),
+	LT  ("<",   5, { a, b -> if(a < b) 1 else 0 }),
+	GTE (">=",  5, { a, b -> if(a >= b) 1 else 0 }),
+	LTE ("<=",  5, { a, b -> if(a <= b) 1 else 0 }),
 
-	EQ  ("==",  3, { a, b -> if(a == b) 1 else 0 }),
-	INEQ("!=",  3, { a, b -> if(a != b) 1 else 0 }),
+	EQ  ("==",  4, { a, b -> if(a == b) 1 else 0 }),
+	INEQ("!=",  4, { a, b -> if(a != b) 1 else 0 }),
 
-	AND ("&",   2, { a, b -> a and b }),
-	XOR ("^",   2, { a, b -> a xor b }),
-	OR  ("|",   2, { a, b -> a or b }),
+	AND ("&",   3, { a, b -> a and b }),
+	XOR ("^",   3, { a, b -> a xor b }),
+	OR  ("|",   3, { a, b -> a or b }),
 
-	LAND("&&",  1, { a, b -> if(a != 0L && b != 0L) 1 else 0 }),
-	LOR ("||",  1, { a, b -> if(a != 0L || b != 0L) 1 else 0 }),
+	LAND("&&",  2, { a, b -> if(a != 0L && b != 0L) 1 else 0 }),
+	LOR ("||",  2, { a, b -> if(a != 0L || b != 0L) 1 else 0 }),
+
+	SET("=", 1)
 
 
 }

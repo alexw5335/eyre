@@ -29,6 +29,7 @@ class Assembler(private val context: CompilerContext) {
 					is ScopeEndNode  -> handleScopeEnd(node)
 					is VarResNode    -> handleVarRes(node)
 					is VarDbNode     -> handleVarDb(node)
+					is VarInitNode   -> handleVarInit(node)
 					else             -> { }
 				}
 			}
@@ -83,6 +84,45 @@ class Assembler(private val context: CompilerContext) {
 				} else {
 					dataWriter.writeWidth(part.width, resolveImm(value))
 				}
+			}
+		}
+	}
+
+
+
+	private fun writeMember(member: MemberSymbol, value: AstNode) {
+		val offset = member.offset
+
+		when(member.type) {
+			is IntType -> {
+				val intValue = resolveImm(value)
+				when(member.type.size) {
+					1 -> dataWriter.i8(intValue.toInt())
+				}
+			}
+		}
+	}
+
+
+
+	private fun handleVarInit(node: VarInitNode) {
+		dataWriter.align8()
+
+		val type = node.symbol.type as? StructSymbol ?: error("Expecting struct")
+
+		node.symbol.pos = dataWriter.pos
+		var named = false
+		for((index, init) in node.inits.withIndex()) {
+			if(init is BinaryNode && init.op == BinaryOp.SET) {
+				named = true
+				val name = (init.left as? NameNode)?.name ?: error("Invalid member")
+				val member = context.symbols.get(type.thisScope, name) as? MemberSymbol ?: error("Invalid member")
+				writeMember(member, init.right)
+			} else if(named) {
+				error("Named arguments must be at the end")
+			} else {
+				val member = type.members[index]
+				writeMember(member, init)
 			}
 		}
 	}

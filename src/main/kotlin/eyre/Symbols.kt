@@ -98,7 +98,7 @@ Types
 
 
 
-abstract class IntegerType(name: String, override val size: Int) : Type {
+abstract class IntType(name: String, override val size: Int) : Type {
 	override val base = SymBase(Scopes.EMPTY, Names[name], resolved = true)
 }
 
@@ -112,13 +112,13 @@ class ArraySymbol(override val base: SymBase, override val type: Type): Type, Ty
 
 
 
-object ByteType : IntegerType("byte", 1)
+object ByteType : IntType("byte", 1)
 
-object WordType : IntegerType("word", 2)
+object WordType : IntType("word", 2)
 
-object DwordType : IntegerType("dword", 4)
+object DwordType : IntType("dword", 4)
 
-object QwordType : IntegerType("qword", 8)
+object QwordType : IntType("qword", 8)
 
 object VoidType : Type {
 	override val base = SymBase.EMPTY

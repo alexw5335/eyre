@@ -10,16 +10,7 @@ struct Rect {
 }
 
 
-
-struct Rect2 {
-	Rect padding
-	Rect border
-	Rect margin
-}
-
-
 var rect: Rect { 10, 10, 10, 10, }
-var rec2: Rect2 { { 1, 1, 1, 1 }, { 2, 2, 2, 2 }, { 3, 3, 3, 3 } }
 
 
 

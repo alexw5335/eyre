@@ -26,7 +26,7 @@ enum class SymToken(
 	MINUS      ("-", BinaryOp.SUB, UnaryOp.NEG),
 	ASTERISK   ("*", BinaryOp.MUL),
 	SLASH      ("/", BinaryOp.DIV),
-	EQUALS     ("="),
+	EQUALS     ("=", BinaryOp.SET),
 	COMMA      (","),
 	SEMICOLON  (";"),
 	COLON      (":"),

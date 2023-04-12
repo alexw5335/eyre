@@ -370,12 +370,18 @@ class Parser(private val context: CompilerContext) {
 			expectTerminator()
 		} else if(first == SymToken.LBRACE) {
 			pos++
+			val inits = ArrayList<AstNode>()
 
-			while() {
-
+			while(true) {
+				if(tokens[pos] == SymToken.RBRACE) break
+				inits.add(parseExpression())
+				if(tokens[pos] != SymToken.COMMA) break
+				pos++
 			}
 
-			expect(SymToken.RBRACE)
+			pos++
+			val symbol = VarInitSymbol(SymBase(name)).add()
+			VarInitNode(symbol, type ?: error("Expecting type"), inits).add()
 		} else if(atTerminator()) {
 			val symbol = VarResSymbol(SymBase(name)).add()
 			VarResNode(symbol, type ?: error("Expecting type")).add()

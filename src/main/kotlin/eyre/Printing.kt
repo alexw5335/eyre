@@ -61,7 +61,20 @@ val AstNode.printString: String get() = when(this) {
 					append(", ")
 			}
 		}
+	}
 
+	is VarInitNode -> buildString {
+		append("var ")
+		append(symbol.name)
+		append(": ")
+		append(type.printString)
+		append(" {")
+		for(init in inits) {
+			append("\n\t")
+			append(init.printString)
+			append(",")
+		}
+		append("\n}")
 	}
 
 	else -> toString()
