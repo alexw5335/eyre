@@ -51,6 +51,12 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun<T : AstNode> T.add2(): T {
+		nodes.add(this)
+		context.typeNodes.add(this)
+		return this
+	}
+
 	private fun<T : AstNode> T.add(): T {
 		nodes.add(this)
 		return this
@@ -158,7 +164,7 @@ class Parser(private val context: CompilerContext) {
 
 			atom = when(op) {
 				BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom, expression) }
-				BinaryOp.DOT -> DotNode(atom, expression.asSymNode)
+				BinaryOp.DOT -> DotNode(atom.asSymNode, expression.asSymNode)
 				BinaryOp.REF -> RefNode(atom.asSymNode, expression as? NameNode ?: error("Invalid reference"))
 				else         -> BinaryNode(op, atom, expression)
 			}
@@ -269,7 +275,7 @@ class Parser(private val context: CompilerContext) {
 		val value = parseExpression()
 		expectTerminator()
 		val symbol = ConstSymbol(SymBase(name)).add()
-		ConstNode(symbol, value).add()
+		ConstNode(symbol, value).add2()
 	}
 
 
@@ -427,7 +433,7 @@ class Parser(private val context: CompilerContext) {
 		expect(SymToken.RBRACE)
 
 		val symbol = EnumSymbol(SymBase(enumName), scope, entrySymbols, isBitmask).add()
-		EnumNode(symbol, entries).add()
+		EnumNode(symbol, entries).add2()
 		context.addParent(symbol)
 	}
 
@@ -464,14 +470,6 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseInt(): Int {
-		val value = (next() as? IntToken)?.value ?: error("Expecting integer")
-		if(value !in 0..Int.MAX_VALUE) error("Signed 32-bit integer out of range")
-		return value.toInt()
-	}
-
-
-
 	private fun parseStruct() {
 		val structName = id()
 		val scope = createScope(structName)
@@ -497,7 +495,7 @@ class Parser(private val context: CompilerContext) {
 		pos++
 
 		val symbol = StructSymbol(SymBase(structName), scope, memberSymbols).add()
-		StructNode(symbol, memberNodes).add()
+		StructNode(symbol, memberNodes).add2()
 		context.addParent(symbol)
 	}
 
@@ -509,7 +507,7 @@ class Parser(private val context: CompilerContext) {
 		val type = parseType()
 		expectTerminator()
 		val symbol = TypedefSymbol(SymBase(name), VoidType).add()
-		TypedefNode(symbol, type).add()
+		TypedefNode(symbol, type).add2()
 	}
 
 

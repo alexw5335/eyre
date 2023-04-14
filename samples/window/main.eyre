@@ -2,86 +2,91 @@ namespace main
 
 
 
-var cursor dq 0
-var class res winapi.WndClassA::size
-var className db "myClass"
-var hwnd dq 0
-var windowName db "My Window"
-var msg res winapi.Message::size
-var paintStruct res winapi.PaintStruct::size
+var cursor: qword
+var className db "MyClass"
+var hwnd: qword
+var windowName db "MyWindow"
+var msg: winapi.Message
+var class: winapi.WndClassA
+var paintStruct: winapi.PaintStruct
 
 
 
-proc wndProc {
-	sub rsp, 40
+proc createCursor(40) {
+	xor ecx, ecx
+	mov edx, winapi.Cursor.ARROW
+	dllcall LoadCursorA
+	cmp rax, 0
+	je fatal
+	mov [cursor], rax
+}
+
+
+
+proc fatal(40) {
+	var string db "Fatal error\0"
+	lea rcx, [string]
+	dllcall printf
+	dllcall ExitProcess
+}
+
+
+
+proc exit(40) {
+	var string db "Finished\0"
+	lea rcx, [string]
+	dllcall printf
+	dllcall ExitProcess
+}
+
+
+
+proc wndProc(40) {
 	cmp edx, winapi.MsgType.DESTROY
 	je destroy
 	cmp edx, winapi.MsgType.PAINT
 	je paint
 	dllcall DefWindowProcA
-	jmp end
+	return
 destroy:
 	xor ecx, ecx
 	dllcall PostQuitMessage
-	jmp end
+	return
 paint:
 	mov rcx, [hwnd]
 	lea rdx, [paintStruct]
 	dllcall BeginPaint
 	mov rcx, rax
-	lea rdx, [paintStruct + winapi.PaintStruct.left]
+	lea rdx, [paintStruct.rect.left]
 	mov r8d, winapi.Colour.WINDOW + 1
 	dllcall FillRect
-	mov rcx, [hwnd]
 	lea rdx, [paintStruct]
 	dllcall EndPaint
-	jmp end
-end:
-	add rsp, 40
-	ret
+	return
 }
 
 
 
-proc createCursor {
-	sub rsp, 40
-	xor ecx, ecx
-	mov edx, winapi.Cursor.ARROW
-	dllcall LoadCursorA
-	cmp rax, 0
-	je stdlib.fatal
-	mov [cursor], rax
-	add rsp, 40
-	ret
-}
-
-
-
-proc createClass {
-	sub rsp, 40
+proc createClass(40) {
 	lea rax, [className]
-	mov [class + winapi.WndClassA.className], rax
+	mov [class.className], rax
 	lea rax, [wndProc]
-	mov [class + winapi.WndClassA.wndProc], rax
+	mov [class.wndProc], rax
 	mov rax, [cursor]
-	mov [class + winapi.WndClassA.hCursor], rax
+	mov [class.hCursor], rax
 	lea rcx, [class]
 	dllcall RegisterClassA
 	cmp rax, 0
-	je stdlib.fatal
-	add rsp, 40
-	ret
+	je fatal
 }
 
 
 
-proc createWindow {
-	sub rsp, 32 + 64 + 8
-
+proc createWindow(32 + 64 + 8) {
 	xor ecx, ecx
-    lea rdx, [className]
-    lea r8, [windowName]
-    mov r9d, winapi.WindowStyle.OVERLAPPEDWINDOW
+	lea rdx, [className]
+	lea r8, [windowName]
+	mov r9d, winapi.WindowStyle.OVERLAPPEDWINDOW
     mov qword [rsp + 32 + 56], 0
     mov qword [rsp + 32 + 48], 0
     mov qword [rsp + 32 + 40], 0
@@ -93,53 +98,44 @@ proc createWindow {
     dllcall CreateWindowExA
     mov [hwnd], rax
     cmp rax, 0
-    je stdlib.fatal
-
-	add rsp, 32 + 64 + 8
-	ret
+    je fatal
 }
 
 
 
-proc showWindow {
-	sub rsp, 40
+proc showWindow(40) {
 	mov rcx, [hwnd]
 	mov edx, 1
 	dllcall ShowWindow
-	add rsp, 40
-	ret
 }
 
 
 
-proc windowCycle {
-	sub rsp, 40
+proc windowCycle(40) {
 loop:
 	lea rcx, [msg]
-    xor edx, edx
-    xor r8, r8
-    xor r9, r9
-    dllcall GetMessageA
-    cmp rax, 0
-    je end
-    lea rcx, [msg]
-    dllcall TranslateMessage
-    lea rcx, [msg]
-    dllcall DispatchMessageA
-    jmp loop
+	xor edx, edx
+	xor r8, r8
+	xor r9, r9
+	dllcall GetMessageA
+	cmp rax, 0
+	je end
+	lea rcx, [msg]
+	dllcall TranslateMessage
+	lea rcx, [msg]
+	dllcall DispatchMessageA
+	jmp loop
 end:
-	add rsp, 40
-	ret
 }
 
 
 
-proc main {
-	sub rsp, 40
+proc main(40) {
 	call createCursor
 	call createClass
 	call createWindow
 	call showWindow
 	call windowCycle
-	call stdlib.exit
+	call exit
 }
+

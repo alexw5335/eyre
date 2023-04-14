@@ -44,6 +44,7 @@ class NativeWriter(bytes: ByteArray) {
 
 
 	fun clear() {
+		pos = 0
 		Arrays.fill(bytes, 0)
 	}
 

@@ -81,10 +81,10 @@ interface AnonSymbol : Symbol {
 
 class AliasRefSymbol(val value: AstNode, val offset: Int) : AnonSymbol
 
-class RefSymbol(val receiver: PosSymbol, val offset: Int, override val type: Type): AnonSymbol, PosSymbol, TypedSymbol {
+class RefSymbol(val receiver: PosSymbol, val invoker: MemberSymbol, override val type: Type): AnonSymbol, PosSymbol, TypedSymbol {
 	override var pos
 		set(_) = error("Cannot set ref symbol pos")
-		get() = receiver.pos + offset
+		get() = receiver.pos + invoker.offset
 	override var section
 		set(_) = error("Cannot set ref symbol section")
 		get() = receiver.section

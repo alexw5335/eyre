@@ -29,7 +29,7 @@ class Assembler(private val context: CompilerContext) {
 					is ScopeEndNode  -> handleScopeEnd(node)
 					is VarResNode    -> handleVarRes(node)
 					is VarDbNode     -> handleVarDb(node)
-					is VarInitNode   -> handleVarInit(node)
+					//is VarInitNode   -> handleVarInit(node)
 					else             -> { }
 				}
 			}
@@ -199,7 +199,7 @@ class Assembler(private val context: CompilerContext) {
 		if(node.symbol is ProcSymbol) {
 			if(node.symbol.hasStackNodes) {
 				encodeRETURN()
-				epilogueWriter.clear()
+				epilogueWriter.reset()
 			}
 
 			node.symbol.size = writer.pos - node.symbol.pos

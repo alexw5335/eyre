@@ -84,7 +84,7 @@ class NameNode(val name: Name, override var symbol: Symbol? = null) : SymNode, O
 
 class NamesNode(val names: Array<Name>, override var symbol: Symbol? = null) : SymNode, OpNode
 
-class DotNode(val left: AstNode, val right: SymNode) : SymNode by right, OpNode
+class DotNode(val left: SymNode, val right: SymNode) : SymNode by right, OpNode
 
 class RefNode(val left: SymNode, val right: NameNode) : SymNode by right, OpNode
 
