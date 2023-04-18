@@ -122,6 +122,48 @@ enum class FpuReg(val value: Int) {
 
 
 
+enum class MmxReg(val value: Int) {
+
+	MM0(0),
+	MM1(1),
+	MM2(2),
+	MM3(3),
+	MM4(4),
+	MM5(5),
+	MM6(6),
+	MM7(7);
+
+	val string = name.lowercase()
+
+}
+
+
+
+enum class XmmReg(val value: Int) {
+
+	XMM0(0),
+	XMM1(1),
+	XMM2(2),
+	XMM3(3),
+	XMM4(4),
+	XMM5(5),
+	XMM6(6),
+	XMM7(7),
+	XMM8(8),
+	XMM9(9),
+	XMM10(10),
+	XMM11(11),
+	XMM12(12),
+	XMM13(13),
+	XMM14(14),
+	XMM15(15);
+
+	val string = name.lowercase()
+
+}
+
+
+
 enum class Register(
 	val value: Int,
 	val width: Width,

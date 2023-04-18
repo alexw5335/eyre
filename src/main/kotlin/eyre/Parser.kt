@@ -53,7 +53,7 @@ class Parser(private val context: CompilerContext) {
 
 	private fun<T : AstNode> T.add2(): T {
 		nodes.add(this)
-		context.typeNodes.add(this)
+		context.unorderedNodes.add(this)
 		return this
 	}
 

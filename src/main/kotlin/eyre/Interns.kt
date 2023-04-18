@@ -26,20 +26,20 @@ class Name(override val id: Int, val hash: Int, val string: String) : Intern, To
 
 
 
-@JvmInline
-value class NameArray(val array: IntArray) {
-	val size get() = array.size
-	operator fun get(index: Int) = Names[array[index]]
-	override fun toString() = array.joinToString(".") { this[it].string }
-}
-
-
-
 class Scope(override val id: Int, val hash: Int, val array: IntArray) : Intern {
 	val last get() = Names[array[array.size - 1]]
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
 	override fun toString() = array.joinToString(transform = { Names[it].string }, separator = ".")
+}
+
+
+
+@JvmInline
+value class NameArray(val array: IntArray) {
+	val size get() = array.size
+	operator fun get(index: Int) = Names[array[index]]
+	override fun toString() = array.joinToString(".") { this[it].string }
 }
 
 
@@ -77,19 +77,11 @@ object Names : Interner<String, Name>() {
 	}
 
 	val EMPTY  = add("")
-	val RES    = add("res")
 	val MAIN   = add("main")
 	val FS     = add("fs")
 	val GS     = add("gs")
-	val DEBUG  = add("debug")
-	val NULL   = add("null")
-	val VOID   = add("void")
 	val SIZE   = add("size")
 	val COUNT  = add("count")
-	val I8     = add("i8")
-	val I16    = add("i16")
-	val I32    = add("i32")
-	val I64    = add("i64")
 
 	val keywords     = createRange(Keyword.values(), Keyword::string)
 	val widths       = createRange(Width.values(), Width::string)
@@ -98,6 +90,8 @@ object Names : Interner<String, Name>() {
 	val prefixes     = createRange(Prefix.values(), Prefix::string)
 	val mnemonics    = createRange(Mnemonic.values(), Mnemonic::string)
 	val fpuRegisters = createRange(FpuReg.values(), FpuReg::string)
+	val mmxRegisters = createRange(MmxReg.values(), MmxReg::string)
+	val xmmRegisters = createRange(XmmReg.values(), XmmReg::string)
 
 }
 

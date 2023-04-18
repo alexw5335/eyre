@@ -1,5 +1,3 @@
-@file:Suppress("LeakingThis")
-
 package eyre
 
 
@@ -10,24 +8,37 @@ Interfaces
 
 
 
+/**
+ * Marker interface for AST nodes
+ */
 sealed interface AstNode
 
 
 
-/** Convenience interface for any node that needs to be set as the parent of a symbol. */
+/**
+ * Convenience interface for any node that needs to be set as the parent of a symbol.
+ */
+@Suppress("LeakingThis")
 sealed class SymContainerNode(symbol: Symbol) : AstNode {
-	init { symbol.node = this }
+	init {
+		symbol.node = this
+	}
 }
 
 
 
-/** A node that represents a symbol when used in an expression. */
+/**
+ *  A node that returns a symbol when used in an expression.
+ */
 sealed interface SymNode : AstNode {
 	val symbol: Symbol?
 }
 
 
 
+/**
+ * Marker interface for nodes that can be used as operands in instruction nodes.
+ */
 sealed interface OpNode : AstNode
 
 
@@ -38,7 +49,11 @@ Nodes
 
 
 
-class TypeNode(val name: Name?, val names: Array<Name>?, val arrayCount: AstNode?) : SymNode {
+class TypeNode(
+	val name: Name?,
+	val names: Array<Name>?,
+	val indices: List<AstNode>?
+) : SymNode {
 	override var symbol: Symbol? = null
 }
 
@@ -112,7 +127,7 @@ class VarAliasNode(val symbol: VarAliasSymbol, val type: TypeNode, val value: As
 
 class VarInitNode(val symbol: VarInitSymbol, val type: TypeNode, val inits: List<AstNode>) : SymContainerNode(symbol)
 
-class EqualsNode(val left: SymNode, val right: AstNode) : AstNode
+//class EqualsNode(val left: SymNode, val right: AstNode) : AstNode
 
 
 

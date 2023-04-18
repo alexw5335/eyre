@@ -25,7 +25,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	fun addParent(parent: ScopedSymbol) = parentMap.put(parent.thisScope, parent)
 
-	val typeNodes = ArrayList<AstNode>() // Nodes that are resolved in the second resolver stage
+	val unorderedNodes = ArrayList<AstNode>()
 
 
 

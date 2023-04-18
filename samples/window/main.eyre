@@ -1,20 +1,22 @@
 namespace main
 
+import winapi
+
 
 
 var cursor: qword
 var className db "MyClass"
 var hwnd: qword
 var windowName db "MyWindow"
-var msg: winapi.Message
-var class: winapi.WndClassA
-var paintStruct: winapi.PaintStruct
+var msg: Message
+var class: WndClassA
+var paintStruct: PaintStruct
 
 
 
 proc createCursor(40) {
 	xor ecx, ecx
-	mov edx, winapi.Cursor.ARROW
+	mov edx, Cursor.ARROW
 	dllcall LoadCursorA
 	cmp rax, 0
 	je fatal
@@ -42,9 +44,9 @@ proc exit(40) {
 
 
 proc wndProc(40) {
-	cmp edx, winapi.MsgType.DESTROY
+	cmp edx, MsgType.DESTROY
 	je destroy
-	cmp edx, winapi.MsgType.PAINT
+	cmp edx, MsgType.PAINT
 	je paint
 	dllcall DefWindowProcA
 	return
@@ -58,7 +60,7 @@ paint:
 	dllcall BeginPaint
 	mov rcx, rax
 	lea rdx, [paintStruct.rect.left]
-	mov r8d, winapi.Colour.WINDOW + 1
+	mov r8d, Colour.WINDOW + 1
 	dllcall FillRect
 	lea rdx, [paintStruct]
 	dllcall EndPaint
@@ -86,7 +88,7 @@ proc createWindow(32 + 64 + 8) {
 	xor ecx, ecx
 	lea rdx, [className]
 	lea r8, [windowName]
-	mov r9d, winapi.WindowStyle.OVERLAPPEDWINDOW
+	mov r9d, WindowStyle.OVERLAPPEDWINDOW
     mov qword [rsp + 32 + 56], 0
     mov qword [rsp + 32 + 48], 0
     mov qword [rsp + 32 + 40], 0

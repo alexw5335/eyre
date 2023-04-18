@@ -12,12 +12,12 @@ struct Rect {
 
 
 struct PaintStruct {
-	i64    hdc
-	i32    erase
-	Rect   rect
-	i32    restore
-	i32    incUpdate
-	i8[32] reserved
+	i64     hdc
+	i32     erase
+	Rect    rect
+	i32     restore
+	i32     incUpdate
+	i8[32]  reserved
 }
 
 

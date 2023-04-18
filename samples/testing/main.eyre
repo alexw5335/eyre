@@ -1,0 +1,11 @@
+namespace main
+
+
+
+var myVar: byte[32]
+
+
+
+proc main {
+	dllcall ExitProcess
+}
