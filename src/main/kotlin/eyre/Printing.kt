@@ -27,7 +27,13 @@ val AstNode.printString: String get() = when(this) {
 	is TypeNode -> buildString {
 		name?.let(::append)
 		names?.joinTo(this, ".")
-		arrayCount?.let { append('['); append(it.printString); append(']') }
+		if(arraySizes != null) {
+			for(size in arraySizes) {
+				append('[')
+				append(size.printString)
+				append(']')
+			}
+		}
 	}
 
 	is StructNode -> buildString {
@@ -75,6 +81,24 @@ val AstNode.printString: String get() = when(this) {
 			append(",")
 		}
 		append("\n}")
+	}
+
+	is ProcNode -> buildString {
+		append("proc ")
+		append(symbol.name)
+	}
+
+	is InsNode -> buildString {
+		append(mnemonic)
+		if(op1 == null) return@buildString
+		append(" ${op1.printString}")
+		if(op2 == null) return@buildString
+		append(", ${op2.printString}")
+		if(op3 == null) return@buildString
+		append(", ${op3.printString}")
+		if(op4 == null) return@buildString
+		append(", ${op4.printString}")
+
 	}
 
 	else -> toString()

@@ -52,7 +52,7 @@ Nodes
 class TypeNode(
 	val name: Name?,
 	val names: Array<Name>?,
-	val indices: List<AstNode>?
+	val arraySizes: Array<AstNode>?
 ) : SymNode {
 	override var symbol: Symbol? = null
 }

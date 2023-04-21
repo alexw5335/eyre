@@ -17,6 +17,8 @@ class Parser(private val context: CompilerContext) {
 
 	private val nameBuilder = ArrayList<Name>()
 
+	private val arraySizes = ArrayList<AstNode>()
+
 
 
 	/*
@@ -544,7 +546,6 @@ class Parser(private val context: CompilerContext) {
 	private fun parseType(): TypeNode {
 		var name: Name? = null
 		var names: Array<Name>? = null
-		var arrayCount: AstNode? = null
 
 		if(tokens[pos + 1] != SymToken.PERIOD) {
 			name = id()
@@ -555,13 +556,27 @@ class Parser(private val context: CompilerContext) {
 			names = nameBuilder.toTypedArray()
 		}
 
-		if(next == SymToken.LBRACKET) {
+		while(tokens[pos] == SymToken.LBRACKET) {
 			pos++
-			arrayCount = parseExpression()
+			arraySizes.add(parseExpression())
 			expect(SymToken.RBRACKET)
 		}
 
-		return TypeNode(name, names, arrayCount)
+		if(next == SymToken.LBRACKET) {
+			pos++
+			expect(SymToken.RBRACKET)
+			arraySizes.clear()
+		}
+
+		if(arraySizes.isNotEmpty()) {
+			val sizes = arraySizes.toTypedArray()
+			arraySizes.clear()
+			val node = TypeNode(name, names, sizes)
+			context.unorderedNodes.add(node)
+			return node
+		}
+
+		return TypeNode(name, names, null)
 	}
 
 
@@ -572,17 +587,6 @@ class Parser(private val context: CompilerContext) {
 		pos--
 		return nameBuilder.toTypedArray()
 	}
-
-
-
-/*	private fun parseName(): SymNode {
-		if(tokens[pos + 1] != SymToken.PERIOD)
-			return NameNode(id())
-		nameBuilder.clear()
-		do { nameBuilder += id() } while(next() == SymToken.PERIOD)
-		pos--
-		return NamesNode(nameBuilder.toTypedArray())
-	}*/
 
 
 
