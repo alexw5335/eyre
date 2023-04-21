@@ -82,7 +82,14 @@ class Assembler(private val context: CompilerContext) {
 						dataWriter.writeWidth(part.width, char.code)
 					}
 				} else {
-					dataWriter.writeWidth(part.width, resolveImm(value))
+					val imm = resolveImm(value)
+					if(immRelocCount == 1) {
+						if(part.width != QWORD)
+							error("Absolute relocations must occupy 64 bits")
+						dataWriter.i64(0)
+					} else {
+						dataWriter.writeWidth(part.width, imm)
+					}
 				}
 			}
 		}
@@ -225,15 +232,16 @@ class Assembler(private val context: CompilerContext) {
 		))
 	}
 
-	private fun addAbsReloc(width: Width, node: AstNode) {
+	private fun addAbsReloc(node: AstNode) {
 		context.relocs.add(Reloc(
 			writer.pos,
 			section,
-			width,
+			QWORD,
 			node,
 			0,
 			RelocType.ABS
 		))
+		context.absRelocCount++
 	}
 
 	private fun addRelReloc(width: Width, node: AstNode, offset: Int) {
@@ -301,7 +309,12 @@ class Assembler(private val context: CompilerContext) {
 	private fun writeImm(node: AstNode, width: Width, value: Long, hasImm64: Boolean = false) {
 		val actualWidth = if(width == QWORD && !hasImm64) DWORD else width
 
-		if(hasImmReloc) {
+		if(immRelocCount == 1) {
+			if(!hasImm64 || width != QWORD)
+				error("Absolute relocations are only allowed with 64-bit operands")
+			addAbsReloc(node)
+			writer.advance(8)
+		} else if(hasImmReloc) {
 			addLinkReloc(actualWidth, node)
 			writer.advance(actualWidth.bytes)
 		} else if(!writer.writeWidth(actualWidth, value)) {

@@ -2,10 +2,14 @@ namespace main
 
 
 
-var myVar: byte[32]
+var msg db "value: %p\n\0"
 
 
 
-proc main {
+proc main(40) {
+	lea rcx, [msg]
+	mov rdx, msg
+	mov byte [rdx], '-'
+	dllcall printf
 	dllcall ExitProcess
 }

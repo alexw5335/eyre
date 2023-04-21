@@ -271,7 +271,7 @@ enum class Section {
 	IDATA,
 
 	/** .bss, uninitialised, read | write */
-	BSS;
+	BSS,
 
 }
 

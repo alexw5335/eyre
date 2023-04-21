@@ -1,5 +1,7 @@
 package eyre
 
+import eyre.util.IntList
+
 class Linker(private val context: CompilerContext) {
 
 
@@ -38,7 +40,7 @@ class Linker(private val context: CompilerContext) {
 		writer.i32(0)          // sizeOfUninitialisedData
 		writer.i32(0)          // pEntryPoint    (fill in later)
 		writer.i32(0)          // baseOfCode
-		writer.i64(0x400000)   // imageBase
+		writer.i64(imageBase)  // imageBase
 		writer.i32(0x1000)     // sectionAlignment
 		writer.i32(0x200)      // fileAlignment
 		writer.i16(6)          // majorOSVersion
@@ -59,9 +61,9 @@ class Linker(private val context: CompilerContext) {
 		writer.i32(0)          // loaderFlags
 		writer.i32(16)         // numDataDirectories
 		writer.advance(16 * 8) // dataDirectories (fill in later)
-		writer.seek(0x200)     // section headers (fill in later)
+		writer.seek(0x400)     // section headers (fill in later)
 
-		nextSectionPos = fileAlignment
+		nextSectionPos = writer.pos.roundToFile
 		nextSectionRva = sectionAlignment
 	}
 
@@ -113,13 +115,40 @@ class Linker(private val context: CompilerContext) {
 
 
 
+	private fun writeRelocs() {
+		val relocPos = writer.pos
+
+		for(reloc in context.relocs)
+			reloc.writeRelocation()
+		if(pages.isEmpty())
+			return
+
+		val relocRva = nextSectionRva
+		writer.pos = relocPos
+
+		for((rva, offsets) in pages) {
+			writer.i32(rva)
+			writer.i32(8 + offsets.size * 2)
+			for(i in 0 until offsets.size)
+				writer.i16(offsets[i] or (10 shl 12))
+		}
+
+		val size = writer.pos - relocPos
+		writer.i32(relocDirPos, relocRva)
+		writer.i32(relocDirPos + 4, size)
+		writeSection(Section.NONE, ".reloc", 0x40_00_00_40, size, 0)
+	}
+
+
+
 	fun link() {
 		writeHeaders()
 		writeSections()
 		writeImports()
-		writeSymbolTable()
-		val finalSize = writer.pos
-		context.relocs.forEach { it.writeRelocation() }
+		//writeSymbolTable()
+		writeRelocs()
+		val finalSize = nextSectionPos
+
 
 		if(context.entryPoint != null) {
 			writer.seek(entryPointPos)
@@ -243,6 +272,10 @@ class Linker(private val context: CompilerContext) {
 
 
 
+	private val pages = HashMap<Int, IntList>()
+
+
+
 	private fun Reloc.writeRelocation() {
 		when(type) {
 			RelocType.LINK -> {
@@ -258,7 +291,11 @@ class Linker(private val context: CompilerContext) {
 			}
 
 			RelocType.ABS -> {
-				error("Absolute relocations not yet supported")
+				val value = resolveImm(node)
+				val rva = section.data.rva + pos
+				val pageRva = (rva shr 12) shl 12
+				pages.getOrPut(pageRva, ::IntList).add(rva - pageRva)
+				writer.i64(section.data.pos + pos, value + imageBase)
 			}
 		}
 	}
@@ -267,6 +304,8 @@ class Linker(private val context: CompilerContext) {
 }
 
 
+
+private const val imageBase = 0x400000L
 
 private const val sectionAlignment = 0x1000
 
@@ -279,6 +318,8 @@ private const val entryPointPos = 104
 private const val imageSizePos = 144
 
 private const val idataDirPos = 208
+
+private const val relocDirPos = 240
 
 private const val sectionHeadersPos = 328
 

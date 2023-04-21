@@ -27,6 +27,8 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val unorderedNodes = ArrayList<AstNode>()
 
+	var absRelocCount = 0
+
 
 
 	/*

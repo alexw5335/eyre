@@ -156,16 +156,10 @@ class Parser(private val context: CompilerContext) {
 			if(op.precedence < precedence) break
 			pos++
 
-			if(op == BinaryOp.ARR && next == SymToken.RBRACKET) {
-				pos++
-				atom = ArrayNode(atom, null)
-				continue
-			}
-
 			val expression = parseExpression(op.precedence + 1)
 
 			atom = when(op) {
-				BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom, expression) }
+				BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom.asSymNode, expression) }
 				BinaryOp.DOT -> DotNode(atom.asSymNode, expression.asSymNode)
 				BinaryOp.REF -> RefNode(atom.asSymNode, expression as? NameNode ?: error("Invalid reference"))
 				else         -> BinaryNode(op, atom, expression)
@@ -202,7 +196,8 @@ class Parser(private val context: CompilerContext) {
 			return MemNode(width, value)
 		}
 
-		return (parseExpression() as? OpNode) ?: error("Invalid operand")
+		val expression = parseExpression()
+		return (expression as? OpNode) ?: error("Invalid operand: ${expression.printString}")
 	}
 
 

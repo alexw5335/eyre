@@ -154,7 +154,23 @@ class Resolver(private val context: CompilerContext) {
 			resolveNode(node.left)
 			context.unorderedNodes.add(node)
 		}
-		else -> return
+		is ArrayNode -> {
+			resolveNode(node.receiver)
+			resolveNode(node.index)
+			context.unorderedNodes.add(node)
+		}
+
+		is RegNode,
+		is DbPart,
+		is IntNode,
+		is FpuRegNode,
+		is SegRegNode,
+		is StringNode,
+		is EnumEntryNode,
+		is LabelNode,
+		is MemberNode,
+		is VarInitNode,
+		is TypeNode -> return
 	}}
 
 
@@ -170,7 +186,7 @@ class Resolver(private val context: CompilerContext) {
 
 		if(node.arraySizes != null) {
 			for(n in node.arraySizes)
-				symbol = ArraySymbol(SymBase(Scopes.EMPTY, Names.EMPTY, true), symbol as Type)
+				symbol = ArraySymbol(SymBase(Scopes.EMPTY, Names.EMPTY), symbol as Type)
 			context.unorderedNodes.add(node)
 		}
 
@@ -189,10 +205,11 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveDotNode(node: DotNode): Symbol? {
-		val receiver: Symbol? = when(node.left) {
-			is NameNode -> resolveNameNode(node.left)
-			is DotNode  -> resolveDotNode(node.left)
-			else        -> error("Invalid receiver: ${node.left}")
+		val receiver: Symbol? = when(val node2 = node.left) {
+			is NameNode  -> resolveNameNode(node2)
+			is DotNode   -> resolveDotNode(node2)
+			is ArrayNode -> { resolveNode(node2); context.unorderedNodes.add(node); return null }
+			else         -> error("Invalid receiver: ${node.left}")
 		}
 
 		if(receiver !is ScopedSymbol) {
@@ -225,7 +242,10 @@ class Resolver(private val context: CompilerContext) {
 		is StructNode  -> calculateStruct(node.symbol)
 		is RefNode     -> calculateRefNode(node)
 		is DotNode     -> calculateDotNode(node)
-		else           -> return
+		is NameNode    -> return
+		is TypeNode    -> calculateTypeNode(node)
+		is ArrayNode   -> calculateArrayNode(node)
+		else           -> error("Invalid node: $node")
 	}}
 
 
@@ -253,11 +273,13 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun calculateSymbol(symbol: Symbol) {
 		when(symbol) {
-			is ArraySymbol   -> calculateSymbol(symbol.type)
-			is ConstSymbol   -> calculateConst(symbol)
-			is TypedefSymbol -> calculateTypedef(symbol)
-			is EnumSymbol    -> calculateEnum(symbol)
-			is StructSymbol  -> calculateStruct(symbol)
+			is EnumEntrySymbol -> if(!symbol.resolved) calculateEnum(symbol.parent())
+			is MemberSymbol    -> if(!symbol.resolved) calculateStruct(symbol.parent())
+			is ArraySymbol     -> calculateSymbol(symbol.type)
+			is ConstSymbol     -> calculateConst(symbol)
+			is TypedefSymbol   -> calculateTypedef(symbol)
+			is EnumSymbol      -> calculateEnum(symbol)
+			is StructSymbol    -> calculateStruct(symbol)
 		}
 	}
 
@@ -399,25 +421,66 @@ class Resolver(private val context: CompilerContext) {
 			return symbol
 		}
 
-		if(receiver !is TypedSymbol || receiver !is PosSymbol) error("Invalid receiver")
+		if(receiver !is TypedSymbol || receiver !is PosSymbol) error("Invalid receiver: $receiver")
 
 		val receiverType = receiver.type
 
-		if(receiverType !is ScopedSymbol) error("")
+		if(receiverType !is ScopedSymbol) error("Invalid receiver type: $receiverType")
 
 		val invoker = context.symbols.get(
 			receiverType.thisScope,
 			(node.right as? NameNode)?.name ?: error("Invalid node")
-		)
+		) ?: error("Invalid symbol")
+
+		calculateSymbol(invoker)
 
 		val symbol = when(invoker) {
-			is MemberSymbol -> RefSymbol(receiver, invoker, invoker.type)
+			is MemberSymbol -> RefSymbol(receiver, invoker.offset, invoker.type)
 			else -> error("Invalid symbol: $invoker")
 		}
 
 		node.right.symbol = symbol
 
 		return symbol
+	}
+
+
+
+	private fun calculateTypeNode(node: TypeNode) {
+		val symbol = node.symbol!!
+		if(symbol.begin()) return
+		if(node.arraySizes != null) {
+			var array = symbol as ArraySymbol
+			for(n in node.arraySizes) {
+				array.count = calculateInt(n).toInt()
+				array = array.type as? ArraySymbol ?: break
+			}
+		}
+		symbol.end()
+	}
+
+
+
+	private fun calculateArrayNode(node: ArrayNode): Symbol {
+		calculateNode(node.receiver)
+		val receiver = node.receiver.symbol!!
+		calculateSymbol(receiver)
+		if(receiver !is TypedSymbol) error("Invalid receiver: $receiver")
+		val type = receiver.type
+		if(type !is ArraySymbol) error("Invalid receiver, expecting array: $receiver")
+
+		if(receiver is PosSymbol) {
+			val offset = type.type.size * calculateInt(node.index).toInt()
+			node.symbol = RefSymbol(receiver, offset, type.type)
+			return node.symbol!!
+		}
+
+		if(receiver is IntSymbol) {
+			node.symbol = IntSymbol(SymBase.EMPTY, receiver.intValue)
+			return node.symbol!!
+		}
+
+		error("Invalid receiver: $receiver")
 	}
 
 
@@ -436,6 +499,7 @@ class Resolver(private val context: CompilerContext) {
 		is BinaryNode -> node.op.calculate(calculateInt(node.left), calculateInt(node.right))
 		is RefNode    -> calculateIntSymbol(calculateRefNode(node))
 		is DotNode    -> calculateIntSymbol(calculateDotNode(node))
+		is NameNode   -> calculateIntSymbol(node.symbol!!)
 		else          -> error("Invalid node: $node")
 	}
 

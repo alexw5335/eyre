@@ -59,7 +59,7 @@ class TypeNode(
 
 class ImportNode(val names: Array<Name>) : AstNode
 
-class ArrayNode(val receiver: AstNode, val index: AstNode?) : SymNode {
+class ArrayNode(val receiver: SymNode, val index: AstNode) : SymNode, OpNode {
 	override var symbol: Symbol? = null
 }
 
@@ -96,8 +96,6 @@ class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode?) : SymConta
 class EnumNode(val symbol: EnumSymbol, val entries: ArrayList<EnumEntryNode>) : SymContainerNode(symbol)
 
 class NameNode(val name: Name, override var symbol: Symbol? = null) : SymNode, OpNode
-
-class NamesNode(val names: Array<Name>, override var symbol: Symbol? = null) : SymNode, OpNode
 
 class DotNode(val left: SymNode, val right: SymNode) : SymNode by right, OpNode
 

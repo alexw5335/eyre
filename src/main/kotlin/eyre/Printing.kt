@@ -13,7 +13,6 @@ val AstNode.printString: String get() = when(this) {
 	is DotNode        -> "(${left.printString}.${right.printString})"
 	is RegNode        -> value.string
 	is NameNode       -> name.string
-	is NamesNode      -> names.joinToString(".")
 	is NamespaceNode  -> "namespace ${symbol.name}"
 	is ScopeEndNode   -> "scope end"
 	is MemNode        -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
@@ -89,7 +88,7 @@ val AstNode.printString: String get() = when(this) {
 	}
 
 	is InsNode -> buildString {
-		append(mnemonic)
+		append(mnemonic.string)
 		if(op1 == null) return@buildString
 		append(" ${op1.printString}")
 		if(op2 == null) return@buildString
@@ -98,8 +97,9 @@ val AstNode.printString: String get() = when(this) {
 		append(", ${op3.printString}")
 		if(op4 == null) return@buildString
 		append(", ${op4.printString}")
-
 	}
+
+	is RefNode -> "${left.printString}::${right.printString}"
 
 	else -> toString()
 }
@@ -107,6 +107,6 @@ val AstNode.printString: String get() = when(this) {
 
 
 val Type.printString get(): String = when(this) {
-	is ArraySymbol -> "${type.printString}[$size]"
+	is ArraySymbol -> "${type.printString}[$count]"
 	else -> qualifiedName
 }
