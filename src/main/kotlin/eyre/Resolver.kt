@@ -124,16 +124,6 @@ class Resolver(private val context: CompilerContext) {
 			resolveNode(node.op3 ?: return)
 			resolveNode(node.op4 ?: return)
 		}
-		is VarResNode ->
-			node.symbol.type = resolveTypeNode(node.type)
-		is VarDbNode ->
-			for(part in node.parts)
-				for(n in part.nodes)
-					resolveNode(n)
-		is VarAliasNode -> {
-			node.symbol.type = resolveTypeNode(node.type)
-			resolveNode(node.value)
-		}
 		is ConstNode -> resolveNode(node.value)
 		is StructNode ->
 			for(member in node.members)
@@ -160,6 +150,24 @@ class Resolver(private val context: CompilerContext) {
 			context.unorderedNodes.add(node)
 		}
 
+		is VarResNode ->
+			node.symbol.type = resolveTypeNode(node.type)
+		is VarDbNode -> {
+			node.symbol.type = node.type?.let(::resolveTypeNode) ?: VoidType
+			for(part in node.parts)
+				for(n in part.nodes)
+					resolveNode(n)
+		}
+		is VarAliasNode -> {
+			node.symbol.type = resolveTypeNode(node.type)
+			resolveNode(node.value)
+		}
+		is VarInitNode -> { }
+
+		is InitNode -> { }
+
+		is EqualsNode -> resolveNode(node.right)
+
 		is RegNode,
 		is DbPart,
 		is IntNode,
@@ -169,8 +177,7 @@ class Resolver(private val context: CompilerContext) {
 		is EnumEntryNode,
 		is LabelNode,
 		is MemberNode,
-		is VarInitNode,
-		is TypeNode -> return
+		is TypeNode, -> return
 	}}
 
 

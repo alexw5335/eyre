@@ -1,5 +1,13 @@
-namespace main
-
-proc main(40) {
-	dllcall ExitProcess
+struct Rect {
+	i32 top
+	i32 right
+	i32 bottom
+	i32 left
 }
+
+struct Paint {
+	i32 type
+	Rect rect
+}
+
+var paint: Paint { type = 1, rect.top = { 1, 1, 1, 1 } }

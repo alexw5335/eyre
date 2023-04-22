@@ -73,13 +73,17 @@ val AstNode.printString: String get() = when(this) {
 		append(symbol.name)
 		append(": ")
 		append(type.printString)
-		append(" {")
-		for(init in inits) {
-			append("\n\t")
-			append(init.printString)
-			append(",")
+		append(" = ")
+		append(initialiser.printString)
+	}
+
+	is InitNode -> buildString {
+		append("{ ")
+		for(node in nodes) {
+			append(node.printString)
+			append(", ")
 		}
-		append("\n}")
+		append("}")
 	}
 
 	is ProcNode -> buildString {

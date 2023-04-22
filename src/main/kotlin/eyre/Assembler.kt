@@ -112,7 +112,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleVarInit(node: VarInitNode) {
+/*	private fun handleVarInit(node: VarInitNode) {
 		dataWriter.align8()
 
 		val type = node.symbol.type as? StructSymbol ?: error("Expecting struct")
@@ -132,7 +132,7 @@ class Assembler(private val context: CompilerContext) {
 				writeMember(member, init)
 			}
 		}
-	}
+	}*/
 
 
 
