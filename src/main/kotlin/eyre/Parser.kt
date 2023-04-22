@@ -129,6 +129,9 @@ class Parser(private val context: CompilerContext) {
 				return expression
 			}
 
+			if(token == SymToken.LBRACE)
+				return parseInit()
+
 			return UnaryNode(token.unaryOp ?: error(srcPos, "Unexpected symbol: $token"), parseAtom())
 		}
 
@@ -373,6 +376,7 @@ class Parser(private val context: CompilerContext) {
 			expectTerminator()
 		} else if(first == SymToken.LBRACE) {
 			pos++
+			val node = parseInit()
 			val inits = ArrayList<AstNode>()
 
 			while(true) {
@@ -392,6 +396,19 @@ class Parser(private val context: CompilerContext) {
 		} else {
 			error("Invalid variable")
 		}
+	}
+
+
+
+	private fun parseInit(): InitNode {
+		val nodes = ArrayList<AstNode>()
+		while(true) {
+			nodes.add(parseExpression())
+			if(tokens[pos] != SymToken.COMMA) break
+			pos++
+		}
+		pos++
+		return InitNode(nodes)
 	}
 
 

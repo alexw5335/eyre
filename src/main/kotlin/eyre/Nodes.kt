@@ -125,7 +125,9 @@ class VarAliasNode(val symbol: VarAliasSymbol, val type: TypeNode, val value: As
 
 class VarInitNode(val symbol: VarInitSymbol, val type: TypeNode, val inits: List<AstNode>) : SymContainerNode(symbol)
 
-//class EqualsNode(val left: SymNode, val right: AstNode) : AstNode
+class EqualsNode(val left: SymNode, val right: AstNode) : AstNode
+
+class InitNode(val nodes: List<AstNode>) : AstNode
 
 
 
