@@ -75,6 +75,7 @@ class Assembler(private val context: CompilerContext) {
 		dataWriter.align8()
 
 		node.symbol.pos = dataWriter.pos
+
 		for(part in node.parts) {
 			for(value in part.nodes) {
 				if(value is StringNode) {
@@ -97,7 +98,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun writeMember(member: MemberSymbol, value: AstNode) {
+/*	private fun writeMember(member: MemberSymbol, value: AstNode) {
 		val offset = member.offset
 
 		when(member.type) {
@@ -108,12 +109,37 @@ class Assembler(private val context: CompilerContext) {
 				}
 			}
 		}
+	}*/
+
+
+
+/*
+	private fun writeInitialiser(type: Type, node: AstNode) {
+		if(node is InitNode) {
+			for(n in node.nodes) {
+				writeInitialiser(node.receiver!!n)
+			}
+		} else {
+
+		}
 	}
+*/
 
 
 
-/*	private fun handleVarInit(node: VarInitNode) {
-		dataWriter.align8()
+	private fun handleVarInit(node: VarInitNode) {
+/*		dataWriter.align8()
+
+		val type = node.symbol.type as? StructSymbol ?: error("Expecting struct")
+
+		node.symbol.pos = dataWriter.pos
+
+		if(node.initialiser is InitNode) {
+
+		}*/
+
+
+/*		dataWriter.align8()
 
 		val type = node.symbol.type as? StructSymbol ?: error("Expecting struct")
 
@@ -131,8 +157,8 @@ class Assembler(private val context: CompilerContext) {
 				val member = type.members[index]
 				writeMember(member, init)
 			}
-		}
-	}*/
+		}*/
+	}
 
 
 

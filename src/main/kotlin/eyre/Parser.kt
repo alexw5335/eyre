@@ -114,11 +114,11 @@ class Parser(private val context: CompilerContext) {
 		val token = next()
 
 		if(token is Name) {
-			when(token) {
-				in Names.registers  -> return RegNode(Names.registers[token])
-				Names.FS            -> return SegRegNode(SegReg.FS)
-				Names.GS            -> return SegRegNode(SegReg.GS)
-				else -> { }
+			return when(token) {
+				in Names.registers  -> RegNode(Names.registers[token])
+				Names.FS            -> SegRegNode(SegReg.FS)
+				Names.GS            -> SegRegNode(SegReg.GS)
+				else                -> NameNode(token)
 			}
 		}
 
@@ -127,6 +127,18 @@ class Parser(private val context: CompilerContext) {
 				val expression = parseExpression()
 				expect(SymToken.RPAREN)
 				return expression
+			}
+
+			if(token == SymToken.LBRACE) {
+				val nodes = ArrayList<AstNode>()
+				while(true) {
+					if(tokens[pos] == SymToken.RBRACE) break
+					nodes.add(parseExpression())
+					if(tokens[pos] != SymToken.COMMA) break
+					pos++
+				}
+				pos++
+				return InitNode(nodes)
 			}
 
 			return UnaryNode(token.unaryOp ?: error(srcPos, "Unexpected symbol: $token"), parseAtom())
@@ -151,18 +163,6 @@ class Parser(private val context: CompilerContext) {
 
 		while(true) {
 			val token = next
-
-			if(token == SymToken.LBRACE) {
-				val nodes = ArrayList<AstNode>()
-				while(true) {
-					if(tokens[pos] == SymToken.RBRACE) break
-					nodes.add(parseExpression())
-					if(tokens[pos] != SymToken.COMMA) break
-					pos++
-				}
-				pos++
-				return InitNode(atom, nodes)
-			}
 
 			val op = (token as? SymToken)?.binaryOp ?: break
 			if(op.precedence < precedence) break

@@ -105,6 +105,8 @@ val AstNode.printString: String get() = when(this) {
 
 	is RefNode -> "${left.printString}::${right.printString}"
 
+	is EqualsNode -> "${left.printString} = ${right.printString}"
+
 	else -> toString()
 }
 

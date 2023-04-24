@@ -127,7 +127,9 @@ class VarInitNode(val symbol: VarInitSymbol, val type: TypeNode, val initialiser
 
 class EqualsNode(val left: SymNode, val right: AstNode) : AstNode
 
-class InitNode(val type: TypeNode, val nodes: List<AstNode>) : AstNode
+class InitNode(val nodes: List<AstNode>) : AstNode {
+	var receiver: TypedSymbol? = null
+}
 
 
 

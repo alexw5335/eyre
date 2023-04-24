@@ -162,12 +162,22 @@ class Resolver(private val context: CompilerContext) {
 			node.symbol.type = resolveTypeNode(node.type)
 			resolveNode(node.value)
 		}
-		is VarInitNode -> { }
+		is VarInitNode -> {
+			node.symbol.type = resolveTypeNode(node.type)
+			if(node.initialiser is InitNode)
+				node.initialiser.receiver = node.symbol
+			resolveNode(node.initialiser)
+		}
+		is InitNode -> {
+			context.unorderedNodes.add(node)
+			for(n in node.nodes)
+				if(n is EqualsNode)
+					resolveNode(n.right)
+				else
+					resolveNode(n)
+		}
 
-		is InitNode -> { }
-
-		is EqualsNode -> resolveNode(node.right)
-
+		is EqualsNode,
 		is RegNode,
 		is DbPart,
 		is IntNode,
@@ -252,7 +262,20 @@ class Resolver(private val context: CompilerContext) {
 		is NameNode    -> return
 		is TypeNode    -> calculateTypeNode(node)
 		is ArrayNode   -> calculateArrayNode(node)
-		else           -> error("Invalid node: $node")
+
+		is InitNode    -> {
+			val receiver = node.receiver!!
+			if(receiver !is PosSymbol) error("Invalid receiver")
+			val type = receiver.type as? StructSymbol ?: error("Expecting struct")
+			if(node.nodes.size > type.members.size) error("Too many initialisers")
+			for((i, n) in node.nodes.withIndex()) {
+				if(n !is InitNode) continue
+				val member = type.members[i]
+				n.receiver = RefSymbol(receiver, member.offset, member.type)
+			}
+		}
+
+		else -> error("Invalid node: $node")
 	}}
 
 
