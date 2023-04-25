@@ -105,11 +105,11 @@ class Assembler(private val context: CompilerContext) {
 		val start = writer.pos
 
 		if(node is InitNode) {
-			for(i in node.nodes.indices) {
-				val member = node.members[i]
-				writer.seek(start + member.offset)
-				writeInitialiser(node.nodes[i], member.type)
+			for(entry in node.entries) {
+				writer.seek(start + entry.offset)
+				writeInitialiser(entry.node, entry.type)
 			}
+			writer.seek(start + type.size)
 		} else if(node is EqualsNode) {
 			writeInitialiser(node.right, type)
 		} else {
@@ -120,7 +120,7 @@ class Assembler(private val context: CompilerContext) {
 				8    -> QWORD
 				else -> error("Invalid initialiser")
 			}
-			writeImm(node, width)
+			writeImm(node, width, true)
 		}
 	}
 
@@ -301,8 +301,8 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun writeImm(node: AstNode, width: Width) {
-		writeImm(node, width, resolveImm(node), false)
+	private fun writeImm(node: AstNode, width: Width, hasImm64: Boolean = false) {
+		writeImm(node, width, resolveImm(node), hasImm64)
 	}
 
 

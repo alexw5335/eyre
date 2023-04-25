@@ -133,19 +133,22 @@ class Parser(private val context: CompilerContext) {
 			}
 
 			if(token == SymToken.LBRACE) {
-				val nodes = ArrayList<AstNode>()
+				val entries = ArrayList<InitNode.Entry>()
 				while(true) {
 					if(tokens[pos] == SymToken.RBRACE) break
-					nodes.add(parseExpression())
+					entries.add(InitNode.Entry(parseExpression()))
 					if(tokens[pos] != SymToken.COMMA) break
 					pos++
 				}
 				pos++
-				return InitNode(nodes)
+				return InitNode(entries)
 			}
 
-			if(token == SymToken.LBRACKET)
-				return ArrayEqualsNode(parseExpression())
+			if(token == SymToken.LBRACKET) {
+				val index = parseExpression()
+				expect(SymToken.RBRACKET)
+				return IndexNode(index)
+			}
 
 			return UnaryNode(token.unaryOp ?: error(srcPos, "Unexpected symbol: $token"), parseAtom())
 		}
@@ -177,7 +180,7 @@ class Parser(private val context: CompilerContext) {
 			val expression = parseExpression(op.precedence + 1)
 
 			atom = when(op) {
-				BinaryOp.SET -> EqualsNode(atom.asSymNode, expression)
+				BinaryOp.SET -> EqualsNode(atom, expression)
 				BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom.asSymNode, expression) }
 				BinaryOp.DOT -> DotNode(atom.asSymNode, expression.asSymNode)
 				BinaryOp.REF -> RefNode(atom.asSymNode, expression as? NameNode ?: error("Invalid reference"))

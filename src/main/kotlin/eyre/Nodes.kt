@@ -133,19 +133,16 @@ class VarInitNode(
 	val initialiser : AstNode
 ) : SymContainerNode(symbol)
 
-class EqualsNode(val left: SymNode, val right: AstNode) : AstNode {
+class EqualsNode(val left: AstNode, val right: AstNode) : AstNode {
 	var offset: Int = 0
 }
 
-class InitNode(val nodes: List<AstNode>) : AstNode {
-	val members = ArrayList<MemberSymbol>()
-	val offsets = ArrayList<Int>()
-	var receiver: TypedSymbol? = null
+class InitNode(val entries: List<Entry>) : AstNode {
+	class Entry(val node: AstNode, var type: Type = VoidType, var offset: Int = 0)
+	var type: Type? = null
 }
 
-class ArrayEqualsNode(val node: AstNode) : AstNode {
-	var index = 0
-}
+class IndexNode(val index: AstNode) : AstNode
 
 
 

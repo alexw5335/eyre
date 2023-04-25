@@ -12,17 +12,15 @@ struct Paint {
 	Rect rect
 }
 
-
 struct Testing {
 	Paint paint
 }
 
-
-
-var myVar: qword[10] = {
-	[0] = 1,
-	[2] = 3
+var array: Testing[4] = {
+	[2] = { { 'A', { 'B', 'C', 'D', 'E' } } }
 }
+
+
 
 proc main(40) {
 	dllcall ExitProcess

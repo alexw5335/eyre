@@ -171,19 +171,19 @@ class Resolver(private val context: CompilerContext) {
 		is VarInitNode -> {
 			node.symbol.type = resolveTypeNode(node.type)
 			if(node.initialiser is InitNode)
-				node.initialiser.receiver = node.symbol
+				node.initialiser.type = node.symbol.type
 			resolveNode(node.initialiser)
 		}
 		is InitNode -> {
 			context.unorderedNodes.add(node)
-			for(n in node.nodes)
-				if(n is EqualsNode)
-					resolveNode(n.right)
+			for(n in node.entries)
+				if(n.node is EqualsNode)
+					resolveNode(n.node.right)
 				else
-					resolveNode(n)
+					resolveNode(n.node)
 		}
 
-		is ArrayEqualsNode -> resolveNode(node.index)
+		is IndexNode -> resolveNode(node.index)
 
 		is EqualsNode,
 		is RegNode,
@@ -280,7 +280,67 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	@Suppress("CascadeIf")
 	private fun calculateInitNode(node: InitNode) {
+		val type = node.type
+		val nodes = node.entries
+		var hasEquals = false
+
+		if(type is ArraySymbol) {
+			for((i, entry) in nodes.withIndex()) {
+				var index = i
+				var n = entry.node
+
+				if(entry.node is EqualsNode) {
+					hasEquals = true
+					val left = entry.node.left as? IndexNode ?: error("Invalid initialiser")
+					index = calculateInt(left.index).toInt()
+					n = entry.node.right
+				} else if(hasEquals) {
+					error("Indexed array initialisers must occur after un-indexed ones")
+				}
+
+				if(n is InitNode)
+					n.type = type.type
+
+				if(index < 0 || index >= type.count)
+					error("Invalid array initialiser index: $index")
+
+				entry.type = type.type
+				entry.offset = type.type.size * index
+			}
+		} else if(type is StructSymbol) {
+			if(nodes.size > type.members.size)
+				error("Too many initialisers")
+
+			for((i, entry) in nodes.withIndex()) {
+				var member = type.members[i]
+				var n = entry.node
+
+				if(entry.node is EqualsNode) {
+					hasEquals = true
+					val name = entry.node.right as? NameNode ?: error("Expecting name node")
+					member = context.symbols.get(type.thisScope, name.name) as? MemberSymbol
+						?: error("Invalid initialiser")
+					n = entry.node.right
+				} else if(hasEquals) {
+					error("Named struct initialisers must occur after unnamed ones")
+				}
+
+				if(n is InitNode)
+					n.type = member.type
+
+				entry.type = member.type
+				entry.offset = member.offset
+			}
+		} else {
+			error("Invalid receiver: $type")
+		}
+	}
+
+
+
+	/*private fun calculateInitNode(node: InitNode) {
 		val receiver = node.receiver!!
 		if(receiver !is PosSymbol) error("Invalid initialiser")
 		val type = receiver.type
@@ -313,10 +373,6 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private var initOffset = 0
-
-
-
 	private fun calculateArrayInit(node: InitNode, type: ArraySymbol) {
 		val receiver = node.receiver!!
 		if(node.nodes.size > type.size) error("Too many initialisers")
@@ -331,7 +387,7 @@ class Resolver(private val context: CompilerContext) {
 			} else if(hasEquals)
 				error("Indexed array initialisers must occur after un-indexed ones")
 		}
-	}
+	}*/
 
 
 
