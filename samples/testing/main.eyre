@@ -17,7 +17,7 @@ struct Testing {
 }
 
 var array: Testing[4] = {
-	[2] = { { 'A', { 'B', 'C', 'D', 'E' } } }
+	[2] = { { 'A', { 'B', 'C', 'D', left = 'E' } } }
 }
 
 

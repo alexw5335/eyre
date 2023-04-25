@@ -319,7 +319,7 @@ class Resolver(private val context: CompilerContext) {
 
 				if(entry.node is EqualsNode) {
 					hasEquals = true
-					val name = entry.node.right as? NameNode ?: error("Expecting name node")
+					val name = entry.node.left as? NameNode ?: error("Expecting name node")
 					member = context.symbols.get(type.thisScope, name.name) as? MemberSymbol
 						?: error("Invalid initialiser")
 					n = entry.node.right
