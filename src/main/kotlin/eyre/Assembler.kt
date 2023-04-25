@@ -29,7 +29,7 @@ class Assembler(private val context: CompilerContext) {
 					is ScopeEndNode  -> handleScopeEnd(node)
 					is VarResNode    -> handleVarRes(node)
 					is VarDbNode     -> handleVarDb(node)
-					//is VarInitNode   -> handleVarInit(node)
+					is VarInitNode   -> handleVarInit(node)
 					else             -> { }
 				}
 			}
@@ -72,92 +72,67 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun handleVarDb(node: VarDbNode) {
-		dataWriter.align8()
+		val prevWriter = writer
+		writer = dataWriter
+		writer.align8()
 
-		node.symbol.pos = dataWriter.pos
+		node.symbol.pos = writer.pos
 
 		for(part in node.parts) {
 			for(value in part.nodes) {
 				if(value is StringNode) {
 					for(char in value.value.string) {
-						dataWriter.writeWidth(part.width, char.code)
+						writer.writeWidth(part.width, char.code)
 					}
 				} else {
 					val imm = resolveImm(value)
 					if(immRelocCount == 1) {
 						if(part.width != QWORD)
 							error("Absolute relocations must occupy 64 bits")
-						dataWriter.i64(0)
+						writer.i64(0)
 					} else {
-						dataWriter.writeWidth(part.width, imm)
+						writer.writeWidth(part.width, imm)
 					}
 				}
 			}
 		}
+		writer = prevWriter
 	}
 
 
 
-/*	private fun writeMember(member: MemberSymbol, value: AstNode) {
-		val offset = member.offset
+	private fun writeInitialiser(node: AstNode, type: Type) {
+		val start = writer.pos
 
-		when(member.type) {
-			is IntType -> {
-				val intValue = resolveImm(value)
-				when(member.type.size) {
-					1 -> dataWriter.i8(intValue.toInt())
-				}
-			}
-		}
-	}*/
-
-
-
-/*
-	private fun writeInitialiser(type: Type, node: AstNode) {
 		if(node is InitNode) {
-			for(n in node.nodes) {
-				writeInitialiser(node.receiver!!n)
+			for(i in node.nodes.indices) {
+				val member = node.members[i]
+				writer.seek(start + member.offset)
+				writeInitialiser(node.nodes[i], member.type)
 			}
+		} else if(node is EqualsNode) {
+			writeInitialiser(node.right, type)
 		} else {
-
+			val width = when(type.size) {
+				1    -> BYTE
+				2    -> WORD
+				4    -> DWORD
+				8    -> QWORD
+				else -> error("Invalid initialiser")
+			}
+			writeImm(node, width)
 		}
 	}
-*/
 
 
 
 	private fun handleVarInit(node: VarInitNode) {
-/*		dataWriter.align8()
-
-		val type = node.symbol.type as? StructSymbol ?: error("Expecting struct")
-
-		node.symbol.pos = dataWriter.pos
-
-		if(node.initialiser is InitNode) {
-
-		}*/
-
-
-/*		dataWriter.align8()
-
-		val type = node.symbol.type as? StructSymbol ?: error("Expecting struct")
-
-		node.symbol.pos = dataWriter.pos
-		var named = false
-		for((index, init) in node.inits.withIndex()) {
-			if(init is BinaryNode && init.op == BinaryOp.SET) {
-				named = true
-				val name = (init.left as? NameNode)?.name ?: error("Invalid member")
-				val member = context.symbols.get(type.thisScope, name) as? MemberSymbol ?: error("Invalid member")
-				writeMember(member, init.right)
-			} else if(named) {
-				error("Named arguments must be at the end")
-			} else {
-				val member = type.members[index]
-				writeMember(member, init)
-			}
-		}*/
+		val prevWriter = writer
+		writer = dataWriter
+		writer.align8()
+		node.symbol.pos = writer.pos
+		writeInitialiser(node.initialiser, node.symbol.type)
+		writer = prevWriter
 	}
 
 
@@ -1231,12 +1206,7 @@ class Assembler(private val context: CompilerContext) {
 		when(op1) {
 			is RegNode -> encode1R(0xFF, Widths.ONLY64, 2, op1.value)
 			is MemNode -> encode1M(0xFF, Widths.ONLY64, 2, op1, 0)
-			else -> {
-				if(op1 is SymNode && op1.symbol is DllImportSymbol)
-					encode1M(0xFF, Widths.ONLY64, 2, MemNode(QWORD, op1), 0)
-				else
-					encodeRel32(0xE8, op1)
-			}
+			else       -> encodeRel32(0xE8, op1)
 		}
 	}
 
@@ -1461,7 +1431,7 @@ class Assembler(private val context: CompilerContext) {
 		val op1 = node.op1 as? NameNode ?: invalidEncoding()
 		op1.symbol = context.getDllImport(op1.name)
 		if(op1.symbol == null) error("Unrecognised dll import: ${op1.name}")
-		encodeCALL(op1)
+		encode1M(0xFF, Widths.ONLY64, 2, MemNode(QWORD, op1), 0)
 	}
 
 

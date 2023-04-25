@@ -67,6 +67,15 @@ interface PosSymbol : Symbol {
 
 
 
+/**
+ * A symbol that defines an offset into some base symbol, typically another [OffsetSymbol] or a [PosSymbol].
+ */
+interface OffsetSymbol : Symbol {
+	val offset: Int
+}
+
+
+
 interface IntSymbol : Symbol {
 	var intValue: Long
 }
@@ -83,7 +92,14 @@ class AliasRefSymbol(val value: AstNode, val offset: Int) : AnonSymbol
 
 
 
-class RefSymbol(val receiver: PosSymbol, val offset: Int, override val type: Type): AnonSymbol, PosSymbol, TypedSymbol {
+class MemberRefSymbol(val receiver: OffsetSymbol, val member: MemberSymbol) : AnonSymbol, TypedSymbol, OffsetSymbol {
+	override val type = member.type
+	override val offset = receiver.offset + member.offset
+}
+
+
+
+class PosRefSymbol(val receiver: PosSymbol, val offset: Int, override val type: Type): AnonSymbol, PosSymbol, TypedSymbol {
 	override var pos
 		set(_) = error("Cannot set ref symbol pos")
 		get() = receiver.pos + offset
@@ -184,10 +200,10 @@ class VarAliasSymbol(
 
 class MemberSymbol(
 	override val base: SymBase,
-	var type: Type = VoidType,
-) : IntSymbol {
+	override var type: Type = VoidType,
+) : IntSymbol, TypedSymbol, OffsetSymbol {
 	var size = 0
-	var offset = 0
+	override var offset = 0
 	override var intValue = offset.toLong()
 }
 

@@ -19,6 +19,12 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun ScopedSymbol.child(name: Name) = context.symbols.get(thisScope, name)
+
+	private fun Scope.child(name: Name) = context.symbols.get(this, name)
+
+
+
 	private fun pushScope(scope: Scope) {
 		scopeStack[scopeStackSize++] = scope
 	}
@@ -177,6 +183,8 @@ class Resolver(private val context: CompilerContext) {
 					resolveNode(n)
 		}
 
+		is ArrayEqualsNode -> resolveNode(node.index)
+
 		is EqualsNode,
 		is RegNode,
 		is DbPart,
@@ -187,6 +195,8 @@ class Resolver(private val context: CompilerContext) {
 		is EnumEntryNode,
 		is LabelNode,
 		is MemberNode,
+		is MmxRegNode,
+		is XmmRegNode,
 		is TypeNode, -> return
 	}}
 
@@ -211,6 +221,7 @@ class Resolver(private val context: CompilerContext) {
 
 		return symbol as Type
 	}
+
 
 
 	private fun resolveNameNode(node: NameNode): Symbol {
@@ -262,21 +273,65 @@ class Resolver(private val context: CompilerContext) {
 		is NameNode    -> return
 		is TypeNode    -> calculateTypeNode(node)
 		is ArrayNode   -> calculateArrayNode(node)
-
-		is InitNode    -> {
-			val receiver = node.receiver!!
-			if(receiver !is PosSymbol) error("Invalid receiver")
-			val type = receiver.type as? StructSymbol ?: error("Expecting struct")
-			if(node.nodes.size > type.members.size) error("Too many initialisers")
-			for((i, n) in node.nodes.withIndex()) {
-				if(n !is InitNode) continue
-				val member = type.members[i]
-				n.receiver = RefSymbol(receiver, member.offset, member.type)
-			}
-		}
+		is InitNode    -> calculateInitNode(node)
 
 		else -> error("Invalid node: $node")
 	}}
+
+
+
+	private fun calculateInitNode(node: InitNode) {
+		val receiver = node.receiver!!
+		if(receiver !is PosSymbol) error("Invalid initialiser")
+		val type = receiver.type
+		if(type is ArraySymbol) {
+			calculateArrayInit(node, type)
+			return
+		}
+		if(type !is StructSymbol) error("Invalid initialiser")
+		if(node.nodes.size > type.members.size) error("Too many initialisers")
+		var hasEquals = false
+
+		for((i, n) in node.nodes.withIndex()) {
+			if(n is EqualsNode) {
+				hasEquals = true
+				if(n.left !is NameNode) error("Nested named initialisers not yet supported")
+				val member = context.symbols.get(type.thisScope, n.left.name)
+					as? MemberSymbol ?: error("Invalid receiver")
+				node.members.add(member)
+				if(n.right is InitNode)
+					n.right.receiver = PosRefSymbol(receiver, member.offset, member.type)
+				continue
+			} else if(hasEquals)
+				error("Named struct initialisers must occur after unnamed ones")
+			val member = type.members[i]
+			node.members.add(member)
+			if(n is InitNode)
+				n.receiver = PosRefSymbol(receiver, member.offset, member.type)
+		}
+	}
+
+
+
+	private var initOffset = 0
+
+
+
+	private fun calculateArrayInit(node: InitNode, type: ArraySymbol) {
+		val receiver = node.receiver!!
+		if(node.nodes.size > type.size) error("Too many initialisers")
+		var hasEquals = false
+		for((i, n) in node.nodes.withIndex()) {
+			if(n is ArrayEqualsNode) {
+				hasEquals = true
+				val index = calculateInt(n.node)
+				n.index = index.toInt()
+
+
+			} else if(hasEquals)
+				error("Indexed array initialisers must occur after un-indexed ones")
+		}
+	}
 
 
 
@@ -465,7 +520,7 @@ class Resolver(private val context: CompilerContext) {
 		calculateSymbol(invoker)
 
 		val symbol = when(invoker) {
-			is MemberSymbol -> RefSymbol(receiver, invoker.offset, invoker.type)
+			is MemberSymbol -> PosRefSymbol(receiver, invoker.offset, invoker.type)
 			else -> error("Invalid symbol: $invoker")
 		}
 
@@ -501,7 +556,7 @@ class Resolver(private val context: CompilerContext) {
 
 		if(receiver is PosSymbol) {
 			val offset = type.type.size * calculateInt(node.index).toInt()
-			node.symbol = RefSymbol(receiver, offset, type.type)
+			node.symbol = PosRefSymbol(receiver, offset, type.type)
 			return node.symbol!!
 		}
 

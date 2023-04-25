@@ -115,10 +115,13 @@ class Parser(private val context: CompilerContext) {
 
 		if(token is Name) {
 			return when(token) {
-				in Names.registers  -> RegNode(Names.registers[token])
-				Names.FS            -> SegRegNode(SegReg.FS)
-				Names.GS            -> SegRegNode(SegReg.GS)
-				else                -> NameNode(token)
+				in Names.registers    -> RegNode(Names.registers[token])
+				in Names.fpuRegisters -> FpuRegNode(Names.fpuRegisters[token])
+				in Names.xmmRegisters -> XmmRegNode(Names.xmmRegisters[token])
+				in Names.mmxRegisters -> MmxRegNode(Names.mmxRegisters[token])
+				Names.FS              -> SegRegNode(SegReg.FS)
+				Names.GS              -> SegRegNode(SegReg.GS)
+				else                  -> NameNode(token)
 			}
 		}
 
@@ -140,6 +143,9 @@ class Parser(private val context: CompilerContext) {
 				pos++
 				return InitNode(nodes)
 			}
+
+			if(token == SymToken.LBRACKET)
+				return ArrayEqualsNode(parseExpression())
 
 			return UnaryNode(token.unaryOp ?: error(srcPos, "Unexpected symbol: $token"), parseAtom())
 		}

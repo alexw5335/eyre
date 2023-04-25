@@ -89,6 +89,10 @@ class SegRegNode(val value: SegReg) : OpNode
 
 class FpuRegNode(val value: FpuReg) : OpNode
 
+class XmmRegNode(val value: XmmReg) : OpNode
+
+class MmxRegNode(val value: MmxReg) : OpNode
+
 class ConstNode(val symbol: ConstSymbol, val value: AstNode) : SymContainerNode(symbol)
 
 class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode?) : SymContainerNode(symbol)
@@ -123,12 +127,24 @@ class VarDbNode(val symbol: VarDbSymbol, val type: TypeNode?, val parts: List<Db
 
 class VarAliasNode(val symbol: VarAliasSymbol, val type: TypeNode, val value: AstNode) : SymContainerNode(symbol)
 
-class VarInitNode(val symbol: VarInitSymbol, val type: TypeNode, val initialiser: AstNode) : SymContainerNode(symbol)
+class VarInitNode(
+	val symbol      : VarInitSymbol,
+	val type        : TypeNode,
+	val initialiser : AstNode
+) : SymContainerNode(symbol)
 
-class EqualsNode(val left: SymNode, val right: AstNode) : AstNode
+class EqualsNode(val left: SymNode, val right: AstNode) : AstNode {
+	var offset: Int = 0
+}
 
 class InitNode(val nodes: List<AstNode>) : AstNode {
+	val members = ArrayList<MemberSymbol>()
+	val offsets = ArrayList<Int>()
 	var receiver: TypedSymbol? = null
+}
+
+class ArrayEqualsNode(val node: AstNode) : AstNode {
+	var index = 0
 }
 
 

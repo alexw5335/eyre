@@ -1,3 +1,5 @@
+namespace main
+
 struct Rect {
 	i32 top
 	i32 right
@@ -10,4 +12,18 @@ struct Paint {
 	Rect rect
 }
 
-var paint: Paint = { 1, { 1, 1, 1, 1, } }
+
+struct Testing {
+	Paint paint
+}
+
+
+
+var myVar: qword[10] = {
+	[0] = 1,
+	[2] = 3
+}
+
+proc main(40) {
+	dllcall ExitProcess
+}

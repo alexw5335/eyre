@@ -21,7 +21,7 @@ class InternRange<T>(private val range: IntRange, private val elements: Array<T>
 class Name(override val id: Int, val hash: Int, val string: String) : Intern, Token {
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
-	override fun toString() = string
+	override fun toString() = if(id == 0) "_" else string
 }
 
 
