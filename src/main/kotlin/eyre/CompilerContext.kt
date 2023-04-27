@@ -29,6 +29,10 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	var absRelocCount = 0
 
+	val stringLiterals = ArrayList<StringLiteralSymbol>()
+
+	val stringLiteralMap = HashMap<String, StringLiteralSymbol>() // Only for short strings
+
 
 
 	/*
@@ -71,5 +75,26 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 		return null
 	}
 
+
+
+	/*
+	Strings
+	 */
+
+
+
+	fun addStringLiteral(string: String): StringLiteralSymbol {
+		if(string.length <= 32) {
+			stringLiteralMap[string]?.let { return it }
+			val symbol = StringLiteralSymbol(string)
+			stringLiterals.add(symbol)
+			stringLiteralMap[string] = symbol
+			return symbol
+		} else {
+			val symbol = StringLiteralSymbol(string)
+			stringLiterals.add(symbol)
+			return symbol
+		}
+	}
 
 }

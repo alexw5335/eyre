@@ -76,13 +76,6 @@ object Names : Interner<String, Name>() {
 		return InternRange(range, elements)
 	}
 
-	val EMPTY  = add("")
-	val MAIN   = add("main")
-	val FS     = add("fs")
-	val GS     = add("gs")
-	val SIZE   = add("size")
-	val COUNT  = add("count")
-
 	val keywords     = createRange(Keyword.values(), Keyword::string)
 	val widths       = createRange(Width.values(), Width::string)
 	val varWidths    = createRange(Width.values(), Width::varString)
@@ -92,6 +85,14 @@ object Names : Interner<String, Name>() {
 	val fpuRegisters = createRange(FpuReg.values(), FpuReg::string)
 	val mmxRegisters = createRange(MmxReg.values(), MmxReg::string)
 	val xmmRegisters = createRange(XmmReg.values(), XmmReg::string)
+
+	val EMPTY = add("")
+	val MAIN  = add("main")
+	val FS    = add("fs")
+	val GS    = add("gs")
+	val SIZE  = add("size")
+	val COUNT = add("count")
+	val INT   = add("int")
 
 }
 

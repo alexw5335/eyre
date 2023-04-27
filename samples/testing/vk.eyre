@@ -1,0 +1,6 @@
+namespace vk
+
+enum SType {
+	APPLICATION_INFO 0
+	INSTANCE_CREATE_INFO 1
+}

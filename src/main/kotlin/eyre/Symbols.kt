@@ -92,13 +92,6 @@ class AliasRefSymbol(val value: AstNode, val offset: Int) : AnonSymbol
 
 
 
-class MemberRefSymbol(val receiver: OffsetSymbol, val member: MemberSymbol) : AnonSymbol, TypedSymbol, OffsetSymbol {
-	override val type = member.type
-	override val offset = receiver.offset + member.offset
-}
-
-
-
 class PosRefSymbol(val receiver: PosSymbol, val offset: Int, override val type: Type): AnonSymbol, PosSymbol, TypedSymbol {
 	override var pos
 		set(_) = error("Cannot set ref symbol pos")
@@ -160,9 +153,9 @@ private class IntSymbolImpl(
 
 
 
-fun IntSymbol(base: SymBase, intValue: Long): IntSymbol {
-	return IntSymbolImpl(base, intValue)
-}
+fun IntSymbol(intValue: Long): IntSymbol = IntSymbolImpl(SymBase.EMPTY, intValue)
+
+fun IntSymbol(intValue: Int): IntSymbol = IntSymbolImpl(SymBase.EMPTY, intValue.toLong())
 
 
 
@@ -287,4 +280,11 @@ class TypedefSymbol(
 	var type: Type
 ) : Type {
 	override val size get() = type.size
+}
+
+
+
+class StringLiteralSymbol(val string: String) : AnonSymbol, PosSymbol {
+	override var section = Section.DATA
+	override var pos = 0
 }

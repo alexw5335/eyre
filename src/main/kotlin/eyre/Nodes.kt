@@ -52,7 +52,8 @@ Nodes
 class TypeNode(
 	val name: Name?,
 	val names: Array<Name>?,
-	val arraySizes: Array<AstNode>?
+	val arraySizes: Array<AstNode>?,
+	var isInferred: Boolean = false
 ) : SymNode {
 	override var symbol: Symbol? = null
 }
@@ -75,7 +76,9 @@ class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode, OpNode
 
 class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode, OpNode
 
-class StringNode(val value: Name) : AstNode, OpNode
+class StringNode(val value: String) : AstNode, OpNode, SymNode {
+	override var symbol: StringLiteralSymbol? = null
+}
 
 class LabelNode(val symbol: LabelSymbol) : SymContainerNode(symbol)
 
@@ -142,7 +145,9 @@ class InitNode(val entries: List<Entry>) : AstNode {
 	var type: Type? = null
 }
 
-class IndexNode(val index: AstNode) : AstNode
+class IndexNode(val index: AstNode) : AstNode, SymNode {
+	override var symbol: Symbol? = null
+}
 
 
 

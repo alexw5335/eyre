@@ -369,7 +369,7 @@ class Parser(private val context: CompilerContext) {
 					nodes.add(component)
 
 					size += when(component) {
-						is StringNode -> width.bytes * component.value.string.length
+						is StringNode -> width.bytes * component.value.length
 						else -> width.bytes
 					}
 
@@ -570,12 +570,6 @@ class Parser(private val context: CompilerContext) {
 			pos++
 			arraySizes.add(parseExpression())
 			expect(SymToken.RBRACKET)
-		}
-
-		if(next == SymToken.LBRACKET) {
-			pos++
-			expect(SymToken.RBRACKET)
-			arraySizes.clear()
 		}
 
 		if(arraySizes.isNotEmpty()) {

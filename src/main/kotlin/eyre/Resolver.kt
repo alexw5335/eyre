@@ -185,13 +185,14 @@ class Resolver(private val context: CompilerContext) {
 
 		is IndexNode -> resolveNode(node.index)
 
+		is StringNode -> node.symbol = context.addStringLiteral(node.value)
+
 		is EqualsNode,
 		is RegNode,
 		is DbPart,
 		is IntNode,
 		is FpuRegNode,
 		is SegRegNode,
-		is StringNode,
 		is EnumEntryNode,
 		is LabelNode,
 		is MemberNode,
@@ -280,6 +281,48 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private var initOffset = 0
+
+
+
+	private fun error(): Nothing = error("Resolver error")
+
+
+
+	private fun calculateEquals(node: AstNode, initialType: Type): Type {
+		if(node is IndexNode) {
+			if(initialType !is ArraySymbol) error()
+			val index = calculateInt(node.index).toInt()
+			if(index < 0 || index >= initialType.count) error()
+			initOffset += index * initialType.type.size
+			return initialType.type
+		}
+
+		if(node is NameNode) {
+			if(initialType !is StructSymbol) error()
+			val member = context.symbols.get(initialType.thisScope, node.name)
+				as? MemberSymbol ?: error()
+			initOffset += member.offset
+			return member.type
+		}
+
+		if(node is DotNode)
+			return calculateEquals(node.right, calculateEquals(node.left, initialType))
+
+		if(node is ArrayNode) {
+			val type = calculateEquals(node.receiver, initialType)
+			if(type !is ArraySymbol) error()
+			val index = calculateInt(node.index).toInt()
+			if(index < 0 || index >= type.count) error()
+			initOffset += index * type.size
+			return type
+		}
+
+		error("Invalid node: $node")
+	}
+
+
+
 	@Suppress("CascadeIf")
 	private fun calculateInitNode(node: InitNode) {
 		val type = node.type
@@ -288,106 +331,42 @@ class Resolver(private val context: CompilerContext) {
 
 		if(type is ArraySymbol) {
 			for((i, entry) in nodes.withIndex()) {
-				var index = i
-				var n = entry.node
-
 				if(entry.node is EqualsNode) {
 					hasEquals = true
-					val left = entry.node.left as? IndexNode ?: error("Invalid initialiser")
-					index = calculateInt(left.index).toInt()
-					n = entry.node.right
+					initOffset = 0
+					entry.type = calculateEquals(entry.node.left, type)
+					entry.offset = initOffset
+					if(entry.node.right is InitNode) entry.node.right.type = type.type
 				} else if(hasEquals) {
 					error("Indexed array initialisers must occur after un-indexed ones")
+				} else {
+					if(i >= type.count) error()
+					entry.type = type.type
+					entry.offset = i * type.type.size
+					if(entry.node is InitNode) entry.node.type = type.type
 				}
-
-				if(n is InitNode)
-					n.type = type.type
-
-				if(index < 0 || index >= type.count)
-					error("Invalid array initialiser index: $index")
-
-				entry.type = type.type
-				entry.offset = type.type.size * index
 			}
 		} else if(type is StructSymbol) {
-			if(nodes.size > type.members.size)
-				error("Too many initialisers")
-
 			for((i, entry) in nodes.withIndex()) {
-				var member = type.members[i]
-				var n = entry.node
-
 				if(entry.node is EqualsNode) {
 					hasEquals = true
-					val name = entry.node.left as? NameNode ?: error("Expecting name node")
-					member = context.symbols.get(type.thisScope, name.name) as? MemberSymbol
-						?: error("Invalid initialiser")
-					n = entry.node.right
+					initOffset = 0
+					entry.type = calculateEquals(entry.node.left, type)
+					entry.offset = initOffset
+					if(entry.node.right is InitNode) entry.node.right.type = entry.type
 				} else if(hasEquals) {
 					error("Named struct initialisers must occur after unnamed ones")
+				} else {
+					if(i >= type.members.size) error()
+					entry.type = type.members[i].type
+					entry.offset = type.members[i].offset
+					if(entry.node is InitNode) entry.node.type = entry.type
 				}
-
-				if(n is InitNode)
-					n.type = member.type
-
-				entry.type = member.type
-				entry.offset = member.offset
 			}
 		} else {
 			error("Invalid receiver: $type")
 		}
 	}
-
-
-
-	/*private fun calculateInitNode(node: InitNode) {
-		val receiver = node.receiver!!
-		if(receiver !is PosSymbol) error("Invalid initialiser")
-		val type = receiver.type
-		if(type is ArraySymbol) {
-			calculateArrayInit(node, type)
-			return
-		}
-		if(type !is StructSymbol) error("Invalid initialiser")
-		if(node.nodes.size > type.members.size) error("Too many initialisers")
-		var hasEquals = false
-
-		for((i, n) in node.nodes.withIndex()) {
-			if(n is EqualsNode) {
-				hasEquals = true
-				if(n.left !is NameNode) error("Nested named initialisers not yet supported")
-				val member = context.symbols.get(type.thisScope, n.left.name)
-					as? MemberSymbol ?: error("Invalid receiver")
-				node.members.add(member)
-				if(n.right is InitNode)
-					n.right.receiver = PosRefSymbol(receiver, member.offset, member.type)
-				continue
-			} else if(hasEquals)
-				error("Named struct initialisers must occur after unnamed ones")
-			val member = type.members[i]
-			node.members.add(member)
-			if(n is InitNode)
-				n.receiver = PosRefSymbol(receiver, member.offset, member.type)
-		}
-	}
-
-
-
-	private fun calculateArrayInit(node: InitNode, type: ArraySymbol) {
-		val receiver = node.receiver!!
-		if(node.nodes.size > type.size) error("Too many initialisers")
-		var hasEquals = false
-		for((i, n) in node.nodes.withIndex()) {
-			if(n is ArrayEqualsNode) {
-				hasEquals = true
-				val index = calculateInt(n.node)
-				n.index = index.toInt()
-
-
-			} else if(hasEquals)
-				error("Indexed array initialisers must occur after un-indexed ones")
-		}
-	}*/
 
 
 
@@ -516,15 +495,24 @@ class Resolver(private val context: CompilerContext) {
 		calculateSymbol(left)
 
 		node.right.symbol = when(node.right.name) {
+			// Unnecessary inclusion of string literal into executable
+			Names.INT -> when(left) {
+				is StringLiteralSymbol -> IntSymbol(left.string.ascii64())
+				else -> error("Invalid reference")
+			}
+
 			Names.SIZE -> when(left) {
-				is VarDbSymbol  -> IntSymbol(SymBase.EMPTY, left.size.toLong())
-				is VarResSymbol -> IntSymbol(SymBase.EMPTY, left.type.size.toLong())
-				is Type         -> IntSymbol(SymBase.EMPTY, left.size.toLong())
+				is VarDbSymbol  -> IntSymbol(left.size)
+				is VarResSymbol -> IntSymbol(left.type.size)
+				is Type         -> IntSymbol(left.size)
 				else            -> error("Invalid reference")
 			}
 
 			Names.COUNT -> when(left) {
-				is EnumSymbol -> IntSymbol(SymBase.EMPTY, left.entries.size.toLong())
+				is EnumSymbol -> IntSymbol(left.entries.size)
+				is ArraySymbol -> IntSymbol(left.count)
+				is TypedSymbol ->
+					IntSymbol((left.type as? ArraySymbol)?.count ?: error("Invalid reference"))
 				else -> error("Invalid reference")
 			}
 
@@ -540,49 +528,27 @@ class Resolver(private val context: CompilerContext) {
 		if(node.symbol != null)
 			return node.symbol
 
-		val receiver = node.left.symbol!!
-
-		if(receiver is VarAliasSymbol) {
-			val receiverType = receiver.type
-
-			if(receiverType !is ScopedSymbol) error("")
-
-			val invoker = context.symbols.get(
-				receiverType.thisScope,
-				(node.right as? NameNode)?.name ?: error("Invalid node")
-			)
-
-			val symbol = when(invoker) {
-				is MemberSymbol -> AliasRefSymbol((receiver.node as VarAliasNode).value, invoker.offset)
-				else -> error("Invalid symbol: $invoker")
-			}
-
-			node.right.symbol = symbol
-
-			return symbol
-		}
-
-		if(receiver !is TypedSymbol || receiver !is PosSymbol) error("Invalid receiver: $receiver")
-
-		val receiverType = receiver.type
-
-		if(receiverType !is ScopedSymbol) error("Invalid receiver type: $receiverType")
-
+		val receiver = node.left.symbol as? TypedSymbol ?: error("Invalid receiver")
+		val receiverType = receiver.type as? ScopedSymbol ?: error("Invalid receiver")
 		val invoker = context.symbols.get(
 			receiverType.thisScope,
 			(node.right as? NameNode)?.name ?: error("Invalid node")
-		) ?: error("Invalid symbol")
+		) as? MemberSymbol ?: error("Expecting struct member")
 
-		calculateSymbol(invoker)
-
-		val symbol = when(invoker) {
-			is MemberSymbol -> PosRefSymbol(receiver, invoker.offset, invoker.type)
-			else -> error("Invalid symbol: $invoker")
+		node.right.symbol = when(receiver) {
+			is VarAliasSymbol -> {
+				AliasRefSymbol((receiver.node as VarAliasNode).value, invoker.offset)
+			}
+			is PosSymbol -> {
+				calculateSymbol(invoker)
+				PosRefSymbol(receiver, invoker.offset, invoker.type)
+			}
+			else -> {
+				error("Invalid receiver")
+			}
 		}
 
-		node.right.symbol = symbol
-
-		return symbol
+		return node.right.symbol!!
 	}
 
 
@@ -613,11 +579,6 @@ class Resolver(private val context: CompilerContext) {
 		if(receiver is PosSymbol) {
 			val offset = type.type.size * calculateInt(node.index).toInt()
 			node.symbol = PosRefSymbol(receiver, offset, type.type)
-			return node.symbol!!
-		}
-
-		if(receiver is IntSymbol) {
-			node.symbol = IntSymbol(SymBase.EMPTY, receiver.intValue)
 			return node.symbol!!
 		}
 

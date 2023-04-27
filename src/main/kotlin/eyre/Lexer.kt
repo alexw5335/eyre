@@ -139,7 +139,7 @@ class Lexer {
 			}
 		}
 
-		add(StringToken(Names.add(stringBuilder.toString())))
+		add(StringToken(stringBuilder.toString()))
 	}
 
 

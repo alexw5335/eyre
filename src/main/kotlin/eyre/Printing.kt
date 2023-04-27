@@ -6,7 +6,7 @@ package eyre
 
 val AstNode.printString: String get() = when(this) {
 	is LabelNode      -> "label ${symbol.name}"
-	is StringNode     -> "\"${value.string}\""
+	is StringNode     -> "\"$value\""
 	is IntNode        -> value.toString()
 	is UnaryNode      -> "${op.symbol}${node.printString}"
 	is BinaryNode     -> "(${left.printString} ${op.symbol} ${right.printString})"
@@ -19,7 +19,7 @@ val AstNode.printString: String get() = when(this) {
 	is SegRegNode     -> value.name.lowercase()
 	is FpuRegNode     -> value.string
 	is VarResNode     -> "var ${symbol.name}: ${type.printString}"
-	is ArrayNode      -> "${receiver.printString}[${index?.printString ?: ""}]"
+	is ArrayNode      -> "${receiver.printString}[${index.printString}]"
 	is ConstNode      -> "const ${symbol.name} = ${value.printString}"
 	is TypedefNode    -> "typedef ${symbol.name} = ${value.printString}"
 

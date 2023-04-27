@@ -45,7 +45,7 @@ class Compiler(private val context: CompilerContext) {
 		Linker(context).link()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
 		//dumpbin()
-		//disassemble()
+		disassemble()
 	}
 
 

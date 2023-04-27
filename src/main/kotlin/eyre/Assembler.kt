@@ -3,6 +3,7 @@ package eyre
 import eyre.Mnemonic.*
 import eyre.Width.*
 import eyre.util.NativeWriter
+import java.io.Writer
 
 class Assembler(private val context: CompilerContext) {
 
@@ -19,6 +20,18 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private inline fun sectioned(writer: NativeWriter, section: Section, block: () -> Unit) {
+		val prevWriter = this.writer
+		val prevSection = this.section
+		this.writer = writer
+		this.section = section
+		block()
+		this.writer = prevWriter
+		this.section = prevSection
+	}
+
+
+
 	fun assemble() {
 		for(srcFile in context.srcFiles) {
 			for(node in srcFile.nodes) {
@@ -32,6 +45,16 @@ class Assembler(private val context: CompilerContext) {
 					is VarInitNode   -> handleVarInit(node)
 					else             -> { }
 				}
+			}
+		}
+
+		for(s in context.stringLiterals) {
+			sectioned(dataWriter, Section.DATA) {
+				writer.align8()
+				s.section = Section.DATA
+				s.pos = writer.pos
+				for(c in s.string) writer.i8(c.code)
+				writer.i8(0)
 			}
 		}
 	}
@@ -81,9 +104,8 @@ class Assembler(private val context: CompilerContext) {
 		for(part in node.parts) {
 			for(value in part.nodes) {
 				if(value is StringNode) {
-					for(char in value.value.string) {
+					for(char in value.value)
 						writer.writeWidth(part.width, char.code)
-					}
 				} else {
 					val imm = resolveImm(value)
 					if(immRelocCount == 1) {
@@ -101,6 +123,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	@Suppress("CascadeIf")
 	private fun writeInitialiser(node: AstNode, type: Type) {
 		val start = writer.pos
 
@@ -118,7 +141,7 @@ class Assembler(private val context: CompilerContext) {
 				2    -> WORD
 				4    -> DWORD
 				8    -> QWORD
-				else -> error("Invalid initialiser")
+				else -> error("Invalid initialiser: ${type.name}, of size: ${type.size}")
 			}
 			writeImm(node, width, true)
 		}
@@ -127,12 +150,11 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun handleVarInit(node: VarInitNode) {
-		val prevWriter = writer
-		writer = dataWriter
-		writer.align8()
-		node.symbol.pos = writer.pos
-		writeInitialiser(node.initialiser, node.symbol.type)
-		writer = prevWriter
+		sectioned(dataWriter, Section.DATA) {
+			writer.align8()
+			node.symbol.pos = writer.pos
+			writeInitialiser(node.initialiser, node.symbol.type)
+		}
 	}
 
 
@@ -287,7 +309,7 @@ class Assembler(private val context: CompilerContext) {
 		is IntNode         -> node.value
 		is UnaryNode       -> node.calculate(::resolveImmRec, regValid)
 		is BinaryNode      -> node.calculate(::resolveImmRec, regValid)
-		is StringNode      -> node.value.string.ascii64()
+		//is StringNode      -> node.value.ascii64()
 		is SymNode         -> resolveImmSym(node.symbol, regValid)
 		else               -> error("Invalid imm node: $node")
 	}
