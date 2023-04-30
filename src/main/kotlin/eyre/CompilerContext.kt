@@ -55,7 +55,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 		val nameIntern = Names.add(name)
 		dllDefs[nameIntern] = DllDef(nameIntern, exports)
 	}
-
+	
 
 
 	fun getDllImport(name: Name): DllImportSymbol? {

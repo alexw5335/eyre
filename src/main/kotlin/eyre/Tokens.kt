@@ -12,6 +12,8 @@ data class CharToken(val value: Char) : Token
 
 data class StringToken(val value: String) : Token
 
+data class FloatToken(val value: Float) : Token
+
 
 
 enum class SymToken(

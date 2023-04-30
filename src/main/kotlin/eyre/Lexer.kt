@@ -189,6 +189,8 @@ class Lexer {
 		}
 	}
 
+
+
 	private fun readBinary(): Long {
 		var value = 0L
 
@@ -260,6 +262,10 @@ class Lexer {
 		add(IntToken(readDecimal()))
 		if(chars[pos].isLetterOrDigit()) lexerError("Invalid char in number literal: '${chars[pos]}'")
 	}
+
+
+
+	var intValue = 0L
 
 
 

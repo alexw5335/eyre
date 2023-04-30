@@ -98,6 +98,16 @@ value class Widths(val value: Int) {
 
 
 
+enum class RegType {
+	GP,
+	SEG,
+	FPU,
+	MMX,
+	XMM;
+}
+
+
+
 enum class SegReg {
 	FS,
 	GS;

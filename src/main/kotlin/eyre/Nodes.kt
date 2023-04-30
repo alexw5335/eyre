@@ -88,6 +88,8 @@ class MemNode(val width: Width?, val value: AstNode) : OpNode
 
 class TypedefNode(val symbol: TypedefSymbol, val value: TypeNode) : SymContainerNode(symbol)
 
+class MiscRegNode(val type: RegType, val value: Int) : OpNode
+
 class SegRegNode(val value: SegReg) : OpNode
 
 class FpuRegNode(val value: FpuReg) : OpNode

@@ -1,6 +1,36 @@
 namespace vk
 
+
+
+#size 4
 enum SType {
 	APPLICATION_INFO 0
 	INSTANCE_CREATE_INFO 1
+	DEVICE_QUEUE_CREATE_INFO 2
+	DEVICE_CREATE_INFO 3
+}
+
+
+
+struct ApplicationInfo {
+	i32 sType
+	i64 pNext
+	i64 pApplicationName
+	i32 applicationVersion
+	i64 pEngineName
+	i32 engineVersion
+	i32 apiVersion
+}
+
+
+
+struct InstanceCreateInfo {
+	i32 sType
+	i64 pNext
+	i32 flags
+	i64 pApplicationInfo
+	i32 enabledLayerCount
+	i64 ppEnabledLayerNames
+	i32 enabledExtensionCount
+	i64 ppEnabledExtensionNames
 }
