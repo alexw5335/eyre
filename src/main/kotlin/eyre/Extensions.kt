@@ -27,6 +27,7 @@ fun NativeWriter.writeWidth(width: Width, value: Long): Boolean {
 		Width.WORD  -> i16(value.toInt())
 		Width.DWORD -> i32(value.toInt())
 		Width.QWORD -> i64(value)
+		else        -> error("Invalid width")
 	}
 
 	return true

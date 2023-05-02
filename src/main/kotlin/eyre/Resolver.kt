@@ -187,12 +187,13 @@ class Resolver(private val context: CompilerContext) {
 
 		is StringNode -> node.symbol = context.addStringLiteral(node.value)
 
+		is FloatNode,
 		is MiscRegNode,
 		is EqualsNode,
 		is RegNode,
 		is DbPart,
 		is IntNode,
-		is FpuRegNode,
+		is FpuNode,
 		is SegRegNode,
 		is EnumEntryNode,
 		is LabelNode,

@@ -191,100 +191,58 @@ class Lexer {
 
 
 
-	private fun readBinary(): Long {
-		var value = 0L
+	private fun number(radix: Int) {
+		val start = pos
+
+		var hasDotOrExponent = false
 
 		while(true) {
-			val mask = when(chars[pos++]) {
-				'0'  -> 0L
-				'1'  -> 1L
-				'_'  -> continue
+			when(chars[pos]) {
+				'.',
+				'e' -> { pos++; hasDotOrExponent = true }
+				'_',
+				in '0'..'9',
+				in 'A'..'Z',
+				in 'a'..'z' -> pos++
 				else -> break
 			}
-
-			if(value and (1L shl 63) != 0L)
-				lexerError("Integer literal out of range")
-			value = (value shl 1) or mask
 		}
 
-		pos--
-		return value
+		val string = String(chars, start, pos - start)
+
+		if(string.last() == 'f' || string.last() == 'F' && radix != 16) {
+			if(radix != 10) lexerError("Malformed number")
+			add(FloatToken(string.toFloatOrNull()?.toDouble() ?: lexerError("Malformed float")))
+		} else if(hasDotOrExponent) {
+			if(radix != 10) lexerError("Malformed number")
+			add(FloatToken(string.toDoubleOrNull() ?: lexerError("Malformed double")))
+		} else {
+			add(IntToken(string.toLongOrNull(radix) ?: lexerError("Malformed integer")))
+		}
 	}
 
 
 
-	private fun readDecimal(): Long {
-		var value = 0L
-
-		while(true) {
-			val mask = when(val char = chars[pos++]) {
-				in '0'..'9' -> char.code - 48L
-				'_'         -> continue
-				else        -> break
-			}
-
-			if(value and (0xFFL shl 56) != 0L)
-				lexerError("Integer literal out of range")
-			value = (value * 10) + mask
+	private fun zero() {
+		when(val next = chars[pos++]) {
+			'b', 'B'    -> number(2)
+			'o', 'O'    -> number(8)
+			'd', 'D'    -> number(10)
+			'x', 'X'    -> number(16)
+			'f', 'F'    -> add(FloatToken(0.0))
+			'.'         -> { pos -= 2; number(10) }
+			in '0'..'9' -> number(10)
+			in 'a'..'z',
+			in 'A'..'Z' -> lexerError("Invalid number character: $next")
+			else        -> { pos-- }
 		}
-
-		pos--
-		return value
-	}
-
-
-
-	private fun readHex(): Long {
-		var value = 0L
-
-		while(true) {
-			val mask = when(val char = chars[pos++]) {
-				'_'         -> continue
-				in '0'..'9' -> char.code - '0'.code.toLong()
-				in 'a'..'z' -> char.code - 'a'.code.toLong() + 10
-				in 'A'..'Z' -> char.code - 'A'.code.toLong() + 10
-				else        -> break
-			}
-
-			if(value and (0b1111L shl 60) != 0L)
-				lexerError("Integer literal out of range")
-			value = (value shl 4) or mask
-		}
-
-		pos--
-		return value
 	}
 
 
 
 	private fun digit() {
 		pos--
-		add(IntToken(readDecimal()))
-		if(chars[pos].isLetterOrDigit()) lexerError("Invalid char in number literal: '${chars[pos]}'")
-	}
-
-
-
-	var intValue = 0L
-
-
-
-	private fun zero() {
-		if(chars[pos].isDigit()) {
-			add(IntToken(readDecimal()))
-			return
-		}
-
-		if(!chars[pos].isLetter()) {
-			add(IntToken(0))
-			return
-		}
-
-		when(val base = chars[pos++]) {
-			'x'  -> add(IntToken(readHex()))
-			'b'  -> add(IntToken(readBinary()))
-			else -> lexerError("Invalid integer base: $base")
-		}
+		number(10)
 	}
 
 

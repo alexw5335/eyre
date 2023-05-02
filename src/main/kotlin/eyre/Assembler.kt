@@ -3,7 +3,6 @@ package eyre
 import eyre.Mnemonic.*
 import eyre.Width.*
 import eyre.util.NativeWriter
-import java.io.Writer
 
 class Assembler(private val context: CompilerContext) {
 
@@ -17,6 +16,16 @@ class Assembler(private val context: CompilerContext) {
 	private var writer = textWriter
 
 	private var section = Section.TEXT
+
+	private var zeroOpcodePrefix = false
+
+
+
+	private inline fun withZeroOpcodePrefix(block: () -> Unit) {
+		zeroOpcodePrefix = true
+		block()
+		zeroOpcodePrefix = false
+	}
 
 
 
@@ -489,6 +498,8 @@ class Assembler(private val context: CompilerContext) {
 
 	private val OpNode.asMem get() = this as? MemNode ?: invalidEncoding()
 
+	private val OpNode?.asFpu get() = (this!! as? FpuNode)?.value ?: invalidEncoding()
+
 	private fun byte(value: Int) = writer.i8(value)
 
 	private fun word(value: Int) = writer.i16(value)
@@ -524,8 +535,14 @@ class Assembler(private val context: CompilerContext) {
 	private fun getOpcode(opcode: Int, widths: Widths, width: Width) =
 		opcode + ((widths.value and 1) and (1 shl width.ordinal).inv())
 
+	private fun writeOpcode(opcode: Int) {
+		writer.varLengthInt(opcode)
+		if(zeroOpcodePrefix) writer.i8(0)
+	}
+
 	private fun writeOpcode(opcode: Int, widths: Widths, width: Width) {
 		writer.varLengthInt(getOpcode(opcode, widths, width))
+		if(zeroOpcodePrefix) writer.i8(0)
 	}
 
 
@@ -571,20 +588,20 @@ class Assembler(private val context: CompilerContext) {
 		if(index != null) { // SIB
 			if(base != null) {
 				writeRex(rexW, rexR, index.rex, base.rex)
-				writer.varLengthInt(opcode)
+				writeOpcode(opcode)
 				writeModRM(mod, reg, 0b100)
 				writeSib(scale, index.value, base.value)
 				relocAndDisp(mod, disp, node)
 			} else {
 				writeRex(rexW, rexR, index.rex, 0)
-				writer.varLengthInt(opcode)
+				writeOpcode(opcode)
 				writeModRM(mod, reg, 0b100)
 				writeSib(scale, index.value, 0b101)
 				relocAndDisp(mod, disp, node)
 			}
 		} else if(base != null) { // Indirect
 			writeRex(rexW, rexR, 0, base.rex)
-			writer.varLengthInt(opcode)
+			writeOpcode(opcode)
 
 			if(base.isSpOr12) {
 				writeModRM(mod, reg, 0b100)
@@ -596,14 +613,14 @@ class Assembler(private val context: CompilerContext) {
 			relocAndDisp(mod, disp, node)
 		} else if(memRelocCount and 1 == 1) { // RIP-relative
 			writeRex(rexW, rexR, 0, 0)
-			writer.varLengthInt(opcode)
+			writeOpcode(opcode)
 			writeModRM(0b00, reg, 0b101)
 			addRelReloc(DWORD, node, immLength)
 			writer.i32(0)
 		} else if(mod != 0) { // Absolute 32-bit
 			error("Absolute memory operands not yet supported")
 			//writeRex(rexW, rexR, 0, 0);
-			//writeVarLengthInt(opcode);
+			//writeOpcode(opcode)
 			//writeModRM(0b00, reg, 0b100);
 			//writeSib(0b00, 0b100, 0b101);
 			//relocAndDisp(mod, disp, node);
@@ -640,25 +657,51 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun encode1R16(opcode: Int, extension: Int, op1: Register) {
+		if(op1.width != WORD) invalidEncoding()
+		writeRex(0, 0, 0, op1.rex)
+		writeOpcode(opcode)
+		writeModRM(0b11, extension, op1.value)
+	}
+
+
+
+	/**
+	 * - [reversed] is false if the instruction has R_RM and RM_R, true otherwise.
+	 * - [reversed] == true if: op1 in ModRM:reg, op2 in ModRM:r/m
+	 * - [reversed] == false if: op1 in ModRM:r/m, op2 in ModRM:reg
+	 *
+	 */
 	private fun encode2RR(
 		opcode: Int,
 		widths: Widths,
 		op1: Register,
 		op2: Register,
-		op2CanBeMem: Boolean,
+		reversed: Boolean,
 		mismatch: Boolean = false,
 	) {
 		val width = op1.width
 		if(!mismatch && op1.width != op2.width) invalidEncoding()
 		checkWidths(widths, width)
 		checkO16(width)
-		writeRex(rexW(widths, width), op2.rex, 0, op1.rex)
-		writeOpcode(opcode, widths, width)
-		if(op2CanBeMem)
+
+		if(reversed) {
+			writeRex(rexW(widths, width), op1.rex, 0, op2.rex)
+			writeOpcode(opcode, widths, width)
 			writeModRM(0b11, op1.value, op2.value)
-		else
+		} else {
+			writeRex(rexW(widths, width), op2.rex, 0, op1.rex)
+			writeOpcode(opcode, widths, width)
 			writeModRM(0b11, op2.value, op1.value)
+		}
 	}
+
+
+
+	private fun encode2XX(opcode: Int, op1: XmmReg, op2: XmmReg) {
+		writeRex(0, op2.rex, 0, op1.rex)
+	}
+
 
 
 
@@ -671,7 +714,7 @@ class Assembler(private val context: CompilerContext) {
 		mismatch: Boolean = false
 	) {
 		val width = op1.width
-		if(mismatch && op2.width != null && op2.width != op1.width) invalidEncoding()
+		if(!mismatch && op2.width != null && op2.width != op1.width) invalidEncoding()
 		checkWidths(widths, width)
 		checkO16(width)
 		writeMem(
@@ -698,9 +741,35 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun encode1MNoWidth(opcode: Int, extension: Int, op1: MemNode) {
+		if(op1.width != null) invalidEncoding()
+		writeMem(opcode, op1.value, 0, 0, extension, 0)
+	}
+
+
+
+	private fun encode1MAnyWidth(opcode: Int, extension: Int, op1: MemNode) {
+		writeMem(opcode, op1.value, 0, 0, extension, 0)
+	}
+
+
+
+	private fun encode1MSingleWidth(opcode: Int, width: Width, extension: Int, op1: MemNode) {
+		if(op1.width != null && op1.width != width) invalidEncoding()
+		writeMem(
+			opcode,
+			op1.value,
+			0,
+			0,
+			extension,
+			0
+		)
+	}
+
+
+
 	private fun encode1M(opcode: Int, widths: Widths, extension: Int, op1: MemNode, immLength: Int) {
 		val width = op1.width ?: invalidEncoding()
-		checkWidths(widths, width)
 		checkO16(width)
 		writeMem(
 			getOpcode(opcode, widths, width),
@@ -730,20 +799,30 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encode2RRM(opcode: Int, widths: Widths, op1: Register, op2: OpNode) {
-		when(op2) {
-			is RegNode -> encode2RR(opcode, widths, op1, op2.value, true)
-			is MemNode -> encode2RM(opcode, widths, op1, op2, 0)
-			else -> invalidEncoding()
+	private fun encode1R16M16(opcode: Int, extension: Int, op1: OpNode) {
+		when(op1) {
+			is RegNode -> encode1R16(opcode, extension, op1.value)
+			is MemNode -> encode1MSingleWidth(opcode, WORD, extension, op1)
+			else       -> invalidEncoding()
 		}
 	}
 
 
 
-	private fun encode2RMR(opcode: Int, widths: Widths, op1: OpNode, op2: Register) {
+	private fun encode1RM16(opcode: Int, widths: Widths, extension: Int, op1: OpNode) {
 		when(op1) {
-			is RegNode -> encode2RR(opcode, widths, op1.value, op2, false)
-			is MemNode -> encode2RM(opcode, widths, op2, op1, 0)
+			is RegNode -> encode1R(opcode, widths, extension, op1.value)
+			is MemNode -> encode1MSingleWidth(opcode, WORD, extension, op1)
+			else       -> invalidEncoding()
+		}
+	}
+
+
+
+	private fun encode2RRM(opcode: Int, widths: Widths, op1: Register, op2: OpNode) {
+		when(op2) {
+			is RegNode -> encode2RR(opcode, widths, op1, op2.value, reversed = true)
+			is MemNode -> encode2RM(opcode, widths, op1, op2, 0)
 			else -> invalidEncoding()
 		}
 	}
@@ -813,6 +892,72 @@ class Assembler(private val context: CompilerContext) {
 		STD    -> byte(0xFD)
 		PAUSE  -> word(0x90F3)
 		RETURN -> encodeRETURN()
+
+		FADDP  -> word(0xC1DE)
+		FMULP  -> word(0xC9DE)
+		FCOM   -> word(0xD1D8)
+		FCOMP  -> word(0xD9D8)
+		FCOMPP -> word(0xD9DE)
+		FSUBP  -> word(0xE9DE)
+		FSUBRP -> word(0xE1DE)
+		FDIVP  -> word(0xF9DE)
+		FDIVRP -> word(0xF1DE)
+		FNOP    -> word(0xD0D9)
+		FXCH    -> word(0xC9D9)
+		FCHS    -> word(0xE0D9)
+		FABS    -> word(0xE1D9)
+		FTST    -> word(0xE4D9)
+		FXAM    -> word(0xE5D9)
+		FLD1    -> word(0xE8D9)
+		FLDL2T  -> word(0xE9D9)
+		FLDL2E  -> word(0xEAD9)
+		FLDPI   -> word(0xEBD9)
+		FLDLG2  -> word(0xECD9)
+		FLDLN2  -> word(0xEDD9)
+		FLDZ    -> word(0xEED9)
+		F2XM1   -> word(0xF0D9)
+		FYL2X   -> word(0xF1D9)
+		FPTAN   -> word(0xF2D9)
+		FPATAN  -> word(0xF3D9)
+		FXTRACT -> word(0xF4D9)
+		FPREM1  -> word(0xF5D9)
+		FDECSTP -> word(0xF6D9)
+		FINCSTP -> word(0xF7D9)
+		FPREM   -> word(0xF8D9)
+		FYL2XP1 -> word(0xF9D9)
+		FSQRT   -> word(0xFAD9)
+		FSINCOS -> word(0xFBD9)
+		FRNDINT -> word(0xFCD9)
+		FSCALE  -> word(0xFDD9)
+		FSIN    -> word(0xFED9)
+		FCOS    -> word(0xFFD9)
+		FUCOM   -> word(0xE1DD)
+		FUCOMP  -> word(0xE9DD)
+		FUCOMPP -> word(0xE9DA)
+		FCLEX   -> writer.i24(0xE2DB9B)
+		FNCLEX  -> word(0xE2DB)
+		FINIT   -> writer.i24(0xE3DB9B)
+		FNINIT  -> word(0xE3DB)
+
+		VMCALL   -> writer.i24(0xC1010F)
+		VMLAUNCH -> writer.i24(0xC2010F)
+		VMRESUME -> writer.i24(0xC3010F)
+		VMXOFF   -> writer.i24(0xC4010F)
+		MONITOR  -> writer.i24(0xC8010F)
+		MWAIT    -> writer.i24(0xC9010F)
+		XGETBV   -> writer.i24(0xD0010F)
+		XSETBV   -> writer.i24(0xD1010F)
+		SWAPGS   -> writer.i24(0xF8010F)
+		RDTSCP   -> writer.i24(0xF9010F)
+
+		SYSCALLD -> writer.i16(0x050F)
+		SYSCALLQ -> writer.i24(0x050F48)
+		CLTS     -> writer.i16(0x060F)
+		SYSRETD  -> writer.i16(0x070F)
+		SYSRETQ  -> writer.i24(0x070F48)
+		INVD     -> writer.i16(0x080F)
+		WBINVD   -> writer.i16(0x090F)
+
 		else   -> invalidEncoding()
 	}}
 
@@ -880,7 +1025,71 @@ class Assembler(private val context: CompilerContext) {
 		SETNL, SETGE -> encodeSETCC(0x9D0F, node)
 		SETLE, SETNG -> encodeSETCC(0x9E0F, node)
 		SETNLE, SETG -> encodeSETCC(0x9F0F, node)
-		
+
+		FLD   -> encodeFLD(node)
+
+		FADD  -> encodeFADD1(node, 0xC0D8, 0)
+		FMUL  -> encodeFADD1(node, 0xC8D8, 1)
+		FCOM  -> encodeFADD1(node, 0xD0D8, 2)
+		FCOMP -> encodeFADD1(node, 0xD8D8, 3)
+		FSUB  -> encodeFADD1(node, 0xE0D8, 4)
+		FSUBR -> encodeFADD1(node, 0xE8D8, 5)
+		FDIV  -> encodeFADD1(node, 0xF0D8, 6)
+		FDIVR -> encodeFADD1(node, 0xF8D8, 7)
+
+		FLDENV  -> encode1MNoWidth(0xD9, 4, op1.asMem)
+		FLDCW   -> encode1MNoWidth(0xD9, 5, op1.asMem)
+		FNSTENV -> encode1MNoWidth(0xD9, 6, op1.asMem)
+		FNSTCW  -> encode1MNoWidth(0xD9, 7, op1.asMem)
+		FSTCW   -> encode1MNoWidth(0xD99B, 7, op1.asMem)
+
+		FSTSW -> encodeFSTSW(op1)
+		FNSTSW -> encodeFNSTSW(op1)
+
+		FIADD  -> encodeFIADD(node, 0)
+		FIMUL  -> encodeFIADD(node, 1)
+		FICOM  -> encodeFIADD(node, 2)
+		FICOMP -> encodeFIADD(node, 3)
+		FISUB  -> encodeFIADD(node, 4)
+		FISUBR -> encodeFIADD(node, 5)
+		FIDIV  -> encodeFIADD(node, 6)
+		FIDIVR -> encodeFIADD(node, 7)
+
+		FXCH -> encode1ST(0xC8D9, op1.asFpu)
+
+		FST  -> encodeFST(node)
+		FSTP -> encodeFSTP(node)
+
+		FUCOM -> encode1ST(0xE0DD, op1.asFpu)
+		FUCOMP -> encode1ST(0xE8DD, op1.asFpu)
+
+		FILD   -> encodeFILD(node)
+		FISTTP -> encodeFISTTP(node)
+		FIST   -> encodeFIST(node)
+		FISTP  -> encodeFISTP(node)
+
+		FFREE -> encode1ST(0xC0DD, op1.asFpu)
+
+		FRSTOR -> encode1MNoWidth(0xDD, 4, op1.asMem)
+		FSAVE  -> encode1MNoWidth(0xDD9B, 6, op1.asMem)
+		FNSAVE -> encode1MNoWidth(0xDD, 6, op1.asMem)
+		FBSTP  -> encode1MNoWidth(0xDF, 6, op1.asMem)
+
+		SLDT -> withZeroOpcodePrefix { encode1RM16(0x000F, Widths.NO8, 0, op1) }
+		STR  -> withZeroOpcodePrefix { encode1RM16(0x000F, Widths.NO8, 1, op1) }
+		LLDT -> withZeroOpcodePrefix { encode1R16M16(0x000F, 2, op1) }
+		LTR  -> withZeroOpcodePrefix { encode1R16M16(0x000F, 3, op1) }
+		VERR -> withZeroOpcodePrefix { encode1R16M16(0x000F, 4, op1) }
+		VERW -> withZeroOpcodePrefix { encode1R16M16(0x000F, 5, op1) }
+		SGDT -> encode1MNoWidth(0x010F, 0, op1.asMem)
+		SIDT -> encode1MNoWidth(0x010F, 1, op1.asMem)
+		LGDT -> encode1MNoWidth(0x010F, 2, op1.asMem)
+		LIDT -> encode1MNoWidth(0x010F, 3, op1.asMem)
+		SMSW -> encode1RM16(0x010F, Widths.NO8, 4, op1)
+		LMSW -> encode1R16M16(0x010F, 6, op1)
+
+		INVLPG -> encode1MNoWidth(0x010F, 7, op1.asMem)
+
 		else -> invalidEncoding()
 	}}
 
@@ -936,6 +1145,37 @@ class Assembler(private val context: CompilerContext) {
 
 		BSR -> encode2RRM(0xBD0F, Widths.NO8, op1.asReg, op2)
 		BSF -> encode2RRM(0xBC0F, Widths.NO8, op1.asReg, op2)
+
+		FADD  -> encode2STST(node, 0xC0D8, 0xC0DC)
+		FMUL  -> encode2STST(node, 0xC8D8, 0xC8DC)
+		FSUB  -> encode2STST(node, 0xE0D8, 0xE8DC)
+		FSUBR -> encode2STST(node, 0xE8D8, 0xE0DC)
+		FDIV  -> encode2STST(node, 0xF0D8, 0xF8DC)
+		FDIVR -> encode2STST(node, 0xF8D8, 0xF0DC)
+
+		FADDP  -> encode2STIST0(node, 0xC0DE)
+		FMULP  -> encode2STIST0(node, 0xC8DE)
+		FSUBP  -> encode2STIST0(node, 0xE8DE)
+		FSUBRP -> encode2STIST0(node, 0xE0DE)
+		FDIVP  -> encode2STIST0(node, 0xF8DE)
+		FDIVRP -> encode2STIST0(node, 0xF0DE)
+
+		FCMOVB   -> encodeFCMOVCC(0xC0DA, node)
+		FCMOVE   -> encodeFCMOVCC(0xC8DA, node)
+		FCMOVBE  -> encodeFCMOVCC(0xD0DA, node)
+		FCMOVU   -> encodeFCMOVCC(0xD8DA, node)
+		FCMOVNB  -> encodeFCMOVCC(0xC0DB, node)
+		FCMOVNE  -> encodeFCMOVCC(0xC8DB, node)
+		FCMOVNBE -> encodeFCMOVCC(0xD0DB, node)
+		FCMOVNU  -> encodeFCMOVCC(0xD8DB, node)
+
+		FCOMI   -> encode2ST0STI(node, 0xF0DB)
+		FCOMIP  -> encode2ST0STI(node, 0xF0DF)
+		FUCOMI  -> encode2ST0STI(node, 0xE8DB)
+		FUCOMIP -> encode2ST0STI(node, 0xE8DF)
+
+		LAR -> encodeLAR(op1, op2, 0x020F)
+		LSL -> encodeLAR(op1, op2, 0x030F)
 
 		else -> invalidEncoding()
 	}}
@@ -1025,10 +1265,10 @@ class Assembler(private val context: CompilerContext) {
 
 		if(op2 is RegNode) {
 			if(imm.isImm8) {
-				encode2RR(0x6B, Widths.NO8, op1, op2.value, true)
+				encode2RR(0x6B, Widths.NO8, op1, op2.value, reversed = true)
 				writeImm(op3, BYTE, imm)
 			} else {
-				encode2RR(0x69, Widths.NO8, op1, op2.value, true)
+				encode2RR(0x69, Widths.NO8, op1, op2.value, reversed = true)
 				writeImm(op3, op1.width, imm)
 			}
 		} else if(op2 is MemNode) {
@@ -1269,7 +1509,7 @@ class Assembler(private val context: CompilerContext) {
 
 		if(op1 is RegNode) {
 			if(op2 is RegNode) {
-				encode2RR(start + 0, Widths.ALL, op1.value, op2.value, false)
+				encode2RR(start + 0, Widths.ALL, op1.value, op2.value, reversed = false)
 			} else if(op2 is MemNode) {
 				encode2RM(start + 2, Widths.ALL, op1.value, op2, 0)
 			} else {
@@ -1373,7 +1613,7 @@ class Assembler(private val context: CompilerContext) {
 		when(op2) {
 			is RegNode -> {
 				if(op2.width != DWORD) invalidEncoding()
-				encode2RR(0x63, Widths.NO8, op1, op2.value, true)
+				encode2RR(0x63, Widths.NO8, op1, op2.value, reversed = true, mismatch = true)
 			}
 			is MemNode -> {
 				if(op2.width != DWORD) invalidEncoding()
@@ -1395,10 +1635,9 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeMOVSX(opcode1: Int, opcode2: Int, op1: Register, op2: OpNode) {
 		if(op2 is RegNode) {
 			when(op2.value.width) {
-				BYTE  -> encode2RR(opcode1, Widths.NO8, op1, op2.value, true)
-				WORD  -> encode2RR(opcode2, Widths.NO816, op1, op2.value, true)
+				BYTE  -> encode2RR(opcode1, Widths.NO8, op1, op2.value, reversed = true, mismatch = true)
+				WORD  -> encode2RR(opcode2, Widths.NO816, op1, op2.value, reversed = true, mismatch = true)
 				else  -> invalidEncoding()
-
 			}
 		} else if(op2 is MemNode) {
 			when(op2.width ?: invalidEncoding()) {
@@ -1420,7 +1659,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeMOV(op1: OpNode, op2: OpNode) {
 		when(op1) {
 			is RegNode -> when(op2) {
-				is RegNode -> encode2RR(0x88, Widths.ALL, op1.value, op2.value, false)
+				is RegNode -> encode2RR(0x88, Widths.ALL, op1.value, op2.value, reversed = false)
 				is MemNode -> encode2RM(0x8A, Widths.ALL, op1.value, op2, 0)
 				else -> {
 					val imm = resolveImm(op2)
@@ -1463,6 +1702,281 @@ class Assembler(private val context: CompilerContext) {
 			writer.i8(0xC3)
 		else
 			writer.bytes(epilogueWriter)
+	}
+
+
+
+	/*
+	FPU
+	 */
+
+
+
+	private fun encodeFLD(node: InsNode) {
+		when(val op1 = node.op1!!) {
+			is MemNode -> when(op1.width) {
+				DWORD -> encode1MAnyWidth(0xD9, 0, op1)
+				QWORD -> encode1MAnyWidth(0xDD, 0, op1)
+				TWORD -> encode1MAnyWidth(0xDB, 5, op1)
+				else  -> invalidEncoding()
+			}
+			is FpuNode -> word(0xC0D9 + (op1.value.value shl 8))
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 * FADD/FMUL/FCOM/FCOMP/FSUB/FSUBR/FDIV/FDIVR with 1 operand
+	 */
+	private fun encodeFADD1(node: InsNode, opcode: Int, extension: Int) {
+		when(val op1 = node.op1!!) {
+			is MemNode -> when(op1.width) {
+				DWORD -> encode1MAnyWidth(0xD8, extension, op1)
+				QWORD -> encode1MAnyWidth(0xDC, extension, op1)
+				else  -> invalidEncoding()
+			}
+			is FpuNode -> word(opcode + (op1.value.value shl 8))
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 * - [opcode1]: ST0, STI
+	 * - [opcode2]: STI, ST0
+	 */
+	private fun encode2STST(node: InsNode, opcode1: Int, opcode2: Int) {
+		val op1 = (node.op1 as? FpuNode)?.value ?: invalidEncoding()
+		val op2 = (node.op2 as? FpuNode)?.value ?: invalidEncoding()
+
+		if(op1 == FpuReg.ST0)
+			word(opcode1 + (op2.value shl 8))
+		else if(op2 == FpuReg.ST0)
+			word(opcode2 + (op1.value shl 8))
+		else
+			invalidEncoding()
+	}
+
+
+
+	/**
+	 * FIADD/FIMUL/FICOM/FICOMP/FISUB/FISUBR/FIDIV/FIDIVR
+	 */
+	private fun encodeFIADD(node: InsNode, extension: Int) {
+		val op1 = node.op1 as? MemNode ?: invalidEncoding()
+		when(op1.width) {
+			WORD  -> encode1MAnyWidth(0xDE, extension, op1)
+			DWORD -> encode1MAnyWidth(0xDA, extension, op1)
+			else  -> invalidEncoding()
+		}
+	}
+
+
+
+	private fun encode2ST0STI(node: InsNode, opcode: Int) {
+		if(node.op1 !is FpuNode || node.op2 !is FpuNode) invalidEncoding()
+		if(node.op1.value != FpuReg.ST0) invalidEncoding()
+		word(opcode + (node.op2.value.value shl 8))
+	}
+
+
+
+	private fun encode2STIST0(node: InsNode, opcode: Int) {
+		if(node.op1 !is FpuNode || node.op2 !is FpuNode) invalidEncoding()
+		if(node.op2.value != FpuReg.ST0) invalidEncoding()
+		word(opcode + (node.op1.value.value shl 8))
+	}
+
+
+
+	private fun encode1ST(opcode: Int, op1: FpuReg) {
+		word(opcode + (op1.value shl 8))
+	}
+
+
+
+	/**
+	 *     DD9B/7  FSTSW   M2BYTE
+	 *     E0DF9B  FSTSW   AX
+	 *     DD/7    FNSTSW  M2BYTE
+	 *     E0DF    FNSTSW  AX
+	 */
+	private fun encodeFSTSW(op1: AstNode) {
+		when(op1) {
+			is RegNode ->
+				if(op1.value == Register.AX)
+					writer.i24(0xE0DF9B)
+				else
+					invalidEncoding()
+			is MemNode -> encode1MNoWidth(0xDD9B, 7, op1)
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+
+	/**
+	 *     DD9B/7  FSTSW   M2BYTE
+	 *     E0DF9B  FSTSW   AX
+	 *     DD/7    FNSTSW  M2BYTE
+	 *     E0DF    FNSTSW  AX
+	 */
+	private fun encodeFNSTSW(op1: AstNode) {
+		when(op1) {
+			is RegNode ->
+				if(op1.value == Register.AX)
+					writer.i16(0xE0DF)
+				else
+					invalidEncoding()
+			is MemNode -> encode1MNoWidth(0xDD, 7, op1)
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	private fun encodeFCMOVCC(opcode: Int, node: InsNode) {
+		val op1 = node.op1.asFpu
+		val op2 = node.op2.asFpu
+		if(op1 != FpuReg.ST0) invalidEncoding()
+		writer.i16(opcode + (op2.value shl 8))
+	}
+
+
+
+	/**
+	 *     D9/2  FST  M32FP
+	 *     DD/2  FST  M64FP
+	 *     D0DD  FST  STI
+	 */
+	private fun encodeFST(node: InsNode) {
+		when(val op1 = node.op1) {
+			is FpuNode -> word(0xD0DD + (op1.value.value shl 8))
+			is MemNode -> when(op1.width) {
+				DWORD  -> encode1MAnyWidth(0xD9, 2, op1)
+				QWORD  -> encode1MAnyWidth(0xDD, 2, op1)
+				else   -> invalidEncoding()
+			}
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 *     D9/3  FSTP  M32FP
+	 *     DD/3  FSTP  M64FP
+	 *     DB/7  FSTP  M80FP
+	 *     D8DD  FSTP  STI
+	 */
+	private fun encodeFSTP(node: InsNode) {
+		when(val op1 = node.op1) {
+			is FpuNode -> word(0xD8DD + (op1.value.value shl 8))
+			is MemNode -> when(op1.width) {
+				DWORD  -> encode1MAnyWidth(0xD9, 3, op1)
+				QWORD  -> encode1MAnyWidth(0xDD, 3, op1)
+				TWORD  -> encode1MAnyWidth(0xDB, 7, op1)
+				else   -> invalidEncoding()
+			}
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 *     DF/0  FILD  M16INT
+	 *     DB/0  FILD  M32INT
+	 *     DF/5  FILD  M64INT
+	 */
+	private fun encodeFILD(node: InsNode) {
+		val op1 = node.op1 as? MemNode ?: invalidEncoding()
+		when(op1.width) {
+			WORD  -> encode1MAnyWidth(0xDF, 0, op1)
+			DWORD -> encode1MAnyWidth(0xDB, 0, op1)
+			QWORD -> encode1MAnyWidth(0xDF, 5, op1)
+			else  -> invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 *     DF/1  FISTTP  M16INT
+	 *     DB/1  FISTTP  M32INT
+	 *     DD/1  FISTTP  M64INT
+	 */
+	private fun encodeFISTTP(node: InsNode) {
+		val op1 = node.op1 as? MemNode ?: invalidEncoding()
+		when(op1.width) {
+			WORD  -> encode1MAnyWidth(0xDF, 1, op1)
+			DWORD -> encode1MAnyWidth(0xDB, 1, op1)
+			QWORD -> encode1MAnyWidth(0xDD, 1, op1)
+			else  -> invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 *     DF/2  FIST  M16INT
+	 *     DB/2  FIST  M32INT
+	 */
+	private fun encodeFIST(node: InsNode) {
+		val op1 = node.op1 as? MemNode ?: invalidEncoding()
+		when(op1.width) {
+			WORD  -> encode1MAnyWidth(0xDF, 2, op1)
+			DWORD -> encode1MAnyWidth(0xDB, 2, op1)
+			else  -> invalidEncoding()
+		}
+	}
+
+
+
+	/**
+	 *     DF/3  FISTP  M16INT
+	 *     DB/3  FISTP  M32INT
+	 *     DF/7  FISTP  M64INT
+	 */
+	private fun encodeFISTP(node: InsNode) {
+		val op1 = node.op1 as? MemNode ?: invalidEncoding()
+		when(op1.width) {
+			WORD  -> encode1MAnyWidth(0xDF, 3, op1)
+			DWORD -> encode1MAnyWidth(0xDB, 3, op1)
+			QWORD -> encode1MAnyWidth(0xDF, 7, op1)
+			else  -> invalidEncoding()
+		}
+	}
+
+
+
+	/*
+	Misc.
+	 */
+
+
+
+	/**
+	 *     020F  LAR  R16/32/64, R16/32/M16 ?
+	 *     030F  LSL  R16/32/64, R16/32/M16 ?
+	 */
+	private fun encodeLAR(op1: OpNode, op2: OpNode, opcode: Int) {
+		if(op1 !is RegNode || op1.width == BYTE) invalidEncoding()
+		when(op2) {
+			is MemNode -> {
+				if(op2.width != null && op2.width != WORD) invalidEncoding()
+				encode2RM(opcode, Widths.NO8, op1.value, op2, 0, true)
+			}
+			is RegNode -> {
+				if(op2.width != WORD && op2.width != DWORD) invalidEncoding()
+				encode2RR(opcode, Widths.NO8, op1.value, op2.value, reversed = true, mismatch = true)
+			}
+			else -> invalidEncoding()
+		}
 	}
 
 

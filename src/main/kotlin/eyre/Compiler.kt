@@ -39,12 +39,12 @@ class Compiler(private val context: CompilerContext) {
 		}
 
 		//printSymbols()
-		Resolver(context).resolve()
+		//Resolver(context).resolve()
 		//printResolution()
+
 		Assembler(context).assemble()
 		Linker(context).link()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
-		//dumpbin()
 		disassemble()
 	}
 
@@ -118,6 +118,12 @@ class Compiler(private val context: CompilerContext) {
 
 
 
+	private fun printTokens(srcFile: SrcFile) {
+		printHeader("TOKENS (${srcFile.relPath}):")
+		for(token in srcFile.tokens)
+			println(token.printString)
+		println()
+	}
 	private fun printNodes(srcFile: SrcFile) {
 		printHeader("NODES (${srcFile.relPath}):")
 		for(node in srcFile.nodes)

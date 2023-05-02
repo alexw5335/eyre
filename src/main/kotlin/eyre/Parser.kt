@@ -116,7 +116,7 @@ class Parser(private val context: CompilerContext) {
 		if(token is Name) {
 			return when(token) {
 				in Names.registers    -> RegNode(Names.registers[token])
-				in Names.fpuRegisters -> FpuRegNode(Names.fpuRegisters[token])
+				in Names.fpuRegisters -> FpuNode(Names.fpuRegisters[token])
 				in Names.xmmRegisters -> XmmRegNode(Names.xmmRegisters[token])
 				in Names.mmxRegisters -> MmxRegNode(Names.mmxRegisters[token])
 				Names.FS              -> SegRegNode(SegReg.FS)
@@ -157,6 +157,7 @@ class Parser(private val context: CompilerContext) {
 			is IntToken    -> IntNode(token.value)
 			is StringToken -> StringNode(token.value)
 			is CharToken   -> IntNode(token.value.code.toLong())
+			is FloatToken  -> FloatNode(token.value)
 			else           -> error(srcPos, "Unexpected token: $token")
 		}
 	}

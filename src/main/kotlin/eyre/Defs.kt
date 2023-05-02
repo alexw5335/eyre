@@ -54,6 +54,103 @@ enum class Mnemonic(val isPseudo: Boolean = false) {
 
 	BSR, BSF,
 
+	FLD, FST, FSTP, FXCH,
+	FCMOVB,
+	FCMOVE,
+	FCMOVBE,
+	FCMOVU,
+	FCMOVNB,
+	FCMOVNE,
+	FCMOVNBE,
+	FCMOVNU,
+	FILD,
+	FIST,
+	FISTP,
+	FISTTP,
+	FBLD,
+	FBSTP,
+	FLDZ,
+	FLD1,
+	FLDPI,
+	FLDL2T,
+	FLDL2E,
+	FLDLG2,
+	FLDLN2,
+	FADD,
+	FADDP,
+	FIADD,
+	FSUB,
+	FSUBP,
+	FISUB,
+	FSUBR,
+	FSUBRP,
+	FISUBR,
+	FMUL,
+	FMULP,
+	FIMUL,
+	FDIV,
+	FDIVP,
+	FIDIV,
+	FDIVR,
+	FDIVRP,
+	FIDIVR,
+	FABS,
+	FCHS,
+	FSQRT,
+	FPREM,
+	FPREM1,
+	FRNDINT,
+	FXTRACT,
+	FCOM,
+	FCOMP,
+	FCOMPP,
+	FUCOM,
+	FUCOMP,
+	FUCOMPP,
+	FICOM,
+	FICOMP,
+	FCOMI,
+	FCOMIP,
+	FUCOMI,
+	FUCOMIP,
+	FTST,
+	FXAM,
+	FSIN,
+	FCOS,
+	FSINCOS,
+	FPTAN,
+	FPATAN,
+	FYL2X,
+	FYL2XP1,
+	F2XM1,
+	FSCALE,
+	FINIT,
+	FNINIT,
+	FLDCW,
+	FSTCW,
+	FNSTCW,
+	FSTSW,
+	FNSTSW,
+	FCLEX,
+	FNCLEX,
+	FLDENV,
+	FSTENV,
+	FNSTENV,
+	FRSTOR,
+	FSAVE,
+	FNSAVE,
+	FINCSTP,
+	FDECSTP,
+	FFREE,
+	FNOP,
+
+	SLDT, STR, LLDT, LTR, VERR, VERW, SGDT,
+	VMCALL, VMLAUNCH, VMRESUME, VMXOFF, SIDT,
+	MONITOR, MWAIT, LGDT, XGETBV, XSETBV, LIDT,
+	SMSW, LMSW, INVLPG, SWAPGS, RDTSCP, LAR, LSL,
+	SYSCALLD, SYSCALLQ, SYSRETD, SYSRETQ,
+	CLTS, INVD, WBINVD,
+
 	DLLCALL(isPseudo = true),
 	RETURN(isPseudo = true);
 
@@ -68,7 +165,8 @@ enum class Width(val varString: String, val bytes: Int) {
 	BYTE("db", 1),
 	WORD("dw", 2),
 	DWORD("dd", 4),
-	QWORD("dq", 8);
+	QWORD("dq", 8),
+	TWORD("dt", 10);
 
 	val string = name.lowercase()
 	val bit = 1 shl ordinal
@@ -92,7 +190,7 @@ value class Widths(val value: Int) {
 		val NO864  = Widths(0b0110)
 		val ONLY64 = Widths(0b1000)
 		val ONLY8  = Widths(0b0001)
-		val NO816  = Widths(0b0011)
+		val NO816  = Widths(0b1100)
 	}
 }
 
@@ -149,24 +247,24 @@ enum class MmxReg(val value: Int) {
 
 
 
-enum class XmmReg(val value: Int) {
+enum class XmmReg(val value: Int, val rex: Int) {
 
-	XMM0(0),
-	XMM1(1),
-	XMM2(2),
-	XMM3(3),
-	XMM4(4),
-	XMM5(5),
-	XMM6(6),
-	XMM7(7),
-	XMM8(8),
-	XMM9(9),
-	XMM10(10),
-	XMM11(11),
-	XMM12(12),
-	XMM13(13),
-	XMM14(14),
-	XMM15(15);
+	XMM0 (0, 0),
+	XMM1 (1, 0),
+	XMM2 (2, 0),
+	XMM3 (3, 0),
+	XMM4 (4, 0),
+	XMM5 (5, 0),
+	XMM6 (6, 0),
+	XMM7 (7, 0),
+	XMM8 (0, 1),
+	XMM9 (1, 1),
+	XMM10(2, 1),
+	XMM11(3, 1),
+	XMM12(4, 1),
+	XMM13(5, 1),
+	XMM14(6, 1),
+	XMM15(7, 1);
 
 	val string = name.lowercase()
 

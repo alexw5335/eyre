@@ -8,7 +8,7 @@ import kotlin.math.absoluteValue
 
 
 fun main() {
-	Compiler("samples/testing").compile()
+	Compiler("samples/testing2").compile()
 }
 
 
