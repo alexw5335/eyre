@@ -21,6 +21,13 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private inline fun prefixed(prefix: Int, block: () -> Unit) {
+		byte(prefix)
+		block()
+	}
+
+
+
 	private inline fun withZeroOpcodePrefix(block: () -> Unit) {
 		zeroOpcodePrefix = true
 		block()
@@ -500,6 +507,8 @@ class Assembler(private val context: CompilerContext) {
 
 	private val OpNode?.asFpu get() = (this!! as? FpuNode)?.value ?: invalidEncoding()
 
+	private val OpNode.asXmm get() = (this as? XmmNode)?.value ?: invalidEncoding()
+
 	private fun byte(value: Int) = writer.i8(value)
 
 	private fun word(value: Int) = writer.i16(value)
@@ -699,9 +708,17 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encode2XX(opcode: Int, op1: XmmReg, op2: XmmReg) {
-		writeRex(0, op2.rex, 0, op1.rex)
+		writeRex(0, op1.rex, 0, op2.rex)
+		writeOpcode(opcode)
+		writeModRM(0b11, op1.value, op2.value)
 	}
 
+
+
+	private fun encode2XM(opcode: Int, op1: XmmReg, op2: MemNode, memWidth: Width) {
+		if(op2.width != null && op2.width != memWidth) invalidEncoding()
+		writeMem(opcode, op2.value, 0, op1.rex, op1.value, 0)
+	}
 
 
 
@@ -1090,6 +1107,11 @@ class Assembler(private val context: CompilerContext) {
 
 		INVLPG -> encode1MNoWidth(0x010F, 7, op1.asMem)
 
+		PREFETCHNTA -> encode1MSingleWidth(0x180F, BYTE, 0, op1.asMem)
+		PREFETCHT0  -> encode1MSingleWidth(0x180F, BYTE, 1, op1.asMem)
+		PREFETCHT1  -> encode1MSingleWidth(0x180F, BYTE, 2, op1.asMem)
+		PREFETCHT2  -> encode1MSingleWidth(0x180F, BYTE, 3, op1.asMem)
+
 		else -> invalidEncoding()
 	}}
 
@@ -1177,8 +1199,102 @@ class Assembler(private val context: CompilerContext) {
 		LAR -> encodeLAR(op1, op2, 0x020F)
 		LSL -> encodeLAR(op1, op2, 0x030F)
 
-		else -> invalidEncoding()
+		MOVUPS   -> encode2XMXM(0x00, 0x100F, op1, op2, XWORD)
+		MOVUPD   -> encode2XMXM(0x66, 0x100F, op1, op2, XWORD)
+		MOVSD    -> encode2XMXM(0xF2, 0x100F, op1, op2, QWORD)
+		MOVSS    -> encode2XMXM(0xF3, 0x100F, op1, op2, DWORD)
+		MOVHLPS  -> encode2XX(0x120F, op1.asXmm, op2.asXmm)
+		MOVLPS   -> encode2XMMX(0x00, 0x120F, op1, op2, QWORD)
+		MOVLPD   -> encode2XMMX(0x66, 0x120F, op1, op2, QWORD)
+		MOVDDUP  -> encode2XXM(0xF2, 0x120F, op1, op2, QWORD)
+		MOVSLDUP -> encode2XXM(0xF3, 0x120F, op1, op2, XWORD)
+		UNPCKLPS -> encode2XXM(0x00, 0x140F, op1, op2, XWORD)
+		UNPCKLPD -> encode2XXM(0x66, 0x140F, op1, op2, XWORD)
+		UNPCKHPS -> encode2XXM(0x00, 0x150F, op1, op2, XWORD)
+		UNPCKHPD -> encode2XXM(0x66, 0x150F, op1, op2, XWORD)
+		MOVLHPS  -> encode2XX(0x160F, op1.asXmm, op2.asXmm)
+		MOVHPS   -> encode2XMMX(0x00, 0x160F, op1, op2, QWORD)
+		MOVHPD   -> encode2XMMX(0x66, 0x160F, op1, op2, QWORD)
+		MOVAPS   -> encode2XMXM(0x00, 0x280F, op1, op2, XWORD)
+		MOVAPD   -> encode2XMXM(0x66, 0x280F, op1, op2, XWORD)
+
+		else     -> invalidEncoding()
 	}}
+
+
+
+	private fun encode2XMMX(prefix: Int, opcode: Int, op1: OpNode, op2: OpNode, memWidth: Width) {
+		if(prefix != 0) byte(prefix)
+		when(op1) {
+			is XmmNode -> when(op2) {
+				is MemNode -> encode2XM(opcode, op1.value, op2, memWidth)
+				else       -> invalidEncoding()
+			}
+			is MemNode -> when(op2) {
+				is XmmNode -> encode2XM(opcode + (1 shl 8), op2.value, op1, memWidth)
+				else       -> invalidEncoding()
+			}
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	private fun encode2XMXM(prefix: Int, opcode: Int, op1: OpNode, op2: OpNode, memWidth: Width) {
+		if(prefix != 0) byte(prefix)
+		when(op1) {
+			is XmmNode -> when(op2) {
+				is XmmNode -> encode2XX(opcode, op1.value, op2.value)
+				is MemNode -> encode2XM(opcode, op1.value, op2, memWidth)
+				else       -> invalidEncoding()
+			}
+			is MemNode -> when(op2) {
+				is XmmNode -> encode2XM(opcode + (1 shl 8), op2.value, op1, memWidth)
+				else       -> invalidEncoding()
+			}
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	private fun encode2XXM(prefix: Int, opcode: Int, op1: OpNode, op2: OpNode, memWidth: Width) {
+		if(prefix != 0) byte(prefix)
+		when(op1) {
+			is XmmNode -> when(op2) {
+				is XmmNode -> encode2XX(opcode, op1.value, op2.value)
+				is MemNode -> encode2XM(opcode, op1.value, op2, memWidth)
+				else       -> invalidEncoding()
+			}
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	/*
+		private fun encode2XXM(node: InsNode, opcode: Int, memWidth: Width) {
+			val op1 = (node.op1 as? XmmNode)?.value ?: invalidEncoding()
+
+			when(val op2 = node.op2!!) {
+				is XmmNode -> encode2XX(opcode, op1, op2.value)
+				is MemNode -> encode2XM(opcode, op1, op2, memWidth)
+				else       -> invalidEncoding()
+			}
+		}
+
+
+
+		private fun encode2XMX(node: InsNode, opcode: Int, memWidth: Width) {
+			val op2 = (node.op2 as? XmmNode)?.value ?: invalidEncoding()
+
+			when(val op1 = node.op1!!) {
+				is XmmNode -> encode2XX(opcode, op1.value, op2)
+				is MemNode -> encode2XM(opcode, op2, op1, memWidth)
+				else       -> invalidEncoding()
+			}
+		}
+	*/
 
 
 

@@ -85,6 +85,8 @@ object Names : Interner<String, Name>() {
 	val fpuRegisters = createRange(FpuReg.values(), FpuReg::string)
 	val mmxRegisters = createRange(MmxReg.values(), MmxReg::string)
 	val xmmRegisters = createRange(XmmReg.values(), XmmReg::string)
+	val ymmRegisters = createRange(YmmReg.values(), YmmReg::string)
+	val zmmRegisters = createRange(ZmmReg.values(), ZmmReg::string)
 
 	val EMPTY = add("")
 	val MAIN  = add("main")

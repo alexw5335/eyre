@@ -117,8 +117,10 @@ class Parser(private val context: CompilerContext) {
 			return when(token) {
 				in Names.registers    -> RegNode(Names.registers[token])
 				in Names.fpuRegisters -> FpuNode(Names.fpuRegisters[token])
-				in Names.xmmRegisters -> XmmRegNode(Names.xmmRegisters[token])
-				in Names.mmxRegisters -> MmxRegNode(Names.mmxRegisters[token])
+				in Names.mmxRegisters -> MmxNode(Names.mmxRegisters[token])
+				in Names.xmmRegisters -> XmmNode(Names.xmmRegisters[token])
+				in Names.ymmRegisters -> YmmNode(Names.ymmRegisters[token])
+				in Names.zmmRegisters -> ZmmNode(Names.zmmRegisters[token])
 				Names.FS              -> SegRegNode(SegReg.FS)
 				Names.GS              -> SegRegNode(SegReg.GS)
 				else                  -> NameNode(token)

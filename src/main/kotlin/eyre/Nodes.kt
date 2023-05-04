@@ -96,9 +96,13 @@ class SegRegNode(val value: SegReg) : OpNode
 
 class FpuNode(val value: FpuReg) : OpNode
 
-class XmmRegNode(val value: XmmReg) : OpNode
+class XmmNode(val value: XmmReg) : OpNode
 
-class MmxRegNode(val value: MmxReg) : OpNode
+class YmmNode(val value: YmmReg) : OpNode
+
+class ZmmNode(val value: ZmmReg) : OpNode
+
+class MmxNode(val value: MmxReg) : OpNode
 
 class ConstNode(val symbol: ConstSymbol, val value: AstNode) : SymContainerNode(symbol)
 

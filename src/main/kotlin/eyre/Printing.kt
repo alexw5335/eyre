@@ -17,11 +17,18 @@ val AstNode.printString: String get() = when(this) {
 	is ScopeEndNode   -> "scope end"
 	is MemNode        -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
 	is SegRegNode     -> value.name.lowercase()
-	is FpuNode     -> value.string
+	is FpuNode        -> value.string
 	is VarResNode     -> "var ${symbol.name}: ${type.printString}"
 	is ArrayNode      -> "${receiver.printString}[${index.printString}]"
 	is ConstNode      -> "const ${symbol.name} = ${value.printString}"
 	is TypedefNode    -> "typedef ${symbol.name} = ${value.printString}"
+	is FloatNode      -> "$value"
+	is RefNode        -> "${left.printString}::${right.printString}"
+	is EqualsNode     -> "${left.printString} = ${right.printString}"
+	is MmxNode        -> "$value"
+	is XmmNode        -> "$value"
+	is YmmNode        -> "$value"
+	is ZmmNode        -> "$value"
 
 	is TypeNode -> buildString {
 		name?.let(::append)
@@ -104,12 +111,6 @@ val AstNode.printString: String get() = when(this) {
 		if(op4 == null) return@buildString
 		append(", ${op4.printString}")
 	}
-
-	is FloatNode -> "$value"
-
-	is RefNode -> "${left.printString}::${right.printString}"
-
-	is EqualsNode -> "${left.printString} = ${right.printString}"
 
 	else -> toString()
 }

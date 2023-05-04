@@ -151,6 +151,16 @@ enum class Mnemonic(val isPseudo: Boolean = false) {
 	SYSCALLD, SYSCALLQ, SYSRETD, SYSRETQ,
 	CLTS, INVD, WBINVD,
 
+	MOVUPS, MOVUPD, MOVSS, MOVHLPS, MOVLPS, MOVLPD,
+	MOVDDUP, MOVSLDUP, UNPCKLPS, UNPCKLPD, UNPCKHPS,
+	UNPCKHPD, MOVLHPS, MOVHPS, MOVHPD, MOVSHDUP,
+	MOVAPS, MOVAPD, CVTPI2PS, CVTSI2SS, CVTPI2PD,
+	CVTSI2SD, MOVNTPS, MOVNTPD, CVTTPS2PI, CVTTSS2SI,
+	CVTTPD2PI, CVTTSD2SI, CVTPS2PI, CVTSS2SI, CVTPD2PI,
+	CVTSD2SI, UCOMISS, UCOMISD, COMISS, COMISD,
+
+	PREFETCHT0, PREFETCHT1, PREFETCHT2, PREFETCHNTA,
+
 	DLLCALL(isPseudo = true),
 	RETURN(isPseudo = true);
 
@@ -166,13 +176,17 @@ enum class Width(val varString: String, val bytes: Int) {
 	WORD("dw", 2),
 	DWORD("dd", 4),
 	QWORD("dq", 8),
-	TWORD("dt", 10);
+	TWORD("dt", 10),
+	XWORD("do", 16),
+	YWORD("dy", 32),
+	ZWORD("dz", 64);
 
 	val string = name.lowercase()
 	val bit = 1 shl ordinal
+
+	// Only for BYTE, WORD, DWORD, and QWORD
 	val min: Long = -(1L shl ((bytes shl 3) - 1))
 	val max: Long = (1L shl ((bytes shl 3) - 1)) - 1
-
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
 
@@ -247,25 +261,140 @@ enum class MmxReg(val value: Int) {
 
 
 
-enum class XmmReg(val value: Int, val rex: Int) {
+interface SimdReg {
+	val value: Int
+	val rex: Int
+	val high: Int
+}
 
-	XMM0 (0, 0),
-	XMM1 (1, 0),
-	XMM2 (2, 0),
-	XMM3 (3, 0),
-	XMM4 (4, 0),
-	XMM5 (5, 0),
-	XMM6 (6, 0),
-	XMM7 (7, 0),
-	XMM8 (0, 1),
-	XMM9 (1, 1),
-	XMM10(2, 1),
-	XMM11(3, 1),
-	XMM12(4, 1),
-	XMM13(5, 1),
-	XMM14(6, 1),
-	XMM15(7, 1);
 
+
+enum class XmmReg : SimdReg {
+
+	XMM0,
+	XMM1,
+	XMM2,
+	XMM3,
+	XMM4,
+	XMM5,
+	XMM6,
+	XMM7,
+	XMM8,
+	XMM9,
+	XMM10,
+	XMM11,
+	XMM12,
+	XMM13,
+	XMM14,
+	XMM15,
+	XMM16,
+	XMM17,
+	XMM18,
+	XMM19,
+	XMM20,
+	XMM21,
+	XMM22,
+	XMM23,
+	XMM24,
+	XMM25,
+	XMM26,
+	XMM27,
+	XMM28,
+	XMM29,
+	XMM30,
+	XMM31;
+	
+	override val value  = ordinal and 0b111
+	override val rex    = (ordinal shr 3) and 1
+	override val high   = ordinal shr 4
+	val string = name.lowercase()
+
+}
+
+
+
+enum class YmmReg : SimdReg {
+
+	YMM0,
+	YMM1,
+	YMM2,
+	YMM3,
+	YMM4,
+	YMM5,
+	YMM6,
+	YMM7,
+	YMM8,
+	YMM9,
+	YMM10,
+	YMM11,
+	YMM12,
+	YMM13,
+	YMM14,
+	YMM15,
+	YMM16,
+	YMM17,
+	YMM18,
+	YMM19,
+	YMM20,
+	YMM21,
+	YMM22,
+	YMM23,
+	YMM24,
+	YMM25,
+	YMM26,
+	YMM27,
+	YMM28,
+	YMM29,
+	YMM30,
+	YMM31;
+
+	override val value  = ordinal and 0b111
+	override val rex    = (ordinal shr 3) and 1
+	override val high   = ordinal shr 4
+	val string = name.lowercase()
+
+}
+
+
+
+enum class ZmmReg : SimdReg{
+
+	ZMM0,
+	ZMM1,
+	ZMM2,
+	ZMM3,
+	ZMM4,
+	ZMM5,
+	ZMM6,
+	ZMM7,
+	ZMM8,
+	ZMM9,
+	ZMM10,
+	ZMM11,
+	ZMM12,
+	ZMM13,
+	ZMM14,
+	ZMM15,
+	ZMM16,
+	ZMM17,
+	ZMM18,
+	ZMM19,
+	ZMM20,
+	ZMM21,
+	ZMM22,
+	ZMM23,
+	ZMM24,
+	ZMM25,
+	ZMM26,
+	ZMM27,
+	ZMM28,
+	ZMM29,
+	ZMM30,
+	ZMM31;
+
+	override val value  = ordinal and 0b111
+	override val rex    = (ordinal shr 3) and 1
+	override val high   = ordinal shr 4
 	val string = name.lowercase()
 
 }

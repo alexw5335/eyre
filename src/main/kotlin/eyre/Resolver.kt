@@ -198,9 +198,12 @@ class Resolver(private val context: CompilerContext) {
 		is EnumEntryNode,
 		is LabelNode,
 		is MemberNode,
-		is MmxRegNode,
-		is XmmRegNode,
-		is TypeNode, -> return
+		is MmxNode,
+		is XmmNode,
+		is YmmNode,
+		is ZmmNode,
+		is TypeNode -> return
+		else        -> return
 	}}
 
 

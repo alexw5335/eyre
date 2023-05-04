@@ -1,5 +1,7 @@
 namespace main
 
 proc main {
-
+	movapd xmm1, xmm2
+	movapd xmm1, [rax]
+	movapd [rax], xmm1
 }
