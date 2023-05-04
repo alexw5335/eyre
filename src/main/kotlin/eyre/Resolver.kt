@@ -124,7 +124,8 @@ class Resolver(private val context: CompilerContext) {
 		}
 		is ScopeEndNode -> popScope()
 		is InsNode -> {
-			if(node.mnemonic.isPseudo) return
+			if(node.mnemonic == Mnemonic.DLLCALL || node.mnemonic == Mnemonic.RETURN)
+				return
 			resolveNode(node.op1 ?: return)
 			resolveNode(node.op2 ?: return)
 			resolveNode(node.op3 ?: return)

@@ -21,13 +21,6 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private inline fun prefixed(prefix: Int, block: () -> Unit) {
-		byte(prefix)
-		block()
-	}
-
-
-
 	private inline fun withZeroOpcodePrefix(block: () -> Unit) {
 		zeroOpcodePrefix = true
 		block()
@@ -715,6 +708,14 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun encode2XMM_MMX(opcode: Int, op1: XmmReg, op2: MmxReg) {
+		writeRex(0, op1.rex, 0, 0)
+		writeOpcode(opcode)
+		writeModRM(0b11, op1.value, op2.value)
+	}
+
+
+
 	private fun encode2XM(opcode: Int, op1: XmmReg, op2: MemNode, memWidth: Width) {
 		if(op2.width != null && op2.width != memWidth) invalidEncoding()
 		writeMem(opcode, op2.value, 0, op1.rex, op1.value, 0)
@@ -1218,8 +1219,44 @@ class Assembler(private val context: CompilerContext) {
 		MOVAPS   -> encode2XMXM(0x00, 0x280F, op1, op2, XWORD)
 		MOVAPD   -> encode2XMXM(0x66, 0x280F, op1, op2, XWORD)
 
+		CVTPI2PS -> encodeCVTPI2PS(op1, op2)
+		CVTSI2SS -> encodeCVTSI2SS(op1, op2)
+		CVTPI2PD -> encodeCVTPI2PD(op1, op2)
+		//CVTSI2SD,
+
 		else     -> invalidEncoding()
 	}}
+
+
+
+	private fun encodeCVTPI2PS(op1: OpNode, op2: OpNode) {
+		if(op1 !is XmmNode) invalidEncoding()
+		when(op2) {
+			is MmxNode -> encode2XMM_MMX(0x2A0F, op1.value, op2.value)
+			is MemNode -> encode2XM(0x2A0F, op1.value, op2, QWORD)
+			else       -> invalidEncoding()
+		}
+	}
+
+
+	
+	private fun encodeCVTSI2SS(op1: OpNode, op2: OpNode) {
+		if(op1 !is XmmNode) invalidEncoding()
+		when(op2) {
+			is RegNode -> {
+
+			}
+		}
+	}
+
+
+
+	//private fun encodeCVTSI2SS(op1: OpNode, op2: OpNode) {
+	//	if(op1 !is XmmNode) invalidEncoding()
+	//	when(op2) {
+	//		is RegNode ->
+	//	}
+	//}
 
 
 
