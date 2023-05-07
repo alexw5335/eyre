@@ -1,6 +1,5 @@
 plugins {
     kotlin("jvm") version "1.8.0"
-	
 }
 
 
@@ -18,6 +17,13 @@ repositories {
 
 kotlin {
     jvmToolchain(18)
+}
+
+
+
+dependencies {
+	implementation(platform("org.apache.tika:tika-bom:2.7.0"))
+	implementation("org.apache.tika:tika-parsers-standard-package")
 }
 
 

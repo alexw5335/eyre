@@ -82,6 +82,8 @@ enum class Mnemonic {
 	CVTTPD2PI, CVTTSD2SI, CVTPS2PI, CVTSS2SI, CVTPD2PI,
 	CVTSD2SI, UCOMISS, UCOMISD, COMISS, COMISD,
 
+	VMOVUPS,
+
 	DLLCALL,
 	RETURN;
 
@@ -227,7 +229,40 @@ enum class SseReg(
 	YMM28(0, 1, 1, Width.YWORD),
 	YMM29(0, 1, 1, Width.YWORD),
 	YMM30(0, 1, 1, Width.YWORD),
-	YMM31(0, 1, 1, Width.YWORD);
+	YMM31(0, 1, 1, Width.YWORD),
+
+	ZMM0(0, 0, 0, Width.ZWORD),
+	ZMM1(1, 0, 0, Width.ZWORD),
+	ZMM2(2, 0, 0, Width.ZWORD),
+	ZMM3(3, 0, 0, Width.ZWORD),
+	ZMM4(4, 0, 0, Width.ZWORD),
+	ZMM5(5, 0, 0, Width.ZWORD),
+	ZMM6(6, 0, 0, Width.ZWORD),
+	ZMM7(0, 0, 0, Width.ZWORD),
+	ZMM8(0, 1, 0, Width.ZWORD),
+	ZMM9(0, 1, 0, Width.ZWORD),
+	ZMM10(0, 1, 0, Width.ZWORD),
+	ZMM11(0, 1, 0, Width.ZWORD),
+	ZMM12(0, 1, 0, Width.ZWORD),
+	ZMM13(0, 1, 0, Width.ZWORD),
+	ZMM14(0, 1, 0, Width.ZWORD),
+	ZMM15(0, 1, 0, Width.ZWORD),
+	ZMM16(0, 0, 1, Width.ZWORD),
+	ZMM17(0, 0, 1, Width.ZWORD),
+	ZMM18(0, 0, 1, Width.ZWORD),
+	ZMM19(0, 0, 1, Width.ZWORD),
+	ZMM20(0, 0, 1, Width.ZWORD),
+	ZMM21(0, 0, 1, Width.ZWORD),
+	ZMM22(0, 0, 1, Width.ZWORD),
+	ZMM23(0, 0, 1, Width.ZWORD),
+	ZMM24(0, 1, 1, Width.ZWORD),
+	ZMM25(0, 1, 1, Width.ZWORD),
+	ZMM26(0, 1, 1, Width.ZWORD),
+	ZMM27(0, 1, 1, Width.ZWORD),
+	ZMM28(0, 1, 1, Width.ZWORD),
+	ZMM29(0, 1, 1, Width.ZWORD),
+	ZMM30(0, 1, 1, Width.ZWORD),
+	ZMM31(0, 1, 1, Width.ZWORD);
 
 }
 

@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	cvtpi2ps xmm1, [rax]
+	vmovups [r15 + r8 * 2 + 10], ymm9
 }
