@@ -72,7 +72,7 @@ class IntNode(val value: Long) : AstNode, OpNode
 
 class FloatNode(val value: Double) : AstNode, OpNode
 
-class RegNode(val value: Register) : OpNode { val width get() = value.width }
+class RegNode(val value: GpReg) : OpNode { val width get() = value.width }
 
 class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode, OpNode
 
@@ -90,17 +90,11 @@ class MemNode(val width: Width?, val value: AstNode) : OpNode
 
 class TypedefNode(val symbol: TypedefSymbol, val value: TypeNode) : SymContainerNode(symbol)
 
-class MiscRegNode(val type: RegType, val value: Int) : OpNode
-
 class SegRegNode(val value: SegReg) : OpNode
 
-class FpuNode(val value: FpuReg) : OpNode
+class StRegNode(val value: StReg) : OpNode
 
-class XmmNode(val value: XmmReg) : OpNode
-
-class YmmNode(val value: YmmReg) : OpNode
-
-class ZmmNode(val value: ZmmReg) : OpNode
+class SseRegNode(val value: SseReg) : OpNode
 
 class MmxNode(val value: MmxReg) : OpNode
 

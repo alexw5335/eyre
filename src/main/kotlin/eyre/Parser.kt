@@ -113,19 +113,18 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = SrcPos()
 		val token = next()
 
-		if(token is Name) {
-			return when(token) {
-				in Names.registers    -> RegNode(Names.registers[token])
-				in Names.fpuRegisters -> FpuNode(Names.fpuRegisters[token])
-				in Names.mmxRegisters -> MmxNode(Names.mmxRegisters[token])
-				in Names.xmmRegisters -> XmmNode(Names.xmmRegisters[token])
-				in Names.ymmRegisters -> YmmNode(Names.ymmRegisters[token])
-				in Names.zmmRegisters -> ZmmNode(Names.zmmRegisters[token])
-				Names.FS              -> SegRegNode(SegReg.FS)
-				Names.GS              -> SegRegNode(SegReg.GS)
-				else                  -> NameNode(token)
+		if(token is RegToken) {
+			return when(val value = token.value) {
+				is GpReg  -> RegNode(value)
+				is SegReg -> SegRegNode(value)
+				is StReg  -> StRegNode(value)
+				is SseReg -> SseRegNode(value)
+				is MmxReg -> MmxNode(value)
 			}
 		}
+
+		if(token is Name)
+			return NameNode(token)
 
 		if(token is SymToken) {
 			if(token == SymToken.LPAREN) {

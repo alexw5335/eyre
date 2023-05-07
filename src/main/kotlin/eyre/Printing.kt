@@ -17,7 +17,7 @@ val AstNode.printString: String get() = when(this) {
 	is ScopeEndNode   -> "scope end"
 	is MemNode        -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
 	is SegRegNode     -> value.name.lowercase()
-	is FpuNode        -> value.string
+	is StRegNode        -> value.string
 	is VarResNode     -> "var ${symbol.name}: ${type.printString}"
 	is ArrayNode      -> "${receiver.printString}[${index.printString}]"
 	is ConstNode      -> "const ${symbol.name} = ${value.printString}"

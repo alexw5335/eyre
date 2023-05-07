@@ -304,5 +304,3 @@ EVEX.LLIG.F2.0F.W1  10  VMOVSD  XMM {kz}, M64  (reg, rm)  (Type1 Scalar)
 
 66 0F 39 F6  ADCX  R_RM  1100
 66 0F 58  ADDPD
-
-

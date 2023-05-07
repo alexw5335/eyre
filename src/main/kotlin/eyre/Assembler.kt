@@ -194,8 +194,8 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private var baseReg: Register? = null
-	private var indexReg: Register? = null
+	private var baseReg: GpReg? = null
+	private var indexReg: GpReg? = null
 	private var indexScale = 0
 	private var aso = Aso.NONE
 	private var memRelocCount = 0
@@ -241,7 +241,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun resolveMemReg(reg: Register, regValid: Boolean): Long {
+	private fun resolveMemReg(reg: GpReg, regValid: Boolean): Long {
 		if(!regValid) invalidEncoding()
 		checkAso(reg.width)
 
@@ -332,7 +332,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private val OpNode.asMem get() = this as? MemNode ?: invalidEncoding()
 
-	private val OpNode?.asFpu get() = (this!! as? FpuNode)?.value ?: invalidEncoding()
+	private val OpNode?.asFpu get() = (this!! as? StRegNode)?.value ?: invalidEncoding()
 
 	private val OpNode.asXmm get() = (this as? XmmNode)?.value ?: invalidEncoding()
 
@@ -506,7 +506,7 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 
-	private fun encode1R(opcode: Int, widths: Widths, extension: Int, op1: Register) {
+	private fun encode1R(opcode: Int, widths: Widths, extension: Int, op1: GpReg) {
 		val width = op1.width
 		checkWidths(widths, width)
 		checkO16(width)
@@ -520,7 +520,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encode2RM(
 		opcode: Int,
 		widths: Widths,
-		op1: Register,
+		op1: GpReg,
 		op2: MemNode,
 		immLength: Int,
 		mismatch: Boolean = false
