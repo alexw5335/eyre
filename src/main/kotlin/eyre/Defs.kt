@@ -82,7 +82,7 @@ enum class Mnemonic {
 	CVTTPD2PI, CVTTSD2SI, CVTPS2PI, CVTSS2SI, CVTPD2PI,
 	CVTSD2SI, UCOMISS, UCOMISD, COMISS, COMISD,
 
-	VMOVUPS,
+	VMOVUPS, VMOVUPD, VMOVSS, VMOVSD,
 
 	DLLCALL,
 	RETURN;
@@ -113,24 +113,6 @@ enum class Width(val varString: String, val bytes: Int) {
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
 
-}
-
-
-@JvmInline
-value class Widths(val value: Int) {
-	operator fun contains(width: Width) = value and width.bit != 0
-	companion object {
-		val ALL    = Widths(0b1111)
-		val NO8    = Widths(0b1110)
-		val NO832  = Widths(0b1010)
-		val NO864  = Widths(0b0110)
-		val ONLY64 = Widths(0b1000)
-		val ONLY8  = Widths(0b0001)
-		val NO816  = Widths(0b1100)
-		val XYZ    = Widths(0b111_0000)
-		val XY     = Widths(0b011_0000)
-		val X      = Widths(0b001_0000)
-	}
 }
 
 

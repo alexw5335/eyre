@@ -292,6 +292,18 @@ EVEX.128.66.0F.W0  11  VMOVUPD  XMM/128 {k} {z}, XMM
 EVEX.256.66.0F.W0  11  VMOVUPD  YMM/256 {k} {z}, YMM
 EVEX.512.66.0F.W0  11  VMOVUPD  ZMM/512 {k} {z}, ZMM
 
+F3 0F 10  MOVSS  XMM, XMM/M32  (reg, rm)
+F3 0F 11  MOVSS  XMM/M32, XMM  (rm, reg)
+VEX.LIG.F3.0F.WIG  10  VMOVSS  XMM, XMM, XMM  (reg, vvvv, rm)
+VEX.LIG.F3.0F.WIG  10  VMOVSS  XMM, M32       (reg, rm)
+VEX.LIG.F3.0F.WIG  11  VMOVSS  XMM, XMM, XMM  (rm, vvvv, reg)
+VEX.LIG.F3.0F.WIG  11  VMOVSS  M32, XMM       (rm, reg)
+EVEX.LLIG.F3.0F.W0  10  VMOVSS  XMM {kz}, XMM, XMM  (reg, vvvv, rm)
+EVEX.LLIG.F3.0F.W0  10  VMOVSS  XMM {kz}, M32       (reg, rm)  (Tuple1 Scalar)
+EVEX.LLIG.F3.0F.W0  11  VMOVSS  XMM {kz}, XMM, XMM  (rm, vvvv, reg)
+EVEX.LLIG.F3.0F.W0  11  VMOVSS  M32 {k}, XMM        (rm, reg)  (Tuple1 Scalar)
+
+
 F2 0F 10  MOVSD  XMM, XMM/M64
 F2 0F 11  MOVSD  XMM/M64, XMM
 VEX.LIG.F2.0F.WIG  10  VMOVSD  XMM, XMM, XMM  (reg, vvvv, rm)
@@ -299,8 +311,51 @@ VEX.LIG.F2.0F.WIG  10  VMOVSD  XMM, M64       (reg, rm)
 VEX.LIG.F2.0F.WIG  11  VMOVSD  XMM, XMM, XMM  (rm, vvvv, reg)
 VEX.LIG.F2.0F.WIG  11  VMOVSD  M64, XMM       (rm, reg)
 EVEX.LLIG.F2.0F.W1  10  VMOVSD  XMM {kz}, XMM, XMM  (reg, vvvv, rm)
-EVEX.LLIG.F2.0F.W1  10  VMOVSD  XMM {kz}, M64  (reg, rm)  (Type1 Scalar)
+EVEX.LLIG.F2.0F.W1  10  VMOVSD  XMM {kz}, M64       (reg, rm)  (Type1 Scalar)
+EVEX.LLIG.F2.0F.W1  11  VMOVSD  XMM {kz}, XMM, XMM  (rm, vvvv, reg)
+EVEX.LLIG.F2.0F.W1  11  VMOVSD  M64 {k}, XMM        (rm, reg)  (Tuple1 Scalar)
 
 
-66 0F 39 F6  ADCX  R_RM  1100
-66 0F 58  ADDPD
+
+Operands:
+S:
+	- XMM
+	- YMM
+	- ZMM
+SM:
+	- XMM/M128
+	- YMM/M256
+	- ZMM/M512
+SMM32BCSTER:
+	- XMM/M128/M32BCST {er}
+	- YMM/M256/M32BCST {er}
+	- ZMM/M512/M32BCST {er}
+SMM64BCSTER:
+    - XMM/M128/M64BCST {er}
+    - YMM/M256/M64BCST {er}
+    - ZMM/M512/M64BCST {er}
+
+Opcode:
+L: Indicates that L and L' should be chosen based on width of 'S' operands
+
+14    ADC  A_I    1111
+80/2  ADC  RM_I   1111
+83/2  ADC  RM_I8  0111
+10    ADC  RM_R   1111
+12    ADC  R_RM   1111
+
+66 0F 38 F6  ADCX  R_RM 1100
+
+04    ADD  A_I    1111
+80/0  ADD  RM_I   1111
+83/0  ADD  RM_I8  0111
+00    ADD  RM_R   1111
+02    ADD  R_RM   1111
+
+66 0F 58  ADDPD  X_XM  (reg, rm)
+VEX.L.66.0F.WIG  58  VADDPD  S_S_SM         (reg, vvvv, rm)
+EVEX.L.66.0F.W1  58  VADDPD  S_S_SMM64BCST  (reg, vvvv, rm, FULL)
+
+0F 58  ADDPS  X_XM  (reg, rm)
+VEX.L.0F.WIG  58  VADDPS  S_S_SM  (reg, vvvv, rm)
+EVEX.L.0F.W0  58  VADDPS  S_S_SMM32BCST

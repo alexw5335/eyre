@@ -1,0 +1,407 @@
+Operands:
+S:
+	- XMM
+	- YMM
+	- ZMM
+SM:
+	- XMM/M128
+	- YMM/M256
+	- ZMM/M512
+SMM32BCST:
+	- XMM/M128/M32BCST
+	- YMM/M256/M32BCST
+	- ZMM/M512/M32BCST
+SMM64BCST:
+	- XMM/M128/M64BCST
+	- YMM/M256/M64BCST
+	- ZMM/M512/M64BCST
+
+Opcode and operand encoding shorthands:
+L: Indicates that L and L' should be chosen based on width of 'S' operands
+k: Indicates {k} on the first operand
+kz: Indicates {k} {z} on the first operand
+er: Indicates {er} on the last memory operand (memory operand may be second last, before an imm)
+sae: Indicates {sae} on the last memory operand (memory operand may be second last, before an imm)
+er64: Indicates {er} on the last memory operand, but only for 64-bit memory operands (VCVTSI2SD)
+V: Indicates VEX
+E: Indicates EVEX
+full: Full
+fullMem: Full Mem
+tuple1s: Tuple1 Scalar
+tuple1f: Tuple1 Fixed
+
+- Lack of W0 and W1 indicates either WIG or W is determined by width of GPR operands (W0 for 32-bit, W1 for 64-bit)
+- Lack of 128 and 256 and 512 indicates implicit L and L' width based on operand width (Not LIG)
+- WIG, LIG, and LLIG are completely omitted
+	- LIG and LLIG can use 0 or 1 from the arg width since it is ignored
+
+Operand Encodings:
+rm:   reg, r/m
+rvm:  reg, vvvv, r/m
+rmv:  reg, r/m, vvvv
+rmi:  reg, r/m, imm
+rvmi: reg, vvvv, r/m, imm
+rvmr: reg, vvvv, r/m, imm8[7:4]
+vm:   vvvv, rm
+mr:   r/m, reg
+mi:   r/m, imm
+o:    opreg
+
+
+
+
+14    ADC  A_I    1111
+80/2  ADC  RM_I   1111
+83/2  ADC  RM_I8  0111
+10    ADC  RM_R   1111
+12    ADC  R_RM   1111
+
+66 0F 38 F6  ADCX  R_RM 1100
+
+04    ADD  A_I    1111
+80/0  ADD  RM_I   1111
+83/0  ADD  RM_I8  0111
+00    ADD  RM_R   1111
+02    ADD  R_RM   1111
+
+66 0F 58  ADDPD  X_XM128  (reg, rm)
+VEX.L.66.0F.WIG  58  VADDPD  S_S_SM           (reg, vvvv, rm)
+EVEX.L.66.0F.W1  58  VADDPD  S_S_SMM64BCST  (reg, vvvv, rm, full, kz, er)
+
+0F 58  ADDPS  X_XM128  (reg, rm)
+VEX.L.0F.WIG  58  VADDPS  S_S_SM  (reg, vvvv, rm)
+EVEX.L.0F.W0  58  VADDPS  S_S_SMM32BCST  (reg, vvvv, rm, full, kz, er)
+
+F2 0F 58  ADDSD  X_XM64  (reg, rm)
+VEX.LIG.F2.0F.WIG   58  VADDSD  X_X_XM64  (reg, vvvv, rm)
+EVEX.LLIG.F2.0F.W1  58  VADDSD  X_X_XM64  (reg, vvvv, rm, tuple1s, kz, er)
+
+F3 0F 58  ADDSS  X_XM32  (reg, rm)
+VEX.LIG.F3.0F.WIG   58  VADDSS  X_X_XM32  (reg vvvv rm)
+EVEX.LLIG.F3.0F.W0  58  VADDSS  X_X_XM32  (reg vvvv rm tuple1s kz er)
+
+66 0F D0  ADDSUBPD  X_XM128             reg rm
+VEX.L.66.0F.WIG  D0  VADDSUBPD  S_S_SM  reg vvvv rm
+
+F2 0F D0  ADDSUBPS  X_XM128             reg rm
+VEX.L.F2.0F.WIG  D0  VADDSUBPS  S_S_SM  reg vvvv rm
+
+F3 0F 38 F6  ADOX  R_RM  1100
+
+66 0F 38 DE        AESDEC   X_XM128  reg rm
+V.L.66.38.WIG  DE  VAESDEC  S_S_SM   reg vvvv rm
+E.L.66.38.WIG  DE  VAESDEC  S_S_SM   reg vvvv rm fullMem
+
+// F3.38 DD  AESDEC128KL      ????
+// F3.38 DF  AESDEC256KL      ????
+// F3.38 D8  AESDECWIDE128KL  ????
+// F3.38 D8  AESDECWIDE256KL  ????
+// F3.38 DC  AESENC128KL      ????
+// F3.38 DE  AESENC256KL      ????
+// F3.38 D8  AESENCWIDE128KL  ????
+// F3.38 D8  AESENCWIDE256KL  ????
+
+66.38    DF  AESDECLAST   X_XM128  rm
+V.66.38  DF  VAESDECLAST  S_S_SM   rvm
+E.66.38  DF  VAESDECLAST  S_S_SM   rvm fullMem
+
+66.38    DC  AESENC   X_XM128  rm
+V.66.38  DC  VAESENC  S_S_SM   rvm
+E.66.e8  DC  VAESENC  S_S_SM   rvm fm
+
+66.38    DD  AESENCLAST   X_XM    rm
+V.66.38  DD  VAESENCLAST  S_S_SM  rvm
+E.66.38  DD  VAESENCLAST  S_S_SM  rvm fullMem
+
+66.38    D8  AESIMC   X_XM  rm
+V.66.38  DB  VAESIMC  X_XM  rm
+
+66.3A    DF  AESKEYGENASSIST   X_XM_I8  rmi
+V.66.3A  DF  VAESKEYGENASSIST  X_XM_I8  rmi
+
+24    AND  A_I    1111
+80/4  AND  RM_I   1111
+83/4  AND  RM_I8  0111
+20    AND  RM_R   1111
+22    AND  R_RM   1111
+
+V.L0.38  F2  ANDN  R_R_RM  1100  rvm
+
+66.0F       54  ANDPD   X_XM         rm
+V.66.0F     54  VANDPD  S_S_SM       rvm
+E.66.0F.W1  54  VANDPD  S_SMM64BCST  rvm full kz
+
+0F       54  ANDPS   X_XM           rm
+V.0F     54  VANDPS  S_S_SM         rvm
+E.0F.W0  54  VANDPS  S_S_SMM32BCST  rvm full kz
+
+66.0F       54  ANDNPD   X_XM           rm
+V.66.0F     55  VANDNPD  S_S_SM         rvm
+E.66.0F.W1  55  VANDNPD  S_S_SMM64BCST  rvm full kz
+
+0F       55  ANDNPS   X_XM           rm
+V.0F     55  VANDNPS  S_S_SM         rvm
+E.0F.W0  55  VANDNPS  S_S_SMM32BCST  rvm full kz
+
+V.L0.38  F7  BEXTR  R_RM_R  1100  rmv
+
+66.3A    0D  BLENDPD   X_XM_I8    rmi
+V.66.3A  0D  VBLENDPD  S_S_SM_I8  rvmi
+
+66.3A    0C  BLENDPS   X_XM_I8    rmi
+V.66.3A  0C  VBLENDPS  S_S_SM_I8  rvmi
+
+66.38      15  BLENDVPD   X_XM_X0   rm
+V.66.3A.W0 4B  VBLENDVPD  S_S_SM_S  rvmr
+
+66.38      14  BLENDVPD   X_XM_X0   rm
+V.66.3A.W0 4A  VBLENDVPD  S_S_SM_S  rvmr
+
+V.L0.38  F3/3  BLSI    R_RM  1100  vm
+V.L0.38  F3/2  BLSMSK  R_RM  1100  vm
+V.L0.38  F3/1  BLSR    R_RM  1100  vm
+
+F3.0F  1A  BNDCL  BND_RM64  rm
+F2.0F  1A  BNDCU  BND_RM64  rm
+F2.0F  1A  BNDCN  BND_RM64  rm
+
+// 0F  1A  BNDLDX  BND_MIB  ????
+
+F3.0F  1B  BNDMK  BND_M64  rm
+
+66.0F  1A  BNDMOV  BND_BNDM128  rm
+66.0F  1B  BNDMOV  BNDM128_BND  mr
+
+// 0F  1B  BNDSTX  MIB_BND  ????
+
+0F BC  BSF  R_RM  1110  rm
+0F BD  BSR  R_RM  1110  rm
+
+0F C7  BSWAP  R  1100  o
+
+0F A3    BT  RM_R   1110  mr
+0F BA/4  BT  RM_I8  1110  mi
+
+0F BB    BTC  RM_R   1110  mr
+0F BA/7  BTC  RM_I8  1110  mi
+
+0F B3    BTR  RM_R   1110  mr
+0F BA/6  BTR  RM_I8  1110  mi
+
+0F AB    BTS  RM_R   1110  mr
+0F BA/5  BTS  RM_I8  1110  mi
+
+V.L0.38  BZHI  R_RM_R  1100  rmv
+
+E8    CALL   REL32
+FF/2  CALL   RM64   1000
+FF/3  CALLF  M      1110
+
+9866  CBW
+98    CWDE
+9848  CDQE
+
+100F  CLAC
+
+F8  CLC
+
+FC  CLD
+
+1C0F/0  CLDEMOTE  M8
+
+AE0F/7  CLFLUSH  M8
+
+AE0F66/7  CLFLUSHOPT  M8
+
+FA  CLI
+
+AE0FF3/6  CLRSSBSY  M64
+
+060F  CLTS
+
+AE0F66/6  CLWB  M8
+
+F5  CMC
+
+400F  CMOVO    R_RM  0111
+410F  CMOVNO   R_RM  0111
+420F  CMOVB    R_RM  0111
+420F  CMOVNAE  R_RM  0111
+420F  CMOVC    R_RM  0111
+430F  CMOVNB   R_RM  0111
+430F  CMOVAE   R_RM  0111
+430F  CMOVNC   R_RM  0111
+440F  CMOVZ    R_RM  0111
+440F  CMOVE    R_RM  0111
+450F  CMOVNZ   R_RM  0111
+450F  CMOVNE   R_RM  0111
+460F  CMOVBE   R_RM  0111
+460F  CMOVNA   R_RM  0111
+470F  CMOVNBE  R_RM  0111
+470F  CMOVA    R_RM  0111
+480F  CMOVS    R_RM  0111
+490F  CMOVNS   R_RM  0111
+4A0F  CMOVP    R_RM  0111
+4A0F  CMOVPE   R_RM  0111
+4B0F  CMOVNP   R_RM  0111
+4B0F  CMOVPO   R_RM  0111
+4C0F  CMOVL    R_RM  0111
+4C0F  CMOVNGE  R_RM  0111
+4D0F  CMOVNL   R_RM  0111
+4D0F  CMOVGE   R_RM  0111
+4E0F  CMOVLE   R_RM  0111
+4E0F  CMOVNG   R_RM  0111
+4F0F  CMOVNLE  R_RM  0111
+4F0F  CMOVG    R_RM  0111
+
+3C    CMP  A_I    1111
+80/7  CMP  RM_I   1111
+83/7  CMP  RM_I8  0111
+38    CMP  RM_R   1111
+3A    CMP  R_RM   1111
+
+66.0F       C2   CMPPD   X_XM_I8           rmi
+V.66.0F     C2   VCMPPD  S_S_SM_I8         rvmi
+E.66.0F.W1  C2   VCMPPD  K_S_SMM64BCST_I8  rvmi full k sae
+
+0F        C2  CMPPS   X_XM_I8           rmi
+V.0F.WIG  C2  VCMPPS  S_S_SM_I8         rvmi
+E.0F.W0   C2  VCMPPS  K_S_SMM32BCST_I8  rvmi full k sae
+
+A6    CMPSB
+A766  CMPSW
+A7    CMPSD
+A748  CMPSQ
+
+F2.0F            C2  CMPSD   X_XM64_I8    rmi
+V.LIG.F2.0F      C2  VCMPSD  X_X_XM64_I8  rvmi
+E.LLIG.F2.0F.W1  C2  VCMPSD  K_X_XM64_I8  rvmi tuple1s k sae
+
+F3.0F            C2  CMPSS   X_XM64_I8    rmi
+V.LIG.F3.0F      C2  VCMPSS  X_X_XM64_I8  rvmi
+E.LLIG.F3.0F.W1  C2  VCMPSS  K_X_XM32_I8  rvmi tuple1s k sae
+
+B00F  CMPXCHG  RM_R  1111
+
+C70F/1  CMPXCHG8B   M64
+C70F/1  CMPXCHG16B  M128  rexw
+
+66.0F            2F  COMISD   X_XM64  rm
+V.LIG.66.0F      2F  VCOMISD  X_XM64  rm
+E.LLIG.66.0F.W1  2F  VCOMISD  X_XM64  rm tuple1s sae
+
+0F            2F  COMISS   X_XM32  rm
+V.LIG.0F      2F  VCOMISS  X_XM32  rm
+E.LLIG.0F.W0  2F  VCOMISS  X_XM32  rm tuple1s sae
+
+A20F  CPUID
+
+F0380FF2    CRC32  R32_RM8
+F1380FF266  CRC32  R32_RM16
+F1380FF2    CRC32  R32_RM32
+F0380FF2    CRC32  R64_RM8   rexw
+F1380FF2    CRC32  R64_RM64  rexw
+
+F3.0F            E6  CVTDQ2PD   X_XM64          rm
+V.128.F3.0F.WIG  E6  VCVTDQ2PD  X_XM64          rm
+V.256.F3.0F.WIG  E6  VCVTDQ2PD  Y_XM128         rm
+E.128.F3.0F.W0   E6  VCVTDQ2PD  X_XM64M32BCST   rm half kz
+E.256.F3.0F.W0   E6  VCVTDQ2PD  Y_XM128M32BCST  rm half kz
+E.512.F3.0F.W0   E6  VCVTDQ2PD  Z_YM256M32BCST  rm half kz
+
+0F       5B  CVTDQ2PS   X_XM         rm
+V.0F     5B  VCVTDQ2PS  S_SM         rm
+E.0F.W0  5B  VCVTDQ2PS  S_SMM32BCST  rm full kz er
+
+F2.0F       E6  CVTPD2DQ   X_XM         rm
+V.F2.0F     E6  VCVTPD2DQ  S_SM         rm
+E.F2.0F.W1  E6  VCVTPD2DQ  S_SMM64BCST  rm full kz er
+
+66.0F 2D  CVTPD2PI  MM_M128  rm
+
+66.0F       5A  CVTPD2PS   X_XM         rm
+V.66.0F     5A  VCVTPD2PS  S_SM         rm
+E.66.0F.W1  5A  VCVTPD2PS  S_SMM64BCST  rm full kz er
+
+66.0F 2A  CVTPI2PD  XMM_MMM64  rm
+
+0F 2A  CVTPI2PS  XMM_MMM64  rm
+
+66.0F       5B  CVTPS2DQ   X_XM         rm
+V.66.0F     5B  VCVTPS2DQ  S_SM         rm
+E.66.0F.W0  5B  VCVTPS2DQ  S_SMM32BCST  rm full kz er
+
+0F            5A  CVTPS2PD   X_XM64          rm
+V.128.0F.WIG  5A  VCVTPS2PD  X_XM64          rm
+V.256.0F.WIG  5A  VCVTPS2PD  Y_XM128         rm
+E.128.0F.W0   5A  VCVTPS2PD  X_XM64M32BCST   rm half kz
+E.256.0F.W0   5A  VCVTPS2PD  Y_XM128M32BCST  rm half kz
+E.512.0F.W0   5A  VCVTPS2PD  Z_YM256M32BCST  rm half kz sae
+
+0F 2D  CVTPS2PI  MM_XM64  rm
+
+F2.0F    2D  CVTSD2SI   R_XM64  1100  rm
+V.F2.0F  2D  VCVTSD2SI  R_XM64  1100  rm
+E.F2.0F  2D  VCVTSD2SI  R_XM64  1100  rm tuple1f er
+
+F2.0F       5A  CVTSD2SS   X_XM64    rm
+V.F2.0F     5A  VCVTSD2SS  X_X_XM64  rvm
+E.F2.0F.W1  5A  VCVTSD2SS  X_X_XM64  rvm tuple1s kz er
+
+F2.0F    2A  CVTSI2SD   X_RM    1100  rm
+V.F2.0F  2A  VCVTSI2SD  X_X_RM  1100  rvm
+E.F2.0F  2A  VCVTSI2SD  X_X_RM  1100  rvm tuple1s er64
+
+F3.0F    2A  CVTSI2SS   X_RM    1100  rm
+V.F3.0F  2A  VCVTSI2SS  X_X_RM  1100  rvm
+E.F3.0F  2A  VCVTSI2SS  X_X_RM  1100  rvm tuple1s er
+
+F3.0F       5A  CVTSS2SD   X_XM32    rm
+V.F3.0F     5A  VCVTSS2SD  X_X_XM32  rvm
+E.F3.0F.W0  5A  VCVTSS2SD  X_X_XM32  rvm tuple1s kz sae
+
+F3.0F    2D  CVTSS2SI   R_XM32  1100  rm
+V.F3.0F  2D  VCVTSS2SI  R_XM32  1100  rm
+E.F3.0F  2D  VCVTSS2SI  R_XM32  1100  rm tuple1f er
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

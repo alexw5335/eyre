@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	vmovups [r15 + r8 * 2 + 10], ymm9
+	vmovupd [rax + rcx * 2 + 10], ymm14
 }

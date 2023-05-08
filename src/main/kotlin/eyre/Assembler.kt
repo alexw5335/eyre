@@ -338,8 +338,12 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun dword(value: Int) = writer.i32(value)
 
-	private fun checkWidths(widths: Widths, width: Width) {
-		if(width !in widths) invalidEncoding()
+	private fun checkWidths(mask: RegMask, width: Width) {
+		if(width !in mask) invalidEncoding()
+	}
+
+	private fun checkWidths(mask: RegMask, reg: Reg) {
+		checkWidths(mask, reg.width)
 	}
 
 	private fun checkO16(width: Width) {
@@ -380,19 +384,19 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 	/** Return 1 if width is QWORD and widths has DWORD set, otherwise 0 */
-	private fun rexW(widths: Widths, width: Width) =
-		(width.bytes shr 3) and (widths.value shr 2)
+	private fun rexW(regMask: RegMask, width: Width) =
+		(width.bytes shr 3) and (regMask.value shr 2)
 
 	/** Add one if width is not BYTE and if widths has BYTE set */
-	private fun getOpcode(opcode: Int, widths: Widths, width: Width) =
-		opcode + ((widths.value and 1) and (1 shl width.ordinal).inv())
+	private fun getOpcode(opcode: Int, regMask: RegMask, width: Width) =
+		opcode + ((regMask.value and 1) and (1 shl width.ordinal).inv())
 
 	private fun writeOpcode(opcode: Int) {
 		writer.varLengthInt(opcode)
 	}
 
-	private fun writeOpcode(opcode: Int, widths: Widths, width: Width) {
-		writer.varLengthInt(getOpcode(opcode, widths, width))
+	private fun writeOpcode(opcode: Int, regMask: RegMask, width: Width) {
+		writer.varLengthInt(getOpcode(opcode, regMask, width))
 	}
 
 
@@ -464,13 +468,13 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encode1M(opcode: Int, widths: Widths, node: MemNode) {
+	private fun encode1M(opcode: Int, mask: RegMask, node: MemNode) {
 		val width = node.width ?: invalidEncoding()
-		if(node.width !in widths) invalidEncoding()
+		checkWidths(mask, node.width)
 		checkO16(width)
 		val disp = resolveMem(node.value)
-		writeRex(rexW(widths, width), 0, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
-		writeOpcode(getOpcode(opcode, widths, width))
+		writeRex(rexW(mask, width), 0, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
+		writeOpcode(getOpcode(opcode, mask, width))
 		writeMem(node, 0, disp, 0)
 	}
 
@@ -498,12 +502,12 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 
-	private fun encode1R(opcode: Int, widths: Widths, extension: Int, op1: Reg) {
+	private fun encode1R(opcode: Int, regMask: RegMask, extension: Int, op1: Reg) {
 		val width = op1.width
-		checkWidths(widths, width)
+		checkWidths(regMask, width)
 		checkO16(width)
-		writeRex(rexW(widths, width), 0, 0, op1.rex)
-		writeOpcode(opcode, widths, width)
+		writeRex(rexW(regMask, width), 0, 0, op1.rex)
+		writeOpcode(opcode, regMask, width)
 		writeModRM(0b11, extension, op1.value)
 	}
 
@@ -511,7 +515,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun encode2RM(
 		opcode: Int,
-		widths: Widths,
+		mask: RegMask,
 		op1: Reg,
 		op2: MemNode,
 		immLength: Int,
@@ -519,11 +523,11 @@ class Assembler(private val context: CompilerContext) {
 	) {
 		val width = op1.width
 		if(!mismatch && op2.width != null && op2.width != op1.width) invalidEncoding()
-		checkWidths(widths, width)
+		checkWidths(mask, width)
 		checkO16(width)
 		val disp = resolveMem(op2.value)
-		writeRex(rexW(widths, width), op1.rex, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
-		writeOpcode(getOpcode(opcode, widths, width))
+		writeRex(rexW(mask, width), op1.rex, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
+		writeOpcode(getOpcode(opcode, mask, width))
 		writeMem(op2, 0, disp, immLength)
 	}
 
@@ -548,8 +552,9 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun assemble2(node: InsNode, op1: OpNode, op2: OpNode) { when(node.mnemonic) {
-		MOVUPS -> { }
-		VMOVUPS -> encodeVMOVUPS(op1, op2)
+		MOVUPS  -> { }
+		VMOVUPS -> encode2SMSM(vex { 0x10 + WIG + E00 + P0F }, op1, op2)
+		VMOVUPD -> encode2SMSM(vex { 0x10 + WIG + E66 + P0F }, op1, op2)
 		else -> invalidEncoding()
 	} }
 
@@ -584,31 +589,8 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	/**
-	 *    0F 10  MOVUPS  XMM, XMM/M128
-	 *    0F 11  MOVUPS  XMM/M128, XMM
-	 *
-	 *    VEX.128.0F.WIG  10  VMOVUPS  XMM, XMM/M128 ?
-	 *    VEX.256.0F.WIG  10  VMOVUPS  YMM, YMM/M256
-	 *    VEX.128.0F.WIG  11  VMOVUPS  XMM/M128, XMM ?
-	 *    VEX.256.0F.WIG  11  VMOVUPS  YMM/M256, YMM
-	 *
-	 *    EVEX.128.0F.W0  10  VMOVUPS  XMM {k} {z}, XMM/M128
-	 *    EVEX.256.0F.W0  10  VMOVUPS  YMM {k} {z}, YMM/M256
-	 *    EVEX.512.0F.W0  10  VMOVUPS  ZMM {k} {z}, ZMM/M512
-	 *    EVEX.128.0F.W0  11  VMOVUPS  XMM/128 {k} {z}, XMM
-	 *    EVEX.256.0F.W0  11  VMOVUPS  YMM/256 {k} {z}, YMM
-	 *    EVEX.512.0F.W0  11  VMOVUPS  ZMM/512 {k} {z}, ZMM
-	 */
-	private fun encodeVMOVUPS(op1: OpNode, op2: OpNode) {
-		encode2SMSM(vex { 0x10 + WIG + P0F }, op1, op2)
-	}
-
-
-
-
 	private fun encode2SS(info: VexInfo, op1: Reg, op2: Reg) {
-		if(!op1.isSSE || !op2.isSSE) invalidEncoding()
+		checkWidths(RegMask.SSE, op1)
 		if(op1.width != op2.width) invalidEncoding()
 		if(op1.high != 0 || op2.high != 0) invalidEncoding()
 
@@ -621,21 +603,19 @@ class Assembler(private val context: CompilerContext) {
 		if(op1.rex == 1 || op2.rex == 1 || info.requiresVex3) {
 			byte(0xC4)
 			writeVEX1(op1.rex xor 1, 1, op2.rex xor 1, info.prefix)
-			writeVEX2(info.vexW, 0b1111, l, info.extension)
-			byte(info.opcode)
-			writeModRM(0b11, op1.value, op2.value)
 		} else {
 			byte(0xC5)
-			writeVEX2(info.vexW, 0b1111, l, info.extension)
-			byte(info.opcode)
-			writeModRM(0b11, op1.value, op2.value)
 		}
+
+		writeVEX2(info.vexW, 0b1111, l, info.extension)
+		byte(info.opcode)
+		writeModRM(0b11, op1.value, op2.value)
 	}
 
 
 
 	private fun encode2SM(info: VexInfo, op1: Reg, op2: MemNode) {
-		if(!op1.isSSE) invalidEncoding()
+		checkWidths(RegMask.SSE, op1)
 		if(op2.width != null && op2.width != op1.width) invalidEncoding()
 		if(op1.high != 0) invalidEncoding()
 
@@ -647,18 +627,16 @@ class Assembler(private val context: CompilerContext) {
 
 		val disp = resolveMem(op2.value)
 
-		if(info.requiresVex3 || memRexB != 0 || memRexX != 0) {
+		if(info.requiresVex3 || memRexB != 0 || memRexX != 0 || op1.rex == 1) {
 			byte(0xC4)
 			writeVEX1(op1.rex xor 1, memRexX xor 1, memRexB xor 1, info.prefix)
-			writeVEX2(info.vexW, 0b1111, l, info.extension)
-			byte(info.opcode)
-			writeMem(op2, op1.value, disp, 0)
 		} else {
 			byte(0xC5)
-			writeVEX2(info.vexW, 0b1111, l, info.extension)
-			byte(info.opcode)
-			writeMem(op2, op1.value, disp, 0)
 		}
+
+		writeVEX2(info.vexW, 0b1111, l, info.extension)
+		byte(info.opcode)
+		writeMem(op2, op1.value, disp, 0)
 	}
 
 
@@ -699,22 +677,23 @@ class Assembler(private val context: CompilerContext) {
 	@JvmInline
 	value class VexInfo(val value: Int) {
 		val opcode       get() = value and 0xFF
-		val vexW         get() = value shr 8
-		val prefix       get() = value shr 9
+		val vexW         get() = (value shr 8) and 0b1
+		val prefix       get() = (value shr 9) and 0b11
 		val extension    get() = value shr 11
 		val requiresVex3 get() = prefix > 1
 		val incremented  get() = VexInfo(value + 1)
 
 		companion object {
+			const val E00 = 0 shl 11
 			const val E66 = 1 shl 11
 			const val EF3 = 2 shl 11
 			const val EF2 = 3 shl 11
 			const val P0F = 1 shl 9
 			const val P38 = 2 shl 9
 			const val P3A = 3 shl 9
-			const val WIG = 1 shl 8
-			const val W1  = 1 shl 8
 			const val W0  = 0 shl 8
+			const val W1  = 1 shl 8
+			const val WIG = 1 shl 8
 		}
 	}
 
