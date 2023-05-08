@@ -116,7 +116,6 @@ enum class Width(val varString: String, val bytes: Int) {
 }
 
 
-
 @JvmInline
 value class Widths(val value: Int) {
 	operator fun contains(width: Width) = value and width.bit != 0

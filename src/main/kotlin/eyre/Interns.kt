@@ -79,14 +79,9 @@ object Names : Interner<String, Name>() {
 	val keywords     = createRange(Keyword.values(), Keyword::string)
 	val widths       = createRange(Width.values(), Width::string)
 	val varWidths    = createRange(Width.values(), Width::varString)
-	val registers    = createRange(GpReg.values(), GpReg::string)
+	val registers    = createRange(Reg.values(), Reg::string)
 	val prefixes     = createRange(Prefix.values(), Prefix::string)
 	val mnemonics    = createRange(Mnemonic.values(), Mnemonic::string)
-	val fpuRegisters = createRange(StReg.values(), StReg::string)
-	val mmxRegisters = createRange(MmxReg.values(), MmxReg::string)
-	val xmmRegisters = createRange(XmmReg.values(), XmmReg::string)
-	val ymmRegisters = createRange(YmmReg.values(), YmmReg::string)
-	val zmmRegisters = createRange(ZmmReg.values(), ZmmReg::string)
 
 	val EMPTY = add("")
 	val MAIN  = add("main")
@@ -95,6 +90,7 @@ object Names : Interner<String, Name>() {
 	val SIZE  = add("size")
 	val COUNT = add("count")
 	val INT   = add("int")
+	val Z     = add("z")
 
 }
 

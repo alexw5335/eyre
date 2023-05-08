@@ -194,8 +194,8 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private var baseReg: GpReg? = null
-	private var indexReg: GpReg? = null
+	private var baseReg: Reg? = null
+	private var indexReg: Reg? = null
 	private var indexScale = 0
 	private var aso = Aso.NONE
 	private var memRelocCount = 0
@@ -241,7 +241,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun resolveMemReg(reg: GpReg, regValid: Boolean): Long {
+	private fun resolveMemReg(reg: Reg, regValid: Boolean): Long {
 		if(!regValid) invalidEncoding()
 		checkAso(reg.width)
 
@@ -303,7 +303,7 @@ class Assembler(private val context: CompilerContext) {
 		val disp = resolveMemRec(node, true)
 
 		// RSP and ESP cannot be index registers, swap to base if possible
-		if(baseReg != null && indexReg != null && indexReg!!.isSP) {
+		if(baseReg != null && indexReg != null && indexReg!!.value == 4) {
 			if(indexScale != 1) invalidEncoding()
 			val temp = indexReg
 			indexReg = baseReg
@@ -331,14 +331,6 @@ class Assembler(private val context: CompilerContext) {
 	private val OpNode.asReg get() = (this as? RegNode)?.value ?: invalidEncoding()
 
 	private val OpNode.asMem get() = this as? MemNode ?: invalidEncoding()
-
-	private val OpNode?.asFpu get() = (this!! as? StRegNode)?.value ?: invalidEncoding()
-
-	private val OpNode.asXmm get() = (this as? XmmNode)?.value ?: invalidEncoding()
-
-	private val OpNode.asYmm get() = (this as? YmmNode)?.value ?: invalidEncoding()
-
-	private val OpNode.asZmm get() = (this as? ZmmNode)?.value ?: invalidEncoding()
 
 	private fun byte(value: Int) = writer.i8(value)
 
@@ -427,7 +419,7 @@ class Assembler(private val context: CompilerContext) {
 
 		val mod = when {
 			hasMemReloc -> 2 // disp32
-			disp == 0L -> if(base != null && base.invalidBase)
+			disp == 0L -> if(base != null && base.value == 5)
 				1 // disp8, rbp as base needs an empty offset
 			else
 				0 // no disp
@@ -446,7 +438,7 @@ class Assembler(private val context: CompilerContext) {
 				relocAndDisp(mod, disp, node)
 			}
 		} else if(base != null) { // Indirect
-			if(base.isSpOr12) {
+			if(base.value == 5) {
 				writeModRM(mod, reg, 0b100)
 				writeSib(0, 0b100, 0b100)
 			} else {
@@ -506,7 +498,7 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 
-	private fun encode1R(opcode: Int, widths: Widths, extension: Int, op1: GpReg) {
+	private fun encode1R(opcode: Int, widths: Widths, extension: Int, op1: Reg) {
 		val width = op1.width
 		checkWidths(widths, width)
 		checkO16(width)
@@ -520,7 +512,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encode2RM(
 		opcode: Int,
 		widths: Widths,
-		op1: GpReg,
+		op1: Reg,
 		op2: MemNode,
 		immLength: Int,
 		mismatch: Boolean = false
@@ -609,26 +601,32 @@ class Assembler(private val context: CompilerContext) {
 	 *    EVEX.512.0F.W0  11  VMOVUPS  ZMM/512 {k} {z}, ZMM
 	 */
 	private fun encodeVMOVUPS(op1: OpNode, op2: OpNode) {
-		when(op1) {
-			is YmmNode -> encode2YYM(vex { 0x10 + WIG + P0F }, op1.value, op2)
-			is MemNode -> encode2YM(vex { 0x11 + WIG + P0F }, op2.asYmm, op1)
-			else       -> invalidEncoding()
-		}
+		encode2SMSM(vex { 0x10 + WIG + P0F }, op1, op2)
 	}
 
 
 
 
-	private fun encode2YY(info: VexInfo, op1: YmmReg, op2: YmmReg) {
+	private fun encode2SS(info: VexInfo, op1: Reg, op2: Reg) {
+		if(!op1.isSSE || !op2.isSSE) invalidEncoding()
+		if(op1.width != op2.width) invalidEncoding()
+		if(op1.high != 0 || op2.high != 0) invalidEncoding()
+
+		val l = when(op1.width) {
+			XWORD -> 0
+			YWORD -> 1
+			else  -> invalidEncoding()
+		}
+
 		if(op1.rex == 1 || op2.rex == 1 || info.requiresVex3) {
 			byte(0xC4)
 			writeVEX1(op1.rex xor 1, 1, op2.rex xor 1, info.prefix)
-			writeVEX2(info.vexW, 0b1111, 1, info.extension)
+			writeVEX2(info.vexW, 0b1111, l, info.extension)
 			byte(info.opcode)
 			writeModRM(0b11, op1.value, op2.value)
 		} else {
 			byte(0xC5)
-			writeVEX2(info.vexW, 0b1111, 1, info.extension)
+			writeVEX2(info.vexW, 0b1111, l, info.extension)
 			byte(info.opcode)
 			writeModRM(0b11, op1.value, op2.value)
 		}
@@ -636,18 +634,28 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encode2YM(info: VexInfo, op1: YmmReg, op2: MemNode) {
-		if(op2.width != null && op2.width != YWORD) invalidEncoding()
+	private fun encode2SM(info: VexInfo, op1: Reg, op2: MemNode) {
+		if(!op1.isSSE) invalidEncoding()
+		if(op2.width != null && op2.width != op1.width) invalidEncoding()
+		if(op1.high != 0) invalidEncoding()
+
+		val l = when(op1.width) {
+			XWORD -> 0
+			YWORD -> 1
+			else  -> invalidEncoding()
+		}
+
 		val disp = resolveMem(op2.value)
+
 		if(info.requiresVex3 || memRexB != 0 || memRexX != 0) {
 			byte(0xC4)
 			writeVEX1(op1.rex xor 1, memRexX xor 1, memRexB xor 1, info.prefix)
-			writeVEX2(info.vexW, 0b1111, 0, info.extension)
+			writeVEX2(info.vexW, 0b1111, l, info.extension)
 			byte(info.opcode)
 			writeMem(op2, op1.value, disp, 0)
 		} else {
 			byte(0xC5)
-			writeVEX2(info.vexW, 0b1111, 0, info.extension)
+			writeVEX2(info.vexW, 0b1111, l, info.extension)
 			byte(info.opcode)
 			writeMem(op2, op1.value, disp, 0)
 		}
@@ -655,10 +663,27 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encode2YYM(info: VexInfo, op1: YmmReg, op2: OpNode) {
+	private fun encode2SSM(info: VexInfo, op1: RegNode, op2: OpNode) {
 		when(op2) {
-			is YmmNode -> encode2YY(info, op1, op2.value)
-			is MemNode -> encode2YM(info, op1, op2)
+			is RegNode -> encode2SS(info, op1.value, op2.value)
+			is MemNode -> encode2SM(info, op1.value, op2)
+			else -> invalidEncoding()
+		}
+	}
+
+
+
+	private fun encode2SMSM(info: VexInfo, op1: OpNode, op2: OpNode) {
+		when(op1) {
+			is RegNode -> when(op2) {
+				is RegNode -> encode2SS(info, op1.value, op2.value)
+				is MemNode -> encode2SM(info, op1.value, op2)
+				else -> invalidEncoding()
+			}
+			is MemNode -> when(op2) {
+				is RegNode -> encode2SM(info.incremented, op2.value, op1)
+				else -> invalidEncoding()
+			}
 			else -> invalidEncoding()
 		}
 	}
@@ -678,7 +703,7 @@ class Assembler(private val context: CompilerContext) {
 		val prefix       get() = value shr 9
 		val extension    get() = value shr 11
 		val requiresVex3 get() = prefix > 1
-		val inc          get() = VexInfo(value + 1)
+		val incremented  get() = VexInfo(value + 1)
 
 		companion object {
 			const val E66 = 1 shl 11

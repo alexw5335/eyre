@@ -2,12 +2,27 @@ package eyre
 
 
 
-sealed interface Register
-
-
-
 enum class RegType {
-	GP, SEG, ST, MMX, SSE;
+	GP, SEG, FPU, MMX, SSE, MASK;
+}
+
+
+
+@JvmInline
+value class Widths2(val value: Int) {
+	companion object {
+		val GP8      = Widths2(0b0001)
+		val GP16     = Widths2(0b0010)
+		val GP32     = Widths2(0b0100)
+		val GP64     = Widths2(0b1000)
+		val GP       = Widths2(0b1111)
+		val GP816    = Widths2(0b0011)
+		val GP81632  = Widths2(0b0111)
+		val GP1664   = Widths2(0b1010)
+		val GP163264 = Widths2(0b1110)
+		val SSE      = Widths2(0b0111_0000)
+		val MMX      = Widths2(0b1000_0000)
+	}
 }
 
 
@@ -205,260 +220,21 @@ enum class Reg(
 	ZMM29(RegType.SSE, Width.ZWORD, 5, 1, 1),
 	ZMM30(RegType.SSE, Width.ZWORD, 6, 1, 1),
 	ZMM31(RegType.SSE, Width.ZWORD, 7, 1, 1),
+
+	K0(RegType.MASK, Width.DWORD, 0, 0, 0),
+	K1(RegType.MASK, Width.DWORD, 1, 0, 0),
+	K2(RegType.MASK, Width.DWORD, 2, 0, 0),
+	K3(RegType.MASK, Width.DWORD, 3, 0, 0),
+	K4(RegType.MASK, Width.DWORD, 4, 0, 0),
+	K5(RegType.MASK, Width.DWORD, 5, 0, 0),
+	K6(RegType.MASK, Width.DWORD, 6, 0, 0),
+	K7(RegType.MASK, Width.DWORD, 7, 0, 0);
+
+	val string = name.lowercase()
+
+	val isGP get() = type == RegType.GP
+	val isSSE get() = type == RegType.SSE
+	val isMMX get() = type == RegType.MMX
+	val isFPU get() = type == RegType.FPU
 	
-}
-
-
-
-enum class SegReg : Register {
-	FS,
-	GS;
-	val string = name.lowercase()
-}
-
-
-
-enum class SseReg(
-	val value : Int,
-	val rex   : Int,
-	val high  : Int,
-	val width : Width
-) : Register {
-
-	MM0(0, 0, 0, Width.QWORD),
-	MM1(1, 0, 0, Width.QWORD),
-	MM2(2, 0, 0, Width.QWORD),
-	MM3(3, 0, 0, Width.QWORD),
-	MM4(4, 0, 0, Width.QWORD),
-	MM5(5, 0, 0, Width.QWORD),
-	MM6(6, 0, 0, Width.QWORD),
-	MM7(7, 0, 0, Width.QWORD),
-
-	XMM0(0, 0, 0, Width.XWORD),
-	XMM1(1, 0, 0, Width.XWORD),
-	XMM2(2, 0, 0, Width.XWORD),
-	XMM3(3, 0, 0, Width.XWORD),
-	XMM4(4, 0, 0, Width.XWORD),
-	XMM5(5, 0, 0, Width.XWORD),
-	XMM6(6, 0, 0, Width.XWORD),
-	XMM7(0, 0, 0, Width.XWORD),
-	XMM8(0, 1, 0, Width.XWORD),
-	XMM9(0, 1, 0, Width.XWORD),
-	XMM10(0, 1, 0, Width.XWORD),
-	XMM11(0, 1, 0, Width.XWORD),
-	XMM12(0, 1, 0, Width.XWORD),
-	XMM13(0, 1, 0, Width.XWORD),
-	XMM14(0, 1, 0, Width.XWORD),
-	XMM15(0, 1, 0, Width.XWORD),
-	XMM16(0, 0, 1, Width.XWORD),
-	XMM17(0, 0, 1, Width.XWORD),
-	XMM18(0, 0, 1, Width.XWORD),
-	XMM19(0, 0, 1, Width.XWORD),
-	XMM20(0, 0, 1, Width.XWORD),
-	XMM21(0, 0, 1, Width.XWORD),
-	XMM22(0, 0, 1, Width.XWORD),
-	XMM23(0, 0, 1, Width.XWORD),
-	XMM24(0, 1, 1, Width.XWORD),
-	XMM25(0, 1, 1, Width.XWORD),
-	XMM26(0, 1, 1, Width.XWORD),
-	XMM27(0, 1, 1, Width.XWORD),
-	XMM28(0, 1, 1, Width.XWORD),
-	XMM29(0, 1, 1, Width.XWORD),
-	XMM30(0, 1, 1, Width.XWORD),
-	XMM31(0, 1, 1, Width.XWORD),
-
-	YMM0(0, 0, 0, Width.YWORD),
-	YMM1(1, 0, 0, Width.YWORD),
-	YMM2(2, 0, 0, Width.YWORD),
-	YMM3(3, 0, 0, Width.YWORD),
-	YMM4(4, 0, 0, Width.YWORD),
-	YMM5(5, 0, 0, Width.YWORD),
-	YMM6(6, 0, 0, Width.YWORD),
-	YMM7(0, 0, 0, Width.YWORD),
-	YMM8(0, 1, 0, Width.YWORD),
-	YMM9(0, 1, 0, Width.YWORD),
-	YMM10(0, 1, 0, Width.YWORD),
-	YMM11(0, 1, 0, Width.YWORD),
-	YMM12(0, 1, 0, Width.YWORD),
-	YMM13(0, 1, 0, Width.YWORD),
-	YMM14(0, 1, 0, Width.YWORD),
-	YMM15(0, 1, 0, Width.YWORD),
-	YMM16(0, 0, 1, Width.YWORD),
-	YMM17(0, 0, 1, Width.YWORD),
-	YMM18(0, 0, 1, Width.YWORD),
-	YMM19(0, 0, 1, Width.YWORD),
-	YMM20(0, 0, 1, Width.YWORD),
-	YMM21(0, 0, 1, Width.YWORD),
-	YMM22(0, 0, 1, Width.YWORD),
-	YMM23(0, 0, 1, Width.YWORD),
-	YMM24(0, 1, 1, Width.YWORD),
-	YMM25(0, 1, 1, Width.YWORD),
-	YMM26(0, 1, 1, Width.YWORD),
-	YMM27(0, 1, 1, Width.YWORD),
-	YMM28(0, 1, 1, Width.YWORD),
-	YMM29(0, 1, 1, Width.YWORD),
-	YMM30(0, 1, 1, Width.YWORD),
-	YMM31(0, 1, 1, Width.YWORD),
-
-	ZMM0(0, 0, 0, Width.ZWORD),
-	ZMM1(1, 0, 0, Width.ZWORD),
-	ZMM2(2, 0, 0, Width.ZWORD),
-	ZMM3(3, 0, 0, Width.ZWORD),
-	ZMM4(4, 0, 0, Width.ZWORD),
-	ZMM5(5, 0, 0, Width.ZWORD),
-	ZMM6(6, 0, 0, Width.ZWORD),
-	ZMM7(0, 0, 0, Width.ZWORD),
-	ZMM8(0, 1, 0, Width.ZWORD),
-	ZMM9(0, 1, 0, Width.ZWORD),
-	ZMM10(0, 1, 0, Width.ZWORD),
-	ZMM11(0, 1, 0, Width.ZWORD),
-	ZMM12(0, 1, 0, Width.ZWORD),
-	ZMM13(0, 1, 0, Width.ZWORD),
-	ZMM14(0, 1, 0, Width.ZWORD),
-	ZMM15(0, 1, 0, Width.ZWORD),
-	ZMM16(0, 0, 1, Width.ZWORD),
-	ZMM17(0, 0, 1, Width.ZWORD),
-	ZMM18(0, 0, 1, Width.ZWORD),
-	ZMM19(0, 0, 1, Width.ZWORD),
-	ZMM20(0, 0, 1, Width.ZWORD),
-	ZMM21(0, 0, 1, Width.ZWORD),
-	ZMM22(0, 0, 1, Width.ZWORD),
-	ZMM23(0, 0, 1, Width.ZWORD),
-	ZMM24(0, 1, 1, Width.ZWORD),
-	ZMM25(0, 1, 1, Width.ZWORD),
-	ZMM26(0, 1, 1, Width.ZWORD),
-	ZMM27(0, 1, 1, Width.ZWORD),
-	ZMM28(0, 1, 1, Width.ZWORD),
-	ZMM29(0, 1, 1, Width.ZWORD),
-	ZMM30(0, 1, 1, Width.ZWORD),
-	ZMM31(0, 1, 1, Width.ZWORD);
-
-	val string = name.lowercase()
-
-}
-
-
-
-enum class StReg(val value: Int) : Register {
-
-	ST0(0),
-	ST1(1),
-	ST2(2),
-	ST3(3),
-	ST4(4),
-	ST5(5),
-	ST6(6),
-	ST7(7);
-
-	val string = name.lowercase()
-
-}
-
-
-
-enum class MmxReg(val value: Int) : Register {
-
-	MM0(0),
-	MM1(1),
-	MM2(2),
-	MM3(3),
-	MM4(4),
-	MM5(5),
-	MM6(6),
-	MM7(7);
-
-	val string = name.lowercase()
-
-}
-
-
-
-enum class GpReg(
-	val value  : Int,
-	val width  : Width,
-	val rex    : Int = 0,
-	val isA    : Boolean = false,
-	val isSP   : Boolean = false,
-	val rex8   : Boolean = false,
-	val noRex8 : Boolean = false
-) : Register {
-
-	RAX(0, Width.QWORD, isA = true),
-	RCX(1, Width.QWORD),
-	RDX(2, Width.QWORD),
-	RBX(3, Width.QWORD),
-	RSP(4, Width.QWORD, isSP = true),
-	RBP(5, Width.QWORD),
-	RSI(6, Width.QWORD),
-	RDI(7, Width.QWORD),
-	R8 (0, Width.QWORD, 1),
-	R9 (1, Width.QWORD, 1),
-	R10(2, Width.QWORD, 1),
-	R11(3, Width.QWORD, 1),
-	R12(4, Width.QWORD, 1),
-	R13(5, Width.QWORD, 1),
-	R14(6, Width.QWORD, 1),
-	R15(7, Width.QWORD, 1),
-
-	EAX (0, Width.DWORD, isA = true),
-	ECX (1, Width.DWORD),
-	EDX (2, Width.DWORD),
-	EBX (3, Width.DWORD),
-	ESP (4, Width.DWORD, isSP = true),
-	EBP (5, Width.DWORD),
-	ESI (6, Width.DWORD),
-	EDI (7, Width.DWORD),
-	R8D (0, Width.DWORD, 1),
-	R9D (1, Width.DWORD, 1),
-	R10D(2, Width.DWORD, 1),
-	R11D(3, Width.DWORD, 1),
-	R12D(4, Width.DWORD, 1),
-	R13D(5, Width.DWORD, 1),
-	R14D(6, Width.DWORD, 1),
-	R15D(7, Width.DWORD, 1),
-
-	AX  (0, Width.WORD, isA = true),
-	CX  (1, Width.WORD),
-	DX  (2, Width.WORD),
-	BX  (3, Width.WORD),
-	SP  (4, Width.WORD, isSP = true),
-	BP  (5, Width.WORD),
-	SI  (6, Width.WORD),
-	DI  (7, Width.WORD),
-	R8W (0, Width.WORD, 1),
-	R9W (1, Width.WORD, 1),
-	R10W(2, Width.WORD, 1),
-	R11W(3, Width.WORD, 1),
-	R12W(4, Width.WORD, 1),
-	R13W(5, Width.WORD, 1),
-	R14W(6, Width.WORD, 1),
-	R15W(7, Width.WORD, 1),
-
-	AL  (0, Width.BYTE, isA = true),
-	CL  (1, Width.BYTE),
-	DL  (2, Width.BYTE),
-	BL  (3, Width.BYTE),
-	AH  (4, Width.BYTE, rex8 = true),
-	CH  (5, Width.BYTE, rex8 = true),
-	DH  (6, Width.BYTE, rex8 = true),
-	BH  (7, Width.BYTE, rex8 = true),
-	R8B (0, Width.BYTE, 1),
-	R9B (1, Width.BYTE, 1),
-	R10B(2, Width.BYTE, 1),
-	R11B(3, Width.BYTE, 1),
-	R12B(4, Width.BYTE, 1),
-	R13B(5, Width.BYTE, 1),
-	R14B(6, Width.BYTE, 1),
-	R15B(7, Width.BYTE, 1),
-
-	SPL(4, Width.BYTE, isSP = true, noRex8 = true),
-	BPL(5, Width.BYTE, noRex8 = true),
-	SIL(6, Width.BYTE, noRex8 = true),
-	DIL(7, Width.BYTE, noRex8 = true);
-
-	val string = name.lowercase()
-
-	val invalidBase get() = value == 5
-	val isSpOr12 get() = value == 4
-
 }

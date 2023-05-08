@@ -113,15 +113,8 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = SrcPos()
 		val token = next()
 
-		if(token is RegToken) {
-			return when(val value = token.value) {
-				is GpReg  -> RegNode(value)
-				is SegReg -> SegRegNode(value)
-				is StReg  -> StRegNode(value)
-				is SseReg -> SseRegNode(value)
-				is MmxReg -> MmxNode(value)
-			}
-		}
+		if(token is RegToken)
+			return RegNode(token.value)
 
 		if(token is Name)
 			return NameNode(token)

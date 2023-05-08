@@ -14,7 +14,7 @@ data class StringToken(val value: String) : Token
 
 data class FloatToken(val value: Double) : Token
 
-data class RegToken(val value: Register) : Token
+data class RegToken(val value: Reg) : Token
 
 
 

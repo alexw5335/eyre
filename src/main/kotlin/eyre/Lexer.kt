@@ -258,9 +258,12 @@ class Lexer {
 			pos++
 		}
 
-		val string = String(chars, startPos, pos - startPos)
-		val name = Names.add(string)
-		add(Names.add(string))
+		val name = Names.add(String(chars, startPos, pos - startPos))
+
+		if(name in Names.registers)
+			add(RegToken(Names.registers[name]))
+		else
+			add(name)
 	}
 
 
@@ -271,14 +274,7 @@ class Lexer {
 
 		private operator fun<T> Array<T>.set(char: Char, value: T) = set(char.code, value)
 
-		private val registerMap = HashMap<String, Register>()
-
 		init {
-			for(r in GpReg.values()) registerMap[r.string] = r
-			for(r in StReg.values()) registerMap[r.string] = r
-			for(r in MmxReg.values()) registerMap[r.string] = r
-			for(r in SegReg.values()) registerMap[r.string] = r
-			for(r in SseReg.values()) registerMap[r.string] = r
 
 			// Whitespace
 			charMap['\n'] = Lexer::onNewline
