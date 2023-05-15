@@ -122,9 +122,6 @@ AND		mem,imm16			[mi:	hle o16 81 /4 iw]			8086,SM,LOCK
 AND		mem,sbytedword32		[mi:	hle o32 83 /4 ib,s]			386,SM,LOCK,ND
 AND		mem,imm32			[mi:	hle o32 81 /4 id]			386,SM,LOCK
 AND		rm8,imm				[mi:	hle 82 /4 ib]				8086,SM,LOCK,ND,NOLONG
-
-;~
-
 ARPL		mem,reg16			[mr:	63 /r]					286,PROT,SM,NOLONG
 ARPL		reg16,reg16			[mr:	63 /r]					286,PROT,NOLONG
 BB0_RESET	void				[	0f 3a]					PENT,CYRIX,ND,OBSOLETE

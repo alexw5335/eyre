@@ -135,8 +135,254 @@ t = 0 for VEX (C4/C5), t = 1 for XOP (8F).
 \376             vsibz|vm32z|vm64z           this instruction takes an ZMM VSIB memory EA
 
 
+if_("SM",                "Size match");
+if_("SM2",               "Size match first two operands");
+if_("SB",                "Unsized operands can't be non-byte");
+if_("SW",                "Unsized operands can't be non-word");
+if_("SD",                "Unsized operands can't be non-dword");
+if_("SQ",                "Unsized operands can't be non-qword");
+if_("SO",                "Unsized operands can't be non-oword");
+if_("SY",                "Unsized operands can't be non-yword");
+if_("SZ",                "Unsized operands can't be non-zword");
+if_("SIZE",              "Unsized operands must match the bitsize");
+if_("SX",                "Unsized operands not allowed");
+if_("ANYSIZE",           "Ignore operand size even if explicit");
+if_("AR0",               "SB, SW, SD applies to argument 0");
+if_("AR1",               "SB, SW, SD applies to argument 1");
+if_("AR2",               "SB, SW, SD applies to argument 2");
+if_("AR3",               "SB, SW, SD applies to argument 3");
+if_("AR4",               "SB, SW, SD applies to argument 4");
+if_("OPT",               "Optimizing assembly only");
+if_("LATEVEX",            "Only if EVEX instructions are disabled");
+
+if_("PRIV",              "Privileged instruction");
+if_("SMM",               "Only valid in SMM");
+if_("PROT",              "Protected mode only");
+if_("LOCK",              "Lockable if operand 0 is memory");
+if_("NOLONG",            "Not available in long mode");
+if_("LONG",              "Long mode");
+if_("NOHLE",             "HLE prefixes forbidden");
+if_("MIB",               "split base/index EA");      12, Only used with some MMX and AMXTILE instructions
+if_("SIB",               "SIB encoding required");    3, Only used with AMXTILE instructions
+if_("BND",               "BND (0xF2) prefix available");
+if_("UNDOC",             "Undocumented");
+if_("HLE",               "HLE prefixed");
+if_("FPU",               "FPU");
+if_("MMX",               "MMX");
+if_("3DNOW",             "3DNow!");
+if_("SSE",               "SSE (KNI, MMX2)");
+if_("SSE2",              "SSE2");
+if_("SSE3",              "SSE3 (PNI)");
+if_("VMX",               "VMX");
+if_("SSSE3",             "SSSE3");
+if_("SSE4A",             "AMD SSE4a");
+if_("SSE41",             "SSE4.1");
+if_("SSE42",             "SSE4.2");
+if_("SSE5",              "SSE5");
+if_("AVX",               "AVX  (256-bit floating point)");
+if_("AVX2",              "AVX2 (256-bit integer)");
+if_("FMA",               "");
+if_("BMI1",              "");
+if_("BMI2",              "");
+if_("TBM",               "");
+if_("RTM",               "");
+if_("INVPCID",           "");
+if_("AVX512",            "AVX-512F (512-bit base architecture)");
+if_("AVX512CD",          "AVX-512 Conflict Detection");
+if_("AVX512ER",          "AVX-512 Exponential and Reciprocal");
+if_("AVX512PF",          "AVX-512 Prefetch");
+if_("MPX",               "MPX");
+if_("SHA",               "SHA");
+if_("PREFETCHWT1",       "PREFETCHWT1");
+if_("AVX512VL",          "AVX-512 Vector Length Orthogonality");
+if_("AVX512DQ",          "AVX-512 Dword and Qword");
+if_("AVX512BW",          "AVX-512 Byte and Word");
+if_("AVX512IFMA",        "AVX-512 IFMA instructions");
+if_("AVX512VBMI",        "AVX-512 VBMI instructions");
+if_("AES",               "AES instructions");
+if_("VAES",              "AES AVX instructions");
+if_("VPCLMULQDQ",        "AVX Carryless Multiplication");
+if_("GFNI",              "Galois Field instructions");
+if_("AVX512VBMI2",       "AVX-512 VBMI2 instructions");
+if_("AVX512VNNI",        "AVX-512 VNNI instructions");
+if_("AVX512BITALG",      "AVX-512 Bit Algorithm instructions");
+if_("AVX512VPOPCNTDQ",   "AVX-512 VPOPCNTD/VPOPCNTQ");
+if_("AVX5124FMAPS",      "AVX-512 4-iteration multiply-add");
+if_("AVX5124VNNIW",      "AVX-512 4-iteration dot product");
+if_("AVX512FP16",        "AVX-512 FP16 instructions");
+if_("AVX512FC16",        "AVX-512 FC16 instructions");
+if_("SGX",               "Intel Software Guard Extensions (SGX)");
+if_("CET",               "Intel Control-Flow Enforcement Technology (CET)");
+if_("ENQCMD",            "Enqueue command instructions");
+if_("PCONFIG",           "Platform configuration instruction");
+if_("WBNOINVD",          "Writeback and do not invalidate instruction");
+if_("TSXLDTRK",          "TSX suspend load address tracking");
+if_("SERIALIZE",         "SERIALIZE instruction");
+if_("AVX512BF16",        "AVX-512 bfloat16");
+if_("AVX512VP2INTERSECT", "AVX-512 VP2INTERSECT instructions");
+if_("AMXTILE",           "AMX tile configuration instructions");
+if_("AMXBF16",           "AMX bfloat16 multiplication");
+if_("AMXINT8",           "AMX 8-bit integer multiplication");
+if_("FRED",              "Flexible Return and Exception Delivery (FRED)");
+if_("RAOINT",		 "Remote atomic operations (RAO-INT)");
+if_("UINTR",		 "User interrupts");
+if_("CMPCCXADD",         "CMPccXADD instructions");
+if_("PREFETCHI",         "PREFETCHI0 and PREFETCHI1");
+if_("WRMSRNS",		 "WRMSRNS");
+if_("MSRLIST",           "RDMSRLIST and WRMSRLIST");
+if_("AVXNECONVERT",	 "AVX exceptionless floating-point conversions");
+if_("AVXVNNIINT8",       "AVX Vector Neural Network 8-bit integer instructions");
+if_("AVXIFMA",           "AVX integer multiply and add");
+if_("HRESET",            "History reset");
+
+if_("OBSOLETE",          "Instruction removed from architecture");
+if_("NEVER",             "Instruction never implemented");
+if_("NOP",               "Instruction is always a (nonintentional) NOP");
+if_("VEX",               "VEX or XOP encoded instruction");
+if_("EVEX",              "EVEX encoded instruction");
+
+if_("8086",              "8086");
+if_("186",               "186+");
+if_("286",               "286+");
+if_("386",               "386+");
+if_("486",               "486+");
+if_("PENT",              "Pentium");
+if_("P6",                "P6");
+if_("KATMAI",            "Katmai");
+if_("WILLAMETTE",        "Willamette");
+if_("PRESCOTT",          "Prescott");
+if_("X86_64",            "x86-64 (long or legacy mode)");
+if_("NEHALEM",           "Nehalem");
+if_("WESTMERE",          "Westmere");
+if_("SANDYBRIDGE",       "Sandy Bridge");
+if_("FUTURE",            "Ivy Bridge or newer");
+if_("IA64",              "IA64 (in x86 mode)");
+
+# Default CPU level
+if_("DEFAULT",           "Default CPU level");
+
+# Must be the last CPU definition
+if_("ANY",               "Allow any known instruction");
+
+# These must come after the CPU definitions proper
+if_("CYRIX",             "Cyrix-specific");
+if_("AMD",               "AMD-specific");
+
+
 
 - Operands starting with 'sbyte' can be ignored. They are imm16/32/64 that can fit into smaller widths.
+- OPT is only used 6 times, and only for alternative operands, can be omitted
+- ND seems to only be used for alternative forms? Used many times, probably can't be omitted for most cases
+	- Used for FADD/FMUL void forms
+	- Used for imm variances (sbyte, etc.)
+	- Can be ignored when paired with certain operands
+	- 'Not Documented'? Used for encodings that don't exactly match the Intel Manual
+	- Used for all KMOV instructions (Intel Manual uses KMOVB, KMOVD, etc., NASM only uses KMOV)
+- VEX, EVEX, DEFAULT, ANY, NOP: Never used
+- HLE: Used once (XTEST)
+- NOHLE: Only used with MOV MOFFS (four times)
+- SIB: Only used with AMXTILE (three times)
+- MIB: Used 12 times (AMXTILE, MPX)
+- iwdq: Only used with MOV moffs
+- AR3, AR4: Never used
+- AR0: Only used with PUSH (eight times)
+- AR1: Used 30 times
+- AR2: Used 35 times
+- ANYSIZE: Only used with LEA (six times)
+- SIZE: Only used with PUSH IMM (eight times)
+- LATEVEX: Used 30 times. Obsolete instructions? They don't appear in the Intel manual, can be omitted?
+
+
+Multiple Extras:
+SM2_SB_AR2  (12, SHLD, SHRD)
+SD_AR1  (10, CVTSI2SS/CVTSS2SI/CVTTSS2SI)
+SQ_AR1  (10)
+SB_AR2  (17)
+SB_AR1  (10)
+SM2_SB_AR2 (4)
+SB_SM  (1, KMOV)
+
+SHLD mem,reg16,imm [mri:, o16, 0f, a4, /r, ib,u] [386, SM2, SB, AR2]
+SHLD reg16,reg16,imm [mri:, o16, 0f, a4, /r, ib,u] [386, SM2, SB, AR2]
+SHLD mem,reg32,imm [mri:, o32, 0f, a4, /r, ib,u] [386, SM2, SB, AR2]
+SHLD reg32,reg32,imm [mri:, o32, 0f, a4, /r, ib,u] [386, SM2, SB, AR2]
+SHLD mem,reg64,imm [mri:, o64, 0f, a4, /r, ib,u] [X86_64, LONG, SM2, SB, AR2]
+SHLD reg64,reg64,imm [mri:, o64, 0f, a4, /r, ib,u] [X86_64, LONG, SM2, SB, AR2]
+SHRD mem,reg16,imm [mri:, o16, 0f, ac, /r, ib,u] [386, SM2, SB, AR2]
+SHRD reg16,reg16,imm [mri:, o16, 0f, ac, /r, ib,u] [386, SM2, SB, AR2]
+SHRD mem,reg32,imm [mri:, o32, 0f, ac, /r, ib,u] [386, SM2, SB, AR2]
+SHRD reg32,reg32,imm [mri:, o32, 0f, ac, /r, ib,u] [386, SM2, SB, AR2]
+SHRD mem,reg64,imm [mri:, o64, 0f, ac, /r, ib,u] [X86_64, LONG, SM2, SB, AR2]
+SHRD reg64,reg64,imm [mri:, o64, 0f, ac, /r, ib,u] [X86_64, LONG, SM2, SB, AR2]
+
+CVTSI2SS xmmreg,mem [rm:, f3, 0f, 2a, /r] [KATMAI, SSE, SD, AR1, ND]
+CVTSI2SS xmmreg,rm32 [rm:, f3, 0f, 2a, /r] [KATMAI, SSE, SD, AR1]
+
+CVTSI2SS xmmreg,rm64 [rm:, o64, f3, 0f, 2a, /r] [X86_64, LONG, SSE, SQ, AR1]
+
+CVTSS2SI reg32,xmmreg [rm:, f3, 0f, 2d, /r] [KATMAI, SSE, SD, AR1]
+CVTSS2SI reg32,mem [rm:, f3, 0f, 2d, /r] [KATMAI, SSE, SD, AR1]
+CVTSS2SI reg64,xmmreg [rm:, o64, f3, 0f, 2d, /r] [X86_64, LONG, SSE, SD, AR1]
+CVTSS2SI reg64,mem [rm:, o64, f3, 0f, 2d, /r] [X86_64, LONG, SSE, SD, AR1]
+CVTTSS2SI reg32,xmmrm [rm:, f3, 0f, 2c, /r] [KATMAI, SSE, SD, AR1]
+CVTTSS2SI reg64,xmmrm [rm:, o64, f3, 0f, 2c, /r] [X86_64, LONG, SSE, SD, AR1]
+
+PEXTRW reg32,mmxreg,imm [rmi:, np, 0f, c5, /r, ib,u] [KATMAI, MMX, SB, AR2]
+PINSRW mmxreg,mem,imm [rmi:, np, 0f, c4, /r, ib,u] [KATMAI, MMX, SB, AR2]
+PINSRW mmxreg,rm16,imm [rmi:, np, 0f, c4, /r, ib,u] [KATMAI, MMX, SB, AR2]
+PINSRW mmxreg,reg32,imm [rmi:, np, 0f, c4, /r, ib,u] [KATMAI, MMX, SB, AR2]
+
+PSHUFW mmxreg,mmxrm,imm [rmi:, np, o64nw, 0f, 70, /r, ib] [KATMAI, MMX, SM2, SB, AR2]
+
+PEXTRW reg32,xmmreg,imm [rmi:, 66, 0f, c5, /r, ib,u] [WILLAMETTE, SSE2, SB, AR2]
+PEXTRW reg64,xmmreg,imm [rmi:, 66, 0f, c5, /r, ib,u] [X86_64, LONG, SSE2, SB, AR2, ND]
+PINSRW xmmreg,reg16,imm [rmi:, 66, 0f, c4, /r, ib,u] [WILLAMETTE, SSE2, SB, AR2]
+PINSRW xmmreg,reg32,imm [rmi:, 66, 0f, c4, /r, ib,u] [WILLAMETTE, SSE2, SB, AR2, ND]
+PINSRW xmmreg,reg64,imm [rmi:, 66, 0f, c4, /r, ib,u] [X86_64, LONG, SSE2, SB, AR2, ND]
+PINSRW xmmreg,mem,imm [rmi:, 66, 0f, c4, /r, ib,u] [WILLAMETTE, SSE2, SB, AR2]
+PINSRW xmmreg,mem16,imm [rmi:, 66, 0f, c4, /r, ib,u] [WILLAMETTE, SSE2, SB, AR2]
+PSHUFD xmmreg,xmmreg,imm [rmi:, 66, 0f, 70, /r, ib] [WILLAMETTE, SSE2, SB, AR2]
+
+PSHUFD xmmreg,mem,imm [rmi:, 66, 0f, 70, /r, ib] [WILLAMETTE, SSE2, SM2, SB, AR2]
+PSHUFHW xmmreg,xmmreg,imm [rmi:, f3, 0f, 70, /r, ib] [WILLAMETTE, SSE2, SB, AR2]
+PSHUFHW xmmreg,mem,imm [rmi:, f3, 0f, 70, /r, ib] [WILLAMETTE, SSE2, SM2, SB, AR2]
+PSHUFLW xmmreg,xmmreg,imm [rmi:, f2, 0f, 70, /r, ib] [WILLAMETTE, SSE2, SB, AR2]
+PSHUFLW xmmreg,mem,imm [rmi:, f2, 0f, 70, /r, ib] [WILLAMETTE, SSE2, SM2, SB, AR2]
+
+PSLLDQ xmmreg,imm [mi:, 66, 0f, 73, /7, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSLLW xmmreg,imm [mi:, 66, 0f, 71, /6, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSLLD xmmreg,imm [mi:, 66, 0f, 72, /6, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSLLQ xmmreg,imm [mi:, 66, 0f, 73, /6, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSRAW xmmreg,imm [mi:, 66, 0f, 71, /4, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSRAD xmmreg,imm [mi:, 66, 0f, 72, /4, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSRLDQ xmmreg,imm [mi:, 66, 0f, 73, /3, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSRLW xmmreg,imm [mi:, 66, 0f, 71, /2, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSRLD xmmreg,imm [mi:, 66, 0f, 72, /2, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+PSRLQ xmmreg,imm [mi:, 66, 0f, 73, /2, ib,u] [WILLAMETTE, SSE2, SB, AR1]
+
+CVTSD2SI reg32,xmmreg [rm:, norexw, f2, 0f, 2d, /r] [WILLAMETTE, SSE2, SQ, AR1]
+CVTSD2SI reg32,mem [rm:, norexw, f2, 0f, 2d, /r] [WILLAMETTE, SSE2, SQ, AR1]
+CVTSD2SI reg64,xmmreg [rm:, o64, f2, 0f, 2d, /r] [X86_64, LONG, SSE2, SQ, AR1]
+CVTSD2SI reg64,mem [rm:, o64, f2, 0f, 2d, /r] [X86_64, LONG, SSE2, SQ, AR1]
+
+CVTSI2SD xmmreg,mem [rm:, f2, 0f, 2a, /r] [WILLAMETTE, SSE2, SD, AR1, ND]
+CVTSI2SD xmmreg,rm32 [rm:, norexw, f2, 0f, 2a, /r] [WILLAMETTE, SSE2, SD, AR1]
+
+CVTSI2SD xmmreg,rm64 [rm:, o64, f2, 0f, 2a, /r] [X86_64, LONG, SSE2, SQ, AR1]
+CVTTSD2SI reg32,xmmreg [rm:, norexw, f2, 0f, 2c, /r] [WILLAMETTE, SSE2, SQ, AR1]
+CVTTSD2SI reg32,mem [rm:, norexw, f2, 0f, 2c, /r] [WILLAMETTE, SSE2, SQ, AR1]
+CVTTSD2SI reg64,xmmreg [rm:, o64, f2, 0f, 2c, /r] [X86_64, LONG, SSE2, SQ, AR1]
+CVTTSD2SI reg64,mem [rm:, o64, f2, 0f, 2c, /r] [X86_64, LONG, SSE2, SQ, AR1]
+
+PINSRB xmmreg,mem,imm8 [rmi:, 66, 0f, 3a, 20, /r, ib,u] [SSE41, SB, AR2]
+PINSRB xmmreg,rm8,imm8 [rmi:, nohi, 66, 0f, 3a, 20, /r, ib,u] [SSE41, SB, AR2]
+PINSRB xmmreg,reg32,imm8 [rmi:, 66, 0f, 3a, 20, /r, ib,u] [SSE41, SB, AR2]
+PINSRD xmmreg,rm32,imm8 [rmi:, norexw, 66, 0f, 3a, 22, /r, ib,u] [SSE41, SB, AR2]
+PINSRQ xmmreg,rm64,imm8 [rmi:, o64, 66, 0f, 3a, 22, /r, ib,u] [SSE41, X86_64, LONG, SB, AR2]
+
+KMOV mem8,kreg8 [mr:, vex.l0.66.0f.w0, 91, /r] [FUTURE, ND, SB, SM]
+
+
 
 mem
 reg8
