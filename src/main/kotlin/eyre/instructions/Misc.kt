@@ -8,8 +8,11 @@ class NasmLine(
 	val operands       : List<String>,
 	val parts          : List<String>,
 	val extras         : List<String>,
-	val arch           : Arch,
+	val arch           : Arch?,
 	val extension      : Extension?,
+	val size           : Size?,
+	val immWidth       : ImmWidth?,
+
 ) {
 
 	override fun toString() = "$mnemonic $operandsString $parts $extras"
@@ -18,65 +21,125 @@ class NasmLine(
 
 
 
-class Encoding(mnemonic: String, operands: NasmOperands)
+val Char.isHex get() = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
 
 
-class Group(mnemonic: String) {
-	val encodings = ArrayList<Encoding>()
+val ignoredParts = setOf(
+	"hle",
+	"nof3",
+	"hlenl",
+	"hlexr",
+	"adf",
+	"norexb",
+	"norexx",
+	"norexr",
+	"norexw",
+	"odf",
+	"nohi",
+	"nof3",
+	"norep",
+	"repe",
+	"np",
+	"iwdq"
+)
+
+
+
+enum class VsibPart {
+	VM32X,
+	VM64X,
+	VM64Y,
+	VM32Y,
+	VSIBX,
+	VSIBY,
+	VSIBZ;
 }
 
 
 
-val groupMap = HashMap<String, Group>()
+enum class OpPart {
+	A32,
+	A64,
+	O16,
+	O32,
+	O64NW,
+	O64,
+	F2I,
+	F3I,
+	WAIT;
+}
 
 
-val nasmOperands = NasmOperands.values()
 
-val noneMap = nasmOperands.associateBy { it.noneString }
-
-val smMap = nasmOperands.associateBy { it.smString }
-
-
-
-enum class NasmOperands(
-	val noneString: String? = null,
-	val smString: String? = null
-) {
-	M8_R8(smString = "mem,reg8"),
-	M16_R16(smString = "mem,reg16"),
-	M32_R32(smString = "mem,reg32"),
-	M64_R64(smString = "mem,reg64"),
-	R8_M8(smString = "reg8,mem"),
-	R16_M16(smString = "reg16,mem"),
-	R32_M32(smString = "reg32,mem"),
-	R64_M64(smString = "reg64,mem"),
-
-	R8_R8(noneString = "reg8,reg8"),
-	R16_R16(noneString = "reg16,reg16"),
-	R32_R32(noneString = "reg32,reg32"),
-	R64_R64(noneString = "reg64,reg64"),
-
-	AL_I8(smString = "reg_al,imm"),
-	AX_I16(smString = "reg_ax,imm"),
-	EAX_I32(smString = "reg_eax,imm",),
-	RAX_I32(smString = "reg_rax,imm"),
-
-	RM16_I8(noneString = "rm16,imm8"),
-	RM32_I8(noneString = "rm32,imm8"),
-	RM64_I8(noneString = "rm64,imm8"),
-
-	RM8_I(smString = "rm8,imm"),
-	RM16_I(smString = "rm16,imm"),
-	RM32_I(smString = "rm32,imm"),
-	RM64_I(smString = "rm64,imm"),
-
-	MEM_I8(noneString = "mem,imm8"),
-	MEM_I16(noneString = "mem,imm16"),
-	MEM_I32(noneString = "mem,imm32"),
-	R32(noneString = "reg32"),
-	R64(noneString = "reg64"),
-
+enum class NasmOperands {
+	M8_R8,
+	M16_R16,
+	M32_R32,
+	M64_R64,
+	R8_M8,
+	R16_M16,
+	R32_M32,
+	R64_M64,
+	R8_R8,
+	R16_R16,
+	R32_R32,
+	R64_R64,
+	AL_I8,
+	AX_I16,
+	EAX_I32,
+	RAX_I32,
+	RM16_I8,
+	RM32_I8,
+	RM64_I8,
+	RM8_I8,
+	RM16_I16,
+	RM32_I32,
+	RM64_I32,
+	R32,
+	R64,
+	M8_I8,
+	M16_I16,
+	M32_I32,
+	M64_I32,
+	AX_I8,
+	EAX_I8,
+	I8_AL,
+	I8_AX,
+	I8_EAX,
+	AL_DX,
+	AX_DX,
+	EAX_DX,
+	DX_AL,
+	DX_AX,
+	DX_EAX,
+	R16_M16_I8,
+	R16_M16_I16,
+	R16_R16_I16,
+	R32_M32_I8,
+	R32_M32_I32,
+	R32_R32_I32,
+	R64_M64_I8,
+	R64_M64_I32,
+	R64_R64_I32,
+	R16_I16,
+	R32_I32,
+	R64_I32,
+	AL_MOFFS,
+	AX_MOFFS,
+	EAX_MOFFS,
+	RAX_MOFFS,
+	MOFFS_AL,
+	MOFFS_AX,
+	MOFFS_EAX,
+	MOFFS_RAX,
+	R8_I8,
+	M16_R16_I16,
+	M32_R32_I32,
+	M64_R64_I32,
+	M16_R16_CL,
+	M32_R32_CL,
+	M64_R64_CL,
 }
 
 
@@ -89,7 +152,8 @@ val invalidExtras = setOf(
 	"AMD",
 	"CYRIX",
 	"LATEVEX",
-	"OPT"
+	"OPT",
+	"ND"
 )
 
 
@@ -112,13 +176,37 @@ val ignoredExtras = setOf(
 	"SIB",
 	"SIZE",
 	"ANYSIZE",
-	"ND"
 )
 
 
 
-enum class Size {
-	NONE,
+object Maps {
+	val sizes = Size.values().associateBy { it.name }
+	val extras = Extra.values().associateBy { it.name }
+	val arches = Arch.values().associateBy { it.name.trimStart('_') }
+	val extensions = Extension.values().associateBy { it.name.trimStart('_') }
+	val opParts = OpPart.values().associateBy { it.name.lowercase().replace('_', ',') }
+	val immWidths = ImmWidth.values().associateBy { it.name.lowercase().replace('_', ',') }
+	val vsibParts = VsibPart.values().associateBy { it.name.lowercase() }
+}
+
+
+
+enum class ImmWidth {
+	IB,
+	IW,
+	ID,
+	IQ,
+	IB_S,
+	IB_U,
+	ID_S,
+	REL,
+	REL8,
+}
+
+
+
+enum class Size(val sm: Boolean = false) {
 	SB,
 	SW,
 	SD,
@@ -127,22 +215,32 @@ enum class Size {
 	SY,
 	SZ,
 	SX,
-	SM,
-	SM2,
+	SM(true),
+	SM2(true),
 	AR0,
-	SM2_SB_AR2,
+	AR1,
+	AR2,
+	SM2_SB_AR2(true),
 	SD_AR1,
 	SQ_AR1,
 	SB_AR2,
 	SB_AR1,
-	SB_SM;
-	companion object { val map = values().associateBy { it.name } }
+	SB_SM(true);
 }
 
 
 
+enum class OpSize {
+	SB,
+	SW,
+	SD,
+	SQ,
+	SO,
+	SY,
+	SZ,
+	SX;
+}
 enum class Extra {
-
 	SM,
 	SM2,
 	SB,
@@ -156,15 +254,11 @@ enum class Extra {
 	AR0,
 	AR1,
 	AR2;
-
-	companion object { val map = values().associateBy { it.name} }
-
 }
 
 
 
 enum class Arch {
-	NONE,
 	_8086,
 	_186,
 	_286,
@@ -181,16 +275,11 @@ enum class Arch {
 	SANDYBRIDGE,
 	FUTURE,
 	IA64;
-
-	companion object { val map = values().associateBy { it.name.trimStart('_') } }
-
 }
 
 
 
 enum class Extension {
-
-	NONE,
 	FPU,
 	MMX,
 	_3DNOW,
@@ -258,7 +347,4 @@ enum class Extension {
 	AVXVNNIINT8,
 	AVXIFMA,
 	HRESET;
-
-	companion object { val map = values().associateBy { it.name.trimStart('_') } }
-
 }

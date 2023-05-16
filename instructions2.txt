@@ -278,19 +278,27 @@ if_("AMD",               "AMD-specific");
 	- Can be ignored when paired with certain operands
 	- 'Not Documented'? Used for encodings that don't exactly match the Intel Manual
 	- Used for all KMOV instructions (Intel Manual uses KMOVB, KMOVD, etc., NASM only uses KMOV)
+	- Seems to be used for alias instructions (can be omitted)
 - VEX, EVEX, DEFAULT, ANY, NOP: Never used
 - HLE: Used once (XTEST)
-- NOHLE: Only used with MOV MOFFS (four times)
-- SIB: Only used with AMXTILE (three times)
+- NOHLE: Only used with MOV MOFFS (4 times)
+- SIB: Only used with AMXTILE (3 times)
 - MIB: Used 12 times (AMXTILE, MPX)
 - iwdq: Only used with MOV moffs
 - AR3, AR4: Never used
-- AR0: Only used with PUSH (eight times)
+- AR0: Only used with PUSH (8 times)
 - AR1: Used 30 times
 - AR2: Used 35 times
-- ANYSIZE: Only used with LEA (six times)
-- SIZE: Only used with PUSH IMM (eight times)
+- ANYSIZE: Only used with LEA (6 times)
+- SIZE: Only used with PUSH IMM (8 times)
 - LATEVEX: Used 30 times. Obsolete instructions? They don't appear in the Intel manual, can be omitted?
+- vm32x/vm32y: Only used with VGATHER... (8 times)
+- vm64x/vm64y: Only used VGATHER... (8 times)
+- vm32z/vm64z: Never used
+- vsibx/vsiby/vsibz: Used 64 times
+- wait: Only used with FPU instructions (10 times), insert 9B before opcode
+- hlexr: Only used with MOV (12 times)
+- nohi: Only used twice, can be omitted
 
 
 Multiple Extras:
@@ -1314,3 +1322,155 @@ zmmreg|mask|z,zmmreg*,zmmrm512|b16
 xmmreg|mask|z,xmmreg*,xmmrm16|sae,imm8
 mem32,reg32,reg32
 mem64,reg64,reg64
+
+
+
+
+
+mr:
+hle
+/r
+o16
+o32
+o64
+rm:
+mi:
+/2
+ib,s
+-i:
+ib
+iw
+id
+id,s
+/0
+/4
+nof3
+r:
+ib,u
+/7
+/6
+/5
+i:
+odf
+rel
+o64nw
+m:
+/3
+repe
+norexw
+/1
+ij:
+r-:
+-r:
+wait
+-:
+rmi:
+r+mi:
+--:
+a32
+rel8
+a64
+adf
+i-:
+iwdq
+hlexr
+ri:
+iq
+np
+norexb
+f3i
+m-:
+mri:
+mr-:
+hlenl
+rm-:
+nohi
+f2i
+norep
+rvm:
+rvm:fv:
+rvmi:
+rvms:
+/is4
+mvr:
+vmi:
+rvmi:fv:
+rmv:
+vm32x
+vm64x
+vm64y
+vm32y
+xop.m10.lz.w0
+xop.m10.lz.w1
+vm:
+xop.ndd.lz.m9.w0
+xop.ndd.lz.m9.w1
+rmx:
+mxr:
+mrx:
+rvm:t1s:
+rm:t2:
+rm:t4:
+rm:t8:
+rm:t1s:
+rvmi:t1s:
+mr:t1s:
+rm:hv:
+rm:fv:
+rm:hvm:
+mri:hvm:
+rm:t1f64:
+rm:t1f32:
+rvmi:fvm:
+mri:t4:
+mri:t8:
+mri:t2:
+mri:t1s:
+rmi:fv:
+rmi:t1s:
+vsibx
+vsiby
+vsibz
+m:t1s:
+rvmi:t4:
+rvmi:t8:
+rvmi:t2:
+rm:fvm:
+mr:fvm:
+rm:dup:
+rvm:t2:
+mr:t2:
+rvm:fvm:
+rm:t1s8:
+rm:t1s16:
+mri:t1s8:
+mri:t1s16:
+rvmi:t1s8:
+rvmi:t1s16:
+mr:qvm:
+mr:hvm:
+mr:ovm:
+rm:qvm:
+rm:ovm:
+vmi:fv:
+rmi:fvm:
+rvm:m128:
+vmi:fvm:
+mr:t1s8:
+mr:t1s16:
+rvm:m128:evex.dds.512.f2.0f38.w0
+rvm:m128:evex.dds.lig.f2.0f38.w0
+/3r0
+rm:hvm:evex.128.66.0f38.w0
+rm:hvm:evex.256.66.0f38.w0
+rm:hvm:evex.512.66.0f38.w0
+rm:qvm:evex.128.66.map5.w0
+rm:qvm:evex.256.66.map5.w0
+rm:qvm:evex.512.66.map5.w0
+rm:t1s:evex.lig.f3.map5.w0
+rm:t1s:evex.lig.f3.map5.w1
+rm:t1s:evex.128.66.map5.w0
+rm:t1s:evex.256.66.map5.w0
+rm:t1s:evex.512.66.map5.w0
+rmvi:t1s:
+mrv:
