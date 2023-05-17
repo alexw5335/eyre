@@ -1,48 +1,16 @@
 package eyre.instructions
 
 
-class NasmLine(
-	val lineNumber     : Int,
-	val mnemonic       : String,
-	val operandsString : String,
-	val operands       : List<String>,
-	val parts          : List<String>,
-	val extras         : List<String>,
-	val arch           : Arch?,
-	val extension      : Extension?,
-	val size           : Size?,
-	val immWidth       : ImmWidth?,
-
-) {
-
-	override fun toString() = "$mnemonic $operandsString $parts $extras"
-
-}
-
-
 
 val Char.isHex get() = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
+private val set = HashSet<String>()
 
-
-val ignoredParts = setOf(
-	"hle",
-	"nof3",
-	"hlenl",
-	"hlexr",
-	"adf",
-	"norexb",
-	"norexx",
-	"norexr",
-	"norexw",
-	"odf",
-	"nohi",
-	"nof3",
-	"norep",
-	"repe",
-	"np",
-	"iwdq"
-)
+fun printUnique(string: String) {
+	if(string in set) return
+	set += string
+	println(string)
+}
 
 
 
@@ -58,6 +26,23 @@ enum class VsibPart {
 
 
 
+enum class SizeMatch {
+	NONE,
+	SM,
+	SM2;
+}
+
+
+
+enum class ArgMatch {
+	NONE,
+	AR0,
+	AR1,
+	AR2;
+}
+
+
+
 enum class OpPart {
 	A32,
 	A64,
@@ -65,6 +50,7 @@ enum class OpPart {
 	O32,
 	O64NW,
 	O64,
+	ODF,
 	F2I,
 	F3I,
 	WAIT;
@@ -122,6 +108,7 @@ enum class NasmOperands {
 	R64_M64_I8,
 	R64_M64_I32,
 	R64_R64_I32,
+	R8_I8,
 	R16_I16,
 	R32_I32,
 	R64_I32,
@@ -133,66 +120,19 @@ enum class NasmOperands {
 	MOFFS_AX,
 	MOFFS_EAX,
 	MOFFS_RAX,
-	R8_I8,
 	M16_R16_I16,
 	M32_R32_I32,
 	M64_R64_I32,
 	M16_R16_CL,
 	M32_R32_CL,
 	M64_R64_CL,
-}
 
-
-
-val invalidExtras = setOf(
-	"NOLONG",
-	"NEVER",
-	"UNDOC",
-	"OBSOLETE",
-	"AMD",
-	"CYRIX",
-	"LATEVEX",
-	"OPT",
-	"ND"
-)
-
-
-
-val ignoredExtras = setOf(
-	"DEFAULT",
-	"ANY",
-	"VEX",
-	"EVEX",
-	"NOP",
-	"HLE",
-	"NOHLE",
-	"PRIV",
-	"SMM",
-	"PROT",
-	"LOCK",
-	"LONG",
-	"BND",
-	"MIB",
-	"SIB",
-	"SIZE",
-	"ANYSIZE",
-)
-
-
-
-object Maps {
-	val sizes = Size.values().associateBy { it.name }
-	val extras = Extra.values().associateBy { it.name }
-	val arches = Arch.values().associateBy { it.name.trimStart('_') }
-	val extensions = Extension.values().associateBy { it.name.trimStart('_') }
-	val opParts = OpPart.values().associateBy { it.name.lowercase().replace('_', ',') }
-	val immWidths = ImmWidth.values().associateBy { it.name.lowercase().replace('_', ',') }
-	val vsibParts = VsibPart.values().associateBy { it.name.lowercase() }
 }
 
 
 
 enum class ImmWidth {
+	NONE,
 	IB,
 	IW,
 	ID,
@@ -206,31 +146,8 @@ enum class ImmWidth {
 
 
 
-enum class Size(val sm: Boolean = false) {
-	SB,
-	SW,
-	SD,
-	SQ,
-	SO,
-	SY,
-	SZ,
-	SX,
-	SM(true),
-	SM2(true),
-	AR0,
-	AR1,
-	AR2,
-	SM2_SB_AR2(true),
-	SD_AR1,
-	SQ_AR1,
-	SB_AR2,
-	SB_AR1,
-	SB_SM(true);
-}
-
-
-
 enum class OpSize {
+	NONE,
 	SB,
 	SW,
 	SD,
@@ -239,21 +156,6 @@ enum class OpSize {
 	SY,
 	SZ,
 	SX;
-}
-enum class Extra {
-	SM,
-	SM2,
-	SB,
-	SW,
-	SD,
-	SQ,
-	SO,
-	SY,
-	SZ,
-	SX,
-	AR0,
-	AR1,
-	AR2;
 }
 
 
@@ -348,3 +250,128 @@ enum class Extension {
 	AVXIFMA,
 	HRESET;
 }
+
+
+
+enum class Width {
+	BYTE,
+	WORD,
+	DWORD,
+	QWORD,
+	TWORD,
+	XWORD,
+	YWORD,
+	ZWORD;
+}
+
+
+
+enum class Operands {
+	RM_I8,
+	M_R,
+	R_M,
+	RM_I,
+	R,
+	M_I,
+	R_M_I,
+	DX_A,
+	A_DX,
+	I8_A,
+	A_I8,
+	M_R_CL,
+	M_R_I,
+	R_I,
+	MOFFS_A,
+	A_MOFFS,
+	R_R_I,
+}
+
+
+
+enum class Operand(val string: String? = null, var width: Width? = null) {
+	R8("reg8", Width.BYTE),
+	R16("reg16", Width.WORD),
+	R32("reg32", Width.DWORD),
+	R64("reg64", Width.QWORD),
+	RM8("rm8", Width.BYTE),
+	RM16("rm16", Width.WORD),
+	RM32("rm32", Width.DWORD),
+	RM64("rm64", Width.QWORD),
+	M8("mem8", Width.BYTE),
+	M16("mem16", Width.WORD),
+	M32("mem32", Width.DWORD),
+	M64("mem64", Width.QWORD),
+	M80("mem80", Width.TWORD),
+	M128("mem128", Width.XWORD),
+	M256("mem256", Width.YWORD),
+	M512("mem512", Width.ZWORD),
+	M,
+	I8("imm8", Width.BYTE),
+	I16("imm16", Width.WORD),
+	I32("imm32", Width.DWORD),
+	I64("imm64", Width.QWORD),
+	AL("reg_al", Width.BYTE),
+	AX("reg_ax", Width.WORD),
+	EAX("reg_eax", Width.DWORD),
+	RAX("reg_rax", Width.QWORD),
+	DX("reg_dx", Width.WORD),
+	CL("reg_cl", Width.BYTE),
+	ONE("unity"),
+	REL8(null, Width.BYTE),
+	REL16(null, Width.WORD),
+	REL32(null, Width.DWORD),
+	NONE("void", null),
+	ST("fpureg", Width.TWORD),
+	ST0("fpu0", Width.TWORD),
+	MM("mmxreg", Width.QWORD),
+	MMM64("mmxrm64"),
+	X("xmmreg", Width.XWORD),
+	XM8("xmmrm8"),
+	XM16("xmmrm16"),
+	XM32("xmmrm32"),
+	XM64("xmmrm64"),
+	XM128("xmmrm128"),
+	XM256("xmmrm256"),
+	X0("xmm0", Width.XWORD),
+	Y("ymmreg", Width.YWORD),
+	Z("zmmreg", Width.ZWORD),
+	YM16("ymmrm16"),
+	YM128("ymmrm128"),
+	YM256("ymmrm256"),
+	ZM16("zmmrm16"),
+	ZM128("zmmrm128"),
+	ZM256("zmmrm512"),
+	VM32X("xmem32"),
+	VM64X("xmem64"),
+	VM32Y("ymem32"),
+	VM64Y("ymem64"),
+	VM32Z("zmem32"),
+	VM64Z("zmem64"),
+	BND("bndreg"),
+	K("kreg"),
+	KM8("krm8"),
+	KM16("krm16"),
+	KM32("krm32"),
+	KM64("krm64"),
+	T("tmmreg"),
+
+}
+
+
+
+val customMnemonics = setOf(
+	"ENTER",
+	"Jcc",
+	"JMP",
+	"CALL",
+	"LOOP",
+	"LOOPE",
+	"LOOPNE",
+	"LOOPZ",
+	"LOOPNZ",
+	"MOV",
+	"PUSH",
+	"XCHG",
+	"POP",
+)
+

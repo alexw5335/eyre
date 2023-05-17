@@ -299,7 +299,12 @@ if_("AMD",               "AMD-specific");
 - wait: Only used with FPU instructions (10 times), insert 9B before opcode
 - hlexr: Only used with MOV (12 times)
 - nohi: Only used twice, can be omitted
+- SM2: Only used with encodings with 3 operands (IMUL, SHLD, SHRD, PSHUFxx, 20 times)
+- SM: Only used with encoding with 2 operands, used many times
+- SX: Only used with AMXTILE (3 times, excluding ND and LATEVEX instructions)
+- Unsized memory operands must not take a width (e.g. SGDT)
 
+- ERROR? PMULUDQ and PSUBQ with MMX registers should be SQ not SO
 
 Multiple Extras:
 SM2_SB_AR2  (12, SHLD, SHRD)
