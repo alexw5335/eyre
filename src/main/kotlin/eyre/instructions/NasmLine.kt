@@ -39,7 +39,8 @@ class NasmLine(
 	var star = false
 	var width: Width? = null
 	var ops = Operands.NONE
-	fun set(ops: Operands, width: Width? = null) { this.ops = ops; this.width = width }
+	fun set(ops: Operands, width: Width) { this.ops = ops; this.width = width }
+	fun set(ops: Operands) { this.ops = ops; this.width = null }
 	override fun toString() = string
 
 }

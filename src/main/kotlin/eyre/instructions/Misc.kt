@@ -74,7 +74,12 @@ enum class ImmWidth {
 	IB_U,
 	ID_S,
 	REL,
-	REL8,
+	REL8;
+
+	val is8  get() = this == IB || this == IB_S || this == IB_U
+	val is16 get() = this == IW
+	val is32 get() = this == ID || this == ID_S
+	val is64 get() = this == IQ
 }
 
 
@@ -199,28 +204,90 @@ enum class Width {
 
 
 
-enum class Operands(val widthIndex: Int = 0, vararg val types: OperandType) {
-	NONE,
-	R_R(0, OperandType.R, OperandType.R),
-	M_R(1, OperandType.M, OperandType.R),
-	R_M(0, OperandType.R, OperandType.M),
-	RM_I8(0, OperandType.RM, OperandType.I8),
-	RM_I(0, OperandType.RM, OperandType.I),
-	A_I(0, OperandType.A, OperandType.I)
+enum class Operands2(vararg val types: OperandOrType) {
+	R_R(OperandType.R, OperandType.R),
+	R_M(OperandType.R, OperandType.M),
+	M_R(OperandType.M, OperandType.R),
+	R_I(OperandType.R, OperandType.I),
+	M(OperandType.M),
+	MEM(OperandType.MEM),
+	R(OperandType.R),
+	RM(OperandType.RM),
 }
 
 
 
-enum class OperandType {
+sealed interface OperandOrType
+
+
+
+enum class Operands(
+	val strings: Array<String?>? = null,
+	val smStrings: Array<String?>? = null,
+	val sStrings: Array<String?>? = null,
+) {
+
+	M_R(
+		strings = arrayOf("mem8,reg8", "mem16,reg16", "mem32,reg32", "mem64,reg64"),
+		smStrings = arrayOf("mem,reg8", "mem,reg16", "mem,reg32", "mem,reg64")),
+
+	R_M(
+		strings = arrayOf("reg8,mem8", "reg16,mem16", "reg32,mem32", "reg64,mem64"),
+		smStrings = arrayOf("reg8,mem", "reg16,mem", "reg32,mem", "reg64,mem")),
+
+	R_R_I8(
+		strings = arrayOf(null, "reg16,reg16,imm8", "reg32,reg32,imm8", "reg64,reg64,imm8"),
+		smStrings = arrayOf(null, "reg16,reg16,imm", "reg32,reg32,imm", "reg64,reg64,imm")),
+
+	NONE(strings = arrayOf("void")),
+	R_R(strings = arrayOf("reg8,reg8", "reg16,reg16", "reg32,reg32", "reg64,reg64")),
+	RM_I(smStrings = arrayOf("rm8,imm", "rm16,imm", "rm32,imm", "rm64,imm")),
+	A_I(smStrings = arrayOf("reg_al,imm", "reg_ax,imm", "reg_eax,imm", "reg_rax,imm")),
+	R_M_I(smStrings = arrayOf(null, "reg16,mem,imm16", "reg32,mem,imm32", "reg64,mem,imm32")),
+	M_R_CL(smStrings = arrayOf(null, "mem,reg16,reg_cl", "mem,reg32,reg_cl", "mem,reg64,reg_cl")),
+	R_M_I8(smStrings = arrayOf(null, "reg16,mem,imm8", "reg32,mem,imm8", "reg64,mem,imm8")),
+	M_R_I8(smStrings = arrayOf(null, "mem,reg16,imm", "mem,reg32,imm", "mem,reg64,imm")),
+
+	MM_MM_I8(smStrings = arrayOf("mmxreg,mmxrm,imm")),
+	X_M_I8(smStrings = arrayOf("xmmreg,mem,imm")),
+
+	R_I8(strings = arrayOf(null, "reg16,imm8", "reg32,imm8", "reg64,imm8")),
+	RM_I8(strings = arrayOf(null, "rm16,imm8", "rm32,imm8", "rm64,imm8")),
+	R(strings = arrayOf("reg8", "reg16", "reg32", "reg64")),
+	RM(strings = arrayOf("rm8", "rm16", "rm32", "rm64")),
+	M(strings = arrayOf("mem8", "mem16", "mem32", "mem64", "mem80", "mem128", "mem256", "mem512")),
+	MEM(strings = arrayOf("mem")),
+	ST(strings = arrayOf("fpureg")),
+	ST_ST0(strings = arrayOf("fpureg,fpu0")),
+	ST0_ST(strings = arrayOf("fpu0,fpureg")),
+	A_I8,
+	I8_A,
+	R_R_I(strings = arrayOf(null, "reg16,reg16,imm16", "reg32,reg32,imm32", "reg64,reg64,imm32")),
+	A(strings = arrayOf(null, "reg_ax")),
+	I(strings = arrayOf(null, "imm16", "imm32")),
+	R_I(strings = arrayOf(null, "reg16,imm16", "reg32,imm32", "reg64,imm32")),
+	RM_1(strings = arrayOf("rm8,unity", "rm16,unity", "rm32,unity", "rm64,unity")),
+	RM_CL(strings = arrayOf("rm8,reg_cl","rm16,reg_cl","rm32,reg_cl","rm64,reg_cl")),
+	S_R8(sStrings = arrayOf("xmmreg,reg8", "ymmreg,reg8", "zmmreg,reg8")),
+	S_R16(sStrings = arrayOf("xmmreg,reg16", "ymmreg,reg16", "zmmreg,reg16")),
+	S_R32(sStrings = arrayOf("xmmreg,reg32", "ymmreg,reg32", "zmmreg,reg32")),
+	S_R64(sStrings = arrayOf("xmmreg,reg64", "ymmreg,reg64", "zmmreg,reg64"));
+}
+
+
+
+enum class OperandType(val fixedWidth: Boolean = false) : OperandOrType {
 	R,
 	RM,
 	M,
+	MEM,
 	I,
+	I8(true),
 	A,
 	S,
 	SM,
 	REL,
-	NONE
+	NONE;
 }
 
 
@@ -229,31 +296,31 @@ enum class Operand(
 	val type   : OperandType,
 	val string : String? = null,
 	var width  : Width? = null
-) {
+) : OperandOrType {
 
 	NONE(OperandType.NONE, "void", null),
 
-	R8 (OperandType.R, "reg8",  Width.BYTE),
+	R8(OperandType.R, "reg8", Width.BYTE),
 	R16(OperandType.R, "reg16", Width.WORD),
 	R32(OperandType.R, "reg32", Width.DWORD),
 	R64(OperandType.R, "reg64", Width.QWORD),
 
-	RM8 (OperandType.RM, "rm8",  Width.BYTE),
+	RM8(OperandType.RM, "rm8", Width.BYTE),
 	RM16(OperandType.RM, "rm16", Width.WORD),
 	RM32(OperandType.RM, "rm32", Width.DWORD),
 	RM64(OperandType.RM, "rm64", Width.QWORD),
 
-	M   (OperandType.M),
-	M8  (OperandType.M, "mem8",   Width.BYTE),
-	M16 (OperandType.M, "mem16",  Width.WORD),
-	M32 (OperandType.M, "mem32",  Width.DWORD),
-	M64 (OperandType.M, "mem64",  Width.QWORD),
-	M80 (OperandType.M, "mem80",  Width.TWORD),
+	MEM(OperandType.MEM),
+	M8(OperandType.M, "mem8", Width.BYTE),
+	M16(OperandType.M, "mem16", Width.WORD),
+	M32(OperandType.M, "mem32", Width.DWORD),
+	M64(OperandType.M, "mem64", Width.QWORD),
+	M80(OperandType.M, "mem80", Width.TWORD),
 	M128(OperandType.M, "mem128", Width.XWORD),
 	M256(OperandType.M, "mem256", Width.YWORD),
 	M512(OperandType.M, "mem512", Width.ZWORD),
 
-	I8 (OperandType.I, "imm8",  Width.BYTE),
+	I8(OperandType.I8, "imm8",  Width.BYTE),
 	I16(OperandType.I, "imm16", Width.WORD),
 	I32(OperandType.I, "imm32", Width.DWORD),
 	I64(OperandType.I, "imm64", Width.QWORD),

@@ -12,6 +12,26 @@ object Maps {
 	val argMatches = ArgMatch.values().associateBy { it.name }
 	val operands = Operand.values().associateBy { it.string }
 
+	val widthArray = Width.values()
+	val operandsArray = Operands.values()
+
+	val smOperands = HashMap<String, Pair<Operands, Width>>().also { map ->
+		for(operands in operandsArray)
+			for((i, s) in operands.smStrings?.withIndex() ?: continue)
+				s?.let { map[it] = operands to widthArray[i] }
+	}
+
+	val explicitOperands = HashMap<String, Pair<Operands, Width>>().also { map ->
+		for(operands in operandsArray)
+			for((i, s) in operands.strings?.withIndex() ?: continue)
+				s?.let { map[it] = operands to widthArray[i] }
+		for(operands in operandsArray)
+			for((i, s) in operands.sStrings?.withIndex() ?: continue)
+				s?.let { map[it] = operands to widthArray[i + Width.XWORD.ordinal] }
+	}
+
+
+
 	val customMnemonics = setOf(
 		"ENTER",
 		"Jcc",
@@ -26,6 +46,8 @@ object Maps {
 		"PUSH",
 		"XCHG",
 		"POP",
+		"IN",
+		"OUT"
 	)
 
 	val ignoredParts = setOf(
