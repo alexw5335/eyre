@@ -2,6 +2,12 @@ package eyre.instructions
 
 
 
+class NasmGroup(val mnemonic: String) {
+	val lines = ArrayList<NasmLine>()
+}
+
+
+
 val Char.isHex get() = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
 private val set = HashSet<String>()
@@ -54,79 +60,6 @@ enum class OpPart {
 	F2I,
 	F3I,
 	WAIT;
-}
-
-
-
-enum class NasmOperands {
-	M8_R8,
-	M16_R16,
-	M32_R32,
-	M64_R64,
-	R8_M8,
-	R16_M16,
-	R32_M32,
-	R64_M64,
-	R8_R8,
-	R16_R16,
-	R32_R32,
-	R64_R64,
-	AL_I8,
-	AX_I16,
-	EAX_I32,
-	RAX_I32,
-	RM16_I8,
-	RM32_I8,
-	RM64_I8,
-	RM8_I8,
-	RM16_I16,
-	RM32_I32,
-	RM64_I32,
-	R32,
-	R64,
-	M8_I8,
-	M16_I16,
-	M32_I32,
-	M64_I32,
-	AX_I8,
-	EAX_I8,
-	I8_AL,
-	I8_AX,
-	I8_EAX,
-	AL_DX,
-	AX_DX,
-	EAX_DX,
-	DX_AL,
-	DX_AX,
-	DX_EAX,
-	R16_M16_I8,
-	R16_M16_I16,
-	R16_R16_I16,
-	R32_M32_I8,
-	R32_M32_I32,
-	R32_R32_I32,
-	R64_M64_I8,
-	R64_M64_I32,
-	R64_R64_I32,
-	R8_I8,
-	R16_I16,
-	R32_I32,
-	R64_I32,
-	AL_MOFFS,
-	AX_MOFFS,
-	EAX_MOFFS,
-	RAX_MOFFS,
-	MOFFS_AL,
-	MOFFS_AX,
-	MOFFS_EAX,
-	MOFFS_RAX,
-	M16_R16_I16,
-	M32_R32_I32,
-	M64_R64_I32,
-	M16_R16_CL,
-	M32_R32_CL,
-	M64_R64_CL,
-
 }
 
 
@@ -266,112 +199,117 @@ enum class Width {
 
 
 
-enum class Operands {
-	RM_I8,
-	M_R,
-	R_M,
-	RM_I,
+enum class Operands(val widthIndex: Int = 0, vararg val types: OperandType) {
+	NONE,
+	R_R(0, OperandType.R, OperandType.R),
+	M_R(1, OperandType.M, OperandType.R),
+	R_M(0, OperandType.R, OperandType.M),
+	RM_I8(0, OperandType.RM, OperandType.I8),
+	RM_I(0, OperandType.RM, OperandType.I),
+	A_I(0, OperandType.A, OperandType.I)
+}
+
+
+
+enum class OperandType {
 	R,
-	M_I,
-	R_M_I,
-	DX_A,
-	A_DX,
-	I8_A,
-	A_I8,
-	M_R_CL,
-	M_R_I,
-	R_I,
-	MOFFS_A,
-	A_MOFFS,
-	R_R_I,
-}
-
-
-
-enum class Operand(val string: String? = null, var width: Width? = null) {
-	R8("reg8", Width.BYTE),
-	R16("reg16", Width.WORD),
-	R32("reg32", Width.DWORD),
-	R64("reg64", Width.QWORD),
-	RM8("rm8", Width.BYTE),
-	RM16("rm16", Width.WORD),
-	RM32("rm32", Width.DWORD),
-	RM64("rm64", Width.QWORD),
-	M8("mem8", Width.BYTE),
-	M16("mem16", Width.WORD),
-	M32("mem32", Width.DWORD),
-	M64("mem64", Width.QWORD),
-	M80("mem80", Width.TWORD),
-	M128("mem128", Width.XWORD),
-	M256("mem256", Width.YWORD),
-	M512("mem512", Width.ZWORD),
+	RM,
 	M,
-	I8("imm8", Width.BYTE),
-	I16("imm16", Width.WORD),
-	I32("imm32", Width.DWORD),
-	I64("imm64", Width.QWORD),
-	AL("reg_al", Width.BYTE),
-	AX("reg_ax", Width.WORD),
-	EAX("reg_eax", Width.DWORD),
-	RAX("reg_rax", Width.QWORD),
-	DX("reg_dx", Width.WORD),
-	CL("reg_cl", Width.BYTE),
-	ONE("unity"),
-	REL8(null, Width.BYTE),
-	REL16(null, Width.WORD),
-	REL32(null, Width.DWORD),
-	NONE("void", null),
-	ST("fpureg", Width.TWORD),
-	ST0("fpu0", Width.TWORD),
-	MM("mmxreg", Width.QWORD),
-	MMM64("mmxrm64"),
-	X("xmmreg", Width.XWORD),
-	XM8("xmmrm8"),
-	XM16("xmmrm16"),
-	XM32("xmmrm32"),
-	XM64("xmmrm64"),
-	XM128("xmmrm128"),
-	XM256("xmmrm256"),
-	X0("xmm0", Width.XWORD),
-	Y("ymmreg", Width.YWORD),
-	Z("zmmreg", Width.ZWORD),
-	YM16("ymmrm16"),
-	YM128("ymmrm128"),
-	YM256("ymmrm256"),
-	ZM16("zmmrm16"),
-	ZM128("zmmrm128"),
-	ZM256("zmmrm512"),
-	VM32X("xmem32"),
-	VM64X("xmem64"),
-	VM32Y("ymem32"),
-	VM64Y("ymem64"),
-	VM32Z("zmem32"),
-	VM64Z("zmem64"),
-	BND("bndreg"),
-	K("kreg"),
-	KM8("krm8"),
-	KM16("krm16"),
-	KM32("krm32"),
-	KM64("krm64"),
-	T("tmmreg"),
-
+	I,
+	A,
+	S,
+	SM,
+	REL,
+	NONE
 }
 
 
 
-val customMnemonics = setOf(
-	"ENTER",
-	"Jcc",
-	"JMP",
-	"CALL",
-	"LOOP",
-	"LOOPE",
-	"LOOPNE",
-	"LOOPZ",
-	"LOOPNZ",
-	"MOV",
-	"PUSH",
-	"XCHG",
-	"POP",
-)
+enum class Operand(
+	val type   : OperandType,
+	val string : String? = null,
+	var width  : Width? = null
+) {
 
+	NONE(OperandType.NONE, "void", null),
+
+	R8 (OperandType.R, "reg8",  Width.BYTE),
+	R16(OperandType.R, "reg16", Width.WORD),
+	R32(OperandType.R, "reg32", Width.DWORD),
+	R64(OperandType.R, "reg64", Width.QWORD),
+
+	RM8 (OperandType.RM, "rm8",  Width.BYTE),
+	RM16(OperandType.RM, "rm16", Width.WORD),
+	RM32(OperandType.RM, "rm32", Width.DWORD),
+	RM64(OperandType.RM, "rm64", Width.QWORD),
+
+	M   (OperandType.M),
+	M8  (OperandType.M, "mem8",   Width.BYTE),
+	M16 (OperandType.M, "mem16",  Width.WORD),
+	M32 (OperandType.M, "mem32",  Width.DWORD),
+	M64 (OperandType.M, "mem64",  Width.QWORD),
+	M80 (OperandType.M, "mem80",  Width.TWORD),
+	M128(OperandType.M, "mem128", Width.XWORD),
+	M256(OperandType.M, "mem256", Width.YWORD),
+	M512(OperandType.M, "mem512", Width.ZWORD),
+
+	I8 (OperandType.I, "imm8",  Width.BYTE),
+	I16(OperandType.I, "imm16", Width.WORD),
+	I32(OperandType.I, "imm32", Width.DWORD),
+	I64(OperandType.I, "imm64", Width.QWORD),
+
+	AL(OperandType.A, "reg_al", Width.BYTE),
+	AX(OperandType.A, "reg_ax", Width.WORD),
+	EAX(OperandType.A, "reg_eax", Width.DWORD),
+	RAX(OperandType.A, "reg_rax", Width.QWORD),
+	DX(OperandType.NONE, "reg_dx", Width.WORD),
+	CL(OperandType.NONE, "reg_cl", Width.BYTE),
+	ONE(OperandType.NONE, "unity"),
+
+	REL8(OperandType.REL, null, Width.BYTE),
+	REL16(OperandType.REL, null, Width.WORD),
+	REL32(OperandType.REL, null, Width.DWORD),
+
+	ST(OperandType.NONE, "fpureg", Width.TWORD),
+	ST0(OperandType.NONE, "fpu0", Width.TWORD),
+
+	MM(OperandType.NONE, "mmxreg", Width.QWORD),
+	MMM64(OperandType.NONE, "mmxrm64"),
+
+	X(OperandType.S, "xmmreg", Width.XWORD),
+	X0(OperandType.NONE, "xmm0", Width.XWORD),
+	XM8(OperandType.NONE, "xmmrm8"),
+	XM16(OperandType.NONE, "xmmrm16"),
+	XM32(OperandType.NONE, "xmmrm32"),
+	XM64(OperandType.NONE, "xmmrm64"),
+	XM128(OperandType.SM, "xmmrm128"),
+	XM256(OperandType.NONE, "xmmrm256"),
+
+	Y(OperandType.S, "ymmreg", Width.YWORD),
+	YM16(OperandType.NONE, "ymmrm16"),
+	YM128(OperandType.NONE, "ymmrm128"),
+	YM256(OperandType.SM, "ymmrm256"),
+
+	Z(OperandType.S, "zmmreg", Width.ZWORD),
+	ZM16(OperandType.NONE, "zmmrm16"),
+	ZM128(OperandType.NONE, "zmmrm128"),
+	ZM512(OperandType.SM, "zmmrm512"),
+
+	VM32X(OperandType.NONE, "xmem32"),
+	VM64X(OperandType.NONE, "xmem64"),
+	VM32Y(OperandType.NONE, "ymem32"),
+	VM64Y(OperandType.NONE, "ymem64"),
+	VM32Z(OperandType.NONE, "zmem32"),
+	VM64Z(OperandType.NONE, "zmem64"),
+
+	K(OperandType.NONE, "kreg"),
+	KM8(OperandType.NONE, "krm8"),
+	KM16(OperandType.NONE, "krm16"),
+	KM32(OperandType.NONE, "krm32"),
+	KM64(OperandType.NONE, "krm64"),
+
+	BND(OperandType.NONE, "bndreg"),
+
+	T(OperandType.NONE, "tmmreg");
+
+}

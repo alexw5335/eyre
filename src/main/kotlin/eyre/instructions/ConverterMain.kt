@@ -34,7 +34,7 @@ private fun readLine(lineNumber: Int, line: String): NasmLine? {
 		.split(',')
 		.filter(String::isNotEmpty)
 
-	if(mnemonic in customMnemonics)
+	if(mnemonic in Maps.customMnemonics)
 		return null
 
 	if("ND" in extras && opString != "void")
@@ -43,7 +43,10 @@ private fun readLine(lineNumber: Int, line: String): NasmLine? {
 	if(extras.any(Maps.invalidExtras::contains))
 		return null
 
-	if(opString.contains("sbyte") || opString.contains("fpureg|to"))
+	if(opString.startsWith("mem,imm"))
+		return null
+
+	if(opString.contains("sbyte") || opString.contains("fpureg|to") || opString.contains("xmm0"))
 		return null
 
 	val result = NasmLine(lineNumber, mnemonic, opString, "$mnemonic $opString $parts $extras")
@@ -114,10 +117,6 @@ private fun readLines(): List<NasmLine> {
 
 
 
-private val lines = readLines()
-
-
-
 /*
 Main
  */
@@ -125,11 +124,15 @@ Main
 
 
 fun main() {
-	for(line in lines)
-		determineOperands(line)
+	val lines = readLines()//.filter { it.mnemonic == "ADC" }
+	val groups = HashMap<String, NasmGroup>()
 
-	val list = lines.map { with(it) { "$mnemonic ${operands.joinToString("_")}" } }
-	Files.write(Paths.get("instructions4.txt"), list)
+	for(line in lines) {
+		groups.getOrPut(line.mnemonic) { NasmGroup(line.mnemonic) }.lines.add(line)
+		determineOperands(line)
+		if(line.operands.size == 3)
+			printUnique(line.operands.joinToString("_"))
+	}
 }
 
 
@@ -143,8 +146,40 @@ private fun NasmLine.error(message: String = "Misc. error"): Nothing {
 
 
 
+private fun combineOperands(line: NasmLine) {
+	outer@ for(it in Operands.values()) {
+		if(it.types.size == line.operands.size) {
+			for(i in it.types.indices)
+				if(it.types[i] != line.operands[i].type)
+					continue@outer
+			line.ops = it
+			line.width = line.operands[it.widthIndex].width!!
+		}
+	}
+
+	line.error("Invalid")
+}
+
+
+
 private fun determineOperands(line: NasmLine) {
 	val strings = line.opString.split(',')
+
+	fun set(operands: Operands, width: Width) {
+		line.ops = operands
+		line.width = width
+	}
+
+	if(line.sm) when(line.opString) {
+		"reg8,mem"  -> set(Operands.R_M, Width.BYTE)
+		"reg16,mem" -> set(Operands.R_M, Width.WORD)
+		"reg32,mem" -> set(Operands.R_M, Width.DWORD)
+		"reg64,mem" -> set(Operands.R_M, Width.QWORD)
+		"mem,reg8"  -> set(Operands.M_R, Width.BYTE)
+		"mem,reg16" -> set(Operands.M_R, Width.WORD)
+		"mem,reg32" -> set(Operands.M_R, Width.DWORD)
+		"mem,reg64" -> set(Operands.M_R, Width.QWORD)
+	}
 
 	val widths = arrayOfNulls<Width>(4)
 
@@ -177,56 +212,22 @@ private fun determineOperands(line: NasmLine) {
 	for(i in strings.indices) {
 		var string = strings[i]
 
-		if(string.endsWith("*"))
-			string = string.dropLast(1)
-
-		if(string.endsWith("|z")) {
-			line.zeroMask = true
-			string = string.dropLast(2)
-		}
-
-		if(string.endsWith("|mask")) {
-			line.vecMask = true
-			string = string.dropLast(5)
-		}
-
-		if(string.endsWith("|sae")) {
-			line.sae = true
-			string = string.dropLast(4)
-		}
-
-		if(string.endsWith("|er")) {
-			line.er = true
-			string = string.dropLast(3)
-		}
-
-		if(string.endsWith("|b16")) {
-			line.b16 = true
-			string = string.dropLast(4)
-		}
-
-		if(string.endsWith("|b32")) {
-			line.b32 = true
-			string = string.dropLast(4)
-		}
-
-		if(string.endsWith("|b64")) {
-			line.b64 = true
-			string = string.dropLast(4)
-		}
-
-		if(string.endsWith("|rs2")) {
-			line.rs2 = true
-			string = string.dropLast(4)
-		}
-
-		if(string.endsWith("|rs4")) {
-			line.rs4 = true
-			string = string.dropLast(4)
-		}
+		if(string.endsWith("*"))     { line.star = true; string = string.dropLast(1) }
+		if(string.endsWith("|z"))    { line.z    = true; string = string.dropLast(2) }
+		if(string.endsWith("|mask")) { line.mask = true; string = string.dropLast(5) }
+		if(string.endsWith("|sae"))  { line.sae  = true; string = string.dropLast(4) }
+		if(string.endsWith("|er"))   { line.er   = true; string = string.dropLast(3) }
+		if(string.endsWith("|b16"))  { line.b16  = true; string = string.dropLast(4) }
+		if(string.endsWith("|b32"))  { line.b32  = true; string = string.dropLast(4) }
+		if(string.endsWith("|b64"))  { line.b64  = true; string = string.dropLast(4) }
+		if(string.endsWith("|rs2"))  { line.rs2  = true; string = string.dropLast(4) }
+		if(string.endsWith("|rs4"))  { line.rs4  = true; string = string.dropLast(4) }
 
 		val operand: Operand = when(string) {
+			"none" -> continue
+
 			in Maps.operands -> Maps.operands[string]!!
+
 			"mem" -> when(widths[i]) {
 				null        -> Operand.M
 				Width.BYTE  -> Operand.M8
@@ -238,6 +239,7 @@ private fun determineOperands(line: NasmLine) {
 				Width.YWORD -> Operand.M256
 				Width.ZWORD -> Operand.M512
 			}
+
 			"xmmrm" -> when(widths[i]) {
 				Width.DWORD -> Operand.XM32
 				Width.QWORD -> Operand.XM64
@@ -245,6 +247,7 @@ private fun determineOperands(line: NasmLine) {
 				null -> Operand.XM128
 				else -> line.error("Invalid width: ${widths[i]}")
 			}
+
 			"mmxrm" -> when(widths[i]) {
 				Width.QWORD -> Operand.MMM64
 				Width.XWORD -> if(line.mnemonic == "PMULUDQ" || line.mnemonic == "PSUBQ")
@@ -253,12 +256,13 @@ private fun determineOperands(line: NasmLine) {
 					line.error("Invalid width: ${widths[i]}")
 				else -> line.error("Invalid width: ${widths[i]}")
 			}
+
 			"imm" -> when(line.immWidth) {
-				ImmWidth.IB,
-				ImmWidth.IB_S,
+				ImmWidth.IB   -> Operand.I8
+				ImmWidth.IB_S -> Operand.I8
 				ImmWidth.IB_U -> Operand.I8
 				ImmWidth.IW   -> Operand.I16
-				ImmWidth.ID,
+				ImmWidth.ID   -> Operand.I16
 				ImmWidth.ID_S -> Operand.I32
 				ImmWidth.IQ   -> Operand.I64
 				ImmWidth.REL8 -> Operand.REL8
@@ -268,7 +272,9 @@ private fun determineOperands(line: NasmLine) {
 					Operand.REL16
 				else -> line.error("Invalid width: ${line.immWidth}")
 			}
+
 			"imm|short" -> Operand.I8
+
 			else -> line.error("Unrecognised operand: $string")
 		}
 

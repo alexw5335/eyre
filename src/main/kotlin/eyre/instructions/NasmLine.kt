@@ -12,7 +12,7 @@ class NasmLine(
 	var opSize = OpSize.NONE
 	var sizeMatch = SizeMatch.NONE
 	var argMatch = ArgMatch.NONE
-
+	val sm get() = sizeMatch != SizeMatch.NONE
 	var immWidth: ImmWidth = ImmWidth.NONE
 	val opcodeParts = ArrayList<Int>()
 	var plusC = false
@@ -27,8 +27,8 @@ class NasmLine(
 	var vsibPart: VsibPart? = null
 	val opParts = ArrayList<OpPart>()
 	val operands = ArrayList<Operand>()
-	var vecMask = false
-	var zeroMask = false
+	var mask = false
+	var z = false
 	var sae = false
 	var er = false
 	var b16 = false
@@ -36,6 +36,10 @@ class NasmLine(
 	var b64 = false
 	var rs2 = false
 	var rs4 = false
+	var star = false
+	var width: Width? = null
+	var ops = Operands.NONE
+	fun set(ops: Operands, width: Width? = null) { this.ops = ops; this.width = width }
 	override fun toString() = string
 
 }

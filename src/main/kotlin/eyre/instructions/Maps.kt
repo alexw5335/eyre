@@ -12,6 +12,22 @@ object Maps {
 	val argMatches = ArgMatch.values().associateBy { it.name }
 	val operands = Operand.values().associateBy { it.string }
 
+	val customMnemonics = setOf(
+		"ENTER",
+		"Jcc",
+		"JMP",
+		"CALL",
+		"LOOP",
+		"LOOPE",
+		"LOOPNE",
+		"LOOPZ",
+		"LOOPNZ",
+		"MOV",
+		"PUSH",
+		"XCHG",
+		"POP",
+	)
+
 	val ignoredParts = setOf(
 		"hle",
 		"nof3",
