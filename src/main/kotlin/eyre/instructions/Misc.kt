@@ -1,5 +1,8 @@
 package eyre.instructions
 
+import eyre.encoding.Operand
+import java.awt.image.ComponentSampleModel
+
 
 
 class NasmGroup(val mnemonic: String) {
@@ -21,6 +24,7 @@ fun printUnique(string: String) {
 
 
 enum class VsibPart {
+	NONE,
 	VM32X,
 	VM64X,
 	VM64Y,
@@ -99,6 +103,7 @@ enum class OpSize {
 
 
 enum class Arch {
+	NONE,
 	_8086,
 	_186,
 	_286,
@@ -120,73 +125,76 @@ enum class Arch {
 
 
 enum class Extension {
+	NONE,
+	AES,
+	AMXBF16,
+	AMXINT8,
+	AMXTILE,
+	AVX,
+	AVX2,
+	AVX512,
+	AVX5124FMAPS,
+	AVX5124VNNIW,
+	AVX512BF16,
+	AVX512BITALG,
+	AVX512BW,
+	AVX512CD,
+	AVX512DQ,
+	AVX512ER,
+	AVX512FC16,
+	AVX512FP16,
+	AVX512IFMA,
+	AVX512PF,
+	AVX512VBMI,
+	AVX512VBMI2,
+	AVX512VL,
+	AVX512VNNI,
+	AVX512VP2INTERSECT,
+	AVX512VPOPCNTDQ,
+	AVXIFMA,
+	AVXNECONVERT,
+	AVXVNNIINT8,
+	BMI1,
+	BMI2,
+	CET,
+	CMPCCXADD,
+	ENQCMD,
+	FMA,
 	FPU,
+	FRED,
+	GFNI,
+	HRESET,
+	INVPCID,
 	MMX,
-	_3DNOW,
+	MPX,
+	MSRLIST,
+	PCONFIG,
+	PREFETCHI,
+	PREFETCHWT1,
+	RAOINT,
+	RTM,
+	SERIALIZE,
+	SGX,
+	SHA,
 	SSE,
 	SSE2,
 	SSE3,
-	VMX,
-	SSSE3,
-	SSE4A,
 	SSE41,
 	SSE42,
+	SSE4A,
 	SSE5,
-	AVX,
-	AVX2,
-	FMA,
-	BMI1,
-	BMI2,
+	SSSE3,
 	TBM,
-	RTM,
-	INVPCID,
-	AVX512,
-	AVX512CD,
-	AVX512ER,
-	AVX512PF,
-	MPX,
-	SHA,
-	PREFETCHWT1,
-	AVX512VL,
-	AVX512DQ,
-	AVX512BW,
-	AVX512IFMA,
-	AVX512VBMI,
-	AES,
-	VAES,
-	VPCLMULQDQ,
-	GFNI,
-	AVX512VBMI2,
-	AVX512VNNI,
-	AVX512BITALG,
-	AVX512VPOPCNTDQ,
-	AVX5124FMAPS,
-	AVX5124VNNIW,
-	AVX512FP16,
-	AVX512FC16,
-	SGX,
-	CET,
-	ENQCMD,
-	PCONFIG,
-	WBNOINVD,
 	TSXLDTRK,
-	SERIALIZE,
-	AVX512BF16,
-	AVX512VP2INTERSECT,
-	AMXTILE,
-	AMXBF16,
-	AMXINT8,
-	FRED,
-	RAOINT,
 	UINTR,
-	CMPCCXADD,
-	PREFETCHI,
+	VAES,
+	VMX,
+	VPCLMULQDQ,
+	WBNOINVD,
 	WRMSRNS,
-	MSRLIST,
-	AVXNECONVERT,
-	AVXVNNIINT8,
-	AVXIFMA,
-	HRESET;
+	_3DNOW,
+	NOT_GIVEN;
+
 }
 
 
@@ -239,9 +247,13 @@ enum class Operands(
 		strings = arrayOf(null, "reg16,reg16,imm8", "reg32,reg32,imm8", "reg64,reg64,imm8"),
 		smStrings = arrayOf(null, "reg16,reg16,imm", "reg32,reg32,imm", "reg64,reg64,imm")),
 
+	RM_I(
+		strings = arrayOf("rm8,imm8"),
+		smStrings = arrayOf("rm8,imm", "rm16,imm", "rm32,imm", "rm64,imm")),
+
 	NONE(strings = arrayOf("void")),
 	R_R(strings = arrayOf("reg8,reg8", "reg16,reg16", "reg32,reg32", "reg64,reg64")),
-	RM_I(smStrings = arrayOf("rm8,imm", "rm16,imm", "rm32,imm", "rm64,imm")),
+
 	A_I(smStrings = arrayOf("reg_al,imm", "reg_ax,imm", "reg_eax,imm", "reg_rax,imm")),
 	R_M_I(smStrings = arrayOf(null, "reg16,mem,imm16", "reg32,mem,imm32", "reg64,mem,imm32")),
 	M_R_CL(smStrings = arrayOf(null, "mem,reg16,reg_cl", "mem,reg32,reg_cl", "mem,reg64,reg_cl")),
@@ -251,6 +263,7 @@ enum class Operands(
 	MM_MM_I8(smStrings = arrayOf("mmxreg,mmxrm,imm")),
 	X_M_I8(smStrings = arrayOf("xmmreg,mem,imm")),
 
+	R_RM(strings = arrayOf(null, "reg16,rm16", "reg32,rm32", "reg64,rm64")),
 	R_I8(strings = arrayOf(null, "reg16,imm8", "reg32,imm8", "reg64,imm8")),
 	RM_I8(strings = arrayOf(null, "rm16,imm8", "rm32,imm8", "rm64,imm8")),
 	R(strings = arrayOf("reg8", "reg16", "reg32", "reg64")),
@@ -276,13 +289,13 @@ enum class Operands(
 
 
 
-enum class OperandType(val fixedWidth: Boolean = false) : OperandOrType {
+enum class OperandType : OperandOrType {
 	R,
 	RM,
 	M,
 	MEM,
 	I,
-	I8(true),
+	I8,
 	A,
 	S,
 	SM,
@@ -292,10 +305,84 @@ enum class OperandType(val fixedWidth: Boolean = false) : OperandOrType {
 
 
 
-enum class Operand(
+enum class Operand2 {
+	R8,
+	R16,
+	R32,
+	R64,
+	M,
+	M8,
+	M16,
+	M32,
+	M64,
+	M80,
+	M128,
+	M256,
+	M512,
+	I8,
+	I16,
+	I32,
+	I64,
+	AL,
+	AX,
+	EAX,
+	RAX,
+	DX,
+	CL,
+	ONE,
+	REL8,
+	REL16,
+	REL32,
+	ST,
+	ST0,
+	MM,
+	X,
+	X0,
+	Y,
+	Z,
+	VM32X,
+	VM64X,
+	VM32Y,
+	VM64Y,
+	VM32Z,
+	VM64Z,
+	K,
+	BND,
+	T;
+}
+
+
+
+enum class RawCompoundOperand(val string: String){
+	RM8("rm8"),
+	RM16("rm16"),
+	RM32("rm32"),
+	RM64("rm64"),
+	MMM64("mmxrm64"),
+	XM8("xmmrm8"),
+	XM16("xmmrm16"),
+	XM32("xmmrm32"),
+	XM64("xmmrm64"),
+	XM128("xmmrm128"),
+	XM256("xmmrm256"),
+	YM16("ymmrm16"),
+	YM128("ymmrm128"),
+	YM256("ymmrm256"),
+	ZM16("zmmrm16"),
+	ZM128("zmmrm128"),
+	ZM512("zmmrm512"),
+	KM8("krm8"),
+	KM16("krm16"),
+	KM32("krm32"),
+	KM64("krm64"),
+}
+
+
+
+enum class RawOperand(
 	val type   : OperandType,
 	val string : String? = null,
-	var width  : Width? = null
+	var width  : Width? = null,
 ) : OperandOrType {
 
 	NONE(OperandType.NONE, "void", null),
@@ -379,4 +466,33 @@ enum class Operand(
 
 	T(OperandType.NONE, "tmmreg");
 
+}
+
+
+
+enum class VexM {
+	NONE,
+	M0F,
+	M38,
+	M3A;
+}
+
+
+enum class VexP {
+	NONE,
+	M66,
+	MF2,
+	MF3;
+}
+
+enum class VexW {
+	W0,
+	W1,
+	WI;
+}
+
+enum class VexL {
+	L0,
+	L1,
+	LI
 }

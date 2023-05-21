@@ -10,7 +10,7 @@ object Maps {
 	val vsibParts = VsibPart.values().associateBy { it.name.lowercase() }
 	val sizeMatches = SizeMatch.values().associateBy { it.name }
 	val argMatches = ArgMatch.values().associateBy { it.name }
-	val operands = Operand.values().associateBy { it.string }
+	val operands = RawOperand.values().associateBy { it.string }
 
 	val widthArray = Width.values()
 	val operandsArray = Operands.values()
@@ -30,8 +30,9 @@ object Maps {
 				s?.let { map[it] = operands to widthArray[i + Width.XWORD.ordinal] }
 	}
 
-
-
+	/**
+	 * - REL/OPREG/CX
+	 */
 	val customMnemonics = setOf(
 		"ENTER",
 		"Jcc",
@@ -46,8 +47,24 @@ object Maps {
 		"PUSH",
 		"XCHG",
 		"POP",
+		"BSWAP",
 		"IN",
-		"OUT"
+		"OUT",
+		"MOVSX",
+		"MOVSXD",
+		"MOVZX",
+		"SHLD",
+		"SHRD",
+		"JECXZ",
+		"JRCXZ",
+		"JMPE",
+		"LAR",
+		"LEA",
+		"LFS",
+		"LGS",
+		"LSL",
+		"LSS",
+		"MOVNTI",
 	)
 
 	val ignoredParts = setOf(
