@@ -303,6 +303,8 @@ if_("AMD",               "AMD-specific");
 - SM: Only used with encoding with 2 operands, used many times
 - SX: Only used with AMXTILE (3 times, excluding ND and LATEVEX instructions)
 - Unsized memory operands must not take a width (e.g. SGDT)
+- f2i: Only used with CRC32 (5 times), just add f2 to the front of the opcode?
+- f3i: Only used 10 times, just add f3 to the front of the opcode?
 
 - ERROR? PMULUDQ and PSUBQ with MMX registers should be SQ not SO
 
@@ -1479,3 +1481,150 @@ rm:t1s:evex.256.66.map5.w0
 rm:t1s:evex.512.66.map5.w0
 rmvi:t1s:
 mrv:
+
+
+
+
+
+CALL	imm			[i:	odf e8 rel]	    8086,BND
+CALL	imm64		[i:	o64nw e8 rel]	X86_64,LONG,BND
+CALL	mem|far		[m:	o64 ff /3]		X86_64,LONG
+CALL	mem16|far	[m:	o16 ff /3]		8086
+CALL	mem32|far   [m:	o32 ff /3]		386
+CALL	mem64|far	[m:	o64 ff /3]  	X86_64,LONG
+CALL	mem			[m:	odf ff /2]		8086,BND
+CALL	rm64		[m:	o64nw ff /2]	X86_64,LONG,BND
+E8    CALL   REL32
+FF/2  CALL   RM     1000
+FF/3  CALLF  M      1110
+
+
+
+JMP		imm|short	[i:	eb rel8]		8086
+JMP		imm			[i:	odf e9 rel]		8086,BND
+JMP		imm64		[i:	o64nw e9 rel]	X86_64,LONG,BND
+JMP		mem|far		[m:	o64 ff /5]		X86_64,LONG
+JMP		mem16|far	[m:	o16 ff /5]		8086
+JMP		mem32|far	[m:	o32 ff /5]		386
+JMP		mem64|far	[m:	o64 ff /5]		X86_64,LONG
+JMP		mem		    [m:	odf ff /4]		8086,BND
+JMP		rm64		[m:	o64nw ff /4]	X86_64,LONG,BND
+EB    JMP  REL8
+E9    JMP  REL32
+FF/4  JMP  RM     1000
+FF/5  JMP  M      1110
+
+
+PUSH	reg16	[r:	o16 50+r]		8086
+PUSH	reg64	[r:	o64nw 50+r]		X86_64,LONG
+PUSH	rm16	[m:	o16 ff /6]		8086
+PUSH	rm64	[m:	o64nw ff /6]	X86_64,LONG
+PUSH	reg_fs	[-:	0f a0]			386
+PUSH	reg_gs	[-:	0f a8]			386
+PUSH	imm8	[i:	6a ib,s]		186
+PUSH	imm16	[i:	o16 68 iw]		186,AR0,SIZE
+PUSH	imm64	[i:	o64nw 68 id,s]	X86_64,LONG,AR0,SIZE
+PUSH	imm32	[i:	o64nw 68 id,s]	X86_64,LONG,AR0,SIZE
+PUSHF	void	[	odf 9c]			8086
+PUSHFQ	void	[	o32 9c]			X86_64,LONG
+PUSHFW	void	[	o16 9c]			8086
+66 50+r  PUSH  R16
+50+r     PUSH  R64
+66 FF/6  PUSH  RM16
+FF/6     PUSH  RM64
+0F A0    PUSH  FS
+0F A8    PUSH  GS
+6A       PUSH  I8
+66 68    PUSH  I16
+68       PUSH  I32
+9C       PUHSF
+
+
+ENTER		imm,imm				[ij:	c8 iw ib,u]				186
+C8  ENTER  I16_I8
+
+
+
+LOOP		imm				[i:	adf e2 rel8]		8086
+LOOP		imm,reg_ecx		[i-:	a32 e2 rel8]	386
+LOOP		imm,reg_rcx		[i-:	a64 e2 rel8]	X86_64,LONG
+LOOPE		imm				[i:	adf e1 rel8]		8086
+LOOPE		imm,reg_ecx		[i-:	a32 e1 rel8]	386
+LOOPE		imm,reg_rcx		[i-:	a64 e1 rel8]	X86_64,LONG
+LOOPNE		imm				[i:	adf e0 rel8]		8086
+LOOPNE		imm,reg_ecx		[i-:	a32 e0 rel8]	386
+LOOPNE		imm,reg_rcx		[i-:	a64 e0 rel8]	X86_64,LONG
+LOOPNZ		imm				[i:	adf e0 rel8]		8086
+LOOPNZ		imm,reg_ecx		[i-:	a32 e0 rel8]	386
+LOOPNZ		imm,reg_rcx		[i-:	a64 e0 rel8]	X86_64,LONG
+LOOPZ		imm				[i:	adf e1 rel8]		8086
+LOOPZ		imm,reg_ecx		[i-:	a32 e1 rel8]	386
+LOOPZ		imm,reg_rcx		[i-:	a64 e1 rel8]	X86_64,LONG
+E2     LOOP  REL8
+E2     LOOP  REL8, RCX
+67 E2  LOOP  REL8, ECX
+E1     LOOPE/LOOPZ  REL8
+E1     LOOPE/LOOPZ  REL8, RCX
+67 E1  LOOPE/LOOPZ  REL8, ECX
+E0     LOOPNE/LOOPNZ  REL8
+E0     LOOPNE/LOOPNZ  REL8, RCX
+67 E0  LOOPNE/LOOPNZ  REL8, ECX
+
+
+
+Jcc		imm|near	[i:	odf 0f 80+c rel]	386,BND
+Jcc		imm64|near	[i:	o64nw 0f 80+c rel]	X86_64,LONG,BND
+Jcc		imm			[i:	70+c rel8]			8086,BND
+0F 80+c  Jcc  REL32
+70+c     Jcc  REL8
+
+
+
+MOV		mem,reg_sreg			[mr:	8c /r]					8086,SW
+MOV		reg16,reg_sreg			[mr:	o16 8c /r]				8086
+MOV		reg32,reg_sreg			[mr:	o32 8c /r]				386
+MOV		rm64,reg_sreg			[mr:	o64 8c /r]				X86_64,LONG
+MOV		reg_sreg,mem			[rm:	8e /r]					8086,SW
+MOV		reg_sreg,reg16			[rm:	o16 8e /r]				8086
+MOV		reg_sreg,reg32			[rm:	o32 8e /r]				386
+MOV		reg_sreg,rm64			[rm:	o64 8e /r]				X86_64,LONG
+MOV		reg_al,mem_offs			[-i:	a0 iwdq]				8086,SM
+MOV		reg_ax,mem_offs			[-i:	o16 a1 iwdq]				8086,SM
+MOV		reg_eax,mem_offs		[-i:	o32 a1 iwdq]				386,SM
+MOV		reg_rax,mem_offs		[-i:	o64 a1 iwdq]				X86_64,LONG,SM
+MOV		mem_offs,reg_al			[i-:	a2 iwdq]				8086,SM,NOHLE
+MOV		mem_offs,reg_ax			[i-:	o16 a3 iwdq]				8086,SM,NOHLE
+MOV		mem_offs,reg_eax		[i-:	o32 a3 iwdq]				386,SM,NOHLE
+MOV		mem_offs,reg_rax		[i-:	o64 a3 iwdq]				X86_64,LONG,SM,NOHLE
+MOV		reg64,reg_creg			[mr:	o64nw 0f 20 /r]				X86_64,LONG,PRIV
+MOV		reg_creg,reg64			[rm:	o64nw 0f 22 /r]				X86_64,LONG,PRIV
+MOV		reg64,reg_dreg			[mr:	o64nw 0f 21 /r]				X86_64,LONG,PRIV
+MOV		reg_dreg,reg64			[rm:	o64nw 0f 23 /r]				X86_64,LONG,PRIV
+MOV		mem,reg8			[mr:	hlexr 88 /r]				8086,SM
+MOV		reg8,reg8			[mr:	88 /r]					8086
+MOV		mem,reg16			[mr:	hlexr o16 89 /r]			8086,SM
+MOV		reg16,reg16			[mr:	o16 89 /r]				8086
+MOV		mem,reg32			[mr:	hlexr o32 89 /r]			386,SM
+MOV		reg32,reg32			[mr:	o32 89 /r]				386
+MOV		mem,reg64			[mr:	hlexr o64 89 /r]			X86_64,LONG,SM
+MOV		reg64,reg64			[mr:	o64 89 /r]				X86_64,LONG
+MOV		reg8,mem			[rm:	8a /r]					8086,SM
+MOV		reg8,reg8			[rm:	8a /r]					8086
+MOV		reg16,mem			[rm:	o16 8b /r]				8086,SM
+MOV		reg16,reg16			[rm:	o16 8b /r]				8086
+MOV		reg32,mem			[rm:	o32 8b /r]				386,SM
+MOV		reg32,reg32			[rm:	o32 8b /r]				386
+MOV		reg64,mem			[rm:	o64 8b /r]				X86_64,LONG,SM
+MOV		reg64,reg64			[rm:	o64 8b /r]				X86_64,LONG
+MOV		reg8,imm			[ri:	b0+r ib]				8086,SM
+MOV		reg16,imm			[ri:	o16 b8+r iw]				8086,SM
+MOV		reg32,imm			[ri:	o32 b8+r id]				386,SM
+MOV		reg64,imm			[ri:	o64 b8+r iq]				X86_64,LONG,SM
+MOV		rm8,imm				[mi:	hlexr c6 /0 ib]				8086,SM
+MOV		rm16,imm			[mi:	hlexr o16 c7 /0 iw]			8086,SM
+MOV		rm32,imm			[mi:	hlexr o32 c7 /0 id]			386,SM
+MOV		rm64,imm			[mi:	hlexr o64 c7 /0 id,s]			X86_64,LONG,SM
+MOV		rm64,imm32			[mi:	hlexr o64 c7 /0 id,s]			X86_64,LONG
+MOV		mem,imm8			[mi:	hlexr c6 /0 ib]				8086,SM
+MOV		mem,imm16			[mi:	hlexr o16 c7 /0 iw]			8086,SM
+MOV		mem,imm32			[mi:	hlexr o32 c7 /0 id]			386,SM

@@ -78,6 +78,7 @@ value class VexInfo(val value: Int) {
 }
 
 
+
 enum class Operand {
 	R8,
 	R16,

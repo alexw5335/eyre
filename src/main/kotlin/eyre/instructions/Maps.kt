@@ -2,70 +2,13 @@ package eyre.instructions
 
 object Maps {
 
-	val opSizes = OpSize.values().associateBy { it.name }
-	val arches = Arch.values().associateBy { it.name.trimStart('_') }
+	val opSizes    = OpSize.values().associateBy { it.name }
+	val arches     = Arch.values().associateBy { it.name.trimStart('_') }
 	val extensions = Extension.values().associateBy { it.name.trimStart('_') }
-	val opParts = OpPart.values().associateBy { it.name.lowercase().replace('_', ',') }
-	val immWidths = ImmWidth.values().associateBy { it.name.lowercase().replace('_', ',') }
-	val vsibParts = VsibPart.values().associateBy { it.name.lowercase() }
-	val sizeMatches = SizeMatch.values().associateBy { it.name }
-	val argMatches = ArgMatch.values().associateBy { it.name }
-	val operands = RawOperand.values().associateBy { it.string }
-
-	val widthArray = Width.values()
-	val operandsArray = Operands.values()
-
-	val smOperands = HashMap<String, Pair<Operands, Width>>().also { map ->
-		for(operands in operandsArray)
-			for((i, s) in operands.smStrings?.withIndex() ?: continue)
-				s?.let { map[it] = operands to widthArray[i] }
-	}
-
-	val explicitOperands = HashMap<String, Pair<Operands, Width>>().also { map ->
-		for(operands in operandsArray)
-			for((i, s) in operands.strings?.withIndex() ?: continue)
-				s?.let { map[it] = operands to widthArray[i] }
-		for(operands in operandsArray)
-			for((i, s) in operands.sStrings?.withIndex() ?: continue)
-				s?.let { map[it] = operands to widthArray[i + Width.XWORD.ordinal] }
-	}
-
-	/**
-	 * - REL/OPREG/CX
-	 */
-	val customMnemonics = setOf(
-		"ENTER",
-		"Jcc",
-		"JMP",
-		"CALL",
-		"LOOP",
-		"LOOPE",
-		"LOOPNE",
-		"LOOPZ",
-		"LOOPNZ",
-		"MOV",
-		"PUSH",
-		"XCHG",
-		"POP",
-		"BSWAP",
-		"IN",
-		"OUT",
-		"MOVSX",
-		"MOVSXD",
-		"MOVZX",
-		"SHLD",
-		"SHRD",
-		"JECXZ",
-		"JRCXZ",
-		"JMPE",
-		"LAR",
-		"LEA",
-		"LFS",
-		"LGS",
-		"LSL",
-		"LSS",
-		"MOVNTI",
-	)
+	val opParts    = OpPart.values().associateBy { it.name.lowercase().replace('_', ',') }
+	val immWidths  = ImmWidth.values().associateBy { it.name.lowercase().replace('_', ',') }
+	val vsibParts  = VsibPart.values().associateBy { it.name.lowercase() }
+	val operands   = NasmOperand.values().associateBy { it.string }
 
 	val ignoredParts = setOf(
 		"hle",
@@ -94,7 +37,8 @@ object Maps {
 		"AMD",
 		"CYRIX",
 		"LATEVEX",
-		"OPT"
+		"OPT",
+		"3DNOW"
 	)
 
 	val ignoredExtras = setOf(

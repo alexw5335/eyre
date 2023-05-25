@@ -991,6 +991,32 @@ F2 0F 12 W1  VMOVDDUP  S_SM    kz movddup
 66 0F 38 F8  MOVDIR64B  R163264_M512
 
 
+E.MAP5.W0  58  VADDPH  S_S_SMB16  rvm kz er full
+
+E.F3.MAP5.W0 58  VADDSH  X_X_XM16  kz er scalar
+
+E.66.3A.W0 03  VALIGND  S_S_SMB32_I8  kz full
+E.66.3A.W1 03  VALIGNQ  S_S_SMB64_I8  kz full
+
+E.66.38.W1 65  VBLENDMPD  S_S_SMB64  kz full
+E.66.38.W0 65  VBLENDMPS  S_S_SMB32  kz full
+
+VBROADCAST??
+
+E.3A.W0 C2  VCMPPH  K_S_SMB16_I8  kz sae full
+
+E.F3.3A.W0 C2  VCMPSH  K_X_XM16_I8  k sae scalar
+
+E.MAP5.W0 2F  VCOMISH  X_XM16  sae scalar
+
+E.66.38.W1 8A  VCOMPRESSPD  SM_S  kz scalar
+
+E.66.38.W0 8A  VCOMPRESSPS  SM_S  kz tuple1s
+
+E.MAP5.W0 5B  VCVTDQ2PH  X_SMB32  kz er full
+
+
+
 
 
 
