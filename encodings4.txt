@@ -533,11 +533,6 @@ D9 F4  FXTRACT
 D9 F1  FYL2X
 D9 F9  FYL2XP1
 
-0F AE/1  FXRSTOR    MEM
-0F AE/1  FXRSTOR64  MEM
-0F AE/0  FXSAVE     MEM
-0F AE/0  FXSAVE64   MEM
-
 
 
 ; 2-byte GP instructions
@@ -563,6 +558,7 @@ D9 F9  FYL2XP1
 0F 01/6  LMSW    RM   0010
 0F 01/7  INVLPG  MEM
 
+0F 01 C0  ENCLV
 0F 01 C1  VMCALL
 0F 01 C2  VMLAUNCH
 0F 01 C3  VMRESUME
@@ -572,11 +568,13 @@ D9 F9  FYL2XP1
 0F 01 C5  PCONFIG
 0F 01 C8  MONITOR
 0F 01 C9  MWAIT
+0F 01 CF  ENCLS
 0F 01 D0  XGETBV
 0F 01 D1  XSETBV
 0F 01 D4  VMFUNC
 0F 01 D5  XEND
 0F 01 D6  XTEST
+0F 01 D7  ENCLU
 0F 01 E8  SERIALIZE
 0F 01 EE  RDPKRU
 0F 01 EF  WRPKRU
@@ -672,6 +670,13 @@ F3 0F 1E FA  ENDBR64
 0F AC  SHRD  RM_R_I8  1110
 0F AD  SHRD  RM_R_CL  1110
 
+
+0F AE/0  FXSAVE      MEM
+0F AE/0  FXSAVE64    MEM
+0F AE/1  FXRSTOR     MEM
+0F AE/1  FXRSTOR64   MEM
+0F AE/2  LDMXCSR     M32
+0F AE/3  STMXCSR     M32
 0F AE/4  XSAVE       MEM
 0F AE/4  XSAVE64     MEM  RW
 0F AE/5  XRSTOR      MEM
@@ -687,7 +692,7 @@ F3 0F AE/4  PTWRITE     RM  1100
 F3 0F AE/5  INCSSPD     R   0100
 F3 0F AE/5  INCSSPQ     R   1000  RW
 F3 0F AE/6  CLRSSBSY    M   1000
-F3 0F AE/6  UMONITOR    R   0100  A32
+F3 0F AE/6  UMONITOR    R   0100  67
 F3 0F AE/6  UMONITOR    R   1000
 F2 0F AE/6  UMWAIT      R   0100
 66 0F AE/6  CLWB        M   0001
@@ -745,15 +750,15 @@ C7 F8     XBEGIN  REL32
 
 
 
-66 0F 38 80  INVEPT  R64_M128
+66 0F 38 80  INVEPT   R64_M128
 66 0F 38 81  INVVPID  R64_M128
 66 0F 38 82  INVPCID  R64_M128
 
-F2 0F 38 F0     CRC32  R32_RM8
-F2 0F 38 F0     CRC32  R64_RM8   RW
-66 F2 0F 38 F1  CRC32  R32_RM16
-F2 0F 38 F1     CRC32  R32_RM32
-F2 0F 38 F1     CRC32  R64_RM64  RW
+F2 0F 38 F0  CRC32  R32_RM8
+F2 0F 38 F0  CRC32  R64_RM8   RW
+F2 0F 38 F1  CRC32  R32_RM16  O16
+F2 0F 38 F1  CRC32  R32_RM32
+F2 0F 38 F1  CRC32  R64_RM64  RW
 
 0F 38 F0  MOVBE  R_M  1110
 0F 38 F1  MOVBE  M_R  1110
@@ -776,118 +781,3 @@ F3 0F 38 F8  ENQCMDS  R64_M512  A64
 0F 38 F9  MOVDIRI  M_R  1100
 
 F3 0F 3A F0 C0  HRESET  I8
-
-
-
-; MMX Instructions
-
-
-0F 77 EMMS
-
-0F 6E  MOVD  MM_RM32
-0F 7E  MOVD  RM32_MM
-0F 6F  MOVQ  MM_RM64  RW
-0F 7E  MOVQ  RM64_MM  RW
-
-0F 6E  PACKSSWB  MM_MMM64
-
-
-
-801: MOVD mmxreg,rm32 [rm:, np, 0f, 6e, /r] [PENT, MMX, SD]
-802: MOVD rm32,mmxreg [mr:, np, 0f, 7e, /r] [PENT, MMX, SD]
-805: MOVQ mmxreg,mmxrm [rm:, np, 0f, 6f, /r] [PENT, MMX, SQ]
-806: MOVQ mmxrm,mmxreg [mr:, np, 0f, 7f, /r] [PENT, MMX, SQ]
-807: MOVQ mmxreg,rm64 [rm:, np, o64, 0f, 6e, /r] [X86_64, LONG, MMX]
-808: MOVQ rm64,mmxreg [mr:, np, o64, 0f, 7e, /r] [X86_64, LONG, MMX]
-895: PACKSSDW mmxreg,mmxrm [rm:, np, o64nw, 0f, 6b, /r] [PENT, MMX, SQ]
-896: PACKSSWB mmxreg,mmxrm [rm:, np, o64nw, 0f, 63, /r] [PENT, MMX, SQ]
-897: PACKUSWB mmxreg,mmxrm [rm:, np, o64nw, 0f, 67, /r] [PENT, MMX, SQ]
-898: PADDB mmxreg,mmxrm [rm:, np, o64nw, 0f, fc, /r] [PENT, MMX, SQ]
-899: PADDD mmxreg,mmxrm [rm:, np, o64nw, 0f, fe, /r] [PENT, MMX, SQ]
-900: PADDSB mmxreg,mmxrm [rm:, np, o64nw, 0f, ec, /r] [PENT, MMX, SQ]
-902: PADDSW mmxreg,mmxrm [rm:, np, o64nw, 0f, ed, /r] [PENT, MMX, SQ]
-903: PADDUSB mmxreg,mmxrm [rm:, np, o64nw, 0f, dc, /r] [PENT, MMX, SQ]
-904: PADDUSW mmxreg,mmxrm [rm:, np, o64nw, 0f, dd, /r] [PENT, MMX, SQ]
-905: PADDW mmxreg,mmxrm [rm:, np, o64nw, 0f, fd, /r] [PENT, MMX, SQ]
-906: PAND mmxreg,mmxrm [rm:, np, o64nw, 0f, db, /r] [PENT, MMX, SQ]
-907: PANDN mmxreg,mmxrm [rm:, np, o64nw, 0f, df, /r] [PENT, MMX, SQ]
-911: PCMPEQB mmxreg,mmxrm [rm:, np, o64nw, 0f, 74, /r] [PENT, MMX, SQ]
-912: PCMPEQD mmxreg,mmxrm [rm:, np, o64nw, 0f, 76, /r] [PENT, MMX, SQ]
-913: PCMPEQW mmxreg,mmxrm [rm:, np, o64nw, 0f, 75, /r] [PENT, MMX, SQ]
-914: PCMPGTB mmxreg,mmxrm [rm:, np, o64nw, 0f, 64, /r] [PENT, MMX, SQ]
-915: PCMPGTD mmxreg,mmxrm [rm:, np, o64nw, 0f, 66, /r] [PENT, MMX, SQ]
-916: PCMPGTW mmxreg,mmxrm [rm:, np, o64nw, 0f, 65, /r] [PENT, MMX, SQ]
-936: PMADDWD mmxreg,mmxrm [rm:, np, o64nw, 0f, f5, /r] [PENT, MMX, SQ]
-941: PMULHW mmxreg,mmxrm [rm:, np, o64nw, 0f, e5, /r] [PENT, MMX, SQ]
-942: PMULLW mmxreg,mmxrm [rm:, np, o64nw, 0f, d5, /r] [PENT, MMX, SQ]
-966: POR mmxreg,mmxrm [rm:, np, o64nw, 0f, eb, /r] [PENT, MMX, SQ]
-969: PSLLD mmxreg,mmxrm [rm:, np, o64nw, 0f, f2, /r] [PENT, MMX, SQ]
-970: PSLLD mmxreg,imm [mi:, np, 0f, 72, /6, ib,u] [PENT, MMX]
-971: PSLLQ mmxreg,mmxrm [rm:, np, o64nw, 0f, f3, /r] [PENT, MMX, SQ]
-972: PSLLQ mmxreg,imm [mi:, np, 0f, 73, /6, ib,u] [PENT, MMX]
-973: PSLLW mmxreg,mmxrm [rm:, np, o64nw, 0f, f1, /r] [PENT, MMX, SQ]
-974: PSLLW mmxreg,imm [mi:, np, 0f, 71, /6, ib,u] [PENT, MMX]
-975: PSRAD mmxreg,mmxrm [rm:, np, o64nw, 0f, e2, /r] [PENT, MMX, SQ]
-976: PSRAD mmxreg,imm [mi:, np, 0f, 72, /4, ib,u] [PENT, MMX]
-977: PSRAW mmxreg,mmxrm [rm:, np, o64nw, 0f, e1, /r] [PENT, MMX, SQ]
-978: PSRAW mmxreg,imm [mi:, np, 0f, 71, /4, ib,u] [PENT, MMX]
-979: PSRLD mmxreg,mmxrm [rm:, np, o64nw, 0f, d2, /r] [PENT, MMX, SQ]
-980: PSRLD mmxreg,imm [mi:, np, 0f, 72, /2, ib,u] [PENT, MMX]
-981: PSRLQ mmxreg,mmxrm [rm:, np, o64nw, 0f, d3, /r] [PENT, MMX, SQ]
-982: PSRLQ mmxreg,imm [mi:, np, 0f, 73, /2, ib,u] [PENT, MMX]
-983: PSRLW mmxreg,mmxrm [rm:, np, o64nw, 0f, d1, /r] [PENT, MMX, SQ]
-984: PSRLW mmxreg,imm [mi:, np, 0f, 71, /2, ib,u] [PENT, MMX]
-985: PSUBB mmxreg,mmxrm [rm:, np, o64nw, 0f, f8, /r] [PENT, MMX, SQ]
-986: PSUBD mmxreg,mmxrm [rm:, np, o64nw, 0f, fa, /r] [PENT, MMX, SQ]
-987: PSUBSB mmxreg,mmxrm [rm:, np, o64nw, 0f, e8, /r] [PENT, MMX, SQ]
-989: PSUBSW mmxreg,mmxrm [rm:, np, o64nw, 0f, e9, /r] [PENT, MMX, SQ]
-990: PSUBUSB mmxreg,mmxrm [rm:, np, o64nw, 0f, d8, /r] [PENT, MMX, SQ]
-991: PSUBUSW mmxreg,mmxrm [rm:, np, o64nw, 0f, d9, /r] [PENT, MMX, SQ]
-992: PSUBW mmxreg,mmxrm [rm:, np, o64nw, 0f, f9, /r] [PENT, MMX, SQ]
-993: PUNPCKHBW mmxreg,mmxrm [rm:, np, o64nw, 0f, 68, /r] [PENT, MMX, SQ]
-994: PUNPCKHDQ mmxreg,mmxrm [rm:, np, o64nw, 0f, 6a, /r] [PENT, MMX, SQ]
-995: PUNPCKHWD mmxreg,mmxrm [rm:, np, o64nw, 0f, 69, /r] [PENT, MMX, SQ]
-996: PUNPCKLBW mmxreg,mmxrm [rm:, np, o64nw, 0f, 60, /r] [PENT, MMX, SQ]
-997: PUNPCKLDQ mmxreg,mmxrm [rm:, np, o64nw, 0f, 62, /r] [PENT, MMX, SQ]
-998: PUNPCKLWD mmxreg,mmxrm [rm:, np, o64nw, 0f, 61, /r] [PENT, MMX, SQ]
-1029: PXOR mmxreg,mmxrm [rm:, np, o64nw, 0f, ef, /r] [PENT, MMX, SQ]
-1490: CVTPI2PS xmmreg,mmxrm64 [rm:, np, 0f, 2a, /r] [KATMAI, SSE, MMX]
-1491: CVTPS2PI mmxreg,xmmrm64 [rm:, np, 0f, 2d, /r] [KATMAI, SSE, MMX]
-1499: CVTTPS2PI mmxreg,xmmrm [rm:, np, 0f, 2c, /r] [KATMAI, SSE, MMX, SQ]
-1578: MASKMOVQ mmxreg,mmxreg [rm:, np, 0f, f7, /r] [KATMAI, MMX]
-1579: MOVNTQ mem,mmxreg [mr:, np, 0f, e7, /r] [KATMAI, MMX, SQ]
-1580: PAVGB mmxreg,mmxrm [rm:, np, o64nw, 0f, e0, /r] [KATMAI, MMX, SQ]
-1581: PAVGW mmxreg,mmxrm [rm:, np, o64nw, 0f, e3, /r] [KATMAI, MMX, SQ]
-1582: PEXTRW reg32,mmxreg,imm [rmi:, np, 0f, c5, /r, ib,u] [KATMAI, MMX, SB, AR2]
-1585: PINSRW mmxreg,mem,imm [rmi:, np, 0f, c4, /r, ib,u] [KATMAI, MMX, SB, AR2]
-1586: PINSRW mmxreg,rm16,imm [rmi:, np, 0f, c4, /r, ib,u] [KATMAI, MMX, SB, AR2]
-1587: PINSRW mmxreg,reg32,imm [rmi:, np, 0f, c4, /r, ib,u] [KATMAI, MMX, SB, AR2]
-1588: PMAXSW mmxreg,mmxrm [rm:, np, o64nw, 0f, ee, /r] [KATMAI, MMX, SQ]
-1589: PMAXUB mmxreg,mmxrm [rm:, np, o64nw, 0f, de, /r] [KATMAI, MMX, SQ]
-1590: PMINSW mmxreg,mmxrm [rm:, np, o64nw, 0f, ea, /r] [KATMAI, MMX, SQ]
-1591: PMINUB mmxreg,mmxrm [rm:, np, o64nw, 0f, da, /r] [KATMAI, MMX, SQ]
-1592: PMOVMSKB reg32,mmxreg [rm:, np, 0f, d7, /r] [KATMAI, MMX]
-1593: PMULHUW mmxreg,mmxrm [rm:, np, o64nw, 0f, e4, /r] [KATMAI, MMX, SQ]
-1594: PSADBW mmxreg,mmxrm [rm:, np, o64nw, 0f, f6, /r] [KATMAI, MMX, SQ]
-1595: PSHUFW mmxreg,mmxrm,imm [rmi:, np, o64nw, 0f, 70, /r, ib] [KATMAI, MMX, SM2, SB, AR2]
-1638: PADDQ mmxreg,mmxrm [rm:, np, 0f, d4, /r] [WILLAMETTE, MMX, SQ]
-1842: PABSB mmxreg,mmxrm [rm:, np, 0f, 38, 1c, /r] [SSSE3, MMX, SQ]
-1844: PABSW mmxreg,mmxrm [rm:, np, 0f, 38, 1d, /r] [SSSE3, MMX, SQ]
-1846: PABSD mmxreg,mmxrm [rm:, np, 0f, 38, 1e, /r] [SSSE3, MMX, SQ]
-1848: PALIGNR mmxreg,mmxrm,imm [rmi:, np, 0f, 3a, 0f, /r, ib,u] [SSSE3, MMX, SQ]
-1850: PHADDW mmxreg,mmxrm [rm:, np, 0f, 38, 01, /r] [SSSE3, MMX, SQ]
-1852: PHADDD mmxreg,mmxrm [rm:, np, 0f, 38, 02, /r] [SSSE3, MMX, SQ]
-1854: PHADDSW mmxreg,mmxrm [rm:, np, 0f, 38, 03, /r] [SSSE3, MMX, SQ]
-1856: PHSUBW mmxreg,mmxrm [rm:, np, 0f, 38, 05, /r] [SSSE3, MMX, SQ]
-1858: PHSUBD mmxreg,mmxrm [rm:, np, 0f, 38, 06, /r] [SSSE3, MMX, SQ]
-1860: PHSUBSW mmxreg,mmxrm [rm:, np, 0f, 38, 07, /r] [SSSE3, MMX, SQ]
-1862: PMADDUBSW mmxreg,mmxrm [rm:, np, 0f, 38, 04, /r] [SSSE3, MMX, SQ]
-1864: PMULHRSW mmxreg,mmxrm [rm:, np, 0f, 38, 0b, /r] [SSSE3, MMX, SQ]
-1866: PSHUFB mmxreg,mmxrm [rm:, np, 0f, 38, 00, /r] [SSSE3, MMX, SQ]
-1868: PSIGNB mmxreg,mmxrm [rm:, np, 0f, 38, 08, /r] [SSSE3, MMX, SQ]
-1870: PSIGNW mmxreg,mmxrm [rm:, np, 0f, 38, 09, /r] [SSSE3, MMX, SQ]
-1872: PSIGND mmxreg,mmxrm [rm:, np, 0f, 38, 0a, /r] [SSSE3, MMX, SQ]
-
-Process finished with exit code 0
-
-
