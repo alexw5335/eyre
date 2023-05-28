@@ -1484,6 +1484,61 @@ mrv:
 
 
 
+ENCODINGS:
+mr      Many uses
+rm      Many uses
+mi      Many uses
+-i      43, e.g. AX_I8
+m       Many uses
+r       53
+r-      28, FPU (ST_ST0)
+-r      28, FPU (ST0_ST)
+-       17, un-encoded single operand (AX)
+rmi     Many uses
+r+mi    12, Only used by IMUL R_I (undocumented)
+i       81
+i-      23, imm with un-encoded second operand (I8_AX)
+m-      78, mem with un-encoded second operand (M_CL)
+mri     86
+mr-     12, SHLD, SHRD (M_R_CL)
+rvm     Many uses
+rvmi    Many uses
+rvms    53, AVX
+mvr     12, Only used by AVX512
+vmi     69
+rmv     44
+vm      24, Only used by BMI1 and TBM
+rmx     1, Only used by BND
+mxr     1, Only used by BND
+mrx     1, Only used by BND
+rmvi    Many uses
+
+
+
+TUPLE TYPES:
+fv
+t1s
+t2
+t4
+t8
+hv
+hvm
+t1f64
+t1f32
+fvm
+dup
+t1s8
+t1s16
+qvm
+ovm
+m128
+
+
+
+Common : nds, 128, 256, 0f38, 0f3a, 0f, wig, lig, f2, f3, w0, w1, np
+VEX    : lz, ndd, dds, l1, l0
+EVEX   : map5, map6, 512
+
 
 
 CALL	imm			[i:	odf e8 rel]	    8086,BND

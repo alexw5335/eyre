@@ -38,7 +38,8 @@ object Maps {
 		"CYRIX",
 		"LATEVEX",
 		"OPT",
-		"3DNOW"
+		"3DNOW",
+		"TBM"
 	)
 
 	val ignoredExtras = setOf(

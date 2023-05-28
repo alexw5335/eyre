@@ -60,7 +60,6 @@ enum class Extension {
 	SSE4A,
 	SSE5,
 	SSSE3,
-	TBM,
 	TSXLDTRK,
 	UINTR,
 	VAES,
