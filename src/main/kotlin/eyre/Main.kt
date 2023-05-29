@@ -1,5 +1,6 @@
 package eyre
 
+import eyre.encoding.EncodingReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.relativeTo
@@ -8,7 +9,8 @@ import kotlin.math.absoluteValue
 
 
 fun main() {
-	Compiler("samples/testing2").compile()
+	EncodingReader(Files.readString(Paths.get("encodings.txt"))).read()
+	//Compiler("samples/testing2").compile()
 }
 
 
