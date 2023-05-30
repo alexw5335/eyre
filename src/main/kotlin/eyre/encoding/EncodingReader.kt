@@ -57,7 +57,7 @@ class EncodingReader(private val string: String) {
 		while(true) {
 			val value = (string[pos++].digitToInt(16) shl 4) or string[pos++].digitToInt(16)
 
-			if(opcode == 0 && value == 0x66 || value == 0xF2 || value == 0xF3)
+			if(opcode == 0 && value == 0x66 || value == 0xF2 || value == 0xF3 || value == 0x9B)
 				prefix = value
 			else
 				opcode = opcode or (value shl (oplen++ shl 3))

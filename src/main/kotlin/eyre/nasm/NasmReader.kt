@@ -1,6 +1,7 @@
 package eyre.nasm
 
 import eyre.Width
+import eyre.util.hexc8
 import eyre.util.isHex
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -17,6 +18,8 @@ class NasmReader(private val inputs: List<String>) {
 
 	val lines = ArrayList<NasmLine>()
 
+	val encodings = ArrayList<NasmEncoding>()
+
 
 
 	fun readRawLines() = inputs.forEachIndexed { i, l -> readRawLine(i, l)?.let(rawLines::add) }
@@ -26,6 +29,10 @@ class NasmReader(private val inputs: List<String>) {
 	fun scrapeLines() = rawLines.forEach { lines.add(scrapeLine(it)) }
 
 	fun determineOperands() = lines.forEach { determineOperands(it) }
+
+	fun filterExtensions(list: Set<NasmExt>) = lines.retainAll { list.containsAll(it.extensions) }
+
+	fun convertLines() = lines.forEach { encodings += convertLine(it) }
 
 
 
@@ -102,14 +109,14 @@ class NasmReader(private val inputs: List<String>) {
 			part.startsWith("vex")    -> line.vex = part
 			part.endsWith("+c")       -> { line.cc = true; line.addOpcode(part.dropLast(2).toInt(16)) }
 			part.endsWith("+r")       -> { line.opreg = true; line.addOpcode(part.dropLast(2).toInt(16)) }
-			part == "/r"    -> line.hasModRM = true
-			part == "/is4"  -> line.is4 = true
-			part == "o16"   -> line.prefix = 0x66
-			part == "o64"   -> line.rexw = true
-			part == "a32"   -> line.prefix = 0x67
+			part == "/r"    -> line.modrm  = true
+			part == "/is4"  -> line.is4    = true
+			part == "o16"   -> line.o16    = true
+			part == "o64"   -> line.rexw   = true
+			part == "a32"   -> line.a32    = true
 			part == "f2i"   -> line.prefix = 0xF2
-			part == "f3i"   -> line.prefix == 0xF3
-			part == "wait"  -> line.addOpcode(0x9B)
+			part == "f3i"   -> line.prefix = 0xF3
+			part == "wait"  -> line.prefix = 0x9B
 			part[0] == '/'  -> line.opcodeExt = part[1].digitToInt(10)
 
 			part.contains(':') -> {
@@ -122,7 +129,7 @@ class NasmReader(private val inputs: List<String>) {
 			}
 
 			part.length == 2 && part[0].isHex && part[1].isHex -> {
-				if(line.hasModRM) {
+				if(line.modrm) {
 					if(line.postModRM >= 0) error("Too many opcode parts")
 					line.postModRM = part.toInt(16)
 				} else {
@@ -141,7 +148,7 @@ class NasmReader(private val inputs: List<String>) {
 			else -> raw.error("Unrecognised opcode part: $part")
 		}
 
-		if(line.arch == NasmArch.FUTURE && line.extensions.isEmpty())
+		if(line.arch == NasmArch.FUTURE && line.extensions.isEmpty() && line.mnemonic.startsWith("K"))
 			line.extensions += NasmExt.NOT_GIVEN
 
 		val parts = (line.vex ?: line.evex ?: return line).split('.')
@@ -274,6 +281,86 @@ class NasmReader(private val inputs: List<String>) {
 			line.addOperand(operand)
 		}
 	}
+
+
+
+	private fun combineOperands(line: NasmLine) : Pair<NasmOps, Width?> {
+		outer@ for(operands in NasmOps.values) {
+			if(line.operands.size != operands.parts.size) continue
+
+			var width: Width? = null
+
+			for((i, opClass) in operands.parts.withIndex()) {
+				val operand = line.operands[i]
+				when(opClass) {
+					is NasmOpType ->
+						if(operand.type != opClass)
+							continue@outer
+						else if(width == null)
+							width = operand.width
+						else if(operand.width != width && !(operand == NasmOp.I32 && width == Width.QWORD))
+							continue@outer
+					is NasmOp ->
+						if(operand != opClass)
+							continue@outer
+				}
+			}
+
+			return operands to width
+		}
+
+		//printUnique(line.operands.joinToString("_")); return Operands.M to null
+		line.raw.error("Invalid operands: ${line.operands.joinToString()}")
+	}
+
+
+
+	private fun convertLine(line: NasmLine): List<NasmEncoding> {
+		val list = ArrayList<NasmEncoding>()
+
+		fun add() {
+			val (operands, width) = combineOperands(line)
+			if(line.cc)
+				for((mnemonic, opcode) in Maps.ccList)
+					list += line.toEncoding(line.mnemonic.dropLast(2) + mnemonic, line.addedOpcode(opcode), operands, width)
+			else
+				list += line.toEncoding(line.mnemonic, line.opcode, operands, width)
+		}
+
+		if(line.compound != null) {
+			for(operand in line.compound!!.parts) {
+				line.operands[line.compoundIndex] = operand
+				add()
+			}
+			line.operands[line.compoundIndex] = line.compound!!
+		} else {
+			add()
+		}
+
+		return list
+	}
+
+
+
+	private fun NasmLine.toEncoding(
+		mnemonic: String,
+		opcode: Int,
+		operands: NasmOps,
+		width: Width?
+	) = NasmEncoding(
+		this,
+		mnemonic,
+		opcodeExt,
+		opcode,
+		oplen,
+		prefix,
+		rexw,
+		o16,
+		a32,
+		operands,
+		width,
+		this.operands
+	)
 
 
 }

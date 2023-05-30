@@ -1,6 +1,7 @@
 package eyre
 
 import eyre.encoding.EncodingReader
+import eyre.nasm.NasmLine
 import eyre.nasm.NasmReader
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -9,13 +10,14 @@ import kotlin.io.path.relativeTo
 
 
 fun main() {
-	//val nasmReader = NasmReader("nasm.txt")
-	//nasmReader.readRawLines()
-	//nasmReader.filterLines()
-	//nasmReader.scrapeLines()
-	//nasmReader.determineOperands()
-	//val lines = nasmReader.lines
-	val encodings = EncodingReader(Files.readString(Paths.get("encodings.txt"))).read()
+	val nasmReader = NasmReader("nasm.txt")
+	nasmReader.readRawLines()
+	nasmReader.filterLines()
+	nasmReader.scrapeLines()
+	nasmReader.determineOperands()
+	val lines = nasmReader.lines
+	val reader = EncodingReader(Files.readString(Paths.get("encodings.txt")))
+	reader.read()
 	//Compiler("samples/testing2").compile()
 }
 

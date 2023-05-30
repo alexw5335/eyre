@@ -18,7 +18,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var evex: String? = null
 	var vex: String? = null
 	var opcodeExt = -1
-	var hasModRM = false
+	var modrm = false
 	var is4 = false
 	var opEnc = OpEnc.NONE
 	var tupleType: TupleType? = null
@@ -37,6 +37,8 @@ class NasmLine(val raw: RawNasmLine) {
 	var rs2 = false
 	var rs4 = false
 	var star = false
+	var a32 = false
+	var o16 = false
 
 	var vexl = VexL.NONE
 	var vexw = VexW.NONE
@@ -47,6 +49,8 @@ class NasmLine(val raw: RawNasmLine) {
 
 	var compoundIndex = -1
 	var compound: NasmOp? = null
+
+	var escape = 0
 
 	val operands = ArrayList<NasmOp>()
 
@@ -61,6 +65,11 @@ class NasmLine(val raw: RawNasmLine) {
 	}
 
 	fun addOpcode(value: Int) {
+		if(oplen == 0) when(value) {
+			0x0F -> if(escape == 0) { escape = 1; return }
+			0x38 -> if(escape == 1) { escape = 2; return }
+			0x3A -> if(escape == 1) { escape = 3; return }
+		}
 		opcode = opcode or (value shl (oplen shl 3))
 		oplen++
 	}

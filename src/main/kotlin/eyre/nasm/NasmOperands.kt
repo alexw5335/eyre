@@ -91,8 +91,6 @@ enum class NasmOps(vararg val parts: NasmOpClass) {
 	K_S_S(NasmOp.K, NasmOpType.S, NasmOpType.S),
 	K_S_M(NasmOp.K, NasmOpType.S, NasmOpType.M),
 
-
-
 	T(NasmOp.T),
 	T_MEM(NasmOp.T, NasmOp.MEM),
 	MEM_T(NasmOp.MEM, NasmOp.T),

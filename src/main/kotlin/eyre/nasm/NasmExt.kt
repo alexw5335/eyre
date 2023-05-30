@@ -1,6 +1,6 @@
 package eyre.nasm
 
-enum class NasmExt(val isAvx: Boolean = false){
+enum class NasmExt(val isAvx: Boolean = false) {
 	// 0, 32-bit only
 	AES,
 	// 1, tmmreg
@@ -55,9 +55,9 @@ enum class NasmExt(val isAvx: Boolean = false){
 	AVXNECONVERT(true),
 	// 12 (LATEVEX)
 	AVXVNNIINT8(true),
-	// 13, GP, R_R_RM, R_RM_R, R_RM
+	// 13, GP, R_R_RM, R_RM_R, R_RM, VEX
 	BMI1,
-	// 16, GP, R_RM_R, R_R_RM, R_RM_I8
+	// 16, GP, R_RM_R, R_R_RM, R_RM_I8, VEX
 	BMI2,
 	// 14, GP
 	CET,
@@ -79,7 +79,7 @@ enum class NasmExt(val isAvx: Boolean = false){
 	MMX,
 	// 16, BND
 	MPX,
-	// 2, void
+	// 2, void (Not in Intel Manual)
 	MSRLIST,
 	// 1, void
 	PCONFIG,
@@ -87,7 +87,7 @@ enum class NasmExt(val isAvx: Boolean = false){
 	PREFETCHI,
 	// 1, mem8
 	PREFETCHWT1,
-	// 6, M_R (AADD, AAND, AXOR)
+	// 6, M_R (AADD, AAND, AXOR) (Not in Intel Manual)
 	RAOINT,
 	// 6: imm, void
 	RTM,
@@ -125,7 +125,7 @@ enum class NasmExt(val isAvx: Boolean = false){
 	VPCLMULQDQ(true),
 	// 1, void
 	WBNOINVD,
-	// 1, void
+	// 1, void (Not in Intel Manual)
 	WRMSRNS,
 	// 0, obsolete
 	_3DNOW,
