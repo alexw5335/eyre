@@ -1,5 +1,10 @@
 package eyre.encoding
 
+import eyre.Mnemonic
+import eyre.OpMask
+import java.nio.file.Files
+import java.nio.file.Paths
+
 class EncodingReader(private val string: String) {
 
 
@@ -7,7 +12,9 @@ class EncodingReader(private val string: String) {
 
 	private var lineNumber = 1
 
-	private val encodings = ArrayList<Encoding>()
+	private val mnemonicMap = Mnemonic.values.associateBy { it.name }
+
+	val encodings = ArrayList<ParsedEncoding>()
 
 
 
@@ -27,8 +34,6 @@ class EncodingReader(private val string: String) {
 				}
 			}
 		}
-
-		encodings.forEach(::println)
 	}
 
 
@@ -38,11 +43,16 @@ class EncodingReader(private val string: String) {
 		var opcode      = 0
 		var oplen       = 0
 		var extension   = 0
-		var widths      = Widths(0)
-		var cops: COps? = null
+		var opMask      = OpMask(0)
+		var opMask2     = OpMask(0)
+		var cops: Cops? = null
 		var ops: Ops?   = null
 		var opsString   = "NONE"
 		val parts       = ArrayList<String>()
+		var rexw = false
+		var rexr = false
+		var o16 = false
+		var a32 = false
 
 		while(true) {
 			val value = (string[pos++].digitToInt(16) shl 4) or string[pos++].digitToInt(16)
@@ -64,14 +74,6 @@ class EncodingReader(private val string: String) {
 		skipSpaces()
 		val mnemonic = readWord()
 
-		when(mnemonic) {
-			"MOVSX", "MOVZX", "MOVSXD",
-			"CRC32", "LAR", "LSL",
-			"INVEPT", "INVPCID", "INVVPID",
-			"ENQCMD", "ENQCMDS", "MOVDIR64B"
-				-> { skipLine(); return }
-		}
-
 		skipSpaces()
 		if(!atNewline()) {
 			opsString = readWord()
@@ -83,19 +85,44 @@ class EncodingReader(private val string: String) {
 		}
 
 		when(opsString) {
-			in COps.map -> cops = COps.map[opsString]!!
+			in Cops.map -> cops = Cops.map[opsString]!!
 			in Ops.map  -> ops = Ops.map[opsString]!!
-			"MEM"  -> { ops = Ops.M; widths = Widths.NONE }
-			"M16"  -> { ops = Ops.M; widths = Widths.WORD }
-			"M32"  -> { ops = Ops.M; widths = Widths.DWORD }
-			"M64"  -> { ops = Ops.M; widths = Widths.QWORD }
-			"M80"  -> { ops = Ops.M; widths = Widths.TWORD }
-			"M128" -> { ops = Ops.M; widths = Widths.XWORD }
-			else   -> error("Invalid operands: $opsString")
+			else        -> error("Invalid operands: $opsString")
 		}
 
-		fun add(mnemonic: String, opcode: Int, ops: Ops) = encodings.add(Encoding(
-			mnemonic, prefix, opcode, oplen, extension, ops, widths
+		for(part in parts) {
+			val intValue = part.toIntOrNull(2)
+
+			if(intValue != null) {
+				if(opMask.isNotEmpty)
+					opMask2 = OpMask(intValue)
+				else
+					opMask = OpMask(intValue)
+				continue
+			}
+
+			when(part) {
+				"RW"  -> rexw = true
+				"RR"  -> rexr = true
+				"O16" -> o16 = true
+				"A32" -> a32 = true
+				else  -> error("Invalid part: $part")
+			}
+		}
+
+		if(cops != null) {
+			if(cops.mask1 != null) {
+				if(opMask.isNotEmpty) opMask2 = opMask
+				opMask = cops.mask1!!
+			} else if(cops.mask2 != null) {
+				opMask2 = cops.mask2!!
+			}
+		}
+
+		fun add(mnemonic: String, opcode: Int, ops: Ops) = encodings.add(ParsedEncoding(
+			mnemonicMap[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
+			prefix, opcode, oplen, extension, ops,
+			opMask, opMask2, rexw, rexr, o16, a32
 		))
 
 		if(mnemonic.endsWith("cc")) {

@@ -1,24 +1,6 @@
 package eyre.encoding
 
-
-
-@JvmInline
-value class Widths(val value: Int) {
-	operator fun plus(other: Widths) = Widths(value or other.value)
-	operator fun contains(other: Widths) = other.value and value == other.value
-	companion object {
-		val NONE  = Widths(0b0000)
-		val BYTE  = Widths(0b0001)
-		val WORD  = Widths(0b0010)
-		val DWORD = Widths(0b0100)
-		val QWORD = Widths(0b1000)
-		val TWORD = Widths(0b0001_0000)
-		val XWORD = Widths(0b0010_0000)
-		val YWORD = Widths(0b0100_0000)
-		val ZWORD = Widths(0b1000_0000)
-	}
-}
-
+import eyre.OpMask
 
 
 val ccList = arrayOf(
@@ -42,7 +24,11 @@ val ccList = arrayOf(
 
 
 
-enum class COps(vararg val parts: Ops) {
+enum class Cops(
+	vararg val parts: Ops,
+	val mask1: OpMask? = null,
+	val mask2: OpMask? = null
+) {
 	RM(Ops.R, Ops.M),
 	R_RM(Ops.R_R, Ops.R_M),
 	RM_R(Ops.R_R, Ops.M_R),
@@ -58,24 +44,55 @@ enum class COps(vararg val parts: Ops) {
 	R_RM_I8(Ops.R_R_I8, Ops.R_M_I8),
 	R_RM_I(Ops.R_R_I, Ops.R_M_I),
 	RM_R_I8(Ops.R_R_I8, Ops.M_R_I8),
-	RM_R_CL(Ops.R_R_CL, Ops.M_R_CL);
+	RM_R_CL(Ops.R_R_CL, Ops.M_R_CL),
 
+	MEM(Ops.M, mask1 = OpMask.NONE),
+	M16(Ops.M, mask1 = OpMask.WORD),
+	M32(Ops.M, mask1 = OpMask.DWORD),
+	M64(Ops.M, mask1 = OpMask.QWORD),
+	M80(Ops.M, mask1 = OpMask.TWORD),
+	M128(Ops.M, mask1 = OpMask.XWORD),
+
+	R_RM8(Ops.R_R, Ops.R_M, mask2 = OpMask.BYTE),
+	R_RM16(Ops.R_R, Ops.R_M, mask2 = OpMask.WORD),
+	R_RM32(Ops.R_R, Ops.R_M, mask2 = OpMask.DWORD),
+	R_M128(Ops.R_M, mask2 = OpMask.XWORD),
+	R_M512(Ops.R_M, mask2 = OpMask.ZWORD),
+	R_REG(Ops.R_R, mask2 = OpMask.R),
+	R_MEM(Ops.R_M, mask2 = OpMask.NONE),
+	R32_RM(Ops.R_R, Ops.R_M, mask1 = OpMask.DWORD);
+	
 	companion object { val map = values().associateBy { it.name } }
 
 }
 
 
-enum class Ops {
+
+enum class Spec {
+	NONE,
+	O,
+	A,
+	A_I,
+	RM_CL,
+	RM_1,
+	RM_I8,
+	A_O,
+	O_I;
+}
+
+
+
+enum class Ops(val spec: Spec = Spec.NONE) {
 	NONE,
 	R,
 	M,
 	I8,
 	I16,
 	I32,
-	O,
+	O(Spec.O),
 	FS,
 	GS,
-	A,
+	A(Spec.A),
 	REL8,
 	REL16,
 	REL32,
@@ -86,19 +103,20 @@ enum class Ops {
 	M_R,
 	R_I,
 	M_I,
-	R_I8,
-	M_I8,
-	A_I,
-	R_1,
-	M_1,
-	R_CL,
-	M_CL,
+	R_I8(Spec.RM_I8),
+	M_I8(Spec.RM_I8),
+	A_I(Spec.A_I),
+	R_1(Spec.RM_1),
+	M_1(Spec.RM_1),
+	R_CL(Spec.RM_CL),
+	M_CL(Spec.RM_CL),
 	ST_ST0,
 	ST0_ST,
+	A_O(Spec.A_O),
+	O_A(Spec.A_O),
+	O_I(Spec.O_I),
 
-	R_MEM,
 	I16_I8,
-	A_O, O_A, O_I,
 	R_SEG, M_SEG, SEG_R, SEG_M,
 	A_MOFFS, MOFFS_A,
 	A_I8, I8_A, A_DX, DX_A,

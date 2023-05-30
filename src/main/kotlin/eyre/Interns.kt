@@ -85,12 +85,9 @@ object Names : Interner<String, Name>() {
 
 	val EMPTY = add("")
 	val MAIN  = add("main")
-	val FS    = add("fs")
-	val GS    = add("gs")
 	val SIZE  = add("size")
 	val COUNT = add("count")
 	val INT   = add("int")
-	val Z     = add("z")
 
 }
 

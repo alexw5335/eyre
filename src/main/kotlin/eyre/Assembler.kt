@@ -338,11 +338,11 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun dword(value: Int) = writer.i32(value)
 
-	private fun checkWidths(mask: RegMask, width: Width) {
+	private fun checkWidths(mask: OpMask, width: Width) {
 		if(width !in mask) invalidEncoding()
 	}
 
-	private fun checkWidths(mask: RegMask, reg: Reg) {
+	private fun checkWidths(mask: OpMask, reg: Reg) {
 		checkWidths(mask, reg.width)
 	}
 
@@ -384,19 +384,19 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 	/** Return 1 if width is QWORD and widths has DWORD set, otherwise 0 */
-	private fun rexW(regMask: RegMask, width: Width) =
-		(width.bytes shr 3) and (regMask.value shr 2)
+	private fun rexW(opMask: OpMask, width: Width) =
+		(width.bytes shr 3) and (opMask.value shr 2)
 
 	/** Add one if width is not BYTE and if widths has BYTE set */
-	private fun getOpcode(opcode: Int, regMask: RegMask, width: Width) =
-		opcode + ((regMask.value and 1) and (1 shl width.ordinal).inv())
+	private fun getOpcode(opcode: Int, opMask: OpMask, width: Width) =
+		opcode + ((opMask.value and 1) and (1 shl width.ordinal).inv())
 
 	private fun writeOpcode(opcode: Int) {
 		writer.varLengthInt(opcode)
 	}
 
-	private fun writeOpcode(opcode: Int, regMask: RegMask, width: Width) {
-		writer.varLengthInt(getOpcode(opcode, regMask, width))
+	private fun writeOpcode(opcode: Int, opMask: OpMask, width: Width) {
+		writer.varLengthInt(getOpcode(opcode, opMask, width))
 	}
 
 
@@ -468,7 +468,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encode1M(opcode: Int, mask: RegMask, node: MemNode) {
+	private fun encode1M(opcode: Int, mask: OpMask, node: MemNode) {
 		val width = node.width ?: invalidEncoding()
 		checkWidths(mask, node.width)
 		checkO16(width)
@@ -502,12 +502,12 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 
-	private fun encode1R(opcode: Int, regMask: RegMask, extension: Int, op1: Reg) {
+	private fun encode1R(opcode: Int, opMask: OpMask, extension: Int, op1: Reg) {
 		val width = op1.width
-		checkWidths(regMask, width)
+		checkWidths(opMask, width)
 		checkO16(width)
-		writeRex(rexW(regMask, width), 0, 0, op1.rex)
-		writeOpcode(opcode, regMask, width)
+		writeRex(rexW(opMask, width), 0, 0, op1.rex)
+		writeOpcode(opcode, opMask, width)
 		writeModRM(0b11, extension, op1.value)
 	}
 
@@ -515,7 +515,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun encode2RM(
 		opcode: Int,
-		mask: RegMask,
+		mask: OpMask,
 		op1: Reg,
 		op2: MemNode,
 		immLength: Int,
@@ -553,8 +553,8 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun assemble2(node: InsNode, op1: OpNode, op2: OpNode) { when(node.mnemonic) {
 		MOVUPS  -> { }
-		VMOVUPS -> encode2SMSM(vex { 0x10 + WIG + E00 + P0F }, op1, op2)
-		VMOVUPD -> encode2SMSM(vex { 0x10 + WIG + E66 + P0F }, op1, op2)
+		//VMOVUPS -> encode2SMSM(vex { 0x10 + WIG + E00 + P0F }, op1, op2)
+		//VMOVUPD -> encode2SMSM(vex { 0x10 + WIG + E66 + P0F }, op1, op2)
 		else -> invalidEncoding()
 	} }
 
@@ -589,8 +589,8 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encode2SS(info: VexInfo, op1: Reg, op2: Reg) {
-		checkWidths(RegMask.SSE, op1)
+	/*private fun encode2SS(info: VexInfo, op1: Reg, op2: Reg) {
+		checkWidths(OpMask.SSE, op1)
 		if(op1.width != op2.width) invalidEncoding()
 		if(op1.high != 0 || op2.high != 0) invalidEncoding()
 
@@ -615,7 +615,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encode2SM(info: VexInfo, op1: Reg, op2: MemNode) {
-		checkWidths(RegMask.SSE, op1)
+		checkWidths(OpMask.SSE, op1)
 		if(op2.width != null && op2.width != op1.width) invalidEncoding()
 		if(op1.high != 0) invalidEncoding()
 
@@ -698,6 +698,6 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 	private inline fun vex(block: VexInfo.Companion.() -> Int) = VexInfo(block(VexInfo))
-
+	*/
 
 }

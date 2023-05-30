@@ -2,6 +2,10 @@ package eyre.util
 
 
 
+val Char.isHex get() = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
+
+val Boolean.int get() = if(this) 1 else 0
+
 val Short.swapEndian get() = java.lang.Short.reverseBytes(this)
 
 val Int.swapEndian get() = Integer.reverseBytes(this)
@@ -102,6 +106,13 @@ val Int.bin233 get() = buildString {
 	append(bin8, 2, 5)
 	append('_')
 	append(bin8, 5, 8)
+}
+
+val Int.bin44 get() = buildString {
+	val bin8 = bin8
+	append(bin8, 0, 4)
+	append('_')
+	append(bin8, 4, 8)
 }
 
 
