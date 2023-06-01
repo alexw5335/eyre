@@ -1,4 +1,4 @@
-package eyre.nasm
+package eyre.encoding
 
 import eyre.Width
 
@@ -29,7 +29,7 @@ object Maps {
 		"L" to 12, "NGE" to 12,
 		"NL" to 13, "GE" to 13,
 		"LE" to 14, "NG" to 14,
-		"NLE" to 15, "JG" to 15
+		"NLE" to 15, "G" to 15
 	)
 
 	val opWidths = mapOf(

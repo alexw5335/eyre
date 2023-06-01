@@ -1,8 +1,7 @@
 package eyre
 
 import eyre.Width.*
-import eyre.encoding.readEncodings
-import eyre.util.hexc8
+import eyre.encoding.Encodings
 
 class Assembler(private val context: CompilerContext) {
 
@@ -12,9 +11,6 @@ class Assembler(private val context: CompilerContext) {
 	private var writer = textWriter
 
 	private var section = Section.TEXT
-
-	private val groups = readEncodings("encodings.bin")
-
 
 
 
@@ -44,15 +40,34 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private lateinit var group: EncodingGroup
+
+	private lateinit var encoding: Encoding
+
+
+
+	private fun encoding(ops: Ops) {
+		encoding = if(ops !in group)
+			invalidEncoding()
+		else
+			group[ops]
+	}
+
+
+
 	private fun handleInstruction(node: InsNode) {
 		node.prefix?.let { byte(it.value) }
 
-		when {
-			node.op1 == null -> assemble0(node)
-			node.op2 == null -> assemble1(node, node.op1)
-			node.op3 == null -> assemble2(node, node.op1, node.op2)
-			node.op4 == null -> assemble3(node, node.op1, node.op2, node.op3)
-			else             -> assemble4(node, node.op1, node.op2, node.op3, node.op4)
+		group = Encodings.groups[node.size][node.mnemonic] ?: invalidEncoding()
+		encoding(Ops2.R_R)
+		println(encoding)
+
+		when(node.size) {
+			0 -> assemble0(node)
+			1 -> assemble1(node, node.op1!!)
+			2 -> assemble2(node, node.op1!!, node.op2!!)
+			3 -> invalidEncoding()
+			4 -> invalidEncoding()
 		}
 	}
 
@@ -543,166 +558,21 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun assemble0(node: InsNode) {
-		val group = groups[0][node.mnemonic.ordinal] ?: error("Missing encoding")
-		val encoding = Encoding(group.encodings[0])
-		println(encoding.opcode.hexc8)
+
 	}
 
 
 
-	private fun assemble1(node: InsNode, op1: OpNode) { when(node.mnemonic) {
-		else -> invalidEncoding()
-	} }
+	private fun assemble1(node: InsNode, op1: OpNode) {
 
-
-
-	private fun assemble2(node: InsNode, op1: OpNode, op2: OpNode) { when(node.mnemonic) {
-		//MOVUPS  -> { }
-		//VMOVUPS -> encode2SMSM(vex { 0x10 + WIG + E00 + P0F }, op1, op2)
-		//VMOVUPD -> encode2SMSM(vex { 0x10 + WIG + E66 + P0F }, op1, op2)
-		else -> invalidEncoding()
-	} }
-
-
-
-	private fun assemble3(
-		node: InsNode,
-		op1: OpNode,
-		op2: OpNode,
-		op3: OpNode
-	) { when(node.mnemonic) {
-		else -> invalidEncoding()
-	} }
-
-
-
-	private fun assemble4(
-		node: InsNode,
-		op1: OpNode,
-		op2: OpNode,
-		op3: OpNode,
-		op4: OpNode
-	) { when(node.mnemonic) {
-		else -> invalidEncoding()
-	} }
-	
-	
-	
-	/*
-	Manual encoding
-	 */
-
-
-
-	/*private fun encode2SS(info: VexInfo, op1: Reg, op2: Reg) {
-		checkWidths(OpMask.SSE, op1)
-		if(op1.width != op2.width) invalidEncoding()
-		if(op1.high != 0 || op2.high != 0) invalidEncoding()
-
-		val l = when(op1.width) {
-			XWORD -> 0
-			YWORD -> 1
-			else  -> invalidEncoding()
-		}
-
-		if(op1.rex == 1 || op2.rex == 1 || info.requiresVex3) {
-			byte(0xC4)
-			writeVEX1(op1.rex xor 1, 1, op2.rex xor 1, info.prefix)
-		} else {
-			byte(0xC5)
-		}
-
-		writeVEX2(info.vexW, 0b1111, l, info.extension)
-		byte(info.opcode)
-		writeModRM(0b11, op1.value, op2.value)
 	}
 
 
 
-	private fun encode2SM(info: VexInfo, op1: Reg, op2: MemNode) {
-		checkWidths(OpMask.SSE, op1)
-		if(op2.width != null && op2.width != op1.width) invalidEncoding()
-		if(op1.high != 0) invalidEncoding()
+	private fun assemble2(node: InsNode, op1: OpNode, op2: OpNode) {
 
-		val l = when(op1.width) {
-			XWORD -> 0
-			YWORD -> 1
-			else  -> invalidEncoding()
-		}
-
-		val disp = resolveMem(op2.value)
-
-		if(info.requiresVex3 || memRexB != 0 || memRexX != 0 || op1.rex == 1) {
-			byte(0xC4)
-			writeVEX1(op1.rex xor 1, memRexX xor 1, memRexB xor 1, info.prefix)
-		} else {
-			byte(0xC5)
-		}
-
-		writeVEX2(info.vexW, 0b1111, l, info.extension)
-		byte(info.opcode)
-		writeMem(op2, op1.value, disp, 0)
 	}
 
 
-
-	private fun encode2SSM(info: VexInfo, op1: RegNode, op2: OpNode) {
-		when(op2) {
-			is RegNode -> encode2SS(info, op1.value, op2.value)
-			is MemNode -> encode2SM(info, op1.value, op2)
-			else -> invalidEncoding()
-		}
-	}
-
-
-
-	private fun encode2SMSM(info: VexInfo, op1: OpNode, op2: OpNode) {
-		when(op1) {
-			is RegNode -> when(op2) {
-				is RegNode -> encode2SS(info, op1.value, op2.value)
-				is MemNode -> encode2SM(info, op1.value, op2)
-				else -> invalidEncoding()
-			}
-			is MemNode -> when(op2) {
-				is RegNode -> encode2SM(info.incremented, op2.value, op1)
-				else -> invalidEncoding()
-			}
-			else -> invalidEncoding()
-		}
-	}
-
-
-
-	/**
-	 * - Bits 0-7: opcode
-	 * - Bits 8-8: VEX.W
-	 * - Bits 9-10: prefix
-	 * - Bits 11-12: extension
-	 */
-	@JvmInline
-	value class VexInfo(val value: Int) {
-		val opcode       get() = value and 0xFF
-		val vexW         get() = (value shr 8) and 0b1
-		val prefix       get() = (value shr 9) and 0b11
-		val extension    get() = value shr 11
-		val requiresVex3 get() = prefix > 1
-		val incremented  get() = VexInfo(value + 1)
-
-		companion object {
-			const val E00 = 0 shl 11
-			const val E66 = 1 shl 11
-			const val EF3 = 2 shl 11
-			const val EF2 = 3 shl 11
-			const val P0F = 1 shl 9
-			const val P38 = 2 shl 9
-			const val P3A = 3 shl 9
-			const val W0  = 0 shl 8
-			const val W1  = 1 shl 8
-			const val WIG = 1 shl 8
-		}
-	}
-
-	private inline fun vex(block: VexInfo.Companion.() -> Int) = VexInfo(block(VexInfo))
-	*/
 
 }

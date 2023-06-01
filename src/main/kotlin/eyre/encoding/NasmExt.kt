@@ -1,4 +1,4 @@
-package eyre.nasm
+package eyre.encoding
 
 enum class NasmExt(val isAvx: Boolean = false) {
 	// 0, 32-bit only

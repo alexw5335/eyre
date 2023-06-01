@@ -1,4 +1,4 @@
-package eyre.nasm
+package eyre.encoding
 
 import eyre.Width
 

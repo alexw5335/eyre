@@ -1,7 +1,6 @@
-package eyre.nasm
+package eyre.encoding
 
 import eyre.Width
-import eyre.util.hexc8
 import eyre.util.isHex
 import java.nio.file.Files
 import java.nio.file.Paths

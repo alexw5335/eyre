@@ -1,8 +1,6 @@
 package eyre.encoding
 
-import eyre.EncodingGroup
-import eyre.Mnemonic
-import eyre.OpMask
+import eyre.*
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.EnumMap
@@ -20,13 +18,21 @@ class EncodingReader(private val string: String) {
 
 	private var lineNumber = 1
 
-	private val mnemonicMap = Mnemonic.values.associateBy { it.name }
+	private val mnemonics = Mnemonic.values.associateBy { it.name }
 
-	val encodings = ArrayList<ParsedEncoding>()
+	val encodings = ArrayList<Encoding>()
 
-	val maps = Array(5) { EnumMap<Mnemonic, ArrayList<ParsedEncoding>>(Mnemonic::class.java) }
+	val groups = Array(5) { EnumMap<Mnemonic, EncodingGroup>(Mnemonic::class.java) }
 
-	val groups = Array(5) { arrayOfNulls<EncodingGroup>(Mnemonic.values.size) }
+	private val copsMap = Cops.values().associateBy { it.name }
+
+	private val opsMap = HashMap<String, Ops>().also {
+		it["NONE"] = Ops0
+		for(op in Ops1.values()) it[op.name] = op
+		for(op in Ops2.values()) it[op.name] = op
+		for(op in Ops3.values()) it[op.name] = op
+		for(op in CustomOps.values()) it[op.name] = op
+	}
 
 
 
@@ -44,23 +50,6 @@ class EncodingReader(private val string: String) {
 					System.err.println("Error on line: $lineNumber")
 					throw e
 				}
-			}
-		}
-
-		for((index, map) in maps.withIndex()) {
-			for((mnemonic, parsedEncodings) in map) {
-				var operands = 0
-				var specs = 0
-				val encodings = LongArray(parsedEncodings.size)
-				parsedEncodings.sortBy { it.operands.index }
-
-				for((i, encoding) in parsedEncodings.withIndex()) {
-					operands = operands or (1 shl encoding.operands.index)
-					specs = specs or (1 shl encoding.operands.spec.ordinal)
-					encodings[i] = encoding.encoding.value
-				}
-
-				groups[index][mnemonic.ordinal] = EncodingGroup(operands, specs, encodings)
 			}
 		}
 	}
@@ -129,9 +118,9 @@ class EncodingReader(private val string: String) {
 		}
 
 		when(opsString) {
-			in Cops.map -> cops = Cops.map[opsString]!!
-			in Ops.map  -> ops = Ops.map[opsString]!!
-			else        -> error("Invalid operands: $opsString")
+			in opsMap  -> ops = opsMap[opsString]!!
+			in copsMap -> cops = copsMap[opsString]!!
+			else       -> error("Unrecognised operands: $opsString")
 		}
 
 		for(part in parts) {
@@ -162,17 +151,27 @@ class EncodingReader(private val string: String) {
 		}
 
 		fun add(mnemonicString: String, opcode: Int, ops: Ops) {
-			val mnemonic = mnemonicMap[mnemonicString] ?: error("Missing mnemonic: $mnemonicString")
-			val encoding = ParsedEncoding(
+			val mnemonic = mnemonics[mnemonicString] ?: error("Missing mnemonic: $mnemonicString")
+
+			val encoding = Encoding(
 				mnemonic, prefix, escape, opcode, oplen, 
 				extension, ops, opMask, opMask2, rexw, o16
 			)
+
 			encodings += encoding
-			maps[encoding.operands.size].getOrPut(mnemonic, ::ArrayList).add(encoding)
+
+
+			val opCount = when(ops) {
+				is Ops0 -> 0; is Ops1 -> 1; is Ops2 -> 2; is Ops3 -> 3; is CustomOps -> return
+			}
+
+			groups[opCount]
+				.getOrPut(mnemonic) { EncodingGroup(opCount, mnemonic) }
+				.add(encoding)
 		}
 
 		if(mnemonicString.endsWith("cc")) {
-			for((postfix, opcodeInc) in ccList) {
+			for((postfix, opcodeInc) in Maps.ccList) {
 				val mnemonicString2 = mnemonicString.dropLast(2) + postfix
 				val opcode2 =  opcode + (opcodeInc shl ((oplen - 1) shl 3))
 				if(cops != null)

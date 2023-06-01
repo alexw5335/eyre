@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	wait
+	add rax, rax
 }

@@ -1,8 +1,5 @@
 package eyre
 
-import eyre.encoding.EncodingReader
-import eyre.nasm.NasmLine
-import eyre.nasm.NasmReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.relativeTo
