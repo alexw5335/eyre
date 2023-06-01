@@ -1,11 +1,19 @@
 package eyre.encoding
 
+import eyre.EncodingGroup
 import eyre.Mnemonic
 import eyre.OpMask
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.EnumMap
 
 class EncodingReader(private val string: String) {
+
+
+	companion object {
+		fun create(path: String) = EncodingReader(Files.readString(Paths.get(path)))
+	}
+
 
 
 	private var pos = 0
@@ -15,6 +23,10 @@ class EncodingReader(private val string: String) {
 	private val mnemonicMap = Mnemonic.values.associateBy { it.name }
 
 	val encodings = ArrayList<ParsedEncoding>()
+
+	val maps = Array(5) { EnumMap<Mnemonic, ArrayList<ParsedEncoding>>(Mnemonic::class.java) }
+
+	val groups = Array(5) { arrayOfNulls<EncodingGroup>(Mnemonic.values.size) }
 
 
 
@@ -34,12 +46,30 @@ class EncodingReader(private val string: String) {
 				}
 			}
 		}
+
+		for((index, map) in maps.withIndex()) {
+			for((mnemonic, parsedEncodings) in map) {
+				var operands = 0
+				var specs = 0
+				val encodings = LongArray(parsedEncodings.size)
+				parsedEncodings.sortBy { it.operands.index }
+
+				for((i, encoding) in parsedEncodings.withIndex()) {
+					operands = operands or (1 shl encoding.operands.index)
+					specs = specs or (1 shl encoding.operands.spec.ordinal)
+					encodings[i] = encoding.encoding.value
+				}
+
+				groups[index][mnemonic.ordinal] = EncodingGroup(operands, specs, encodings)
+			}
+		}
 	}
 
 
 
 	private fun readEncoding() {
-		var prefix      = 0 // 66, F2, F3
+		var prefix      = 0 // 66, 67, F2, F3
+		var escape      = 0
 		var opcode      = 0
 		var oplen       = 0
 		var extension   = 0
@@ -49,18 +79,27 @@ class EncodingReader(private val string: String) {
 		var ops: Ops?   = null
 		var opsString   = "NONE"
 		val parts       = ArrayList<String>()
-		var rexw = false
-		var rexr = false
-		var o16 = false
-		var a32 = false
+		var rexw        = false
+		var o16         = false
 
 		while(true) {
 			val value = (string[pos++].digitToInt(16) shl 4) or string[pos++].digitToInt(16)
 
-			if(opcode == 0 && value == 0x66 || value == 0xF2 || value == 0xF3 || value == 0x9B)
-				prefix = value
-			else
+			fun setOpcode() {
 				opcode = opcode or (value shl (oplen++ shl 3))
+			}
+
+			if(opcode == 0)
+				when(value) {
+					0x66, 0x67, 0xF2, 0xF3, 0x9B -> prefix = value
+					0x0F -> escape = 1
+					0x38 -> if(escape == 1) escape = 2 else setOpcode()
+					0x3A -> if(escape == 1) escape = 3 else setOpcode()
+					else -> setOpcode()
+				}
+			else
+				setOpcode()
+
 
 			if(string[pos] == '/') {
 				pos++
@@ -72,7 +111,7 @@ class EncodingReader(private val string: String) {
 		}
 
 		skipSpaces()
-		val mnemonic = readWord()
+		val mnemonicString = readWord()
 
 		skipSpaces()
 		if(!atNewline()) {
@@ -103,9 +142,7 @@ class EncodingReader(private val string: String) {
 
 			when(part) {
 				"RW"  -> rexw = true
-				"RR"  -> rexr = true
 				"O16" -> o16 = true
-				"A32" -> a32 = true
 				else  -> error("Invalid part: $part")
 			}
 		}
@@ -119,28 +156,32 @@ class EncodingReader(private val string: String) {
 			}
 		}
 
-		fun add(mnemonic: String, opcode: Int, ops: Ops) = encodings.add(ParsedEncoding(
-			mnemonicMap[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
-			prefix, opcode, oplen, extension, ops,
-			opMask, opMask2, rexw, rexr, o16, a32
-		))
+		fun add(mnemonicString: String, opcode: Int, ops: Ops) {
+			val mnemonic = mnemonicMap[mnemonicString] ?: error("Missing mnemonic: $mnemonicString")
+			val encoding = ParsedEncoding(
+				mnemonic, prefix, escape, opcode, oplen, 
+				extension, ops, opMask, opMask2, rexw, o16
+			)
+			encodings += encoding
+			maps[encoding.operands.size].getOrPut(mnemonic, ::ArrayList).add(encoding)
+		}
 
-		if(mnemonic.endsWith("cc")) {
+		if(mnemonicString.endsWith("cc")) {
 			for((postfix, opcodeInc) in ccList) {
-				val mnemonic2 = mnemonic.dropLast(2) + postfix
+				val mnemonicString2 = mnemonicString.dropLast(2) + postfix
 				val opcode2 =  opcode + (opcodeInc shl ((oplen - 1) shl 3))
 				if(cops != null)
 					for(part in cops.parts)
-						add(mnemonic2, opcode2, part)
+						add(mnemonicString2, opcode2, part)
 				else
-					add(mnemonic2, opcode2, ops!!)
+					add(mnemonicString2, opcode2, ops!!)
 			}
 		} else {
 			if(cops != null)
 				for(part in cops.parts)
-					add(mnemonic, opcode, part)
+					add(mnemonicString, opcode, part)
 			else
-				add(mnemonic, opcode, ops!!)
+				add(mnemonicString, opcode, ops!!)
 		}
 
 		skipLine()

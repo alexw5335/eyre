@@ -321,6 +321,7 @@ if_("AMD",               "AMD-specific");
 	- 9B DD/7   FSTSW   MEM
 	- 9B DF E0  FSTSW   AX
 	- 9B        FWAIT
+	- The 'wait' prefix is actually a prefix and not part of the opcodef, since it comes before the REX prefix
 - Some psuedo-encodings have an additional byte after MODRM
 
 ENCODINGS:

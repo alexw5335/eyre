@@ -552,7 +552,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun assemble2(node: InsNode, op1: OpNode, op2: OpNode) { when(node.mnemonic) {
-		MOVUPS  -> { }
+		//MOVUPS  -> { }
 		//VMOVUPS -> encode2SMSM(vex { 0x10 + WIG + E00 + P0F }, op1, op2)
 		//VMOVUPD -> encode2SMSM(vex { 0x10 + WIG + E66 + P0F }, op1, op2)
 		else -> invalidEncoding()

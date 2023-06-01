@@ -47,8 +47,15 @@ object Maps {
 		"ENTER",
 		// Obsolete
 		"JMPE",
-		// Not found in Intel manuals?
+		// Not found in Intel manuals
 		"CMPccXADD",
+		// Unnecessary size specifiers
+		"RETN",
+		"RETQ",
+		"RETNW",
+		"RETNQ",
+		"RETFW",
+		"RETFD"
 	)
 
 	val essentialMnemonics = setOf(

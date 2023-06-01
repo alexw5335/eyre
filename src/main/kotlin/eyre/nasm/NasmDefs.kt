@@ -74,15 +74,10 @@ enum class TupleType {
 
 
 enum class OpPart {
-	A32,
 	A64,
-	O16,
 	O32,
 	O64NW,
-	O64,
-	ODF,
-	F2I,
-	F3I;
+	ODF;
 }
 
 

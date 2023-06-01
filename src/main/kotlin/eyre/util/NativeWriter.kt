@@ -1,6 +1,8 @@
 package eyre.util
 
 import java.nio.charset.Charset
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
@@ -12,6 +14,16 @@ class NativeWriter(bytes: ByteArray) {
 	constructor(initialSize: Int) : this(ByteArray(initialSize))
 
 	constructor() : this(8192)
+
+
+
+	companion object {
+		fun write(path: String, block: (NativeWriter) -> Unit) {
+			val writer = NativeWriter()
+			block(writer)
+			Files.write(Paths.get(path), writer.getTrimmedBytes())
+		}
+	}
 
 
 

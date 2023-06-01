@@ -176,7 +176,6 @@ enum class NasmOp(
 	ST0(NasmOpType.ST, "fpu0", Width.TWORD),
 	MM(NasmOpType.MM, "mmxreg", Width.QWORD),
 	X(NasmOpType.S, "xmmreg", Width.XWORD),
-	X0(NasmOpType.S, "xmm0", Width.XWORD),
 	Y(NasmOpType.S, "ymmreg", Width.YWORD),
 	Z(NasmOpType.S, "zmmreg", Width.ZWORD),
 	VM32X(NasmOpType.VM32S, "xmem32", Width.XWORD),

@@ -19,7 +19,7 @@ val ccList = arrayOf(
 	"L" to 12, "NGE" to 12,
 	"NL" to 13, "GE" to 13,
 	"LE" to 14, "NG" to 14,
-	"NLE" to 15, "JG" to 15
+	"NLE" to 15, "G" to 15
 )
 
 
@@ -60,7 +60,8 @@ enum class Cops(
 	R_M512(Ops.R_M, mask2 = OpMask.ZWORD),
 	R_REG(Ops.R_R, mask2 = OpMask.R),
 	R_MEM(Ops.R_M, mask2 = OpMask.NONE),
-	R32_RM(Ops.R_R, Ops.R_M, mask1 = OpMask.DWORD);
+	R32_RM(Ops.R_R, Ops.R_M, mask1 = OpMask.DWORD),
+	RA_M512(Ops.RA_M, mask2 = OpMask.ZWORD);
 	
 	companion object { val map = values().associateBy { it.name } }
 
@@ -77,61 +78,69 @@ enum class Spec {
 	RM_1,
 	RM_I8,
 	A_O,
-	O_I;
+	O_I,
+	RA;
 }
 
 
 
-enum class Ops(val spec: Spec = Spec.NONE) {
-	NONE,
-	R,
-	M,
-	I8,
-	I16,
-	I32,
-	O(Spec.O),
-	FS,
-	GS,
-	A(Spec.A),
-	REL8,
-	REL16,
-	REL32,
-	ST,
+enum class Ops(val size: Int, val index: Int = 0, val spec: Spec = Spec.NONE) {
+	NONE(0, 0),
 
-	R_R,
-	R_M,
-	M_R,
-	R_I,
-	M_I,
-	R_I8(Spec.RM_I8),
-	M_I8(Spec.RM_I8),
-	A_I(Spec.A_I),
-	R_1(Spec.RM_1),
-	M_1(Spec.RM_1),
-	R_CL(Spec.RM_CL),
-	M_CL(Spec.RM_CL),
-	ST_ST0,
-	ST0_ST,
-	A_O(Spec.A_O),
-	O_A(Spec.A_O),
-	O_I(Spec.O_I),
+	R(1, 0),
+	M(1, 1),
+	I8(1, 2),
+	I16(1, 3),
+	I32(1, 4),
+	O(1, 5, Spec.O),
+	FS(1, 6),
+	GS(1, 7),
+	A(1, 8, Spec.A),
+	REL8(1, 9),
+	REL16(1, 10),
+	REL32(1, 11),
+	ST(1, 12),
+	RA(1, 13, Spec.RA),
 
-	I16_I8,
-	R_SEG, M_SEG, SEG_R, SEG_M,
-	A_MOFFS, MOFFS_A,
-	A_I8, I8_A, A_DX, DX_A,
-	R_DR, DR_R,
-	R_CR, R_CR8, CR_R, CR8_R,
-	BND_R64, BND_M64, BND_MIB, BND_BND, BND_M128, M128_BND, MIB_BND,
+	R_R(2, 0),
+	R_M(2, 1),
+	M_R(2, 2),
+	R_I(2, 3),
+	M_I(2, 4),
+	R_I8(2, 5, Spec.RM_I8),
+	M_I8(2, 6, Spec.RM_I8),
+	A_I(2, 7, Spec.A_I),
+	R_1(2, 8, Spec.RM_1),
+	M_1(2, 9, Spec.RM_1),
+	R_CL(2, 10, Spec.RM_CL),
+	M_CL(2, 11, Spec.RM_CL),
+	ST_ST0(2, 12),
+	ST0_ST(2, 13),
+	A_O(2, 14, Spec.A_O),
+	O_A(2, 15, Spec.A_O),
+	O_I(2, 16, Spec.O_I),
+	RA_M(2, 17, Spec.RA),
 
-	R_R_I8,
-	R_M_I8,
-	R_R_I,
-	R_M_I,
-	M_R_I8,
-	R_R_CL,
-	M_R_CL;
+	R_R_I8(3, 0),
+	R_M_I8(3, 1),
+	R_R_I(3, 2),
+	R_M_I(3, 3),
+	M_R_I8(3, 4),
+	R_R_CL(3, 5),
+	M_R_CL(3, 6),
 
-	companion object { val map = values().associateBy { it.name } }
+	I16_I8(2),
+	R_SEG(2), M_SEG(2), SEG_R(2), SEG_M(2),
+	A_MOFFS(2), MOFFS_A(2),
+	A_I8(2), I8_A(2), A_DX(2), DX_A(2),
+	R_DR(2), DR_R(2), R_CR(2), CR_R(2),
+	BND_R64(2), BND_M64(2), BND_MIB(2), BND_BND(2), BND_M128(2), M128_BND(2), MIB_BND(2);
+
+	companion object {
+		val start1 = R
+		val start2 = R_R
+		val start3 = R_R_I8
+		val map = values().associateBy { it.name }
+	}
 
 }

@@ -284,7 +284,7 @@ class NasmReader(private val inputs: List<String>) {
 
 
 
-	private fun combineOperands(line: NasmLine) : Pair<NasmOps, Width?> {
+/*	private fun combineOperands(line: NasmLine) : Pair<NasmOps, Width?> {
 		outer@ for(operands in NasmOps.values) {
 			if(line.operands.size != operands.parts.size) continue
 
@@ -311,7 +311,7 @@ class NasmReader(private val inputs: List<String>) {
 
 		//printUnique(line.operands.joinToString("_")); return Operands.M to null
 		line.raw.error("Invalid operands: ${line.operands.joinToString()}")
-	}
+	}*/
 
 
 
@@ -319,12 +319,11 @@ class NasmReader(private val inputs: List<String>) {
 		val list = ArrayList<NasmEncoding>()
 
 		fun add() {
-			val (operands, width) = combineOperands(line)
 			if(line.cc)
 				for((mnemonic, opcode) in Maps.ccList)
-					list += line.toEncoding(line.mnemonic.dropLast(2) + mnemonic, line.addedOpcode(opcode), operands, width)
+					list += line.toEncoding(line.mnemonic.dropLast(2) + mnemonic, line.addedOpcode(opcode))
 			else
-				list += line.toEncoding(line.mnemonic, line.opcode, operands, width)
+				list += line.toEncoding(line.mnemonic, line.opcode)
 		}
 
 		if(line.compound != null) {
@@ -342,24 +341,18 @@ class NasmReader(private val inputs: List<String>) {
 
 
 
-	private fun NasmLine.toEncoding(
-		mnemonic: String,
-		opcode: Int,
-		operands: NasmOps,
-		width: Width?
-	) = NasmEncoding(
+	private fun NasmLine.toEncoding(mnemonic: String, opcode: Int) = NasmEncoding(
 		this,
 		mnemonic,
 		opcodeExt,
 		opcode,
 		oplen,
 		prefix,
+		escape,
 		rexw,
 		o16,
 		a32,
-		operands,
-		width,
-		this.operands
+		operands
 	)
 
 
