@@ -1,6 +1,9 @@
 package eyre.encoding
 
+import eyre.EncodingGroup
+import eyre.Mnemonic
 import eyre.nasm.*
+import eyre.util.NativeReader
 import eyre.util.NativeWriter
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -28,32 +31,65 @@ fun main() {
 	nasmReader.determineOperands()
 	nasmReader.convertLines()
 
-/*	for(opCount in reader.groups.indices) {
+	NativeWriter.write("encodings.bin") { writer ->
+		for(opCount in reader.groups.indices) {
+			val groups = reader.groups[opCount]
+			for(group in groups) {
+				if(group == null) {
+					writer.i8(0)
+					continue
+				}
+
+				writer.i8(group.encodings.size)
+				writer.i32(group.operands)
+				writer.i32(group.specs)
+				for(encoding in group.encodings)
+					writer.i64(encoding)
+			}
+		}
+	}
+
+	val encodings = readEncodings("encodings.bin")
+}
+
+
+
+fun readEncodings(path: String): Array<Array<EncodingGroup?>> {
+	val array = Array(5) { arrayOfNulls<EncodingGroup>(Mnemonic.values.size) }
+	val reader = NativeReader(Files.readAllBytes(Paths.get(path)))
+
+	for(i in array.indices) {
+		for(j in 0 until Mnemonic.values.size) {
+			val encodingCount = reader.s8()
+			if(encodingCount == 0) continue
+			val operands = reader.i32()
+			val specs = reader.i32()
+			val encodings = LongArray(encodingCount)
+			for(k in encodings.indices)
+				encodings[k] = reader.i64()
+			array[i][j] = EncodingGroup(operands, specs, encodings)
+		}
+	}
+
+	return array
+}
+
+
+
+private fun writeEncodings(reader: EncodingReader) = NativeWriter.write("encodings.bin") { writer ->
+	for(opCount in reader.groups.indices) {
 		val groups = reader.groups[opCount]
-		println("val map$opCount = arrayOf<EncodingGroup?>(")
-		var nullCount = 0
 		for(group in groups) {
 			if(group == null) {
-				if(nullCount > 10) {
-					println()
-					nullCount = 0
-				}
-				if(nullCount == 0) print("\t")
-				print("null,")
-				nullCount++
+				writer.i8(0)
 				continue
 			}
-			if(nullCount > 0) println()
-			nullCount = 0
-			print("\tEncodingGroup(${group.operands}, ${group.specs}, longArrayOf(")
-			for((i, e) in group.encodings.withIndex()) {
-				print("$e")
-				if(i != group.encodings.size - 1)
-					print(", ")
-			}
-			println(")),")
+
+			writer.i8(group.encodings.size)
+			writer.i32(group.operands)
+			writer.i32(group.specs)
+			for(encoding in group.encodings)
+				writer.i64(encoding)
 		}
-		println(")")
-		println()
-	}*/
+	}
 }

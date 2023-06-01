@@ -10,15 +10,7 @@ import kotlin.io.path.relativeTo
 
 
 fun main() {
-	val nasmReader = NasmReader("nasm.txt")
-	nasmReader.readRawLines()
-	nasmReader.filterLines()
-	nasmReader.scrapeLines()
-	nasmReader.determineOperands()
-	val lines = nasmReader.lines
-	val reader = EncodingReader(Files.readString(Paths.get("encodings.txt")))
-	reader.read()
-	//Compiler("samples/testing2").compile()
+	Compiler("samples/testing2").compile()
 }
 
 

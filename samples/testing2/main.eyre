@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	vmovupd [rax + rcx * 2 + 10], ymm14
+	wait
 }

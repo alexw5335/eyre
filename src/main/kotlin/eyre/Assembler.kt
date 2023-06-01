@@ -1,7 +1,8 @@
 package eyre
 
-import eyre.Mnemonic.*
 import eyre.Width.*
+import eyre.encoding.readEncodings
+import eyre.util.hexc8
 
 class Assembler(private val context: CompilerContext) {
 
@@ -11,6 +12,8 @@ class Assembler(private val context: CompilerContext) {
 	private var writer = textWriter
 
 	private var section = Section.TEXT
+
+	private val groups = readEncodings("encodings.bin")
 
 
 
@@ -539,9 +542,11 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun assemble0(node: InsNode) { when(node.mnemonic) {
-		else -> invalidEncoding()
-	} }
+	private fun assemble0(node: InsNode) {
+		val group = groups[0][node.mnemonic.ordinal] ?: error("Missing encoding")
+		val encoding = Encoding(group.encodings[0])
+		println(encoding.opcode.hexc8)
+	}
 
 
 

@@ -39,13 +39,13 @@ class Compiler(private val context: CompilerContext) {
 		}
 
 		//printSymbols()
-		//Resolver(context).resolve()
+		Resolver(context).resolve()
 		//printResolution()
 
 		Assembler(context).assemble()
-		Linker(context).link()
-		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
-		disassemble()
+		//Linker(context).link()
+		//Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
+		//disassemble()
 	}
 
 

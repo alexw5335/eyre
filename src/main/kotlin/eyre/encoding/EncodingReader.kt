@@ -113,6 +113,11 @@ class EncodingReader(private val string: String) {
 		skipSpaces()
 		val mnemonicString = readWord()
 
+		if(mnemonicString == "WAIT") {
+			opcode = 0x9B
+			prefix = 0
+		}
+
 		skipSpaces()
 		if(!atNewline()) {
 			opsString = readWord()
