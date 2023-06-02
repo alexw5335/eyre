@@ -1,5 +1,7 @@
 package eyre
 
+import eyre.util.bin8888
+
 class EncodingGroup(val opCount: Int, val mnemonic: Mnemonic) {
 	var ops = 0
 	var specs = 0
@@ -15,6 +17,6 @@ class EncodingGroup(val opCount: Int, val mnemonic: Mnemonic) {
 	operator fun contains(operands: Ops) = this.ops and (1 shl operands.ordinal) != 0
 	operator fun contains(spec: Spec) = this.specs and (1 shl spec.ordinal) != 0
 
-	override fun toString() = "Group$opCount($mnemonic, ${encodings.joinToString()})"
+	override fun toString() = "Group$opCount($mnemonic, ${ops.bin8888}, ${specs.bin8888}, ${encodings.joinToString()})"
 	
 }

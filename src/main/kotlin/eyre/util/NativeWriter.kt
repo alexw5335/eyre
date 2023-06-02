@@ -162,15 +162,10 @@ class NativeWriter(bytes: ByteArray) {
 
 
 	fun i8(pos: Int, value: Int) = bytes.set(pos, value.toByte())
-
 	fun i16(pos: Int, value: Int) = Unsafe.instance.putShort(bytes, pos + 16L, value.toShort())
-
 	fun i32(pos: Int, value: Int) = Unsafe.instance.putInt(bytes, pos + 16L, value)
-
 	fun i64(pos: Int, value: Long) = Unsafe.instance.putLong(bytes, pos + 16L, value)
-
 	fun f32(pos: Int, value: Float) = Unsafe.instance.putFloat(bytes, pos + 16L, value)
-
 	fun f64(pos: Int, value: Double) = Unsafe.instance.putDouble(bytes, pos + 16L, value)
 
 

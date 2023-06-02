@@ -3,22 +3,24 @@ package eyre
 import eyre.util.bin44
 
 
-enum class Width(val string: String, val varString: String, val bytes: Int) {
+enum class Width(val string: String, val varString: String?, val bytes: Int) {
 
 	BYTE("byte", "db", 1),
 	WORD("word", "dw", 2),
 	DWORD("dword", "dd", 4),
 	QWORD("qword", "dq", 8),
-	TWORD("tword", "dt", 10),
-	XWORD("xword", "dx", 16),
-	YWORD("yword", "dy", 32),
-	ZWORD("zword", "dz", 64);
+	TWORD("tword", null, 10),
+	XWORD("xword", null, 16),
+	YWORD("yword", null, 32),
+	ZWORD("zword", null, 64);
 
 	// Only for BYTE, WORD, DWORD, and QWORD
 	private val min: Long = -(1L shl ((bytes shl 3) - 1))
 	private val max: Long = (1L shl ((bytes shl 3) - 1)) - 1
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
+
+	companion object { val values = values() }
 
 }
 
@@ -45,24 +47,36 @@ enum class RegType {
 
 @JvmInline
 value class OpMask(val value: Int) {
-	val isEmpty get() = value == 0
+
+	val isEmpty    get() = value == 0
 	val isNotEmpty get() = value != 0
+	val highest    get() = Width.values[32 - value.countLeadingZeroBits()]
+	val lowest     get() = Width.values[value.countLeadingZeroBits()]
+
 	operator fun contains(type: RegType) = (1 shl type.ordinal) and value != 0
 	operator fun contains(reg: Reg)      = (1 shl reg.type.ordinal) and value != 0
 	operator fun contains(width: Width)  = (1 shl width.ordinal) and value != 0
+	operator fun plus(other: OpMask) = OpMask(value or other.value)
+
 	companion object {
 		val NONE  = OpMask(0)   // NONE
-		val BYTE  = OpMask(1)   // R8 M8
-		val WORD  = OpMask(2)   // R16 M16
-		val DWORD = OpMask(4)   // R32 M32
-		val QWORD = OpMask(8)   // R64 M64
-		val TWORD = OpMask(16)  // ST M80
+		val BYTE  = OpMask(1)   // R8  M8  I8  REL8
+		val WORD  = OpMask(2)   // R16 M16 I16 REL16
+		val DWORD = OpMask(4)   // R32 M32 I32 REL32
+		val QWORD = OpMask(8)   // R64 M64 I32
+		val TWORD = OpMask(16)  // ST  M80
 		val XWORD = OpMask(32)  // XMM M128
 		val YWORD = OpMask(64)  // YMM M256
 		val ZWORD = OpMask(128) // ZMM M512
-		val R     = OpMask(0b1111) // R8 R16 R32 R64 M8 M16 M32 M64
+		val R8  = BYTE
+		val R16 = WORD
+		val R32 = DWORD
+		val R64 = QWORD
+		val R   = R8 + R16 + R32 + R64
 	}
+
 	override fun toString() = value.bin44
+
 }
 
 

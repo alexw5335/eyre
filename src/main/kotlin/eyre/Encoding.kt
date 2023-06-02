@@ -8,8 +8,12 @@ data class Encoding(
 	val oplen     : Int,
 	val extension : Int,
 	val operands  : Ops,
-	val opMask    : OpMask,
-	val opMask2   : OpMask,
-	val rexw      : Boolean,
+	val mask      : OpMask,
+	val mask2     : OpMask,
+	val rexw      : Int,
 	val o16       : Boolean,
-)
+) {
+
+	fun addToOpcode(value: Int) = opcode or (value shl ((oplen - 1) shl 3))
+
+}

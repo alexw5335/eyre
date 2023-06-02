@@ -41,6 +41,12 @@ sealed interface SymNode : AstNode {
  */
 sealed interface OpNode : AstNode
 
+class RegNode(val value: Reg) : OpNode { val width get() = value.width }
+
+class MemNode(val width: Width?, val value: AstNode) : OpNode
+
+class ImmNode(val width: Width?, val value: AstNode) : OpNode
+
 
 
 /*
@@ -60,7 +66,7 @@ class TypeNode(
 
 class ImportNode(val names: Array<Name>) : AstNode
 
-class ArrayNode(val receiver: SymNode, val index: AstNode) : SymNode, OpNode {
+class ArrayNode(val receiver: SymNode, val index: AstNode) : SymNode {
 	override var symbol: Symbol? = null
 }
 
@@ -68,25 +74,21 @@ class ScopeEndNode(val symbol: ScopedSymbol): SymContainerNode(symbol)
 
 class NamespaceNode(val symbol: Namespace) : SymContainerNode(symbol)
 
-class IntNode(val value: Long) : AstNode, OpNode
+class IntNode(val value: Long) : AstNode
 
-class FloatNode(val value: Double) : AstNode, OpNode
+class FloatNode(val value: Double) : AstNode
 
-class RegNode(val value: Reg) : OpNode { val width get() = value.width }
+class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode
 
-class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode, OpNode
+class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode
 
-class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode, OpNode
-
-class StringNode(val value: String) : AstNode, OpNode, SymNode {
+class StringNode(val value: String) : AstNode, SymNode {
 	override var symbol: StringLiteralSymbol? = null
 }
 
 class LabelNode(val symbol: LabelSymbol) : SymContainerNode(symbol)
 
 class ProcNode(val symbol: ProcSymbol, val stackNodes: List<AstNode>) : SymContainerNode(symbol)
-
-class MemNode(val width: Width?, val value: AstNode) : OpNode
 
 class TypedefNode(val symbol: TypedefSymbol, val value: TypeNode) : SymContainerNode(symbol)
 
@@ -96,11 +98,11 @@ class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode?) : SymConta
 
 class EnumNode(val symbol: EnumSymbol, val entries: ArrayList<EnumEntryNode>) : SymContainerNode(symbol)
 
-class NameNode(val name: Name, override var symbol: Symbol? = null) : SymNode, OpNode
+class NameNode(val name: Name, override var symbol: Symbol? = null) : SymNode
 
-class DotNode(val left: SymNode, val right: SymNode) : SymNode by right, OpNode
+class DotNode(val left: SymNode, val right: SymNode) : SymNode by right
 
-class RefNode(val left: SymNode, val right: NameNode) : SymNode by right, OpNode
+class RefNode(val left: SymNode, val right: NameNode) : SymNode by right
 
 class MemberNode(val symbol: MemberSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
@@ -110,6 +112,7 @@ class InsNode(
 	val prefix   : Prefix?,
 	val mnemonic : Mnemonic,
 	val size     : Int,
+	val short    : Boolean,
 	val op1      : OpNode?,
 	val op2      : OpNode?,
 	val op3      : OpNode?,

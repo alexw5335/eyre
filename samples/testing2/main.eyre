@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	add rax, rax
+	push rax
 }

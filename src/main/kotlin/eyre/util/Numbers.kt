@@ -43,7 +43,6 @@ val Int.bin16Full get() = "0b$bin16"
 val Int.bin32Full get() = "0b$bin32"
 
 
-
 val Int.dec8 get() = toString().zeroPadded(3)
 
 
@@ -113,6 +112,17 @@ val Int.bin44 get() = buildString {
 	append(bin8, 0, 4)
 	append('_')
 	append(bin8, 4, 8)
+}
+
+val Int.bin8888 get() = buildString {
+	val bin = bin32
+	append(bin, 0, 8)
+	append('_')
+	append(bin, 8, 16)
+	append(' ')
+	append(bin, 16, 24)
+	append(' ')
+	append(bin, 24, 32)
 }
 
 

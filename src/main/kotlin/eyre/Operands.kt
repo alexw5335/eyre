@@ -2,44 +2,41 @@ package eyre
 
 
 
-enum class Cops(
+enum class MultiOps(
 	vararg val parts: Ops,
 	val mask1: OpMask? = null,
 	val mask2: OpMask? = null
 ) {
-	RM(Ops1.R, Ops1.M),
-	R_RM(Ops2.R_R, Ops2.R_M),
-	RM_R(Ops2.R_R, Ops2.M_R),
-	RM_I(Ops2.R_I, Ops2.M_I),
-	RM_I8(Ops2.R_I8, Ops2.M_I8),
-	RM_1(Ops2.R_1, Ops2.M_1),
-	RM_CL(Ops2.R_CL, Ops2.M_CL),
+	RM(Ops.R, Ops.M),
+	R_RM(Ops.R_R, Ops.R_M),
+	RM_R(Ops.R_R, Ops.M_R),
+	O_A(Ops.A_O),
 
-	BND_RM64(CustomOps.BND_R64, CustomOps.BND_M64),
-	BND_BNDM128(CustomOps.BND_BND, CustomOps.BND_M128),
-	BNDM128_BND(CustomOps.M128_BND, CustomOps.BND_BND),
+	BND_RM64(Ops.BND_R64, Ops.BND_M64),
+	BND_BNDM128(Ops.BND_BND, Ops.BND_M128),
+	BNDM128_BND(Ops.M128_BND, Ops.BND_BND),
 
-	R_RM_I8(Ops3.R_R_I8, Ops3.R_M_I8),
-	R_RM_I(Ops3.R_R_I, Ops3.R_M_I),
-	RM_R_I8(Ops3.R_R_I8, Ops3.M_R_I8),
-	RM_R_CL(Ops3.R_R_CL, Ops3.M_R_CL),
+	R_RM_I8(Ops.R_R_I8, Ops.R_M_I8),
+	R_RM_I(Ops.R_R_I, Ops.R_M_I),
+	RM_R_I8(Ops.R_R_I8, Ops.M_R_I8),
+	RM_R_CL(Ops.R_R_CL, Ops.M_R_CL),
 
-	MEM(Ops1.M, mask1 = OpMask.NONE),
-	M16(Ops1.M, mask1 = OpMask.WORD),
-	M32(Ops1.M, mask1 = OpMask.DWORD),
-	M64(Ops1.M, mask1 = OpMask.QWORD),
-	M80(Ops1.M, mask1 = OpMask.TWORD),
-	M128(Ops1.M, mask1 = OpMask.XWORD),
+	MEM(Ops.M, mask1 = OpMask.NONE),
+	M16(Ops.M, mask1 = OpMask.WORD),
+	M32(Ops.M, mask1 = OpMask.DWORD),
+	M64(Ops.M, mask1 = OpMask.QWORD),
+	M80(Ops.M, mask1 = OpMask.TWORD),
+	M128(Ops.M, mask1 = OpMask.XWORD),
 
-	R_RM8(Ops2.R_R, Ops2.R_M, mask2 = OpMask.BYTE),
-	R_RM16(Ops2.R_R, Ops2.R_M, mask2 = OpMask.WORD),
-	R_RM32(Ops2.R_R, Ops2.R_M, mask2 = OpMask.DWORD),
-	R_M128(Ops2.R_M, mask2 = OpMask.XWORD),
-	R_M512(Ops2.R_M, mask2 = OpMask.ZWORD),
-	R_REG(Ops2.R_R, mask2 = OpMask.R),
-	R_MEM(Ops2.R_M, mask2 = OpMask.NONE),
-	R32_RM(Ops2.R_R, Ops2.R_M, mask1 = OpMask.DWORD),
-	RA_M512(Ops2.RA_M, mask2 = OpMask.ZWORD);
+	R_RM8(Ops.R_R, Ops.R_M, mask2 = OpMask.BYTE),
+	R_RM16(Ops.R_R, Ops.R_M, mask2 = OpMask.WORD),
+	R_RM32(Ops.R_R, Ops.R_M, mask2 = OpMask.DWORD),
+	R_M128(Ops.R_M, mask2 = OpMask.XWORD),
+	R_M512(Ops.R_M, mask2 = OpMask.ZWORD),
+	R_REG(Ops.R_R, mask2 = OpMask.R),
+	R_MEM(Ops.R_M, mask2 = OpMask.NONE),
+	R32_RM(Ops.R_R, Ops.R_M, mask1 = OpMask.DWORD),
+	RA_M512(Ops.RA_M, mask2 = OpMask.ZWORD);
 
 }
 
@@ -48,93 +45,79 @@ enum class Cops(
 @Suppress("EnumEntryName")
 enum class Spec {
 	NONE,
-	O,
-	A,
-	A_I,
-	_1,
-	A_O,
-	O_I,
 	_CL,
-	_I8,
-	RA;
+	_I8;
 }
 
 
 
-sealed interface Ops {
-	val ordinal: Int
-	val spec: Spec
-}
+enum class Ops(
+	val size: Int = 0, 
+	val index: Int = 0,
+	val spec: Spec = Spec.NONE
+) {
+	NONE(0, 0),
+	
+	R(1, 0),
+	M(1, 1),
+	I8(1, 2),
+	I16(1, 3),
+	I32(1, 4),
+	O(1, 5),
+	AX(1, 6),
+	REL8(1, 7),
+	REL16(1, 8),
+	REL32(1, 9),
+	ST(1, 10),
+	RA(1, 11),
 
+	R_R(2, 0),
+	R_M(2, 1),
+	M_R(2, 2),
+	RM_I(2, 3),
+	RM_I8(2, 4),
+	A_I(2, 5),
+	RM_1(2, 6),
+	RM_CL(2, 7),
+	ST_ST0(2, 8),
+	ST0_ST(2, 9),
+	A_O(2, 10),
+	O_I(2, 11),
+	RA_M(2, 12),
+	
+	R_R_I(3, 0),
+	R_M_I(3, 1),
+	R_R_I8(3, 2, Spec._I8),
+	R_M_I8(3, 3, Spec._I8),
+	M_R_I8(3, 4, Spec._I8),
+	R_R_CL(3, 5, Spec._CL),
+	M_R_CL(3, 6, Spec._CL),
 
+	FS(-1),
+	GS(-1),
+	I16_I8(-1),
+	R_SEG(-1),
+	M_SEG(-1),
+	SEG_R(-1),
+	SEG_M(-1),
+	A_MOFFS(-1),
+	MOFFS_A(-1),
+	A_I8(-1),
+	I8_A(-1),
+	A_DX(-1),
+	DX_A(-1),
+	R_DR(-1),
+	DR_R(-1),
+	R_CR(-1),
+	CR_R(-1),
+	BND_R64(-1),
+	BND_M64(-1),
+	BND_MIB(-1),
+	BND_BND(-1),
+	BND_M128(-1),
+	M128_BND(-1),
+	MIB_BND(-1);
 
-object Ops0 : Ops {
-	override val ordinal = 0
-	override val spec = Spec.NONE
-}
+	val isCustom get() = size < 0
 
-
-
-enum class Ops1(override val spec: Spec = Spec.NONE) : Ops {
-	R,
-	M,
-	I8,
-	I16,
-	I32,
-	O(Spec.O),
-	FS,
-	GS,
-	A(Spec.A),
-	REL8,
-	REL16,
-	REL32,
-	ST,
-	RA(Spec.RA)
-}
-
-
-
-enum class Ops2(override val spec: Spec = Spec.NONE) : Ops {
-	R_R,
-	R_M,
-	M_R,
-	R_I,
-	M_I,
-	R_I8(Spec._I8),
-	M_I8(Spec._I8),
-	A_I(Spec.A_I),
-	R_1(Spec._1),
-	M_1(Spec._1),
-	R_CL(Spec._CL),
-	M_CL(Spec._CL),
-	ST_ST0,
-	ST0_ST,
-	A_O(Spec.A_O),
-	O_A(Spec.A_O),
-	O_I(Spec.O_I),
-	RA_M(Spec.RA);
-}
-
-
-
-enum class Ops3(override val spec: Spec = Spec.NONE) : Ops {
-	R_R_I8(Spec._I8),
-	R_M_I8(Spec._I8),
-	M_R_I8(Spec._I8),
-	R_R_I,
-	R_M_I,
-	R_R_CL(Spec._CL),
-	M_R_CL(Spec._CL),
-}
-
-
-
-enum class CustomOps : Ops {
-	I16_I8,
-	R_SEG, M_SEG, SEG_R, SEG_M,
-	A_MOFFS, MOFFS_A,
-	A_I8, I8_A, A_DX,
-	DX_A, R_DR, DR_R, R_CR, CR_R,
-	BND_R64, BND_M64, BND_MIB, BND_BND, BND_M128, M128_BND, MIB_BND;
-	override val spec = Spec.NONE
 }

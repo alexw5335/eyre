@@ -195,6 +195,30 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseOperand(): OpNode {
+		var token = tokens[pos]
+		var width: Width? = null
+
+		if(token is Name && token in Names.widths) {
+			width = Names.widths[token]
+			pos++
+			if(!atTerminator())
+				token = tokens[pos]
+		}
+
+		if(token == SymToken.LBRACKET) {
+			pos++
+			val value = parseExpression()
+			expect(SymToken.RBRACKET)
+			return MemNode(width, value)
+		}
+
+		return ImmNode(width, parseExpression())
+	}
+
+
+
+/*
+	private fun parseOperand(): OpNode {
 		var token = next
 		var width: Width? = null
 
@@ -216,31 +240,38 @@ class Parser(private val context: CompilerContext) {
 		val expression = parseExpression()
 		return (expression as? OpNode) ?: error("Invalid operand: ${expression.printString}")
 	}
+*/
 
 
 
 	private fun parseInstruction(prefix: Prefix?, mnemonic: Mnemonic): InsNode {
 		if(atNewline() || next == EndToken)
-			return InsNode(prefix, mnemonic, 0, null, null, null, null)
+			return InsNode(prefix, mnemonic, 0, false, null, null, null, null)
+
+		val short = if(tokens[pos] == Names.SHORT) {
+			pos++
+			true
+		} else
+			false
 
 		val op1 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(prefix, mnemonic, 1, op1, null, null, null)
+			return InsNode(prefix, mnemonic, 1, short, op1, null, null, null)
 		pos++
 
 		val op2 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(prefix, mnemonic, 2, op1, op2, null, null)
+			return InsNode(prefix, mnemonic, 2, short, op1, op2, null, null)
 		pos++
 
 		val op3 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(prefix, mnemonic, 3, op1, op2, op3, null)
+			return InsNode(prefix, mnemonic, 3, short, op1, op2, op3, null)
 		pos++
 
 		val op4 = parseOperand()
 		expectTerminator()
-		return InsNode(prefix, mnemonic, 4, op1, op2, op3, op4)
+		return InsNode(prefix, mnemonic, 4, short, op1, op2, op3, op4)
 	}
 
 

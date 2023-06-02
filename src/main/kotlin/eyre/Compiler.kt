@@ -35,7 +35,7 @@ class Compiler(private val context: CompilerContext) {
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
 			parser.parse(srcFile)
-			//printNodes(srcFile)
+			printNodes(srcFile)
 		}
 
 		//printSymbols()
@@ -43,9 +43,9 @@ class Compiler(private val context: CompilerContext) {
 		//printResolution()
 
 		Assembler(context).assemble()
-		//Linker(context).link()
+		Linker(context).link()
 		//Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
-		//disassemble()
+		disassemble()
 	}
 
 
