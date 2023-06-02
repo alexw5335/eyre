@@ -23,7 +23,7 @@ class EncodingReader(private val string: String) {
 
 	val encodings = ArrayList<Encoding>()
 
-	val groups = Array(5) { EnumMap<Mnemonic, EncodingGroup>(Mnemonic::class.java) }
+	val groups = EnumMap<Mnemonic, EncodingGroup>(Mnemonic::class.java)
 
 	private val multiOpsMap = MultiOps.values().associateBy { it.name }
 
@@ -48,9 +48,8 @@ class EncodingReader(private val string: String) {
 			}
 		}
 
-		for(map in groups)
-			for(group in map.values)
-				group.encodings.sortBy { it.operands.index }
+		for(group in groups.values)
+			group.encodings.sortBy { it.operands }
 	}
 
 
@@ -67,6 +66,7 @@ class EncodingReader(private val string: String) {
 		val parts       = ArrayList<String>()
 		var rexw        = false
 		var o16         = false
+		var widthOp     = 0
 
 		while(true) {
 			val value = (string[pos++].digitToInt(16) shl 4) or string[pos++].digitToInt(16)
@@ -143,26 +143,25 @@ class EncodingReader(private val string: String) {
 			if(multiOps.mask1 != null) {
 				if(opMask.isNotEmpty) opMask2 = opMask
 				opMask = multiOps.mask1
+				widthOp = 1
 			} else if(multiOps.mask2 != null) {
 				opMask2 = multiOps.mask2
+				widthOp = 0
 			}
 		}
 
 		fun add(mnemonicString: String, opcode: Int, ops: Ops) {
 			val mnemonic = mnemonics[mnemonicString] ?: error("Missing mnemonic: $mnemonicString")
 
-			if(ops.isCustom) return
-
 			val encoding = Encoding(
 				mnemonic, prefix, escape, opcode, oplen, 
-				extension, ops, opMask, opMask2, rexw.int, o16
+				extension, ops, opMask, opMask2, rexw.int,
+				o16, widthOp
 			)
 
 			encodings += encoding
 
-			groups[ops.size]
-				.getOrPut(mnemonic) { EncodingGroup(ops.size, mnemonic) }
-				.add(encoding)
+			groups.getOrPut(mnemonic) { EncodingGroup(mnemonic) }.add(encoding)
 		}
 
 		if(mnemonicString.endsWith("cc")) {

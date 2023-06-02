@@ -52,6 +52,7 @@ value class OpMask(val value: Int) {
 	val isNotEmpty get() = value != 0
 	val highest    get() = Width.values[32 - value.countLeadingZeroBits()]
 	val lowest     get() = Width.values[value.countLeadingZeroBits()]
+	val isSingle   get() = value.countOneBits() == 1
 
 	operator fun contains(type: RegType) = (1 shl type.ordinal) and value != 0
 	operator fun contains(reg: Reg)      = (1 shl reg.type.ordinal) and value != 0
@@ -68,11 +69,10 @@ value class OpMask(val value: Int) {
 		val XWORD = OpMask(32)  // XMM M128
 		val YWORD = OpMask(64)  // YMM M256
 		val ZWORD = OpMask(128) // ZMM M512
-		val R8  = BYTE
-		val R16 = WORD
-		val R32 = DWORD
-		val R64 = QWORD
-		val R   = R8 + R16 + R32 + R64
+
+		val R1111 = OpMask(0b1111)
+		val R1100 = OpMask(0b1100)
+		val R1110 = OpMask(0b1110)
 	}
 
 	override fun toString() = value.bin44
@@ -318,5 +318,8 @@ enum class Reg(
 	BND3(RegType.BND, Width.XWORD, 3, 0, 0);
 
 	val string = name.lowercase()
+
+	val isR = type == RegType.R8 || type == RegType.R16 || type == RegType.R32 || type == RegType.R64
+	val isA = isR && value == 0 && rex == 0
 	
 }

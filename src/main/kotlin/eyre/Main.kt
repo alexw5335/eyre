@@ -5,7 +5,6 @@ import java.nio.file.Paths
 import kotlin.io.path.relativeTo
 
 
-
 fun main() {
 	Compiler("samples/testing2").compile()
 }

@@ -18,8 +18,12 @@ fun main() {
 	nasmReader.readRawLines()
 	nasmReader.filterLines()
 	nasmReader.scrapeLines()
-	nasmReader.filterExtensions(extensions)
+	//nasmReader.filterExtensions(extensions)
 	nasmReader.determineOperands()
 	nasmReader.convertLines()
+
+	for(encoding in nasmReader.encodings)
+		if(encoding.operands.any { it.type == NasmOpType.MM })
+			println(encoding)
 }
 

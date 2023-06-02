@@ -112,7 +112,6 @@ class InsNode(
 	val prefix   : Prefix?,
 	val mnemonic : Mnemonic,
 	val size     : Int,
-	val short    : Boolean,
 	val op1      : OpNode?,
 	val op2      : OpNode?,
 	val op3      : OpNode?,

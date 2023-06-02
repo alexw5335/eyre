@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	push rax
+	xchg eax, edx
 }

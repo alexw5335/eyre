@@ -119,9 +119,9 @@ val Int.bin8888 get() = buildString {
 	append(bin, 0, 8)
 	append('_')
 	append(bin, 8, 16)
-	append(' ')
+	append('_')
 	append(bin, 16, 24)
-	append(' ')
+	append('_')
 	append(bin, 24, 32)
 }
 

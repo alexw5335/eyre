@@ -38,7 +38,7 @@ class Compiler(private val context: CompilerContext) {
 			printNodes(srcFile)
 		}
 
-		//printSymbols()
+		printSymbols()
 		Resolver(context).resolve()
 		//printResolution()
 

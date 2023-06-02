@@ -188,6 +188,8 @@ class Resolver(private val context: CompilerContext) {
 
 		is StringNode -> node.symbol = context.addStringLiteral(node.value)
 
+		is ImmNode -> resolveNode(node.value)
+
 		else        -> return
 	}}
 
@@ -265,8 +267,7 @@ class Resolver(private val context: CompilerContext) {
 		is TypeNode    -> calculateTypeNode(node)
 		is ArrayNode   -> calculateArrayNode(node)
 		is InitNode    -> calculateInitNode(node)
-
-		else -> error("Invalid node: $node")
+		else           -> error("Invalid node: $node")
 	}}
 
 
