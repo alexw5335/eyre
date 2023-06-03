@@ -30,7 +30,6 @@ enum class MultiOps(
 	R_RM16(Ops.R_R, Ops.R_M, mask2 = OpMask.WORD),
 	R_RM32(Ops.R_R, Ops.R_M, mask2 = OpMask.DWORD),
 	R_M128(Ops.R_M, mask2 = OpMask.XWORD),
-	R_M512(Ops.R_M, mask2 = OpMask.ZWORD),
 	R_REG(Ops.R_R, mask2 = OpMask.R1111),
 	R_MEM(Ops.R_M, mask2 = OpMask.NONE),
 	R32_RM(Ops.R_R, Ops.R_M, mask1 = OpMask.DWORD),
@@ -41,8 +40,10 @@ enum class MultiOps(
 
 
 enum class Ops {
+	// No operands
 	NONE,
-	
+
+	// 1 operand
 	R,
 	M,
 	I8,
@@ -57,6 +58,7 @@ enum class Ops {
 	GS,
 	O,
 
+	// 2 operands
 	R_R,
 	R_M,
 	M_R,
@@ -67,16 +69,17 @@ enum class Ops {
 	RM_CL,
 	ST_ST0,
 	ST0_ST,
-	O_I,
 	RA_M,
 	A_O,
 
+	// 3 operands
 	R_RM_I,
 	R_R_I8,
 	R_M_I8,
 	M_R_I8,
 	RM_R_CL,
 
+	// MMX
 	MM_R,
 	R_MM,
 	MM_MM,
@@ -90,21 +93,29 @@ enum class Ops {
 	MM_X,
 	X_MM,
 
+	// ENTER
 	I16_I8,
+
+	// MOV
+	O_I,
 	R_SEG,
 	M_SEG,
 	SEG_R,
 	SEG_M,
 	A_MOFFS,
 	MOFFS_A,
-	A_I8,
-	I8_A,
-	A_DX,
-	DX_A,
 	R_DR,
 	DR_R,
 	R_CR,
 	CR_R,
+
+	// IN/OUT
+	A_I8,
+	I8_A,
+	A_DX,
+	DX_A,
+
+	// BND
 	BND_R64,
 	BND_M64,
 	BND_MIB,
@@ -112,7 +123,5 @@ enum class Ops {
 	BND_M128,
 	M128_BND,
 	MIB_BND;
-	
-	val isCustom get() = ordinal >= O.ordinal
 
 }

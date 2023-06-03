@@ -1,27 +1,24 @@
 package eyre
 
-import eyre.util.bin8888
+import eyre.util.hex
 
 class EncodingGroup(val mnemonic: Mnemonic) {
 
-	var ops = 0
+	var ops = 0L
 	val encodings = ArrayList<Encoding>()
 
 
 	fun add(encoding: Encoding) {
 		if(encoding.operands in this)
 			return
-		if(encoding.operands.ordinal < 32)
-			ops = ops or (1 shl encoding.operands.ordinal)
+		if(encoding.operands.ordinal < 64)
+			ops = ops or (1L shl encoding.operands.ordinal)
 		encodings += encoding
 	}
 
+	operator fun get(ops: Ops) = encodings[(this.ops and ((1L shl ops.ordinal) - 1)).countOneBits()]
+	operator fun contains(operands: Ops) = this.ops and (1L shl operands.ordinal) != 0L
 
-	fun getCustom(ops: Ops) = encodings.first { it.operands == ops }
-
-	operator fun get(ops: Ops) = encodings[(this.ops and ((1 shl ops.ordinal) - 1)).countOneBits()]
-	operator fun contains(operands: Ops) = this.ops and (1 shl operands.ordinal) != 0
-
-	override fun toString() = "Group($mnemonic, ${ops.bin8888}, ${encodings.joinToString()})"
+	override fun toString() = "Group($mnemonic, ${ops.hex}, ${encodings.joinToString()})"
 	
 }

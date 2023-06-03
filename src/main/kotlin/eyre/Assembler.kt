@@ -579,7 +579,7 @@ class Assembler(private val context: CompilerContext) {
 		val disp = resolveMem(op1.value)
 		writeRex(rexw(width), 0, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
 		writeOpcode(width)
-		writeMem(op1, 0, disp, 0)
+		writeMem(op1, encoding.extension, disp, 0)
 	}
 
 
@@ -589,13 +589,14 @@ class Assembler(private val context: CompilerContext) {
 
 		if(encoding.mismatch) {
 			if(width !in encoding.mask) invalidEncoding()
-			if(op2.width !in encoding.mask) invalidEncoding()
+			if(op2.width !in encoding.mask2) invalidEncoding()
 			if(encoding.widthOp == 1) width = op2.width
 		} else {
 			if(op2.width != width) invalidEncoding()
 			checkMask(width)
 		}
 
+		checkO16(width)
 		writeRex(rexw(width), op1.rex, 0, op2.rex)
 		writeOpcode(width)
 		writeModRM(0b11, op1.value, op2.value)
@@ -675,10 +676,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private val customEncodings = mapOf(
-		Mnemonic.PUSH  to ::encodePUSH,
-		Mnemonic.ENTER to ::encodeENTER,
 		Mnemonic.MOV   to ::encodeMOV,
-		Mnemonic.BSWAP to ::encodeBSWAP
 	)
 
 
@@ -690,108 +688,9 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun encodeBSWAP(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		val op1 = (node.op1!! as? RegNode)?.value ?: invalidEncoding()
-		encode1O(0xC80F, 2, op1, OpMask.R1100)
-	}
-
-
-
-	private fun encodeXCHG(node: InsNode) {
-		if(node.op1 is RegNode && node.op2 is RegNode && node.size == 2) {
-			if(node.op1.value.isA) {
-				encode1O(0x90, 1, node.op2.value, OpMask.R1110)
-				return
-			} else if(node.op2.value.isA) {
-				encode1O(0x90, 1, node.op1.value, OpMask.R1110)
-				return
-			}
-		}
-	}
-
-
 
 	private fun encodeMOV(node: InsNode) {
 
-	}
-
-
-
-	private fun encodeENTER(node: InsNode) {
-
-	}
-
-
-
-	private fun encodePUSHW(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		when((node.op1 as? RegNode)?.value) {
-			Reg.FS -> writer.i24(0xA00F66)
-			Reg.GS -> writer.i24(0xA80F66)
-			else   -> invalidEncoding()
-		}
-	}
-
-
-	private fun encodePOP(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		when(val op1 = node.op1!!) {
-			is RegNode -> when(op1.value) {
-				Reg.FS -> writer.i16(0xA10F)
-				Reg.GS -> writer.i16(0xA90F)
-				else   -> { encoding(Ops.O); encode1O(op1.value) }
-			}
-			is MemNode -> { encoding(Ops.M); encode1M(op1) }
-			else -> invalidEncoding()
-		}
-	}
-
-	private fun encodePOPW(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		when((node.op1 as? RegNode)?.value) {
-			Reg.FS -> writer.i24(0xA10F66)
-			Reg.GS -> writer.i24(0xA90F66)
-			else   -> invalidEncoding()
-		}
-	}
-
-
-
-	private fun encodePUSH(node: InsNode) {
-		if(node.size != 1) invalidEncoding()
-		when(val op1 = node.op1!!) {
-			is RegNode -> when(op1.value) {
-				Reg.FS -> writer.i16(0xA00F)
-				Reg.GS -> writer.i16(0xA80F)
-				else   -> {
-					encoding(Ops.O)
-					println(group)
-					encode1O(op1.value)
-				}
-			}
-			is MemNode -> {
-				encoding(Ops.M)
-				encode1M(op1)
-			}
-			is ImmNode -> {
-				val imm = resolveImm(op1)
-
-				fun i8() { byte(0x6A); writeImm(op1, BYTE, imm) }
-				fun i16() { word(0x6866); writeImm(op1, WORD, imm) }
-				fun i32() { byte(0x68); writeImm(op1, DWORD, imm) }
-
-				when {
-					op1.width == BYTE  -> i8()
-					op1.width == WORD  -> i16()
-					op1.width == DWORD -> i32()
-					hasImmReloc        -> i32()
-					imm.isImm8         -> i8()
-					imm.isImm16        -> i16()
-					else               -> i32()
-				}
-			}
-		}
 	}
 
 
@@ -841,30 +740,25 @@ class Assembler(private val context: CompilerContext) {
 				writeImm(op1, width, imm, false, rel)
 			}
 
-			if(node.mnemonic == Mnemonic.PUSH) {
-				when {
-					op1.width == BYTE -> imm(Ops.I8, BYTE, false)
-					op1.width == WORD -> imm(Ops.I16, WORD, false)
+			when {
+				node.mnemonic == Mnemonic.PUSH -> when {
+					op1.width == BYTE  -> imm(Ops.I8, BYTE, false)
+					op1.width == WORD  -> imm(Ops.I16, WORD, false)
 					op1.width == DWORD -> imm(Ops.I32, DWORD, false)
 					hasImmReloc -> imm(Ops.I32, DWORD, false)
-					imm.isImm8 -> imm(Ops.I8, BYTE, false)
+					imm.isImm8  -> imm(Ops.I8, BYTE, false)
 					imm.isImm16 -> imm(Ops.I16, WORD, false)
-					else -> imm(Ops.I32, DWORD, false)
+					else        -> imm(Ops.I32, DWORD, false)
 				}
-			} else if(Ops.REL32 in group) {
-				if(Ops.REL8 in group && ((!hasImmReloc && imm.isImm8) || op1.width == BYTE))  {
-					imm(Ops.REL8, BYTE, true)
-				} else {
-					imm(Ops.REL32, DWORD, true)
-				}
-			} else if(Ops.REL8 in group) {
-				imm(Ops.REL8, BYTE, true)
-			} else if(Ops.I8 in group) {
-				imm(Ops.I8, BYTE, false)
-			} else if(Ops.I16 in group) {
-				imm(Ops.I16, WORD, false)
-			} else {
-				invalidEncoding()
+				Ops.REL32 in group ->
+					if(Ops.REL8 in group && ((!hasImmReloc && imm.isImm8) || op1.width == BYTE))
+						imm(Ops.REL8, BYTE, true)
+					else
+						imm(Ops.REL32, DWORD, true)
+				Ops.REL8 in group -> imm(Ops.REL8, BYTE, true)
+				Ops.I8   in group -> imm(Ops.I8, BYTE, false)
+				Ops.I16  in group -> imm(Ops.I16, WORD, false)
+				else              -> invalidEncoding()
 			}
 		}
 	}
@@ -878,24 +772,33 @@ class Assembler(private val context: CompilerContext) {
 			if(op2 is RegNode) {
 				val r2 = op2.value
 
-
-				if(Ops.A_O in group) {
-					if(r1.isA) {
-						encoding = group[Ops.A_O]
-						encode1O(r2)
-					} else if(r2.isA) {
-						encoding = group[Ops.A_O]
-						encode1O(r1)
-					} else {
-						encoding(Ops.R_R)
+				if(r2.isR) {
+					if(Ops.A_O in group) {
+						if(r1.isA) {
+							encoding = group[Ops.A_O]
+							encode1O(r2)
+						} else if(r2.isA) {
+							encoding = group[Ops.A_O]
+							encode1O(r1)
+						} else {
+							encoding(Ops.R_R)
+							encode2RR(r1, r2)
+						}
+					} else if(Ops.RM_CL in group && r2 == Reg.CL) {
+						encoding = group[Ops.RM_CL]
+						encode1R(r1)
+					} else if(Ops.R_R in group) {
+						encoding = group[Ops.R_R]
 						encode2RR(r1, r2)
+					} else {
+						invalidEncoding()
 					}
-				} else if(Ops.RM_CL in group && r2 == Reg.CL) {
-					encoding = group[Ops.RM_CL]
-					encode1R(r1)
-				} else if(Ops.R_R in group) {
-					encoding = group[Ops.R_R]
-					encode2RR(r1, r2)
+				} else if(r1 == Reg.ST0) {
+					encoding(Ops.ST0_ST)
+					encode1ST(r2)
+				} else if(r2 == Reg.ST0) {
+					encoding(Ops.ST_ST0)
+					encode1ST(r1)
 				} else {
 					invalidEncoding()
 				}
