@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	movsx rax, ax
+	fadd st1, st0
 }

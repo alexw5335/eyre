@@ -585,17 +585,9 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encode2RR(op1: Reg, op2: Reg) {
-		var width = op1.width
-
-		if(encoding.mismatch) {
-			if(width !in encoding.mask) invalidEncoding()
-			if(op2.width !in encoding.mask2) invalidEncoding()
-			if(encoding.widthOp == 1) width = op2.width
-		} else {
-			if(op2.width != width) invalidEncoding()
-			checkMask(width)
-		}
-
+		val width = op1.width
+		if(width != op2.width) invalidEncoding()
+		checkMask(width)
 		checkO16(width)
 		writeRex(rexw(width), op1.rex, 0, op2.rex)
 		writeOpcode(width)
@@ -677,6 +669,10 @@ class Assembler(private val context: CompilerContext) {
 
 	private val customEncodings = mapOf(
 		Mnemonic.MOV   to ::encodeMOV,
+		Mnemonic.MOVSX to { node ->
+			if(node.size != 2) invalidEncoding()
+			
+		}
 	)
 
 
@@ -685,7 +681,6 @@ class Assembler(private val context: CompilerContext) {
 		encoding(Ops.NONE)
 		encodeNone()
 	}
-
 
 
 
@@ -789,7 +784,10 @@ class Assembler(private val context: CompilerContext) {
 						encode1R(r1)
 					} else if(Ops.R_R in group) {
 						encoding = group[Ops.R_R]
-						encode2RR(r1, r2)
+						if(Ops.M_R in group)
+							encode2RR(r2, r1)
+						else
+							encode2RR(r1, r2)
 					} else {
 						invalidEncoding()
 					}

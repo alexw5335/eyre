@@ -70,6 +70,7 @@ value class OpMask(val value: Int) {
 		val YWORD = OpMask(64)  // YMM M256
 		val ZWORD = OpMask(128) // ZMM M512
 
+		val R1000 = OpMask(0b1000)
 		val R1111 = OpMask(0b1111)
 		val R1100 = OpMask(0b1100)
 		val R1110 = OpMask(0b1110)

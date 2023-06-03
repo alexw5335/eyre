@@ -9,13 +9,9 @@ data class Encoding(
 	val extension : Int,
 	val operands  : Ops,
 	val mask      : OpMask,
-	val mask2     : OpMask,
 	val rexw      : Int,
-	val o16       : Boolean,
-	val widthOp   : Int
+	val o16       : Boolean
 ) {
-
-	val mismatch get() = mask2.isNotEmpty
 
 	fun addToOpcode(value: Int) = opcode or (value shl ((oplen - 1) shl 3))
 

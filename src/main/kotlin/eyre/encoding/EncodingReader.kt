@@ -55,18 +55,17 @@ class EncodingReader(private val string: String) {
 
 
 	private fun readEncoding() {
-		var prefix      = 0 // 66, 67, F2, F3
-		var escape      = 0
-		var opcode      = 0
-		var oplen       = 0
-		var extension   = 0
-		var opMask      = OpMask(0)
-		var opMask2     = OpMask(0)
-		var opsString   = "NONE"
-		val parts       = ArrayList<String>()
-		var rexw        = false
-		var o16         = false
-		var widthOp     = 0
+		var prefix     = 0 // 66, 67, F2, F3
+		var escape     = 0
+		var opcode     = 0
+		var oplen      = 0
+		var extension  = 0
+		var mask       = OpMask(0)
+		var opsString  = "NONE"
+		val parts      = ArrayList<String>()
+		var rexw       = false
+		var o16        = false
+		var widthOp    = 0
 
 		while(true) {
 			val value = (string[pos++].digitToInt(16) shl 4) or string[pos++].digitToInt(16)
@@ -125,10 +124,7 @@ class EncodingReader(private val string: String) {
 			val intValue = part.toIntOrNull(2)
 
 			if(intValue != null) {
-				if(opMask.isNotEmpty)
-					opMask2 = OpMask(intValue)
-				else
-					opMask = OpMask(intValue)
+				mask = OpMask(intValue)
 				continue
 			}
 
@@ -139,24 +135,14 @@ class EncodingReader(private val string: String) {
 			}
 		}
 
-		if(multiOps != null) {
-			if(multiOps.mask1 != null) {
-				if(opMask.isNotEmpty) opMask2 = opMask
-				opMask = multiOps.mask1
-				widthOp = 1
-			} else if(multiOps.mask2 != null) {
-				opMask2 = multiOps.mask2
-				widthOp = 0
-			}
-		}
+		multiOps?.mask?.let { mask = it }
 
 		fun add(mnemonicString: String, opcode: Int, ops: Ops) {
 			val mnemonic = mnemonics[mnemonicString] ?: error("Missing mnemonic: $mnemonicString")
 
 			val encoding = Encoding(
 				mnemonic, prefix, escape, opcode, oplen, 
-				extension, ops, opMask, opMask2, rexw.int,
-				o16, widthOp
+				extension, ops, mask, rexw.int, o16
 			)
 
 			encodings += encoding

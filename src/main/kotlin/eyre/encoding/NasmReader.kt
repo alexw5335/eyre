@@ -19,6 +19,8 @@ class NasmReader(private val inputs: List<String>) {
 
 	val encodings = ArrayList<NasmEncoding>()
 
+	val mnemonicMap = HashMap<String, ArrayList<NasmEncoding>>()
+
 
 
 	fun readRawLines() = inputs.forEachIndexed { i, l -> readRawLine(i, l)?.let(rawLines::add) }
@@ -32,6 +34,8 @@ class NasmReader(private val inputs: List<String>) {
 	fun filterExtensions(list: Set<NasmExt>) = lines.retainAll { list.containsAll(it.extensions) }
 
 	fun convertLines() = lines.forEach { encodings += convertLine(it) }
+
+	fun map() = encodings.forEach { mnemonicMap.getOrPut(it.mnemonic, ::ArrayList).add(it) }
 
 
 
