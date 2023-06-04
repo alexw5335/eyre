@@ -5,7 +5,6 @@ data class Encoding(
 	val prefix    : Int,
 	val escape    : Int,
 	val opcode    : Int,
-	val oplen     : Int,
 	val extension : Int,
 	val operands  : Ops,
 	val mask      : OpMask,
@@ -13,6 +12,5 @@ data class Encoding(
 	val o16       : Boolean
 ) {
 
-	fun addToOpcode(value: Int) = opcode or (value shl ((oplen - 1) shl 3))
-
+	val oplen = if(opcode and 0xFF00 != 0) 2 else 1
 }

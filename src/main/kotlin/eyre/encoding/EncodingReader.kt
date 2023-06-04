@@ -1,6 +1,7 @@
 package eyre.encoding
 
 import eyre.*
+import eyre.util.Unique
 import eyre.util.int
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -29,9 +30,13 @@ class EncodingReader(private val string: String) {
 
 	private val opsMap = Ops.values().associateBy { it.name }
 
+	val encodingLines = ArrayList<EncodingLine>()
+
+	val expandedLines = ArrayList<EncodingLine>()
 
 
-	fun read() {
+
+	fun readLines() {
 		while(pos < string.length) {
 			when(string[pos]) {
 				'\n' -> { lineNumber++; pos++ }
@@ -40,52 +45,87 @@ class EncodingReader(private val string: String) {
 				'\r' -> pos++
 				';'  -> skipLine()
 				else -> try {
-					readEncoding()
+					encodingLines.add(readEncodingLine())
 				} catch(e: Exception) {
 					System.err.println("Error on line: $lineNumber")
 					throw e
 				}
 			}
 		}
-
-		for(group in groups.values)
-			group.encodings.sortBy { it.operands }
 	}
 
 
 
-	private fun readEncoding() {
-		var prefix     = 0 // 66, 67, F2, F3
-		var escape     = 0
-		var opcode     = 0
-		var oplen      = 0
-		var extension  = 0
-		var mask       = OpMask(0)
-		var opsString  = "NONE"
-		val parts      = ArrayList<String>()
-		var rexw       = false
-		var o16        = false
-		var widthOp    = 0
+	fun expandLines() = encodingLines.forEach(::expandLine)
+
+	fun readEncodings() = expandedLines.forEach(::readEncoding)
+
+
+
+
+	private fun expandLine(line: EncodingLine) {
+		when(line.ops) {
+			"E_EM" -> {
+				expandedLines += line.copy(ops = "MM_MMM")
+				expandedLines += line.copy(prefix = 0x66, ops = "X_XM")
+				return
+			}
+			"E_I8" -> {
+				expandedLines += line.copy(ops = "M_I8")
+				expandedLines += line.copy(prefix = 0x66, ops = "X_I8")
+				return
+			}
+			"E_M" -> {
+				expandedLines += line.copy(ops = "MM_M")
+				expandedLines += line.copy(prefix = 0x66, ops = "X_M")
+				return
+			}
+		}
+
+		if(line.mnemonic.endsWith("cc")) {
+			for((postfix, opcodeInc) in Maps.ccList) {
+				expandedLines += line.copy(
+					mnemonic = line.mnemonic.dropLast(2) + postfix,
+					opcode = line.opcode + (opcodeInc shl (line.oplen - 1) shl 3)
+				)
+			}
+			return
+		}
+
+		expandedLines += line
+	}
+
+
+
+	private fun readEncodingLine(): EncodingLine {
+		var prefix = 0
+		var escape = 0
+		var opcode = 0
+		var extension = 0
+		var mask = OpMask(0)
+		var opsString = "NONE"
+		var rexw = false
+		var o16 = false
 
 		while(true) {
-			val value = (string[pos++].digitToInt(16) shl 4) or string[pos++].digitToInt(16)
+			val value = (string[pos++].digitToInt(16) shl 4 or string[pos++].digitToInt(16))
 
-			fun setOpcode() {
-				opcode = opcode or (value shl (oplen++ shl 3))
-			}
-
-			if(opcode == 0)
+			if(opcode == 0) {
 				when(value) {
-					0x66, 0x67, 0xF2, 0xF3, 0x9B -> prefix = value
+					0x66,
+					0x67,
+					0xF2,
+					0xF3,
+					0x9B -> prefix = value
 					0x0F -> escape = 1
-					0x38 -> if(escape == 1) escape = 2 else setOpcode()
-					0x3A -> if(escape == 1) escape = 3 else setOpcode()
-					0x00 -> if(escape == 1) escape = 4 else setOpcode()
-					else -> setOpcode()
+					0x38 -> if(escape == 1) escape = 2 else opcode = value
+					0x3A -> if(escape == 1) escape = 3 else opcode = value
+					0x00 -> if(escape == 1) escape = 4 else opcode = value
+					else -> opcode = value
 				}
-			else
-				setOpcode()
-
+			} else {
+				opcode = opcode or (value shl 8)
+			}
 
 			if(string[pos] == '/') {
 				pos++
@@ -97,9 +137,9 @@ class EncodingReader(private val string: String) {
 		}
 
 		skipSpaces()
-		val mnemonicString = readWord()
+		val mnemonic = readWord()
 
-		if(mnemonicString == "WAIT") {
+		if(mnemonic == "WAIT") {
 			opcode = 0x9B
 			prefix = 0
 		}
@@ -109,66 +149,61 @@ class EncodingReader(private val string: String) {
 			opsString = readWord()
 			skipSpaces()
 			while(!atNewline()) {
-				parts += readWord()
+				val part = readWord()
+				when {
+					part[0] == '0' || part[0] == '1' -> mask = OpMask(part.toInt(2))
+					part == "RW" -> rexw = true
+					part == "O16" -> o16 = true
+					else -> error("Invalid part: $part")
+				}
 				skipSpaces()
 			}
 		}
 
-		val multiOps = multiOpsMap[opsString]
-		val ops = opsMap[opsString]
+		skipLine()
 
-		if(multiOps == null && ops == null)
-			error("Unrecognised operands: $opsString")
+		return EncodingLine(
+			lineNumber,
+			prefix,
+			escape,
+			extension,
+			opcode,
+			if(opcode and 0xFF00 != 0) 2 else 1,
+			mnemonic,
+			opsString,
+			mask,
+			rexw,
+			o16
+		)
+	}
 
-		for(part in parts) {
-			val intValue = part.toIntOrNull(2)
 
-			if(intValue != null) {
-				mask = OpMask(intValue)
-				continue
-			}
 
-			when(part) {
-				"RW"  -> rexw = true
-				"O16" -> o16 = true
-				else  -> error("Invalid part: $part")
-			}
+	private fun readEncoding(line: EncodingLine) {
+		val multiOps = multiOpsMap[line.ops]
+		val ops = opsMap[line.ops]
+
+		if(multiOps == null && ops == null) {
+			println(line.ops)
+			return
 		}
 
-		multiOps?.mask?.let { mask = it }
+		val mask = multiOps?.mask ?: line.mask
 
-		fun add(mnemonicString: String, opcode: Int, ops: Ops) {
-			val mnemonic = mnemonics[mnemonicString] ?: error("Missing mnemonic: $mnemonicString")
-
+		fun add(ops: Ops) {
+			val mnemonic = mnemonics[line.mnemonic] ?: error("Missing mnemonic: ${line.mnemonic}")
 			val encoding = Encoding(
-				mnemonic, prefix, escape, opcode, oplen, 
-				extension, ops, mask, rexw.int, o16
+				mnemonic, line.prefix, line.escape, line.opcode,
+				line.extension, ops, mask, line.rexw.int, line.o16
 			)
-
-			encodings += encoding
-
 			groups.getOrPut(mnemonic) { EncodingGroup(mnemonic) }.add(encoding)
 		}
 
-		if(mnemonicString.endsWith("cc")) {
-			for((postfix, opcodeInc) in Maps.ccList) {
-				val mnemonicString2 = mnemonicString.dropLast(2) + postfix
-				val opcode2 =  opcode + (opcodeInc shl ((oplen - 1) shl 3))
-				if(multiOps != null)
-					for(part in multiOps.parts)
-						add(mnemonicString2, opcode2, part)
-				else
-					add(mnemonicString2, opcode2, ops!!)
-			}
-		} else {
-			if(multiOps != null)
-				for(part in multiOps.parts)
-					add(mnemonicString, opcode, part)
-			else
-				add(mnemonicString, opcode, ops!!)
-		}
-
-		skipLine()
+		if(multiOps != null)
+			for(part in multiOps.parts)
+				add(part)
+		else
+			add(ops!!)
 	}
 
 

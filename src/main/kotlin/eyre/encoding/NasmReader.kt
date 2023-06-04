@@ -112,15 +112,15 @@ class NasmReader(private val inputs: List<String>) {
 			part.startsWith("vex")    -> line.vex = part
 			part.endsWith("+c")       -> { line.cc = true; line.addOpcode(part.dropLast(2).toInt(16)) }
 			part.endsWith("+r")       -> { line.opreg = true; line.addOpcode(part.dropLast(2).toInt(16)) }
-			part == "/r"    -> line.modrm  = true
-			part == "/is4"  -> line.is4    = true
-			part == "o16"   -> line.o16    = true
-			part == "o64"   -> line.rexw   = true
-			part == "a32"   -> line.a32    = true
-			part == "f2i"   -> line.prefix = 0xF2
-			part == "f3i"   -> line.prefix = 0xF3
-			part == "wait"  -> line.prefix = 0x9B
-			part[0] == '/'  -> line.opcodeExt = part[1].digitToInt(10)
+			part == "/r"   -> line.modrm  = true
+			part == "/is4" -> line.is4    = true
+			part == "o16"  -> line.o16    = true
+			part == "o64"  -> line.rexw   = true
+			part == "a32"  -> line.a32    = true
+			part == "f2i"  -> line.prefix = 0xF2
+			part == "f3i"  -> line.prefix = 0xF3
+			part == "wait" -> line.prefix = 0x9B
+			part[0] == '/' -> line.opcodeExt = part[1].digitToInt(10)
 
 			part.contains(':') -> {
 				val array = part.split(':').filter { it.isNotEmpty() }
@@ -138,12 +138,16 @@ class NasmReader(private val inputs: List<String>) {
 				} else {
 					val value = part.toInt(16)
 					when {
-						line.evex != null || line.vex != null || line.oplen != 0
-						-> line.addOpcode(value)
+						line.evex != null || line.vex != null
+							-> line.addOpcode(value)
+						line.opcode != 0
+							-> line.addOpcode(value)
+						line.prefix != 0
+							-> line.addOpcode(value)
 						value == 0x66 || value == 0xF2 || value == 0xF3
-						-> line.prefix = value
+							-> line.prefix = value
 						else
-						-> line.addOpcode(value)
+							-> line.addOpcode(value)
 					}
 				}
 			}

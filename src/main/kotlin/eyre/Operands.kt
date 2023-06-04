@@ -8,11 +8,6 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 	RM_R(Ops.R_R, Ops.M_R),
 	O_A(Ops.A_O),
 
-	BND_M64(Ops.BND_M, mask = OpMask.QWORD),
-	BND_RM64(Ops.BND_R, Ops.BND_M, mask = OpMask.R1000),
-	BND_BNDM128(Ops.BND_BND, Ops.BND_M, mask = OpMask.XWORD),
-	BNDM128_BND(Ops.M_BND, Ops.BND_BND, mask = OpMask.XWORD),
-
 	R_RM_I8(Ops.R_R_I8, Ops.R_M_I8),
 	RM_R_I8(Ops.R_R_I8, Ops.M_R_I8),
 
@@ -21,7 +16,21 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 	M32(Ops.M, mask = OpMask.DWORD),
 	M64(Ops.M, mask = OpMask.QWORD),
 	M80(Ops.M, mask = OpMask.TWORD),
-	M128(Ops.M, mask = OpMask.XWORD);
+	M128(Ops.M, mask = OpMask.XWORD),
+
+	MM_MMM_I8(Ops.MM_MM_I8, Ops.MM_M_I8),
+	RM_X_I8(Ops.R_X_I8, Ops.M_X_I8),
+	X_XM32(Ops.X_X, Ops.X_M, mask = OpMask.DWORD),
+	X_XM64(Ops.X_X, Ops.X_M, mask = OpMask.QWORD),
+	X_XM(Ops.X_X, Ops.M),
+	XM_X(Ops.X_X, Ops.M_X),
+	MM_MMM(Ops.MM_MM, Ops.MM_M),
+	X_MEM(Ops.X_M, mask = OpMask.NONE),
+	X_XM_I8(Ops.X_X_I8, Ops.X_M_I8),
+	MM_XM(Ops.MM_X, Ops.MM_M),
+	X_RM(Ops.X_R, Ops.X_M),
+	X_MMM(Ops.X_M, Ops.X_MM),
+	X_XM_X0(Ops.X_X, Ops.X_M);
 
 }
 
@@ -67,20 +76,6 @@ enum class Ops {
 	M_R_I8,
 	RM_R_CL,
 
-	// MMX
-	MM_R,
-	R_MM,
-	MM_MM,
-	MM_M,
-	M_MM,
-	MM_I8,
-	R32_MM_I8,
-	MM_R32M16_I8,
-	MM_M_I8,
-	MM_MM_I8,
-	MM_X,
-	X_MM,
-
 	// Mismatched widths
 	R_RM8,
 	R_RM16,
@@ -113,12 +108,31 @@ enum class Ops {
 	A_DX,
 	DX_A,
 
-	// BND
-	BND_R,
-	BND_M,
-	M_BND,
-	BND_BND,
-	MIB_BND,
-	BND_MIB;
+	// MMX/SSE (also contains R_M)
+	MM_MM,
+	MM_M,
+	M_MM,
+	X_M,
+	M_X,
+	X_MM,
+	MM_X,
+	X_X,
+	X_I8,
+	M_I8,
+	X_X_M_I8,
+	X_R_I8,
+	X_M_I8,
+	X_R,
+	MM_MM_I8,
+	MM_M_I8,
+	REG_MM_I8,
+	REG_X_I8,
+	M_X_I8,
+	R_X_I8,
+	R_X,
+	X_X_I8,
+	MM_R_I8,
+	REG_X,
+	R_MM;
 
 }
