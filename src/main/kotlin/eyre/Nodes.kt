@@ -109,7 +109,7 @@ class MemberNode(val symbol: MemberSymbol, val type: TypeNode) : SymContainerNod
 class StructNode(val symbol: StructSymbol, val members: List<MemberNode>) : SymContainerNode(symbol)
 
 class InsNode(
-	val prefix   : Prefix?,
+	val prefix   : InsPrefix?,
 	val mnemonic : Mnemonic,
 	val size     : Int,
 	val op1      : OpNode?,

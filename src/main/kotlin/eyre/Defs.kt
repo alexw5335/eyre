@@ -84,7 +84,7 @@ enum class BinaryOp(
 
 
 
-enum class Prefix(val value: Int) {
+enum class InsPrefix(val value: Int) {
 
 	REP(0xF3),
 	REPE(0xF3),
@@ -164,3 +164,23 @@ enum class RelocType {
 class DllImports(val name: Name, val imports: HashMap<Name, DllImportSymbol>)
 
 class DllDef(val name: Name, val exports: Set<Name>)
+
+
+
+enum class Escape {
+	NONE,
+	E0F,
+	E38,
+	E3A,
+	E00;
+}
+
+
+
+enum class Prefix(val value: Int) {
+	NONE(0),
+	P66(0x66),
+	PF2(0xF2),
+	PF3(0xF3),
+	P9B(0x9B);
+}

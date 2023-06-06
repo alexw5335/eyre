@@ -1,14 +1,27 @@
 package eyre.encoding
 
+import eyre.Mnemonic
 import eyre.util.Unique
 
 
 private val extensions = setOf(
+	// General-purpose
 	NasmExt.CET, NasmExt.FPU, NasmExt.ENQCMD, NasmExt.HRESET,
 	NasmExt.INVPCID, NasmExt.MPX, NasmExt.PCONFIG, NasmExt.PREFETCHI,
 	NasmExt.PREFETCHWT1, NasmExt.RTM, NasmExt.SERIALIZE, NasmExt.SGX,
 	NasmExt.TSXLDTRK, NasmExt.UINTR, NasmExt.VMX, NasmExt.WBNOINVD,
-	NasmExt.WRMSRNS
+	NasmExt.WRMSRNS,
+
+	// MMX/SSE
+	NasmExt.MMX,
+	NasmExt.SSE,
+	NasmExt.SSE2,
+	NasmExt.SSE3,
+	NasmExt.SSE41,
+	NasmExt.SSE42,
+	NasmExt.SSE4A,
+	NasmExt.SSE5,
+	NasmExt.SSSE3
 )
 
 
@@ -17,41 +30,44 @@ fun main() {
 	val reader = EncodingReader.create("encodings.txt")
 	reader.readLines()
 	reader.expandLines()
-	//reader.readEncodings()
+	reader.readEncodings()
 	val nasmReader = NasmReader("nasm.txt")
 	nasmReader.readRawLines()
 	nasmReader.filterLines()
 	nasmReader.scrapeLines()
+	nasmReader.filterExtensions(extensions)
 	nasmReader.determineOperands()
 	nasmReader.convertLines()
 	nasmReader.map()
 
-	val mnemonics = HashSet<String>()
-
-	nasmReader.lines.forEach {
-		if(it.operands.any { it == NasmOp.MM || it == NasmOp.X } && it.vex == null && it.evex == null) {
-			mnemonics += it.mnemonic
+	/*outer@ for(line in reader.expandedLines) {
+		if(line.mnemonic !in nasmReader.mnemonicMap) {
+			Unique.print(line.mnemonic)
+			continue
 		}
-	}
 
-	val lines = nasmReader.lines.filter { it.mnemonic in mnemonics }
+		val list = nasmReader.mnemonicMap[line.mnemonic]!!
 
-	lines.forEach { Unique.print(it.operands.joinToString("_"))}
+		for(l in list) {
+			when {
+				l.opcode != line.opcode -> continue
+				l.prefix != line.prefix -> continue
+				l.escape != line.escape -> continue
+				l.extension != line.extension -> continue
+				else -> continue@outer
+			}
+		}
 
-/*	val map1 = nasmReader.mnemonicMap
-	val map2 = HashMap<String, ArrayList<EncodingLine>>()
-
-	for(encoding in reader.expandedLines) {
-		map2.getOrPut(encoding.mnemonic, ::ArrayList).add(encoding)
-	}
-
-	outer@ for(line in reader.encodingLines) {
-		val list = map1[line.mnemonic] ?: continue
+		println("${line.prefix} ${line.escape} /${line.extension} ${line.opcode.hexc16}  ${line.mnemonic}  ${line.ops}")
 		for(l in list)
-			if(l.opcode == line.opcode && l.prefix == line.prefix && l.escape == line.escape)
-				continue@outer
-		println("${line.opcode.hex16Full} $line")
+			println("${l.prefix} ${l.escape} /${l.extension} ${l.opcode.hexc16}  ${l.mnemonic}  ${l.operands.joinToString("_")}")
+		println()
 	}*/
+
+	val map = Mnemonic.values.associateBy { it.name }
+	for(encoding in nasmReader.encodings)
+		if(encoding.mnemonic !in map)
+			Unique.print(encoding.mnemonic)
 }
 
 

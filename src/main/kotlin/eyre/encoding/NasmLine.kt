@@ -1,5 +1,7 @@
 package eyre.encoding
 
+import eyre.Escape
+import eyre.Prefix
 import eyre.Width
 
 class NasmLine(val raw: RawNasmLine) {
@@ -17,7 +19,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var opreg = false
 	var evex: String? = null
 	var vex: String? = null
-	var opcodeExt = -1
+	var opcodeExt = 0
 	var modrm = false
 	var is4 = false
 	var opEnc = OpEnc.NONE
@@ -25,7 +27,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var postModRM = -1
 	var vsib = VSib.NONE
 	val opParts = ArrayList<OpPart>()
-	var prefix = 0
+	var prefix = Prefix.NONE
 	var rexw = false
 	var k = false
 	var z = false
@@ -50,7 +52,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var compoundIndex = -1
 	var compound: NasmOp? = null
 
-	var escape = 0
+	var escape = Escape.NONE
 
 	val operands = ArrayList<NasmOp>()
 
@@ -66,12 +68,12 @@ class NasmLine(val raw: RawNasmLine) {
 
 	fun addOpcode(value: Int) {
 		if(oplen == 0) when(value) {
-			0x0F -> if(escape == 0) { escape = 1; return }
-			0x38 -> if(escape == 1) { escape = 2; return }
-			0x3A -> if(escape == 1) { escape = 3; return }
+			0x0F -> if(escape == Escape.NONE) { escape = Escape.E0F; return }
+			0x38 -> if(escape == Escape.E0F) { escape = Escape.E38; return }
+			0x3A -> if(escape == Escape.E0F) { escape = Escape.E3A; return }
+			0x00 -> if(escape == Escape.E0F) { escape = Escape.E00; return }
 		}
-		opcode = opcode or (value shl (oplen shl 3))
-		oplen++
+		opcode = opcode or (value shl (oplen++ shl 3))
 	}
 
 	override fun toString() = raw.toString()

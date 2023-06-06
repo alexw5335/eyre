@@ -251,7 +251,7 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseInstruction(prefix: Prefix?, mnemonic: Mnemonic): InsNode {
+	private fun parseInstruction(prefix: InsPrefix?, mnemonic: Mnemonic): InsNode {
 		if(atNewline() || next == EndToken)
 			return InsNode(prefix, mnemonic, 0, null, null, null, null)
 

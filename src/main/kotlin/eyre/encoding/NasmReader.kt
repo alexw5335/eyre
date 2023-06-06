@@ -1,5 +1,7 @@
 package eyre.encoding
 
+import eyre.Escape
+import eyre.Prefix
 import eyre.Width
 import eyre.util.isHex
 import java.nio.file.Files
@@ -117,9 +119,9 @@ class NasmReader(private val inputs: List<String>) {
 			part == "o16"  -> line.o16    = true
 			part == "o64"  -> line.rexw   = true
 			part == "a32"  -> line.a32    = true
-			part == "f2i"  -> line.prefix = 0xF2
-			part == "f3i"  -> line.prefix = 0xF3
-			part == "wait" -> line.prefix = 0x9B
+			part == "f2i"  -> line.prefix = Prefix.PF2
+			part == "f3i"  -> line.prefix = Prefix.PF3
+			part == "wait" -> line.prefix = Prefix.P9B
 			part[0] == '/' -> line.opcodeExt = part[1].digitToInt(10)
 
 			part.contains(':') -> {
@@ -138,16 +140,15 @@ class NasmReader(private val inputs: List<String>) {
 				} else {
 					val value = part.toInt(16)
 					when {
-						line.evex != null || line.vex != null
-							-> line.addOpcode(value)
-						line.opcode != 0
-							-> line.addOpcode(value)
-						line.prefix != 0
-							-> line.addOpcode(value)
-						value == 0x66 || value == 0xF2 || value == 0xF3
-							-> line.prefix = value
-						else
-							-> line.addOpcode(value)
+						line.evex != null ||
+						line.vex != null ||
+						line.opcode != 0 ||
+						line.prefix != Prefix.NONE ||
+						line.escape != Escape.NONE -> line.addOpcode(value)
+						value == 0x66 -> line.prefix = Prefix.P66
+						value == 0xF2 -> line.prefix = Prefix.PF2
+						value == 0xF3 -> line.prefix = Prefix.PF3
+						else  -> line.addOpcode(value)
 					}
 				}
 			}
@@ -157,6 +158,9 @@ class NasmReader(private val inputs: List<String>) {
 
 		if(line.arch == NasmArch.FUTURE && line.extensions.isEmpty() && line.mnemonic.startsWith("K"))
 			line.extensions += NasmExt.NOT_GIVEN
+
+		if(line.mnemonic == "PTWRITE")
+			line.prefix = Prefix.PF3
 
 		val parts = (line.vex ?: line.evex ?: return line).split('.')
 
@@ -359,7 +363,7 @@ class NasmReader(private val inputs: List<String>) {
 		rexw,
 		o16,
 		a32,
-		operands
+		ArrayList(operands)
 	)
 
 

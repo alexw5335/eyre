@@ -136,6 +136,24 @@ enum class NasmOpType : NasmOpClass {
 
 
 
+enum class OpType {
+	R,M,I,A,C,D,ST,MM,X,Y,Z,K,REL,ONE,VM,MOFFS;
+}
+
+
+
+enum class Op(val type: OpType, val width: Width?) {
+	R8(OpType.R, Width.BYTE),
+	R16(OpType.R, Width.WORD),
+	R32(OpType.R, Width.DWORD),
+	R64(OpType.R, Width.QWORD),
+	MEM(OpType.M, null),
+	M8(OpType.M, Width.BYTE),
+	M16(OpType.M, Width.DWORD)
+}
+
+
+
 enum class NasmOp(
 	val type         : NasmOpType,
 	val string       : String?,

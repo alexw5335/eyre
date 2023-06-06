@@ -2,8 +2,8 @@ package eyre
 
 data class Encoding(
 	val mnemonic  : Mnemonic,
-	val prefix    : Int,
-	val escape    : Int,
+	val prefix    : Prefix,
+	val escape    : Escape,
 	val opcode    : Int,
 	val extension : Int,
 	val operands  : Ops,
@@ -13,4 +13,5 @@ data class Encoding(
 ) {
 
 	val oplen = if(opcode and 0xFF00 != 0) 2 else 1
+
 }

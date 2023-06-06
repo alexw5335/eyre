@@ -1,11 +1,13 @@
 package eyre.encoding
 
+import eyre.Escape
 import eyre.OpMask
+import eyre.Prefix
 
 data class EncodingLine(
 	val lineNumber : Int,
-	val prefix     : Int,
-	val escape     : Int,
+	val prefix     : Prefix,
+	val escape     : Escape,
 	val extension  : Int,
 	val opcode     : Int,
 	val oplen      : Int,

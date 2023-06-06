@@ -62,22 +62,21 @@ class EncodingReader(private val string: String) {
 
 
 
-
 	private fun expandLine(line: EncodingLine) {
 		when(line.ops) {
 			"E_EM" -> {
 				expandedLines += line.copy(ops = "MM_MMM")
-				expandedLines += line.copy(prefix = 0x66, ops = "X_XM")
+				expandedLines += line.copy(prefix = Prefix.P66, ops = "X_XM")
 				return
 			}
 			"E_I8" -> {
 				expandedLines += line.copy(ops = "M_I8")
-				expandedLines += line.copy(prefix = 0x66, ops = "X_I8")
+				expandedLines += line.copy(prefix = Prefix.P66, ops = "X_I8")
 				return
 			}
 			"E_M" -> {
 				expandedLines += line.copy(ops = "MM_M")
-				expandedLines += line.copy(prefix = 0x66, ops = "X_M")
+				expandedLines += line.copy(prefix = Prefix.P66, ops = "X_M")
 				return
 			}
 		}
@@ -86,7 +85,7 @@ class EncodingReader(private val string: String) {
 			for((postfix, opcodeInc) in Maps.ccList) {
 				expandedLines += line.copy(
 					mnemonic = line.mnemonic.dropLast(2) + postfix,
-					opcode = line.opcode + (opcodeInc shl (line.oplen - 1) shl 3)
+					opcode = line.opcode + opcodeInc
 				)
 			}
 			return
@@ -98,8 +97,8 @@ class EncodingReader(private val string: String) {
 
 
 	private fun readEncodingLine(): EncodingLine {
-		var prefix = 0
-		var escape = 0
+		var prefix = Prefix.NONE
+		var escape = Escape.NONE
 		var opcode = 0
 		var extension = 0
 		var mask = OpMask(0)
@@ -112,15 +111,14 @@ class EncodingReader(private val string: String) {
 
 			if(opcode == 0) {
 				when(value) {
-					0x66,
-					0x67,
-					0xF2,
-					0xF3,
-					0x9B -> prefix = value
-					0x0F -> escape = 1
-					0x38 -> if(escape == 1) escape = 2 else opcode = value
-					0x3A -> if(escape == 1) escape = 3 else opcode = value
-					0x00 -> if(escape == 1) escape = 4 else opcode = value
+					0x66 -> if(escape == Escape.NONE) prefix = Prefix.P66 else opcode = 0x66
+					0xF2 -> if(escape == Escape.NONE) prefix = Prefix.PF2 else opcode = 0xF2
+					0xF3 -> if(escape == Escape.NONE) prefix = Prefix.PF3 else opcode = 0xF3
+					0x9B -> if(escape == Escape.NONE) prefix = Prefix.P9B else opcode = 0x9B
+					0x0F -> if(escape == Escape.NONE) escape = Escape.E0F else opcode = 0x0F
+					0x38 -> if(escape == Escape.E0F) escape = Escape.E38 else opcode = 0x38
+					0x3A -> if(escape == Escape.E0F) escape = Escape.E3A else opcode = 0x3A
+					0x00 -> if(escape == Escape.E0F) escape = Escape.E00 else opcode = 0x00
 					else -> opcode = value
 				}
 			} else {
@@ -141,7 +139,7 @@ class EncodingReader(private val string: String) {
 
 		if(mnemonic == "WAIT") {
 			opcode = 0x9B
-			prefix = 0
+			prefix = Prefix.NONE
 		}
 
 		skipSpaces()

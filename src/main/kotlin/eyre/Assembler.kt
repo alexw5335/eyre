@@ -401,8 +401,12 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 	private fun checkPrefix() {
-		if(encoding.prefix != 0)
-			writer.i8(encoding.prefix)
+		when(encoding.prefix) {
+			Prefix.NONE -> Unit
+			Prefix.P66 -> writer.i8(0x66)
+			Prefix.PF2 -> writer.i8(0xF2)
+			Prefix.PF3 -> writer.i8(0xF3)
+		}
 	}
 
 	/** r: REG, x: INDEX, b: RM, BASE, or OPREG*/
@@ -445,10 +449,11 @@ class Assembler(private val context: CompilerContext) {
 	
 	private fun writeOpcode(width: Width = DWORD, addition: Int = 0) {
 		when(encoding.escape) {
-			1 -> writer.i8(0x0F)
-			2 -> writer.i16(0x380F)
-			3 -> writer.i16(0x3A0F)
-			4 -> writer.i16(0x000F)
+			Escape.NONE -> Unit
+			Escape.E0F  -> writer.i8(0x0F)
+			Escape.E38  -> writer.i16(0x380F)
+			Escape.E3A  -> writer.i16(0x3A0F)
+			Escape.E00  -> writer.i16(0x000F)
 		}
 
 		/** Add one if width is not BYTE and if widths has BYTE set */

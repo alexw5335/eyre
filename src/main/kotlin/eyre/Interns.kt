@@ -80,7 +80,7 @@ object Names : Interner<String, Name>() {
 	val widths       = createRange(Width.values(), Width::string)
 	val varWidths    = createRange(Width.values(), Width::varString)
 	val registers    = createRange(Reg.values(), Reg::string)
-	val prefixes     = createRange(Prefix.values(), Prefix::string)
+	val prefixes     = createRange(InsPrefix.values(), InsPrefix::string)
 	val mnemonics    = createRange(Mnemonic.values(), Mnemonic::string)
 
 	val EMPTY = add("")
