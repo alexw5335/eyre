@@ -1,34 +1,38 @@
-package eyre.encoding
+package eyre.nasm
 
-import eyre.Escape
-import eyre.Prefix
-import eyre.Width
+import eyre.*
 
 class NasmLine(val raw: RawNasmLine) {
 
 	val mnemonic = raw.mnemonic
 	var arch = NasmArch.NONE
 	val extensions = ArrayList<NasmExt>()
+
 	var opSize: Width? = null
 	var sm = false
 	var ar = -1
 	var immType = ImmType.NONE
+
+	var prefix = Prefix.NONE
+	var escape = Escape.NONE
 	var opcode = 0
 	var oplen = 0
+	var ext = 0
+	var rexw = false
+	var o16 = false
+	var a32 = false
+	var enc = OpEnc.NONE
+	var pseudo = -1
 	var cc = false
 	var opreg = false
-	var evex: String? = null
-	var vex: String? = null
-	var opcodeExt = 0
 	var modrm = false
+	var odf = false
+
+	var vex: String? = null
+	var isEvex = false
+	var vsib: VSib? = null
 	var is4 = false
-	var opEnc = OpEnc.NONE
-	var tupleType: TupleType? = null
-	var postModRM = -1
-	var vsib = VSib.NONE
-	val opParts = ArrayList<OpPart>()
-	var prefix = Prefix.NONE
-	var rexw = false
+	var tuple: TupleType? = null
 	var k = false
 	var z = false
 	var sae = false
@@ -38,33 +42,26 @@ class NasmLine(val raw: RawNasmLine) {
 	var b64 = false
 	var rs2 = false
 	var rs4 = false
+	var nds = false
+	var ndd = false
+	var dds = false
 	var star = false
-	var a32 = false
-	var o16 = false
-
 	var vexl = VexL.NONE
 	var vexw = VexW.NONE
-	var vexPrefix = VexPrefix.NP
-	var vexExt = VexExt.E0F
 	var map5 = false
 	var map6 = false
 
-	var compoundIndex = -1
-	var compound: NasmOp? = null
+	val ops = ArrayList<Op>()
+	var multi1 = Op.NONE
+	var multi2 = Op.NONE
+	var multiIndex = -1
 
-	var escape = Escape.NONE
 
-	val operands = ArrayList<NasmOp>()
 
-	fun addedOpcode(value: Int) = opcode + (value shl ((oplen - 1) shl 3))
+	fun addedOpcode(value: Int) =
+		opcode + (value shl ((oplen - 1) shl 3))
 
-	fun addOperand(operand: NasmOp) {
-		if(operand.parts.isNotEmpty()) {
-			compound = operand
-			compoundIndex = operands.size
-		}
-		operands += operand
-	}
+
 
 	fun addOpcode(value: Int) {
 		if(oplen == 0) when(value) {
@@ -76,6 +73,9 @@ class NasmLine(val raw: RawNasmLine) {
 		opcode = opcode or (value shl (oplen++ shl 3))
 	}
 
+
+
 	override fun toString() = raw.toString()
+
 
 }

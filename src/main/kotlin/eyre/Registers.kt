@@ -78,6 +78,12 @@ value class OpMask(val value: Int) {
 
 	override fun toString() = value.bin44
 
+	inline fun forEachWidth(block: (Width) -> Unit) {
+		for(width in Width.values)
+			if(width in this)
+				block(width)
+	}
+
 }
 
 

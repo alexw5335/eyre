@@ -1,6 +1,28 @@
-package eyre.encoding
+package eyre.nasm
 
-enum class NasmExt(val isAvx: Boolean = false) {
+enum class NasmArch {
+	NONE,
+	_8086,
+	_186,
+	_286,
+	_386,
+	_486,
+	PENT,
+	P6,
+	KATMAI,
+	WILLAMETTE,
+	PRESCOTT,
+	X86_64,
+	NEHALEM,
+	WESTMERE,
+	SANDYBRIDGE,
+	FUTURE,
+	IA64;
+}
+
+
+
+enum class NasmExt {
 	// 0, 32-bit only
 	AES,
 	// 1, tmmreg
@@ -10,51 +32,51 @@ enum class NasmExt(val isAvx: Boolean = false) {
 	// 7, tmmreg or mem
 	AMXTILE,
 	// 703, xmm, ymm
-	AVX(true),
+	AVX,
 	// 186, xmm, ymm, sib
-	AVX2(true),
+	AVX2,
 	// 1494
-	AVX512(true),
+	AVX512,
 	// 4, rs4
-	AVX5124FMAPS(true),
+	AVX5124FMAPS,
 	// 2, rs4
-	AVX5124VNNIW(true),
+	AVX5124VNNIW,
 	// 12, k
-	AVX512BF16(true),
+	AVX512BF16,
 	// 3, zmm, k
-	AVX512BITALG(true),
+	AVX512BITALG,
 	// 412
-	AVX512BW(true),
+	AVX512BW,
 	// 18
-	AVX512CD(true),
+	AVX512CD,
 	// 132
-	AVX512DQ(true),
+	AVX512DQ,
 	// 10
-	AVX512ER(true),
+	AVX512ER,
 	// 2, X_XM64 Y_XM128
-	AVX512FC16(true),
+	AVX512FC16,
 	// 111
-	AVX512FP16(true),
+	AVX512FP16,
 	// 6
-	AVX512IFMA(true),
+	AVX512IFMA,
 	// 16
-	AVX512PF(true),
+	AVX512PF,
 	// 12
-	AVX512VBMI(true),
+	AVX512VBMI,
 	// 18
-	AVX512VBMI2(true),
+	AVX512VBMI2,
 	// 193
-	AVX512VL(true),
+	AVX512VL,
 	// 4, Z_Z_ZM
-	AVX512VNNI(true),
+	AVX512VNNI,
 	// 2, Z_ZM
-	AVX512VPOPCNTDQ(true),
+	AVX512VPOPCNTDQ,
 	// 4 (LATEVEX)
-	AVXIFMA(true),
+	AVXIFMA,
 	// 14 (LATEEVEX
-	AVXNECONVERT(true),
+	AVXNECONVERT,
 	// 12 (LATEVEX)
-	AVXVNNIINT8(true),
+	AVXVNNIINT8,
 	// 13, GP, R_R_RM, R_RM_R, R_RM, VEX
 	BMI1,
 	// 16, GP, R_RM_R, R_R_RM, R_RM_I8, VEX
@@ -66,7 +88,7 @@ enum class NasmExt(val isAvx: Boolean = false) {
 	// 4, R32_M512, R64_M512
 	ENQCMD,
 	// 192, x, y, xm, ym
-	FMA(true),
+	FMA,
 	// 213
 	FPU,
 	// 18, but combined with other extensions
@@ -118,11 +140,11 @@ enum class NasmExt(val isAvx: Boolean = false) {
 	// 5, void, R64
 	UINTR,
 	// 16, zmm, ymm, xmm
-	VAES(true),
+	VAES,
 	// 13, GP, void, mem, R_RM, R64_MEM
 	VMX,
 	// 20, zmm, ymm, xmm,
-	VPCLMULQDQ(true),
+	VPCLMULQDQ,
 	// 1, void
 	WBNOINVD,
 	// 1, void (Not in Intel Manual)
@@ -132,4 +154,109 @@ enum class NasmExt(val isAvx: Boolean = false) {
 	// 108, void, R, M_R, R_M512, K_K, K_K_K, mem, etc., many unique encodings
 	NOT_GIVEN;
 
+}
+
+
+
+enum class OpEnc(val string: String?) {
+	NONE(null),
+	ij("ij"),
+	N("-"),
+	NI("-i"),
+	RN("r-"),
+	NR("-r"),
+	IN("i-"),
+	MN("m-"),
+	NN("--"),
+	RI("ri"),
+	MRN("mr-"),
+	MR("mr"),
+	RM("rm"),
+	MI("mi"),
+	M("m"),
+	R("r"),
+	RMI("rmi"),
+	I("i"),
+	MRI("mri"),
+	RVM("rvm"),
+	RVMI("rvmi"),
+	RVMS("rvms"),
+	MVR("mvr"),
+	VMI("vmi"),
+	RMV("rmv"),
+	VM("vm"),
+	RMX("rmx"),
+	MXR("mxr"),
+	MRX("mrx"),
+	RMVI("rmvi");
+}
+
+
+
+enum class ImmType {
+	NONE,
+	IB,
+	IW,
+	ID,
+	IQ,
+	IB_S,
+	IB_U,
+	ID_S,
+	REL,
+	REL8;
+}
+
+
+
+enum class TupleType {
+	FV,
+	T1S,
+	T2,
+	T4,
+	T8,
+	HV,
+	HVM,
+	T1F64,
+	T1F32,
+	FVM,
+	DUP,
+	T1S8,
+	T1S16,
+	QVM,
+	OVM,
+	M128;
+}
+
+
+
+enum class VSib {
+	VM32X,
+	VM64X,
+	VM64Y,
+	VM32Y,
+	VSIBX,
+	VSIBY,
+	VSIBZ;
+}
+
+
+
+enum class VexL {
+	NONE,
+	L128,
+	L256,
+	L512,
+	L0,
+	LZ,
+	L1,
+	LIG;
+}
+
+
+
+enum class VexW {
+	NONE,
+	W0,
+	W1,
+	WIG;
 }

@@ -1,7 +1,6 @@
 package eyre
 
 import eyre.Width.*
-import eyre.encoding.EncodingReader
 
 class Assembler(private val context: CompilerContext) {
 
@@ -40,56 +39,13 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private val groups = EncodingReader.create("encodings.txt").let {
-		//it.read();
-		it.groups
-	}
-
-	private lateinit var group: EncodingGroup
-
-	private lateinit var encoding: Encoding
-
-
-
-	private fun encoding(ops: Ops) {
-		encoding = if(ops !in group)
-			invalidEncoding()
-		else
-			group[ops]
-	}
-
-
-
 	private fun handleInstruction(node: InsNode) {
 		node.prefix?.let { byte(it.value) }
 
-		group = groups[node.mnemonic] ?: invalidEncoding()
-
-		customEncodings[node.mnemonic]?.let {
-			it(node)
-			return
-		}
-
 		when(node.size) {
-			0 -> { encoding(Ops.NONE); encodeNone() }
-			1 -> when(val op1 = node.op1!!) {
-				is RegNode -> assemble1R(node, op1.value)
-				is MemNode -> { encoding(Ops.M); encode1M(op1) }
-				is ImmNode -> assemble1I(node, op1)
-			}
-			2 -> when(val op1 = node.op1!!) {
-				is RegNode -> when(val op2 = node.op2!!) {
-					is RegNode -> assemble2RR(node, op1.value, op2.value)
-					is MemNode -> { }
-					is ImmNode -> { }
-				}
-				is MemNode -> when(val op2 = node.op2!!) {
-					is RegNode -> { }
-					is MemNode -> invalidEncoding()
-					is ImmNode -> { }
-				}
-				is ImmNode -> invalidEncoding()
-			}
+			0 -> invalidEncoding()
+			1 -> invalidEncoding()
+			2 -> invalidEncoding()
 			3 -> invalidEncoding()
 			4 -> invalidEncoding()
 		}
@@ -381,35 +337,13 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private val OpNode.asReg get() = (this as? RegNode)?.value ?: invalidEncoding()
-
-	private val OpNode.asMem get() = this as? MemNode ?: invalidEncoding()
-
 	private fun byte(value: Int) = writer.i8(value)
 
 	private fun word(value: Int) = writer.i16(value)
 
 	private fun dword(value: Int) = writer.i32(value)
 
-	private fun checkMask(width: Width) {
-		if(width !in encoding.mask) invalidEncoding()
-	}
-
-	private fun checkO16(width: Width) {
-		if(encoding.o16 || (width == WORD && encoding.mask != OpMask.WORD))
-			writer.i8(0x66)
-	}
-
-	private fun checkPrefix() {
-		when(encoding.prefix) {
-			Prefix.NONE -> Unit
-			Prefix.P66 -> writer.i8(0x66)
-			Prefix.PF2 -> writer.i8(0xF2)
-			Prefix.PF3 -> writer.i8(0xF3)
-		}
-	}
-
-	/** r: REG, x: INDEX, b: RM, BASE, or OPREG*/
+	/** [w]: 64-bit override [r]: REG, [x]: INDEX, [b]: RM, BASE, or OPREG */
 	private fun writeRex(w: Int, r: Int, x: Int, b: Int) {
 		val value = 0b0100_0000 or (w shl 3) or (r shl 2) or (x shl 1) or b
 		if(value != 0b0100_0000) writer.i8(value)
@@ -441,27 +375,6 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun writeEVEX3(z: Int, l2: Int, l: Int, b: Int, v2: Int, aaa: Int) {
 		writer.i8((z shl 7) or (l2 shl 6) or (l shl 5) or (b shl 4) or (v2 shl 3) or aaa)
-	}
-
-	/** Return 1 if width is QWORD and widths has DWORD set, otherwise 0 */
-	private fun rexw(width: Width) =
-		((width.bytes shr 3) and (encoding.mask.value shr 2)) or encoding.rexw
-	
-	private fun writeOpcode(width: Width = DWORD, addition: Int = 0) {
-		when(encoding.escape) {
-			Escape.NONE -> Unit
-			Escape.E0F  -> writer.i8(0x0F)
-			Escape.E38  -> writer.i16(0x380F)
-			Escape.E3A  -> writer.i16(0x3A0F)
-			Escape.E00  -> writer.i16(0x000F)
-		}
-
-		/** Add one if width is not BYTE and if widths has BYTE set */
-		val addition2 = addition + ((encoding.mask.value and 1) and (1 shl width.ordinal).inv())
-		/** Add to the encoding opcode's MSB */
-		val finalOpcode = encoding.opcode or (addition2 shl ((encoding.oplen - 1) shl 3))
-		writer.i16(writer.pos, finalOpcode)
-		writer.pos += encoding.oplen
 	}
 
 
@@ -526,323 +439,6 @@ class Assembler(private val context: CompilerContext) {
 			invalidEncoding() // Empty memory operand
 		}
 	}
-
-
-
-	// Basic encoding
-
-
-
-	private fun encodeNone() {
-		if(encoding.o16) writer.i8(0x66)
-		checkPrefix()
-		if(encoding.rexw == 1) writer.i8(0x48)
-		writeOpcode(DWORD)
-	}
-
-
-
-	private fun encode1R(op1: Reg) {
-		val width = op1.width
-		checkMask(width)
-		checkO16(width)
-		checkPrefix()
-		writeRex(rexw(width), 0, 0, op1.rex)
-		writeOpcode(width)
-		writeModRM(0b11, encoding.extension, op1.value)
-	}
-
-
-
-	private fun encode1O(opcode: Int, oplen: Int, op1: Reg, mask: OpMask) {
-		val width = op1.width
-		if(width !in mask) invalidEncoding()
-		if(width == WORD && encoding.mask != OpMask.WORD) writer.i8(0x66)
-		val rexw = ((width.bytes shr 3) and (mask.value shr 2))
-		writeRex(rexw, 0, 0, op1.rex)
-		writer.varLengthInt(opcode + (op1.value shl ((oplen - 1) shl 3)))
-	}
-
-
-
-	private fun encode1O(op1: Reg) {
-		val width = op1.width
-		checkMask(width)
-		checkO16(width)
-		checkPrefix()
-		writeRex(rexw(width), 0, 0, op1.rex)
-		writeOpcode(width, op1.value)
-	}
-
-
-
-	private fun encode1ST(op1: Reg) {
-		checkPrefix()
-		writeOpcode(addition = op1.value)
-	}
-
-
-
-	private fun encode1RA(op1: Reg) {
-		val width = op1.width
-		if(width == DWORD) writer.i8(0x67)
-		checkMask(width)
-		checkO16(width)
-		checkPrefix()
-		writeRex(0, 0, 0, op1.rex)
-		writeOpcode(width)
-		writeModRM(0b11, encoding.extension, op1.value)
-	}
-
-
-
-	private fun encode1M(op1: MemNode) {
-		if(encoding.mask.isNotEmpty) checkMask(op1.width ?: invalidEncoding())
-		else if(op1.width != null) invalidEncoding()
-		val width = op1.width ?: DWORD
-		checkO16(width)
-		val disp = resolveMem(op1.value)
-		writeRex(rexw(width), 0, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
-		writeOpcode(width)
-		writeMem(op1, encoding.extension, disp, 0)
-	}
-
-
-
-	private fun encode2RR(op1: Reg, op2: Reg) {
-		val width = op1.width
-		if(width != op2.width) invalidEncoding()
-		checkMask(width)
-		checkO16(width)
-		writeRex(rexw(width), op1.rex, 0, op2.rex)
-		writeOpcode(width)
-		writeModRM(0b11, op1.value, op2.value)
-	}
-
-
-
-	/*private fun encode1M(opcode: Int, mask: OpMask, node: MemNode) {
-		val width = node.width ?: invalidEncoding()
-		checkWidths(node.width)
-		checkO16(width)
-		val disp = resolveMem(node.value)
-		writeRex(rexw(width), 0, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
-		writeOpcode(getOpcode(opcode, mask, width))
-		writeMem(node, 0, disp, 0)
-	}
-
-
-
-	private fun encode1MAnyWidth(opcode: Int, node: MemNode) {
-		val disp = resolveMem(node.value)
-		writeRex(0, 0, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
-		writeOpcode(opcode)
-		writeMem(node, 0, disp, 0)
-	}
-
-
-
-	private fun encode1MSingleWidth(opcode: Int, node: MemNode, width: Width) {
-		if(node.width != null && node.width != width) invalidEncoding()
-		encode1MAnyWidth(opcode, node)
-	}
-
-
-
-	private fun encode1MNoWidth(opcode: Int, node: MemNode) {
-		if(node.width != null) invalidEncoding()
-		encode1MAnyWidth(opcode, node)
-	}
-
-
-	private fun encode1R(opcode: Int, opMask: OpMask, extension: Int, op1: Reg) {
-		val width = op1.width
-		checkWidths(opMask, width)
-		checkO16(width)
-		writeRex(rexw(opMask, width), 0, 0, op1.rex)
-		writeOpcode(opcode, opMask, width)
-		writeModRM(0b11, extension, op1.value)
-	}
-
-
-
-	private fun encode2RM(
-		opcode: Int,
-		mask: OpMask,
-		op1: Reg,
-		op2: MemNode,
-		immLength: Int,
-		mismatch: Boolean = false
-	) {
-		val width = op1.width
-		if(!mismatch && op2.width != null && op2.width != op1.width) invalidEncoding()
-		checkWidths(mask, width)
-		checkO16(width)
-		val disp = resolveMem(op2.value)
-		writeRex(rexw(mask, width), op1.rex, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
-		writeOpcode(getOpcode(opcode, mask, width))
-		writeMem(op2, 0, disp, immLength)
-	}*/
-
-
-
-	/*
-	Assembly
-	 */
-
-
-
-	private val customEncodings = mapOf(
-		Mnemonic.MOV    to ::encodeMOV,
-		Mnemonic.ENTER  to ::encodeENTER,
-		Mnemonic.ENTERW to ::encodeENTER
-	)
-
-
-
-	private fun encodeMOV(node: InsNode) {
-		if(node.size != 2) invalidEncoding()
-		val op1 = node.op1!!
-		val op2 = node.op2!!
-
-		//88  MOV  RM_R     1111
-		//8B  MOV  R_RM     1111
-
-		if(op1 is RegNode) {
-			val r1 = op1.value
-			if(op2 is RegNode) {
-				val r2 = op1.value
-
-				if(r1.type == RegType.CR) {
-					//writeRex(0, )
-				}
-			}
-		}
-	}
-
-
-
-	private fun encodeENTER(node: InsNode) {
-		if(node.size != 2) invalidEncoding()
-		val op1 = node.op1 as? ImmNode ?: invalidEncoding()
-		val op2 = node.op2 as? ImmNode ?: invalidEncoding()
-		val i16 = resolveImm(op1)
-		if(hasImmReloc || !i16.isImm16) invalidEncoding()
-		val i8 = resolveImm(op2)
-		if(hasImmReloc || !i8.isImm8) invalidEncoding()
-		if(node.mnemonic == Mnemonic.ENTERW) byte(0x66)
-		byte(0xC8)
-		word(i16.toInt())
-		byte(i8.toInt())
-	}
-
-
-
-	private fun assemble0(node: InsNode) {
-		encoding(Ops.NONE)
-		encodeNone()
-	}
-
-
-
-	private fun assemble1R(node: InsNode, op1: Reg) {
-		when {
-			op1.isR -> when {
-				Ops.R in group -> { encoding = group[Ops.R]; encode1R(op1) }
-				Ops.O in group -> { encoding = group[Ops.O]; encode1O(op1) }
-				op1 == Reg.AX -> { encoding(Ops.AX); encodeNone() }
-				else -> invalidEncoding()
-			}
-			op1.type == RegType.ST -> { encoding(Ops.ST); encode1ST(op1) }
-			op1 == Reg.FS -> { encoding(Ops.FS); encodeNone() }
-			op1 == Reg.GS -> { encoding(Ops.GS); encodeNone() }
-			else -> invalidEncoding()
-		}
-	}
-
-
-
-	private fun assemble1I(node: InsNode, op1: ImmNode) {
-		val imm = resolveImm(op1)
-
-		fun imm(ops: Ops, width: Width, rel: Boolean) {
-			encoding(ops)
-			encodeNone()
-			writeImm(op1, width, imm, false, rel)
-		}
-
-		when {
-			node.mnemonic == Mnemonic.PUSH -> when {
-				op1.width == BYTE  -> imm(Ops.I8, BYTE, false)
-				op1.width == WORD  -> imm(Ops.I16, WORD, false)
-				op1.width == DWORD -> imm(Ops.I32, DWORD, false)
-				hasImmReloc -> imm(Ops.I32, DWORD, false)
-				imm.isImm8  -> imm(Ops.I8, BYTE, false)
-				imm.isImm16 -> imm(Ops.I16, WORD, false)
-				else        -> imm(Ops.I32, DWORD, false)
-			}
-			Ops.REL32 in group ->
-				if(Ops.REL8 in group && ((!hasImmReloc && imm.isImm8) || op1.width == BYTE))
-					imm(Ops.REL8, BYTE, true)
-				else
-					imm(Ops.REL32, DWORD, true)
-			Ops.REL8 in group -> imm(Ops.REL8, BYTE, true)
-			Ops.I8   in group -> imm(Ops.I8, BYTE, false)
-			Ops.I16  in group -> imm(Ops.I16, WORD, false)
-			else              -> invalidEncoding()
-		}
-	}
-
-
-
-	private fun assemble2RR(node: InsNode, op1: Reg, op2: Reg) {
-		when {
-			op2.isR -> when {
-				Ops.A_O in group -> when {
-					op1.isA -> { encoding = group[Ops.A_O]; encode1O(op2) }
-					op2.isA -> { encoding = group[Ops.A_O]; encode1O(op1) }
-					else    -> { encoding = group[Ops.R_R]; encode2RR(op1, op2) }
-				}
-				Ops.RM_CL in group -> when {
-					op2 == Reg.CL -> { encoding = group[Ops.RM_CL]; encode1R(op1) }
-					else -> encode2RR(op1, op2)
-				}
-				Ops.R_R in group -> {
-					encoding = group[Ops.R_R]
-					if(Ops.M_R in group) encode2RR(op2, op1) else encode2RR(op1, op2)
-				}
-				else -> invalidEncoding()
-			}
-			op1 == Reg.ST0 -> { encoding(Ops.ST0_ST); encode1ST(op2) }
-			op2 == Reg.ST0 -> { encoding(Ops.ST_ST0); encode1ST(op1) }
-			else -> invalidEncoding()
-		}
-	}
-
-
-
-	private fun assemble2(node: InsNode, op1: OpNode, op2: OpNode) {
-		if(op1 is RegNode) {
-			if(op2 is RegNode) {
-				assemble2RR(node, op2.value, op2.value)
-			} else if(op2 is MemNode) {
-
-			} else if(op2 is ImmNode) {
-
-			}
-		} else if(op1 is MemNode) {
-			if(op2 is RegNode) {
-
-			} else if(op2 is ImmNode) {
-
-			} else {
-				invalidEncoding()
-			}
-		} else {
-			invalidEncoding()
-		}
-	}
-
 
 
 }
