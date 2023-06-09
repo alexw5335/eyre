@@ -1,4 +1,4 @@
-package eyre.nasm
+package eyre.gen
 
 import eyre.*
 
@@ -18,9 +18,9 @@ class NasmLine(val raw: RawNasmLine) {
 	var opcode = 0
 	var oplen = 0
 	var ext = 0
-	var rexw = false
-	var o16 = false
-	var a32 = false
+	var rexw = 0
+	var o16 = 0
+	var a32 = 0
 	var enc = OpEnc.NONE
 	var pseudo = -1
 	var cc = false

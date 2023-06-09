@@ -1,14 +1,49 @@
 package eyre
 
-import eyre.manual.ManualParser
-import eyre.nasm.NasmExt
-import eyre.nasm.NasmParser
+import eyre.gen.CommonEncoding
+import eyre.gen.ManualParser
+import eyre.gen.NasmExt
+import eyre.gen.NasmParser
 
 
 
 fun main() {
-	val nasmEncodings = NasmParser("nasm.txt", extensions).let { it.read(); it.encodings }
-	val manualEncodings = ManualParser("encodings.txt").let { it.read(); it.encodings }
+	val manualParser = ManualParser("encodings.txt")
+	val manualEncodings = manualParser.convert(manualParser.parse())
+	val nasmParser = NasmParser("nasm.txt", extensions)
+	nasmParser.read()
+	val nasmEncodings = nasmParser.encodings
+
+	val nasmMap = HashMap<String, ArrayList<CommonEncoding>>()
+	val manualMap = HashMap<String, ArrayList<CommonEncoding>>()
+	for(e in nasmEncodings) nasmMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
+	for(e in manualEncodings) manualMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
+
+	manualEncodings
+		.map { it.mnemonic }
+		.toSet()
+		.sorted()
+		.forEach { println("$it,") }
+
+	for((mnemonic, manual) in manualMap) {
+		//if(mnemonic in ignoredMnemonics) continue
+		val nasm = nasmMap[mnemonic] ?: error("Missing mnemonic: $mnemonic")
+
+		for(encoding in manual) {
+			if(encoding.pseudo >= 0)
+				continue
+			if(nasm.none { it == encoding }) {
+				println(encoding)
+				for(m in nasm)
+					println("\t$m")
+			}
+		}
+	}
+
+
+
+/*	val nasmEncodings = NasmParser("nasm.txt", extensions).let { it.read(); it.encodings }
+	val manualEncodings = ManualParser("encodings.txt").let { it.parse(); it.encodings }
 
 	val nasmMap = HashMap<String, ArrayList<Encoding>>()
 	val manualMap = HashMap<String, ArrayList<Encoding>>()
@@ -19,7 +54,7 @@ fun main() {
 		.map(Encoding::mnemonic)
 		.toSet()
 		.sorted()
-		.forEach { println("$it,")}
+		.forEach { println("$it,")}*/
 
 /*	for((mnemonic, manual) in manualMap) {
 		if(mnemonic in ignoredMnemonics) continue

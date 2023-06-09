@@ -17,21 +17,6 @@ enum class OpType {
 
 
 
-enum class MmxSseOp {
-	R8,
-	R16,
-	R32,
-	R64,
-	M16,
-	M32,
-	M64,
-	M128,
-	X,
-	MM
-}
-
-
-
 enum class Op(val type: OpType, val width: Width?) {
 
 	NONE(OpType.MISC, null),
@@ -100,8 +85,6 @@ enum class Op(val type: OpType, val width: Width?) {
 
 	SEG(OpType.MISC, null),
 
-	REG(OpType.MISC, null),
-
 	CR(OpType.MISC, QWORD),
 	DR(OpType.MISC, QWORD),
 
@@ -115,12 +98,8 @@ enum class Op(val type: OpType, val width: Width?) {
 enum class MultiOps(
 	vararg val parts: Ops,
 	val mask: OpMask? = null,
-	val p66: Boolean = false
+	val mask2: OpMask? = null
 ) {
-	E_EM(Ops.MM_MM, Ops.MM_M, Ops.X_X, Ops.X_M, p66 = true),
-	E_I8(Ops.MM_I8, Ops.X_I8, p66 = true),
-	E_M(Ops.MM_M, Ops.X_M, p66 = true),
-
 	RM(Ops.R, Ops.M),
 	R_RM(Ops.R_R, Ops.R_M),
 	RM_R(Ops.R_R, Ops.M_R),
@@ -149,20 +128,10 @@ enum class MultiOps(
 	X_RM(Ops.X_R, Ops.X_M),
 	X_MMM(Ops.X_M, Ops.X_MM),
 	X_XM_X0(Ops.X_X, Ops.X_M),
-	X_RM8_I8(Ops.X_R_I8, Ops.X_M_I8, mask = OpMask.BYTE),
-	X_RM16_I8(Ops.X_R_I8, Ops.X_M_I8, mask = OpMask.WORD),
-	X_RM32_I8(Ops.X_R_I8, Ops.X_M_I8, mask = OpMask.DWORD),
-	X_RM64_I8(Ops.X_R_I8, Ops.X_M_I8, mask = OpMask.QWORD),
-	MM_RM16_I8(Ops.MM_R_I8, Ops.MM_M_I8, mask = OpMask.WORD),
-	R32_MM(Ops.R_MM, mask = OpMask.DWORD),
-	R32_X(Ops.R_X, mask = OpMask.DWORD),
-	REGM8_X_I8(Ops.REG_X_I8, Ops.M_X_I8, mask = OpMask.BYTE),
-	REGM16_X_I8(Ops.REG_X_I8, Ops.M_X_I8, mask = OpMask.WORD),
+	X_RM_I8(Ops.X_R_I8, Ops.X_M_I8),
 	X_XM16(Ops.X_X, Ops.X_M, mask = OpMask.WORD),
 	MM_RM32(Ops.MM_R, Ops.MM_M, mask = OpMask.DWORD),
 	X_RM32(Ops.X_R, Ops.X_M, mask = OpMask.DWORD),
-	RM64_MM(Ops.R_MM, Ops.M_MM, mask = OpMask.QWORD),
-	RM64_X(Ops.R_X, Ops.M_X, mask = OpMask.QWORD),
 	X_XM32_I8(Ops.X_X_I8, Ops.X_M_I8, mask = OpMask.DWORD),
 	X_XM64_I8(Ops.X_X_I8, Ops.X_M_I8, mask = OpMask.QWORD),
 	X_M64(Ops.X_M, mask = OpMask.QWORD),
@@ -171,9 +140,9 @@ enum class MultiOps(
 	XM64_X(Ops.X_X, Ops.M_X, mask = OpMask.QWORD),
 	XM32_X(Ops.X_X, Ops.M_X, mask = OpMask.DWORD),
 	MM_XM64(Ops.MM_X, Ops.MM_X, mask = OpMask.QWORD),
-	R_XM64(Ops.R_X, Ops.R_M, mask = OpMask.QWORD),
-	R_XM32(Ops.R_X, Ops.R_M, mask = OpMask.DWORD),
-	REGM32_X_I8(Ops.REG_X_I8, Ops.M_X_I8, mask = OpMask.DWORD),
+	MM_RM(Ops.MM_R, Ops.MM_M),
+	RM_MM(Ops.R_MM, Ops.M_MM),
+	RM_X(Ops.R_X, Ops.M_X),
 }
 
 
@@ -192,7 +161,6 @@ enum class Ops {
 	REL8,
 	REL32,
 	ST,
-	RA,
 	FS,
 	GS,
 	O,
@@ -208,7 +176,6 @@ enum class Ops {
 	RM_CL,
 	ST_ST0,
 	ST0_ST,
-	RA_M,
 	A_O,
 
 	// 3 operands
@@ -218,18 +185,57 @@ enum class Ops {
 	M_R_I8,
 	RM_R_CL,
 
-	// Mismatched widths
+	// MMX/SSE (also contains R_M)
+	MM_MM,
+	MM_M,
+	M_MM,
+	MM_I8,
+	MM_MM_I8,
+	MM_M_I8,
+	R_MM_I8,
+	R_MM,
+	MM_R,
+	MM_RM_I8,
+	X_MM,
+	MM_X,
+	X_M,
+	M_X,
+	X_X,
+	X_I8,
+	X_R_I8,
+	X_M_I8,
+	X_R,
+	M_X_I8,
+	R_X_I8,
+	R_X,
+	X_X_I8,
+
+	// MOVSX/MOVZX
 	R_RM8,
 	R_RM16,
+	// MOVSXD
 	R_RM32,
+	// LAR/LSL
 	R_REG,
+	// LAR/LSL/LSS/LFS/LGS
 	R_MEM,
+	// CRC32
 	R32_RM,
+	// INVEPT/INVVPID/INVPCID
 	R64_M128,
-	RA_M512,
+	// CVTSS2SI/CVTTSS2SI
+	R_XM32,
+	// CVTSD2SI/CVTTSD2SI
+	R_XM64,
 
 	// ENTER
 	I16_I8,
+
+	// UMONITOR
+	RA,
+
+	// ENQCMD/ENQCMDS/MOVDIR64B
+	RA_M512,
 
 	// MOV
 	O_I,
@@ -249,34 +255,5 @@ enum class Ops {
 	I8_A,
 	A_DX,
 	DX_A,
-
-	// MMX/SSE (also contains R_M)
-	MM_MM,
-	MM_M,
-	M_MM,
-	MM_I8,
-	MM_MM_I8,
-	MM_M_I8,
-	REG_MM_I8,
-	R_MM,
-	MM_R,
-	MM_R_I8,
-
-	X_MM,
-	MM_X,
-
-	X_M,
-	M_X,
-	X_X,
-	X_I8,
-	REG_X,
-	X_R_I8,
-	X_M_I8,
-	X_R,
-	REG_X_I8,
-	M_X_I8,
-	R_X_I8,
-	R_X,
-	X_X_I8,
 
 }

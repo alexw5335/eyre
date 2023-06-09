@@ -1,4 +1,4 @@
-package eyre.nasm
+package eyre.gen
 
 class RawNasmLine(
 	val lineNumber: Int,

@@ -1,4 +1,4 @@
-package eyre.nasm
+package eyre.gen
 
 import eyre.Op
 import eyre.Width
@@ -135,6 +135,29 @@ object Maps {
 		"INT01",
 		"INT03",
 		"SKINIT",
+		// BND
+		"BNDMK",
+		"BNDCL",
+		"BNDCL",
+		"BNDCL",
+		"BNDCU",
+		"BNDCU",
+		"BNDCU",
+		"BNDCN",
+		"BNDCN",
+		"BNDCN",
+		"BNDMOV",
+		"BNDMOV",
+		"BNDMOV",
+		"BNDMOV",
+		"BNDLDX",
+		"BNDLDX",
+		"BNDLDX",
+		"BNDSTX",
+		"BNDSTX",
+		"BNDSTX",
+		"BNDSTX",
+		"BNDSTX",
 	)
 
 	val essentialMnemonics = setOf(

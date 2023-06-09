@@ -1,4 +1,4 @@
-package eyre.nasm
+package eyre.gen
 
 import eyre.*
 import eyre.util.isHex
@@ -18,7 +18,7 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 
 	val lines = ArrayList<NasmLine>()
 
-	val encodings = ArrayList<Encoding>()
+	val encodings = ArrayList<CommonEncoding>()
 
 
 
@@ -27,7 +27,7 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 		for(l in rawLines) if(filterLine(l)) filteredRawLines.add(l)
 		for(l in filteredRawLines) scrapeLine(l, lines)
 		for(l in lines) determineOperands(l)
-		for(l in lines) convertLine(l, encodings)
+		for(l in lines) convert(l, encodings)
 	}
 
 
@@ -106,9 +106,9 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 			part.endsWith("+r")       -> { line.opreg = true; line.addOpcode(part.dropLast(2).toInt(16)) }
 			part == "/r"   -> line.modrm  = true
 			part == "/is4" -> line.is4    = true
-			part == "o16"  -> line.o16    = true
-			part == "o64"  -> line.rexw   = true
-			part == "a32"  -> line.a32    = true
+			part == "o16"  -> line.o16    = 1
+			part == "o64"  -> line.rexw   = 1
+			part == "a32"  -> line.a32    = 1
 			part == "odf"  -> line.odf    = true
 			part == "f2i"  -> line.prefix = Prefix.PF2
 			part == "f3i"  -> line.prefix = Prefix.PF3
@@ -303,37 +303,24 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 
 
 
-	private fun NasmLine.toEncoding(mnemonic: String, opcode: Int) = Encoding(
-		mnemonic,
-		prefix,
-		escape,
-		opcode,
-		ext,
-		ArrayList(ops),
-		if(rexw) 1 else 0,
-		if(o16) 1 else 0,
-		pseudo
-	)
+	private fun convert(line: NasmLine, list: ArrayList<CommonEncoding>) {
+		fun add(mnemonic: String, opcode: Int) = list.add(CommonEncoding(
+			mnemonic,
+			line.prefix,
+			line.escape,
+			opcode,
+			line.ext,
+			line.ops,
+			line.rexw,
+			line.o16,
+			line.pseudo
+		))
 
-
-
-	private fun convertLine(line: NasmLine, list: ArrayList<Encoding>) {
-		fun add() {
-			if(line.cc)
-				for((mnemonic, opcode) in Maps.ccList)
-					list += line.toEncoding(line.mnemonic.dropLast(2) + mnemonic, line.addedOpcode(opcode))
-			else
-				list += line.toEncoding(line.mnemonic, line.opcode)
-		}
-
-		if(line.multiIndex >= 0) {
-			line.ops[line.multiIndex] = line.multi1
-			add()
-			line.ops[line.multiIndex] = line.multi2
-			add()
-		} else {
-			add()
-		}
+		if(line.cc)
+			for((postfix, opcodeInc) in Maps.ccList)
+				add(line.mnemonic.dropLast(2) + postfix, line.opcode + opcodeInc)
+		else
+			add(line.mnemonic, line.opcode)
 	}
 
 

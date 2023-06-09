@@ -1,16 +1,17 @@
-package eyre
+package eyre.gen
 
-data class Encoding(
-	val mnemonic : Mnemonic,
+import eyre.Escape
+import eyre.Op
+import eyre.Prefix
+
+class CommonEncoding(
+	val mnemonic : String,
 	val prefix   : Prefix,
 	val escape   : Escape,
 	val opcode   : Int,
-	val mask     : OpMask,
-	val mask2    : OpMask,
 	val ext      : Int,
-	val ops      : Ops,
+	val ops      : List<Op>,
 	val rexw     : Int,
 	val o16      : Int,
-	val norexw   : Int,
 	val pseudo   : Int,
 )
