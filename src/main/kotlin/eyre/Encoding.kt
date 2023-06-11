@@ -6,7 +6,6 @@ data class Encoding(
 	val escape   : Escape,
 	val opcode   : Int,
 	val mask     : OpMask,
-	val mask2    : OpMask,
 	val ext      : Int,
 	val ops      : Ops,
 	val rexw     : Int,

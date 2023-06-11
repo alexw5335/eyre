@@ -1,24 +1,21 @@
 package eyre.util
 
-object Unique {
+object Unique : Iterable<Unique.Holder> {
 
-	private val uniques = HashMap<String, HashSet<String>>()
+	data class Holder(val value: String, var count: Int) {
+		override fun toString() = "$value $count"
+	}
 
-	private val String.set get() = uniques.getOrPut(this, ::HashSet)
+	val set = HashMap<String, Holder>()
 
-	operator fun set(key: String, value: String) = key.set.add(value)
+	fun add(value: String) = set.getOrPut(value) { Holder(value, 0) }.count++
 
-	operator fun plus(value: String) = "misc".set.add(value)
-
-	fun print(key: String, value: String, print: String) {
-		val set = uniques.getOrPut(key, ::HashSet)
+	fun print(value: String, print: String = value) {
 		if(value in set) return
-		set += value
+		add(value)
 		println(print)
 	}
 
-	fun print(key: String, value: String) = print(key, value, value)
-
-	fun print(value: String) = print("misc", value)
+	override fun iterator() = set.values.iterator()
 
 }

@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import eyre.util.isHex
 import eyre.Width.*
+import eyre.util.Unique
 
 class ManualParser(private val inputs: List<String>) {
 
@@ -27,8 +28,10 @@ class ManualParser(private val inputs: List<String>) {
 		return encodings
 	}
 
+
+
 	fun convert(encodings: List<Encoding>) = ArrayList<CommonEncoding>().also {
-		for(e in encodings) convert(e, it)
+		//for(e in encodings) convert(e, it)
 	}
 
 
@@ -44,8 +47,7 @@ class ManualParser(private val inputs: List<String>) {
 		var escape = Escape.NONE
 		var opcode = 0
 		var ext = 0
-		var mask1 = OpMask(0)
-		var mask2 = OpMask(0)
+		var mask = OpMask(0)
 		var opsString = "NONE"
 		var rexw = 0
 		var o16 = 0
@@ -101,7 +103,7 @@ class ManualParser(private val inputs: List<String>) {
 					if(part.startsWith(":"))
 						pseudo = part.drop(1).toInt()
 					else
-						mask1 = OpMask(part.toIntOrNull(2) ?: error("Line $lineNumber: Invalid part: $part"))
+						mask = OpMask(part.toIntOrNull(2) ?: error("Line $lineNumber: Invalid part: $part"))
 			}
 		}
 
@@ -110,8 +112,7 @@ class ManualParser(private val inputs: List<String>) {
 			prefix,
 			escape,
 			opcode,
-			mask1,
-			mask2,
+			mask,
 			ext,
 			ops,
 			rexw,
@@ -120,31 +121,55 @@ class ManualParser(private val inputs: List<String>) {
 			pseudo
 		))
 
-		if(opsString == "E_EM") {
+		val multi = multiMap[opsString]
+		val ops = opsMap[opsString]
+
+		if(multi?.mask != null)
+			if(mask.isNotEmpty)
+				error("Mask already present")
+			else
+				mask = multi.mask
+
+		if(multi == null && ops == null)
+			error("Unrecognised ops: $opsString")
+
+		if(mnemonic.endsWith("cc")) {
+			for((postfix, opcodeInc) in Maps.ccList)
+				if(multi != null)
+					for(part in multi.parts)
+						add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc, part, prefix)
+				else
+					add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc, ops!!, prefix)
+		} else {
+			if(multi != null)
+				for(part in multi.parts)
+					add(mnemonic, opcode, part, prefix)
+			else
+				add(mnemonic, opcode, ops!!, prefix)
+		}
+
+		/*(if(opsString == "E_EM") {
 			add(mnemonic, opcode, Ops.MM_MM, prefix)
-			add(mnemonic, opcode, Ops.MM_M, prefix)
+			add(mnemonic, opcode, Ops.MM_M64, prefix)
 			add(mnemonic, opcode, Ops.X_X, Prefix.P66)
-			add(mnemonic, opcode, Ops.X_M, Prefix.P66)
+			add(mnemonic, opcode, Ops.X_M128, Prefix.P66)
 		} else if(opsString == "E_I8") {
 			add(mnemonic, opcode, Ops.MM_I8, prefix)
 			add(mnemonic, opcode, Ops.X_I8, Prefix.P66)
 		} else if(opsString == "E_EM_I8") {
 			add(mnemonic, opcode, Ops.MM_MM_I8, prefix)
-			add(mnemonic, opcode, Ops.MM_M_I8, prefix)
+			add(mnemonic, opcode, Ops.MM_M64_I8, prefix)
 			add(mnemonic, opcode, Ops.X_X_I8, Prefix.P66)
-			add(mnemonic, opcode, Ops.X_M_I8, Prefix.P66)
+			add(mnemonic, opcode, Ops.X_M128_I8, Prefix.P66)
 		} else {
 			val multi = multiMap[opsString]
 			val ops = opsMap[opsString]
 
-			if(multi != null) {
-				if(multi.mask != null) {
-					mask2 = mask1
-					mask1 = multi.mask
-				} else if(multi.mask2 != null) {
-					mask2 = multi.mask2
-				}
-			}
+			if(multi?.mask != null)
+				if(mask.isNotEmpty)
+					error("Mask already present")
+				else 
+					mask = multi.mask
 
 			if(multi == null && ops == null)
 				error("Line $lineNumber: Unrecognised ops: $opsString")
@@ -163,24 +188,9 @@ class ManualParser(private val inputs: List<String>) {
 				else
 					add(mnemonic, opcode, ops!!, prefix)
 			}
-		}
+		}*/
 	}
 
-
-
-	private val multiOpMap = mapOf(
-		"RM"   to Pair("R", "M"),
-		"RM8"  to Pair("R8", "M8"),
-		"RM16" to Pair("R16", "M16"),
-		"RM32" to Pair("R32", "M32"),
-		"RM64" to Pair("R64", "M64"),
-		"XM"   to Pair("X", "M128"),
-		"MMM"  to Pair("MM", "M64"),
-		"XM16" to Pair("X", "M16"),
-		"XM32" to Pair("X", "M32"),
-		"XM64" to Pair("X", "M64"),
-		"BNDM128" to Pair("BND", "M128")
-	)
 	
 	
 	private val Width.r get() = when(this) {
@@ -207,6 +217,15 @@ class ManualParser(private val inputs: List<String>) {
 		else  -> error("Invalid width: $this")
 	}
 
+
+	private val Width.mof get() = when(this) {
+		BYTE  -> Op.MOFFS8
+		WORD  -> Op.MOFFS16
+		DWORD -> Op.MOFFS32
+		QWORD -> Op.MOFFS64
+		else  -> error("Invalid width: $this")
+	}
+
 	private val Width.m get() = when(this) {
 		BYTE  -> Op.M8
 		WORD  -> Op.M16
@@ -220,7 +239,7 @@ class ManualParser(private val inputs: List<String>) {
 	
 	
 	
-	fun convert(encoding: Encoding, list: ArrayList<CommonEncoding>) {
+	/*fun convert(encoding: Encoding, list: ArrayList<CommonEncoding>) {
 		fun add(ops: List<Op>, rexw: Int, o16: Int, opcode: Int) {
 			list.add(CommonEncoding(
 				encoding.mnemonic.name,
@@ -239,23 +258,36 @@ class ManualParser(private val inputs: List<String>) {
 
 		fun add(vararg ops: Op) = add(ops.toList())
 
-		var found = false
-		when(encoding.ops) {
-			Ops.NONE -> add()
-			Ops.RA,
-			Ops.RA_M512  -> encoding.mask.forEachWidth { add(it.r) }
-			Ops.MM_MM    -> add(Op.MM, Op.MM)
-			Ops.MM_I8    -> add(Op.MM, Op.I8)
-			Ops.MM_MM_I8 -> add(Op.MM, Op.MM, Op.I8)
-			Ops.X_MM     -> add(Op.X, Op.MM)
-			Ops.MM_X     -> add(Op.MM, Op.X)
-			Ops.X_X      -> add(Op.X, Op.X)
-			Ops.X_I8     -> add(Op.X, Op.I8)
-			Ops.X_X_I8   -> add(Op.X, Op.X, Op.I8)
-			else         -> found = false
+		if(encoding.mask.isEmpty) {
+			when(encoding.ops) {
+				Ops.NONE     -> add()
+				Ops.MM_MM    -> add(Op.MM, Op.MM)
+				Ops.MM_I8    -> add(Op.MM, Op.I8)
+				Ops.MM_MM_I8 -> add(Op.MM, Op.MM, Op.I8)
+				Ops.X_MM     -> add(Op.X, Op.MM)
+				Ops.MM_X     -> add(Op.MM, Op.X)
+				Ops.X_X      -> add(Op.X, Op.X)
+				Ops.X_I8     -> add(Op.X, Op.I8)
+				Ops.X_X_I8   -> add(Op.X, Op.X, Op.I8)
+				Ops.R64_M128 -> add(Op.R64, Op.M128)
+				Ops.I16_I8   -> add(Op.I16, Op.I8)
+				Ops.I8       -> add(Op.I8)
+				Ops.I16      -> add(Op.I16)
+				Ops.I32      -> add(Op.I32)
+				Ops.AX       -> add(Op.AX)
+				Ops.REL8     -> add(Op.REL8)
+				Ops.REL32    -> add(Op.REL32)
+				Ops.ST       -> add(Op.ST)
+				Ops.FS       -> add(Op.FS)
+				Ops.GS       -> add(Op.GS)
+				Ops.ST_ST0   -> add(Op.ST, Op.ST0)
+				Ops.ST0_ST   -> add(Op.ST0, Op.ST)
+				Ops.M        -> add(Op.MEM)
+				else         -> error("Invalid: $encoding")
+			}
+			return
 		}
-		if(found) return
-		
+
 		encoding.mask.forEachWidth { with(it) {
 			val rexw = if(encoding.rexw == 1)
 				1
@@ -281,17 +313,8 @@ class ManualParser(private val inputs: List<String>) {
 			fun add2(vararg ops: Op) = add(ops.toList(), rexw, o16, opcode)
 
 			when(encoding.ops) {
-				Ops.R     -> add2(r())
-				Ops.M     -> add2(m())
-				Ops.I8    -> add(Op.I8)
-				Ops.I16   -> add(Op.I16)
-				Ops.I32   -> add(Op.I32)
-				Ops.AX    -> add(Op.AX)
-				Ops.REL8  -> add(Op.REL8)
-				Ops.REL32 -> add(Op.REL32)
-				Ops.ST    -> add(Op.ST)
-				Ops.FS    -> add(Op.FS)
-				Ops.GS    -> add(Op.GS)
+				Ops.R     -> add2(r)
+				Ops.M     -> add2(m)
 				Ops.O     -> add2(r)
 
 				Ops.R_R    -> add2(r, r)
@@ -302,142 +325,59 @@ class ManualParser(private val inputs: List<String>) {
 				Ops.RM_I8  -> { add2(r, Op.I8); add2(m, Op.I8) }
 				Ops.RM_1   -> { add2(r, Op.ONE); add2(m, Op.ONE) }
 				Ops.RM_CL  -> { add2(r, Op.CL); add2(m, Op.CL) }
-				Ops.ST_ST0 -> add2(Op.ST, Op.ST0)
-				Ops.ST0_ST -> add2(Op.ST0, Op.ST)
 				Ops.A_O    -> add2(a, r)
 
-				// 3 operands
 				Ops.R_RM_I -> { add2(r, r, i); add2(r, m, i) }
-				Ops.R_R_I8 -> add(r, r, Op.I8)
-				Ops.R_M_I8 -> add(r, m, Op.I8)
-				Ops.M_R_I8 -> add(m, r, Op.I8)
+				Ops.R_R_I8 -> add2(r, r, Op.I8)
+				Ops.R_M_I8 -> add2(r, m, Op.I8)
+				Ops.M_R_I8 -> add2(m, r, Op.I8)
 				Ops.RM_R_CL -> { add2(r, r, Op.CL); add2(m, r, Op.CL) }
 
-				Ops.MM_MM,
-				Ops.MM_I8,
-				Ops.MM_MM_I8,
-				Ops.MM_M_I8,
-				Ops.R_MM_I8,
-				Ops.R_MM,
-				Ops.MM_R,
-				Ops.MM_RM_I8,
-				Ops.X_MM,
-				Ops.MM_X,
-				Ops.X_X,
-				Ops.X_I8,
-				Ops.X_R_I8,
-				Ops.X_M_I8,
-				Ops.X_R,
-				Ops.M_X_I8,
-				Ops.R_X_I8,
-				Ops.R_X,
-				Ops.X_X_I8,
+				Ops.MM_M64_I8 -> add2(Op.MM, m, Op.I8)
+				Ops.R_MM_I8 -> add2(r, Op.MM, Op.I8)
+				Ops.R_MM -> add2(r, Op.MM)
+				Ops.MM_R -> add2(Op.MM, r)
+				Ops.MM_RM_I8 -> { add2(Op.MM, r, Op.I8); add2(Op.MM, m, Op.I8) }
+				Ops.X_R_I8 -> add2(Op.X, r, Op.I8)
+				Ops.X_M128_I8 -> add2(Op.X, m, Op.I8)
+				Ops.X_R -> add2(Op.X, r)
+				Ops.M128_X_I8 -> add2(m, Op.X, Op.I8)
+				Ops.R_X_I8 -> add2(r, Op.X, Op.I8)
+				Ops.R_X -> add2(r, Op.X)
+				Ops.MM_M64 -> add2(Op.MM, m)
+				Ops.M64_MM -> add2(m, Op.MM)
+				Ops.X_M128 -> add2(Op.X, m)
+				Ops.M128_X -> add2(m, Op.X)
 
-				Ops.R_RM8,
-				Ops.R_RM16,
-				Ops.R_RM32,
-				Ops.R_REG,
-				Ops.R_MEM,
-				Ops.R32_RM,
-				Ops.R64_M128,
-				Ops.I16_I8,
-				Ops.O_I,
-				Ops.R_SEG,
-				Ops.M_SEG,
-				Ops.SEG_R,
-				Ops.SEG_M,
-				Ops.A_MOFFS,
-				Ops.MOFFS_A,
-				Ops.R_DR,
-				Ops.DR_R,
-				Ops.R_CR,
-				Ops.CR_R,
-				Ops.A_I8,
-				Ops.I8_A,
-				Ops.A_DX,
-				Ops.DX_A -> { }
+				Ops.R_RM8 -> { add2(r, Op.R8); add2(r, Op.M8) }
+				Ops.R_RM16 -> { add2(r, Op.R16); add2(r, Op.M16) }
+				Ops.R_RM32 -> { add2(r, Op.R32); add2(r, Op.M32) }
+				Ops.R_REG -> { add2(r, Op.R16); add2(r, Op.R32); add2(r, Op.R64) }
+				Ops.R_MEM -> add2(r, Op.MEM)
+				Ops.R32_RM -> { add2(Op.R32, r); add2(Op.R32, m) }
+				Ops.O_I -> if(this == QWORD) add2(Op.R64, Op.I64) else add2(r, i)
+				Ops.R_SEG -> add2(r, Op.SEG)
+				Ops.M_SEG -> add2(m, Op.SEG)
+				Ops.SEG_R -> add2(Op.SEG, r)
+				Ops.SEG_M -> add2(Op.SEG, m)
+				Ops.A_MOF -> add2(a, mof)
+				Ops.MOF_A -> add2(mof, a)
+				Ops.R_DR -> add2(r, Op.DR)
+				Ops.DR_R -> add2(Op.DR, r)
+				Ops.R_CR -> add2(r, Op.CR)
+				Ops.CR_R -> add2(Op.CR, r)
+				Ops.A_I8 -> add2(a, Op.I8)
+				Ops.I8_A -> add2(Op.I8, a)
+				Ops.A_DX -> add2(a, Op.DX)
+				Ops.DX_A -> add2(Op.DX, a)
+				Ops.R_XM32 -> { add(r, Op.X); add2(r, Op.M32) }
+				Ops.R_XM64 -> { add2(r, Op.X); add2(r, Op.M64) }
+				Ops.RA -> add2(r)
+				Ops.RA_M512 -> add2(r, Op.M512)
 
-				Ops.X_M,
-				Ops.M_X,
-				Ops.MM_M,
-				Ops.M_MM,
-				Ops.NONE,
-				Ops.RA,
-				Ops.RA_M512 -> { }
+				else -> error("Invalid ops: $encoding")
 			}
-		}
-	}
-
-
-	/*fun convert(encoding: Encoding, list: ArrayList<CommonEncoding>) {
-		val opsString = encoding.ops.name
-		val ops = ArrayList(opsString.split('_'))
-
-		fun add(ops: List<Op>, rexw: Int, o16: Int, opcode: Int) {
-			list.add(CommonEncoding(
-				encoding.mnemonic.name,
-				encoding.prefix,
-				encoding.escape,
-				opcode,
-				encoding.ext,
-				ops,
-				rexw,
-				o16,
-				encoding.pseudo
-			))
-		}
-
-		fun add(ops: List<Op>) = add(ops, encoding.rexw, encoding.o16, encoding.opcode)
-
-		fun add(vararg ops: Op) = add(ops.toList())
-		
-		var multi: Pair<String, String>? = null
-		var multiIndex = -1
-		
-		for((i, op) in ops.withIndex()) {
-			if(op in multiOpMap) {
-				multi = multiOpMap[op]!!
-				multiIndex = i
-			}
-		}
-
-		if(encoding.mask.isEmpty) {
-			when(opsString) {
-				"NONE" -> { add(); return }
-				"X_M"  -> { add(Op.X, Op.M128); return }
-				"M_X"  -> { add(Op.M128, Op.X); return }
-				"MM_M" -> { add(Op.MM, Op.M64); return }
-				"M_MM" -> { add(Op.M64, Op.MM); return }
-				else   -> error(opsString)
-			}
-		}
-
-		//if(encoding.mask.isEmpty) { add(ops.map { convert(it, null) }); return }
-
-		encoding.mask.forEachWidth { width ->
-			val rexw = if(encoding.rexw == 1)
-				1
-			else if(width == Width.QWORD && encoding.norexw == 0 && Width.DWORD in encoding.mask && "RA" !in opsString)
-				1
-			else
-				0
-
-			val o16 = if(encoding.o16 == 1)
-				1
-			else if(width == Width.WORD && encoding.mask != OpMask.WORD)
-				1
-			else
-				0
-
-			val opcode = if(width == Width.BYTE)
-				encoding.opcode
-			else if(encoding.mask != OpMask.BYTE && Width.BYTE in encoding.mask)
-				encoding.opcode + 1
-			else
-				encoding.opcode
-
-			add(ops.map { convert(it, width) }, rexw, o16, opcode)
-		}
+		}}
 	}*/
 
 

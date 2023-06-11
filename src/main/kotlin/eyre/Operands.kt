@@ -95,11 +95,7 @@ enum class Op(val type: OpType, val width: Width?) {
 
 
 
-enum class MultiOps(
-	vararg val parts: Ops,
-	val mask: OpMask? = null,
-	val mask2: OpMask? = null
-) {
+enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null, val p66: Boolean = false) {
 	RM(Ops.R, Ops.M),
 	R_RM(Ops.R_R, Ops.R_M),
 	RM_R(Ops.R_R, Ops.M_R),
@@ -115,34 +111,41 @@ enum class MultiOps(
 	M80(Ops.M, mask = OpMask.TWORD),
 	M128(Ops.M, mask = OpMask.XWORD),
 
-	MM_MMM_I8(Ops.MM_MM_I8, Ops.MM_M_I8),
-	RM_X_I8(Ops.R_X_I8, Ops.M_X_I8),
-	X_XM32(Ops.X_X, Ops.X_M, mask = OpMask.DWORD),
-	X_XM64(Ops.X_X, Ops.X_M, mask = OpMask.QWORD),
-	X_XM(Ops.X_X, Ops.M),
-	XM_X(Ops.X_X, Ops.M_X),
-	MM_MMM(Ops.MM_MM, Ops.MM_M),
-	X_MEM(Ops.X_M, mask = OpMask.NONE),
-	X_XM_I8(Ops.X_X_I8, Ops.X_M_I8),
-	MM_XM(Ops.MM_X, Ops.MM_M),
-	X_RM(Ops.X_R, Ops.X_M),
-	X_MMM(Ops.X_M, Ops.X_MM),
-	X_XM_X0(Ops.X_X, Ops.X_M),
-	X_RM_I8(Ops.X_R_I8, Ops.X_M_I8),
-	X_XM16(Ops.X_X, Ops.X_M, mask = OpMask.WORD),
-	MM_RM32(Ops.MM_R, Ops.MM_M, mask = OpMask.DWORD),
-	X_RM32(Ops.X_R, Ops.X_M, mask = OpMask.DWORD),
-	X_XM32_I8(Ops.X_X_I8, Ops.X_M_I8, mask = OpMask.DWORD),
-	X_XM64_I8(Ops.X_X_I8, Ops.X_M_I8, mask = OpMask.QWORD),
-	X_M64(Ops.X_M, mask = OpMask.QWORD),
-	M64_X(Ops.M_X, mask = OpMask.QWORD),
-	MMM_MM(Ops.MM_MM, Ops.M_MM),
-	XM64_X(Ops.X_X, Ops.M_X, mask = OpMask.QWORD),
-	XM32_X(Ops.X_X, Ops.M_X, mask = OpMask.DWORD),
+	E_I8(Ops.MM_I8, Ops.X_I8, p66 = true),
+	E_EM(Ops.MM_MM, Ops.MM_M64, Ops.X_X, Ops.X_M128, p66 = true),
+
+	X_XM(Ops.X_X, Ops.X_M128),
+	XM_X(Ops.X_X, Ops.M128_X),
+	X_XM64(Ops.X_X, Ops.X_M64),
+	X_XM32(Ops.X_X, Ops.X_M32),
+
+/*	MM_MMM_I8(Ops.MM_MM_I8, Ops.MM_M64_I8, mask = OpMask.QWORD),
+	RM_X_I8(Ops.R_X_I8, Ops.M128_X_I8),
+	X_XM32(Ops.X_X, Ops.X_M128, mask = OpMask.DWORD),
+	X_XM64(Ops.X_X, Ops.X_M128, mask = OpMask.QWORD),
+	X_XM(Ops.X_X, Ops.M, mask = OpMask.XWORD),
+	XM_X(Ops.X_X, Ops.M128_X, mask = OpMask.XWORD),
+	MM_MMM(Ops.MM_MM, Ops.MM_M64, mask = OpMask.QWORD),
+	X_MEM(Ops.X_M128, mask = OpMask.NONE),
+	X_XM_I8(Ops.X_X_I8, Ops.X_M128_I8, mask = OpMask.XWORD),
+	MM_XM(Ops.MM_X, Ops.MM_M64, mask = OpMask.XWORD),
+	X_RM(Ops.X_R, Ops.X_M128),
+	X_MMM(Ops.X_M128, Ops.X_MM, mask = OpMask.QWORD),
+	X_XM_X0(Ops.X_X, Ops.X_M128, mask = OpMask.XWORD),
+	X_XM16(Ops.X_X, Ops.X_M128, mask = OpMask.WORD),
+	MM_RM32(Ops.MM_R, Ops.MM_M64, mask = OpMask.DWORD),
+	X_RM32(Ops.X_R, Ops.X_M128, mask = OpMask.DWORD),
+	X_XM32_I8(Ops.X_X_I8, Ops.X_M128_I8, mask = OpMask.DWORD),
+	X_XM64_I8(Ops.X_X_I8, Ops.X_M128_I8, mask = OpMask.QWORD),
+	X_M64(Ops.X_M128, mask = OpMask.QWORD),
+	M64_X(Ops.M128_X, mask = OpMask.QWORD),
+	MMM_MM(Ops.MM_MM, Ops.M64_MM, mask = OpMask.QWORD),
+	XM64_X(Ops.X_X, Ops.M128_X, mask = OpMask.QWORD),
+	XM32_X(Ops.X_X, Ops.M128_X, mask = OpMask.DWORD),
 	MM_XM64(Ops.MM_X, Ops.MM_X, mask = OpMask.QWORD),
-	MM_RM(Ops.MM_R, Ops.MM_M),
-	RM_MM(Ops.R_MM, Ops.M_MM),
-	RM_X(Ops.R_X, Ops.M_X),
+	MM_RM(Ops.MM_R, Ops.MM_M64),
+	RM_MM(Ops.R_MM, Ops.M64_MM),
+	RM_X(Ops.R_X, Ops.M128_X),*/
 }
 
 
@@ -185,30 +188,64 @@ enum class Ops {
 	M_R_I8,
 	RM_R_CL,
 
-	// MMX/SSE (also contains R_M)
-	MM_MM,
-	MM_M,
-	M_MM,
+	// Many uses
 	MM_I8,
-	MM_MM_I8,
-	MM_M_I8,
-	R_MM_I8,
-	R_MM,
+	X_I8,
+	X_X,
+	MM_MM,
+	MM_M64,
+	X_M128,
+	M128_X,
+	X_M64,
+	X_M32,
+	M64_X,
+	R_X,
+	X_XM_I8,
+	// CMPSD/ROUNDSD
+	X_XM64_I8,
+	// CMPSS/ROUNDSS/INSERTPS
+	X_XM32_I8,
+	// MOVD
+	MM_RM,
+	RM_MM,
+	// MOVD/MOVQ/CVTSI2SD/CVTSI2SS
+	X_RM,
+	// MOVD/MOVQ
+	RM_X,
+	// MOVQ
+	MM_MMM64,
+	MMM64_MM,
+	// MOVSD/MOVQ,
+	XM64_X,
+	// MOVSS
+	XM32_X,
+	// PALIGNR/PSHUFW
+	MM_MMM_I8,
+
+	// MMX/SSE (also contains R_M)
+/*	MM_MM,
+	MM_M64,
+	MM_I8,
 	MM_R,
-	MM_RM_I8,
-	X_MM,
 	MM_X,
-	X_M,
-	M_X,
+	MM_MM_I8,
+	MM_M64_I8,
+	MM_RM_I8,
 	X_X,
 	X_I8,
 	X_R_I8,
-	X_M_I8,
+	X_M128_I8,
 	X_R,
-	M_X_I8,
+	X_MM,
+	X_M128,
+	X_X_I8,
 	R_X_I8,
 	R_X,
-	X_X_I8,
+	R_MM_I8,
+	R_MM,
+	M64_MM,
+	M128_X,
+	M128_X_I8,*/
 
 	// MOVSX/MOVZX
 	R_RM8,
@@ -227,29 +264,24 @@ enum class Ops {
 	R_XM32,
 	// CVTSD2SI/CVTTSD2SI
 	R_XM64,
-
 	// ENTER
 	I16_I8,
-
 	// UMONITOR
 	RA,
-
 	// ENQCMD/ENQCMDS/MOVDIR64B
 	RA_M512,
-
 	// MOV
 	O_I,
 	R_SEG,
 	M_SEG,
 	SEG_R,
 	SEG_M,
-	A_MOFFS,
-	MOFFS_A,
+	A_MOF,
+	MOF_A,
 	R_DR,
 	DR_R,
 	R_CR,
 	CR_R,
-
 	// IN/OUT
 	A_I8,
 	I8_A,
