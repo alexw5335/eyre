@@ -17,7 +17,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var escape = Escape.NONE
 	var opcode = 0
 	var oplen = 0
-	var ext = 0
+	var ext = -1
 	var rexw = 0
 	var o16 = 0
 	var a32 = 0

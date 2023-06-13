@@ -8,8 +8,11 @@ data class Encoding(
 	val mask     : OpMask,
 	val ext      : Int,
 	val ops      : Ops,
+	val sseOps   : SseOps,
 	val rexw     : Int,
 	val o16      : Int,
-	val norexw   : Int,
 	val pseudo   : Int,
-)
+	val sseEnc   : SseEnc,
+) {
+	val extension = if(ext == -1) 0 else ext
+}

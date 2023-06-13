@@ -5,10 +5,18 @@ import eyre.util.isHex
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class NasmParser(private val inputs: List<String>, private val extensions: Set<NasmExt>) {
+class NasmParser(
+	private val inputs: List<String>,
+	private val includeBase: Boolean,
+	private val extensions: Set<NasmExt>
+) {
 
 
-	constructor(path: String, extensions: Set<NasmExt>) : this(Files.readAllLines(Paths.get(path)), extensions)
+	constructor(path: String, includeBase: Boolean, extensions: Set<NasmExt>) : this(
+		Files.readAllLines(Paths.get(path)),
+		includeBase,
+		extensions
+	)
 
 
 
@@ -68,6 +76,7 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 
 
 	private fun filterLine(line: RawNasmLine) = when {
+		line.mnemonic == "PUSH" && line.operands[0] == "imm64" -> false
 		"r+mi:" in line.parts -> false
 		line.mnemonic == "aw" -> true
 		line.mnemonic in Maps.essentialMnemonics -> true
@@ -113,7 +122,7 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 			part == "f2i"  -> line.prefix = Prefix.PF2
 			part == "f3i"  -> line.prefix = Prefix.PF3
 			part == "wait" -> line.prefix = Prefix.P9B
-			part[0] == '/' -> line.ext    = part[1].digitToInt(10)
+			part[0] == '/' -> if(line.mnemonic != "SETcc") line.ext = part[1].digitToInt(10)
 
 			part.contains(':') -> {
 				val array = part.split(':').filter { it.isNotEmpty() }
@@ -150,6 +159,9 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 			line.extensions += NasmExt.NOT_GIVEN
 
 		if(!extensions.containsAll(line.extensions))
+			return
+
+		if(!includeBase && line.extensions.isEmpty())
 			return
 
 		list += line
@@ -254,6 +266,13 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 			val operand: Op = when(string) {
 				"void" -> continue
 
+				"imm64" -> when(line.mnemonic) {
+					"XBEGIN" -> Op.REL32
+					"JMP"    -> Op.REL32
+					"CALL"   -> Op.REL32
+					else     -> Op.I64
+				}
+
 				in Maps.ops -> Maps.ops[string]!!
 				
 				"mem" -> when(widths[i]) {
@@ -310,17 +329,29 @@ class NasmParser(private val inputs: List<String>, private val extensions: Set<N
 			line.escape,
 			opcode,
 			line.ext,
-			line.ops,
+			ArrayList(line.ops),
 			line.rexw,
 			line.o16,
-			line.pseudo
+			line.pseudo,
+			line.enc
 		))
 
+		fun addMulti(mnemonic: String, opcode: Int) {
+			if(line.multiIndex >= 0) {
+				line.ops[line.multiIndex] = line.multi1
+				add(mnemonic, opcode)
+				line.ops[line.multiIndex] = line.multi2
+				add(mnemonic, opcode)
+			} else {
+				add(mnemonic, opcode)
+			}
+		}
+		
 		if(line.cc)
 			for((postfix, opcodeInc) in Maps.ccList)
-				add(line.mnemonic.dropLast(2) + postfix, line.opcode + opcodeInc)
+				addMulti(line.mnemonic.dropLast(2) + postfix, line.opcode + opcodeInc)
 		else
-			add(line.mnemonic, line.opcode)
+			addMulti(line.mnemonic, line.opcode)
 	}
 
 

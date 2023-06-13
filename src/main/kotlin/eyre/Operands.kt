@@ -4,6 +4,72 @@ import eyre.Width.*
 
 
 
+enum class SseEnc {
+	NONE,
+	RM,
+	RMI,
+	MRI,
+	MR,
+	MI,
+}
+
+
+
+@JvmInline
+value class SseOps(val value: Int) {
+
+	constructor(op1: SseOp, op2: SseOp, op3: SseOp) :
+		this(op1.value or (op2.value shl 4) or (op3.value shl 8))
+
+	val op1 get() = SseOp.values[(value shr 0) and 0xF]
+	val op2 get() = SseOp.values[(value shr 4) and 0xF]
+	val op3 get() = SseOp.values[(value shr 8) and 0xF]
+
+	override fun toString() = when {
+		this == NULL      -> "NULL"
+		op1 == SseOp.NONE -> "NONE"
+		op2 == SseOp.NONE -> op1.toString()
+		op3 == SseOp.NONE -> "${op1}_$op2"
+		else              -> "${op1}_${op2}_$op3"
+	}
+
+	fun isSimilar(other: SseOps) = op1.isSimilar(other.op1) && op2.isSimilar(other.op2) && op3.isSimilar(other.op3)
+
+	companion object { val NULL = SseOps(-1) }
+}
+
+
+
+enum class SseOp(val value: Int, val op: Op) {
+	NONE(0, Op.NONE),
+	X(1, Op.X),
+	MM(2, Op.MM),
+	I8(3, Op.I8),
+	R8(4, Op.R8),
+	R16(5, Op.R16),
+	R32(6, Op.R32),
+	R64(7, Op.R64),
+	M8(8, Op.M8),
+	M16(9, Op.M16),
+	M32(10, Op.M32),
+	M64(11, Op.M64),
+	M128(12, Op.M128),
+	MEM(13, Op.MEM);
+
+	val isX get() = value == 1
+	val isMM get() = value == 2
+	val isI get() = value == 3
+	val isR get() = value and 0b0100 != 0
+	val isM get() = value and 0b1000 != 0
+	val isREG get() = isR || isX || isM
+
+	fun isSimilar(other: SseOp) = this == other || isR && other.isR || isM && other.isM
+
+	companion object { val values = values(); val map = values.associateBy { it.name } }
+}
+
+
+
 enum class OpType {
 	R,
 	M,
@@ -95,13 +161,16 @@ enum class Op(val type: OpType, val width: Width?) {
 
 
 
-enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null, val p66: Boolean = false) {
+enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 	RM(Ops.R, Ops.M),
 	R_RM(Ops.R_R, Ops.R_M),
 	RM_R(Ops.R_R, Ops.M_R),
-	O_A(Ops.A_O),
 
+	//XCHG
+	O_A(Ops.A_O),
+	// IMUL
 	R_RM_I8(Ops.R_R_I8, Ops.R_M_I8),
+	// SHLD/SHRD
 	RM_R_I8(Ops.R_R_I8, Ops.M_R_I8),
 
 	MEM(Ops.M, mask = OpMask.NONE),
@@ -110,51 +179,13 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null, val p66: Bo
 	M64(Ops.M, mask = OpMask.QWORD),
 	M80(Ops.M, mask = OpMask.TWORD),
 	M128(Ops.M, mask = OpMask.XWORD),
-
-	E_I8(Ops.MM_I8, Ops.X_I8, p66 = true),
-	E_EM(Ops.MM_MM, Ops.MM_M64, Ops.X_X, Ops.X_M128, p66 = true),
-
-	X_XM(Ops.X_X, Ops.X_M128),
-	XM_X(Ops.X_X, Ops.M128_X),
-	X_XM64(Ops.X_X, Ops.X_M64),
-	X_XM32(Ops.X_X, Ops.X_M32),
-
-/*	MM_MMM_I8(Ops.MM_MM_I8, Ops.MM_M64_I8, mask = OpMask.QWORD),
-	RM_X_I8(Ops.R_X_I8, Ops.M128_X_I8),
-	X_XM32(Ops.X_X, Ops.X_M128, mask = OpMask.DWORD),
-	X_XM64(Ops.X_X, Ops.X_M128, mask = OpMask.QWORD),
-	X_XM(Ops.X_X, Ops.M, mask = OpMask.XWORD),
-	XM_X(Ops.X_X, Ops.M128_X, mask = OpMask.XWORD),
-	MM_MMM(Ops.MM_MM, Ops.MM_M64, mask = OpMask.QWORD),
-	X_MEM(Ops.X_M128, mask = OpMask.NONE),
-	X_XM_I8(Ops.X_X_I8, Ops.X_M128_I8, mask = OpMask.XWORD),
-	MM_XM(Ops.MM_X, Ops.MM_M64, mask = OpMask.XWORD),
-	X_RM(Ops.X_R, Ops.X_M128),
-	X_MMM(Ops.X_M128, Ops.X_MM, mask = OpMask.QWORD),
-	X_XM_X0(Ops.X_X, Ops.X_M128, mask = OpMask.XWORD),
-	X_XM16(Ops.X_X, Ops.X_M128, mask = OpMask.WORD),
-	MM_RM32(Ops.MM_R, Ops.MM_M64, mask = OpMask.DWORD),
-	X_RM32(Ops.X_R, Ops.X_M128, mask = OpMask.DWORD),
-	X_XM32_I8(Ops.X_X_I8, Ops.X_M128_I8, mask = OpMask.DWORD),
-	X_XM64_I8(Ops.X_X_I8, Ops.X_M128_I8, mask = OpMask.QWORD),
-	X_M64(Ops.X_M128, mask = OpMask.QWORD),
-	M64_X(Ops.M128_X, mask = OpMask.QWORD),
-	MMM_MM(Ops.MM_MM, Ops.M64_MM, mask = OpMask.QWORD),
-	XM64_X(Ops.X_X, Ops.M128_X, mask = OpMask.QWORD),
-	XM32_X(Ops.X_X, Ops.M128_X, mask = OpMask.DWORD),
-	MM_XM64(Ops.MM_X, Ops.MM_X, mask = OpMask.QWORD),
-	MM_RM(Ops.MM_R, Ops.MM_M64),
-	RM_MM(Ops.R_MM, Ops.M64_MM),
-	RM_X(Ops.R_X, Ops.M128_X),*/
 }
 
 
 
 enum class Ops {
-	// No operands
 	NONE,
 
-	// 1 operand
 	R,
 	M,
 	I8,
@@ -168,7 +199,6 @@ enum class Ops {
 	GS,
 	O,
 
-	// 2 operands
 	R_R,
 	R_M,
 	M_R,
@@ -181,95 +211,30 @@ enum class Ops {
 	ST0_ST,
 	A_O,
 
-	// 3 operands
 	R_RM_I,
 	R_R_I8,
 	R_M_I8,
 	M_R_I8,
 	RM_R_CL,
 
-	// Many uses
-	MM_I8,
-	X_I8,
-	X_X,
-	MM_MM,
-	MM_M64,
-	X_M128,
-	M128_X,
-	X_M64,
-	X_M32,
-	M64_X,
-	R_X,
-	X_XM_I8,
-	// CMPSD/ROUNDSD
-	X_XM64_I8,
-	// CMPSS/ROUNDSS/INSERTPS
-	X_XM32_I8,
-	// MOVD
-	MM_RM,
-	RM_MM,
-	// MOVD/MOVQ/CVTSI2SD/CVTSI2SS
-	X_RM,
-	// MOVD/MOVQ
-	RM_X,
-	// MOVQ
-	MM_MMM64,
-	MMM64_MM,
-	// MOVSD/MOVQ,
-	XM64_X,
-	// MOVSS
-	XM32_X,
-	// PALIGNR/PSHUFW
-	MM_MMM_I8,
-
-	// MMX/SSE (also contains R_M)
-/*	MM_MM,
-	MM_M64,
-	MM_I8,
-	MM_R,
-	MM_X,
-	MM_MM_I8,
-	MM_M64_I8,
-	MM_RM_I8,
-	X_X,
-	X_I8,
-	X_R_I8,
-	X_M128_I8,
-	X_R,
-	X_MM,
-	X_M128,
-	X_X_I8,
-	R_X_I8,
-	R_X,
-	R_MM_I8,
-	R_MM,
-	M64_MM,
-	M128_X,
-	M128_X_I8,*/
-
+	// LEA
+	R_MEM,
 	// MOVSX/MOVZX
 	R_RM8,
 	R_RM16,
 	// MOVSXD
 	R_RM32,
-	// LAR/LSL
-	R_REG,
-	// LAR/LSL/LSS/LFS/LGS
-	R_MEM,
 	// CRC32
 	R32_RM,
 	// INVEPT/INVVPID/INVPCID
 	R64_M128,
-	// CVTSS2SI/CVTTSS2SI
-	R_XM32,
-	// CVTSD2SI/CVTTSD2SI
-	R_XM64,
 	// ENTER
 	I16_I8,
 	// UMONITOR
 	RA,
 	// ENQCMD/ENQCMDS/MOVDIR64B
 	RA_M512,
+
 	// MOV
 	O_I,
 	R_SEG,
@@ -282,6 +247,7 @@ enum class Ops {
 	DR_R,
 	R_CR,
 	CR_R,
+
 	// IN/OUT
 	A_I8,
 	I8_A,

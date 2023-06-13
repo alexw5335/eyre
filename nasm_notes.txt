@@ -162,7 +162,7 @@ if_("LOCK",              "Lockable if operand 0 is memory");
 if_("NOLONG",            "Not available in long mode");
 if_("LONG",              "Long mode");
 if_("NOHLE",             "HLE prefixes forbidden");
-if_("MIB",               "split base/index EA");      12, Only used with some MMX and AMXTILE instructions
+if_("MIB",               "split base/index EA");      12, Only used with some MPX and AMXTILE instructions
 if_("SIB",               "SIB encoding required");    3, Only used with AMXTILE instructions
 if_("BND",               "BND (0xF2) prefix available");
 if_("UNDOC",             "Undocumented");
@@ -383,3 +383,4 @@ F2 0F 2C  CVTTSD2SI  R_XM64   1100
 F3 0F 2C  CVTTSS2SI  R_XM32   1100
 
 ERROR: PTWRITE is missing F3 prefix
+ERROR: SETcc has /0, but should have no extension?

@@ -4,7 +4,7 @@ import eyre.Escape
 import eyre.Op
 import eyre.Prefix
 
-class CommonEncoding(
+data class CommonEncoding(
 	val mnemonic : String,
 	val prefix   : Prefix,
 	val escape   : Escape,
@@ -14,4 +14,5 @@ class CommonEncoding(
 	val rexw     : Int,
 	val o16      : Int,
 	val pseudo   : Int,
+	val sseEnc   : OpEnc?
 )

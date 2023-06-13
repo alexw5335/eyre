@@ -1,5 +1,5 @@
 namespace main
 
 proc main {
-	fadd st1, st0
+	dppd xmm2, xword [rax], 1
 }
