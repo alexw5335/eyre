@@ -19,7 +19,7 @@ enum class SseEnc {
 value class SseOps(val value: Int) {
 
 	constructor(op1: SseOp, op2: SseOp, op3: SseOp) :
-		this(op1.value or (op2.value shl 4) or (op3.value shl 8))
+		this(op1.ordinal or (op2.ordinal shl 4) or (op3.ordinal shl 8))
 
 	val op1 get() = SseOp.values[(value shr 0) and 0xF]
 	val op2 get() = SseOp.values[(value shr 4) and 0xF]
@@ -33,39 +33,23 @@ value class SseOps(val value: Int) {
 		else              -> "${op1}_${op2}_$op3"
 	}
 
-	fun isSimilar(other: SseOps) = op1.isSimilar(other.op1) && op2.isSimilar(other.op2) && op3.isSimilar(other.op3)
-
 	companion object { val NULL = SseOps(-1) }
 }
 
 
 
-enum class SseOp(val value: Int, val op: Op) {
-	NONE(0, Op.NONE),
-	X(1, Op.X),
-	MM(2, Op.MM),
-	I8(3, Op.I8),
-	R8(4, Op.R8),
-	R16(5, Op.R16),
-	R32(6, Op.R32),
-	R64(7, Op.R64),
-	M8(8, Op.M8),
-	M16(9, Op.M16),
-	M32(10, Op.M32),
-	M64(11, Op.M64),
-	M128(12, Op.M128),
-	MEM(13, Op.MEM);
+enum class SseOp {
+	NONE,
+	X,
+	MM,
+	I8,
+	R8,
+	R16,
+	R32,
+	R64,
+	M;
 
-	val isX get() = value == 1
-	val isMM get() = value == 2
-	val isI get() = value == 3
-	val isR get() = value and 0b0100 != 0
-	val isM get() = value and 0b1000 != 0
-	val isREG get() = isR || isX || isM
-
-	fun isSimilar(other: SseOp) = this == other || isR && other.isR || isM && other.isM
-
-	companion object { val values = values(); val map = values.associateBy { it.name } }
+	companion object { val values = values() }
 }
 
 

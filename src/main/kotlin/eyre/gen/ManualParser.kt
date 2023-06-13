@@ -150,7 +150,23 @@ class ManualParser(private val inputs: List<String>) {
 			sseOps = SseOps(SseOp.NONE, SseOp.NONE, SseOp.NONE)
 
 		if(sse) {
-			val ops = opsString.split('_').map { SseOp.map[it] ?: error("Invalid sse op") }
+			val ops = opsString.split('_').map { when(it) {
+				"X"    -> SseOp.X
+				"MM"   -> SseOp.MM
+				"I8"   -> SseOp.I8
+				"R8"   -> SseOp.R8
+				"R16"  -> SseOp.R16
+				"R32"  -> SseOp.R32
+				"R64"  -> SseOp.R64
+				"MEM"  -> { mask = OpMask.NONE; SseOp.M }
+				"M8"   -> { mask = OpMask.BYTE; SseOp.M }
+				"M16"  -> { mask = OpMask.WORD; SseOp.M }
+				"M32"  -> { mask = OpMask.DWORD; SseOp.M }
+				"M64"  -> { mask = OpMask.QWORD; SseOp.M }
+				"M128" -> { mask = OpMask.XWORD; SseOp.M }
+				else   -> error("Invalid SSE operand: $it")
+			} }
+
 			sseOps = when(ops.size) {
 				1 -> SseOps(ops[0], SseOp.NONE, SseOp.NONE)
 				2 -> SseOps(ops[0], ops[1], SseOp.NONE)
@@ -248,10 +264,29 @@ class ManualParser(private val inputs: List<String>) {
 
 		fun add(vararg ops: Op) = add(ops.toList())
 
+		fun convert(op: SseOp) = when(op) {
+			SseOp.NONE -> Op.NONE
+			SseOp.X -> Op.X
+			SseOp.MM -> Op.MM
+			SseOp.I8 -> Op.I8
+			SseOp.R8 -> Op.R8
+			SseOp.R16 -> Op.R16
+			SseOp.R32 -> Op.R32
+			SseOp.R64 -> Op.R64
+			SseOp.M -> when(encoding.mask) {
+				OpMask.BYTE -> Op.M8
+				OpMask.WORD -> Op.M16
+				OpMask.DWORD -> Op.M32
+				OpMask.QWORD -> Op.M64
+				OpMask.XWORD -> Op.M128
+				else -> error("Invalid mask: ${encoding.mask}")
+			}
+		}
+
 		if(encoding.sseOps != SseOps.NULL) {
-			val op1 = encoding.sseOps.op1.op
-			val op2 = encoding.sseOps.op2.op
-			val op3 = encoding.sseOps.op3.op
+			val op1 = convert(encoding.sseOps.op1)
+			val op2 = convert(encoding.sseOps.op2)
+			val op3 = convert(encoding.sseOps.op3)
 			add(if(op3 == Op.NONE) listOf(op1, op2) else listOf(op1, op2, op3))
 			return
 		}

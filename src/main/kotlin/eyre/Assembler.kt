@@ -732,15 +732,7 @@ class Assembler(private val context: CompilerContext) {
 			RegType.MM  -> SseOp.MM
 			else -> invalidEncoding()
 		}
-		is MemNode -> when(width) {
-			null -> SseOp.MEM
-			BYTE -> SseOp.M8
-			WORD -> SseOp.M16
-			DWORD -> SseOp.M32
-			QWORD -> SseOp.M64
-			XWORD -> SseOp.M128
-			else -> invalidEncoding()
-		}
+		is MemNode -> SseOp.M
 		is ImmNode -> SseOp.I8
 	}
 
