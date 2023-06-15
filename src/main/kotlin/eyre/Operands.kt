@@ -156,7 +156,8 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 
 
 
-enum class Ops(val mismatch: Boolean = false) {
+enum class Ops {
+
 	NONE,
 
 	R,
@@ -191,16 +192,16 @@ enum class Ops(val mismatch: Boolean = false) {
 	RM_R_CL,
 
 	// LEA/LFS/LGS/LSS
-	R_MEM(mismatch = true),
+	R_MEM,
 	// MOVSX/MOVZX/CRC32
-	R_RM8(mismatch = true),
-	R_RM16(mismatch = true),
+	R_RM8,
+	R_RM16,
 	// MOVSXD
-	R_RM32(mismatch = true),
+	R_RM32,
 	// INVEPT/INVVPID/INVPCID
-	R64_M128(mismatch = true),
+	R_M128,
 	// ENQCMD/ENQCMDS/MOVDIR64B
-	RA_M512(mismatch = true),
+	RA_M512,
 
 	// ENTER
 	I16_I8,

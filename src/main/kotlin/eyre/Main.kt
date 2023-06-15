@@ -6,7 +6,8 @@ import kotlin.io.path.relativeTo
 
 
 fun main() {
-	Compiler("samples/testing2").compile()
+	Reg.values().map(Reg::string).forEach(::println)
+	//Compiler("samples/testing2").compile()
 }
 
 

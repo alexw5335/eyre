@@ -3,10 +3,13 @@ package eyre
 import eyre.util.bin8888
 
 class EncodingGroup(val mnemonic: Mnemonic) {
+
+
 	var isSse = false
+
 	val encodings = ArrayList<Encoding>()
+
 	var ops = 0L
-	var mismatch = false
 
 	fun add(encoding: Encoding) {
 		if(encoding.sseOps != SseOps.NULL) {
@@ -17,10 +20,6 @@ class EncodingGroup(val mnemonic: Mnemonic) {
 		} else if(encoding.ops !in this) {
 			ops = ops or (1L shl encoding.ops.ordinal)
 			encodings += encoding
-			if(encoding.ops.mismatch)
-				mismatch = true
-			if(encoding.ops.mismatch != mismatch)
-				error("Mixed mismatched and non-mismatched GP encodings")
 		}
 	}
 

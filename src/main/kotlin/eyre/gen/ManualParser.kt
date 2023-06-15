@@ -291,7 +291,6 @@ class ManualParser(private val inputs: List<String>) {
 		if(encoding.mask.isEmpty) {
 			when(encoding.ops) {
 				Ops.NONE     -> add()
-				Ops.R64_M128 -> add(Op.R64, Op.M128)
 				Ops.I16_I8   -> add(Op.I16, Op.I8)
 				Ops.I8       -> add(Op.I8)
 				Ops.I16      -> add(Op.I16)
@@ -359,9 +358,9 @@ class ManualParser(private val inputs: List<String>) {
 				Ops.R_RM8   -> { add2(r, Op.R8); add2(r, Op.M8) }
 				Ops.R_RM16  -> { add2(r, Op.R16); add2(r, Op.M16) }
 				Ops.R_RM32  -> { add2(r, Op.R32); add2(r, Op.M32) }
-				Ops.R32_RM  -> { add2(Op.R32, r); add2(Op.R32, m) }
 				Ops.RA      -> add2(r)
 				Ops.RA_M512 -> add2(r, Op.M512)
+				Ops.R_M128  -> add(r, Op.M128)
 
 				else -> return
 			}

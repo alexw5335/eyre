@@ -1,17 +1,30 @@
 namespace main
 
 proc main {
-	mov rax, 1
-	mov eax, 1
-	mov ax, 1
-	mov al, 1
-	mov rax, rcx
-	mov ecx, 1
-	mov fs, [rax]
-	mov [rax], es
-	mov gs, rcx
-	mov rdx, fs
-	mov rsi, ss
-	mov rax, [rax]
-	mov [rax], rax
+	crc32 ecx, al
+	crc32 rcx, al
+	crc32 ecx, ax
+	crc32 ecx, eax
+	crc32 rcx, rax
+
+	crc32 ecx, byte [rax]
+	crc32 rcx, byte [rax]
+	crc32 ecx, [rax]
+	crc32 rcx, [rax]
+	crc32 ecx, word [rax]
+	crc32 ecx, dword [rax]
+
+	enqcmd ecx, [rax]
+	enqcmd rcx, [rax]
+	enqcmds ecx, [rax]
+	enqcmds rcx, [rax]
+	movdir64b ecx, [rax]
+	movdir64b rcx, zword [rax]
+	umonitor ecx
+	umonitor rcx
+
+	shld rcx, rax, 1
+	shld rcx, rax, cl
+	shld [rax], rcx, 1
+	shld [rax], rcx, cl
 }
