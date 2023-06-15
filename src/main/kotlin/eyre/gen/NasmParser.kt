@@ -76,6 +76,7 @@ class NasmParser(
 
 
 	private fun filterLine(line: RawNasmLine) = when {
+		(line.mnemonic == "PINSRB" || line.mnemonic == "PINSRW") && "mem" in line.operands -> false
 		line.mnemonic == "PUSH" && line.operands[0] == "imm64" -> false
 		"r+mi:" in line.parts -> false
 		line.mnemonic == "aw" -> true
@@ -333,7 +334,7 @@ class NasmParser(
 			line.rexw,
 			line.o16,
 			line.pseudo,
-			line.enc
+			line.enc == OpEnc.MR || line.enc == OpEnc.MRI
 		))
 
 		fun addMulti(mnemonic: String, opcode: Int) {

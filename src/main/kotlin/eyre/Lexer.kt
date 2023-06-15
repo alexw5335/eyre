@@ -234,7 +234,7 @@ class Lexer {
 			in '0'..'9' -> number(10)
 			in 'a'..'z',
 			in 'A'..'Z' -> lexerError("Invalid number character: $next")
-			else        -> { pos-- }
+			else        -> { pos -= 2; number(10) }
 		}
 	}
 

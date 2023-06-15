@@ -12,7 +12,7 @@ data class Encoding(
 	val rexw     : Int,
 	val o16      : Int,
 	val pseudo   : Int,
-	val sseEnc   : SseEnc,
+	val mr       : Boolean
 ) {
 	val extension = if(ext == -1) 0 else ext
 }

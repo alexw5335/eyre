@@ -71,7 +71,7 @@ class ManualParser(private val inputs: List<String>) {
 		val mnemonic: String
 		var pseudo = -1
 		var sseOps = SseOps.NULL
-		var sseEnc = SseEnc.NONE
+		var mr = false
 
 		while(true) {
 			var part = parts[pos++]
@@ -114,11 +114,7 @@ class ManualParser(private val inputs: List<String>) {
 
 		while(pos < parts.size) {
 			when(val part = parts[pos++]) {
-				"RM"   -> sseEnc = SseEnc.RM
-				"RMI"  -> sseEnc = SseEnc.RMI
-				"MRI"  -> sseEnc = SseEnc.MRI
-				"MR"   -> sseEnc = SseEnc.MR
-				"MI"   -> sseEnc = SseEnc.MI
+				"MR"   -> mr = true
 				"RW"   -> rexw = 1
 				"O16"  -> o16 = 1
 				else   -> if(part.startsWith(":"))
@@ -140,7 +136,7 @@ class ManualParser(private val inputs: List<String>) {
 			rexw,
 			o16,
 			pseudo,
-			sseEnc
+			mr
 		))
 
 		if(mnemonic == "ADDPD")
@@ -256,7 +252,7 @@ class ManualParser(private val inputs: List<String>) {
 				rexw,
 				o16,
 				encoding.pseudo,
-				null
+				encoding.mr
 			))
 		}
 
@@ -274,12 +270,13 @@ class ManualParser(private val inputs: List<String>) {
 			SseOp.R32 -> Op.R32
 			SseOp.R64 -> Op.R64
 			SseOp.M -> when(encoding.mask) {
-				OpMask.BYTE -> Op.M8
-				OpMask.WORD -> Op.M16
+				OpMask.BYTE  -> Op.M8
+				OpMask.WORD  -> Op.M16
 				OpMask.DWORD -> Op.M32
 				OpMask.QWORD -> Op.M64
 				OpMask.XWORD -> Op.M128
-				else -> error("Invalid mask: ${encoding.mask}")
+				OpMask.NONE  -> Op.MEM
+				else -> error("Invalid mask: $encoding")
 			}
 		}
 

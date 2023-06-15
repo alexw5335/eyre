@@ -70,6 +70,7 @@ value class OpMask(val value: Int) {
 		val YWORD = OpMask(64)  // YMM M256
 		val ZWORD = OpMask(128) // ZMM M512
 
+		val R0111 = OpMask(0b0111)
 		val R1000 = OpMask(0b1000)
 		val R1111 = OpMask(0b1111)
 		val R1100 = OpMask(0b1100)
@@ -89,13 +90,13 @@ value class OpMask(val value: Int) {
 
 
 enum class Reg(
-	val type: RegType,
-	val width: Width,
-	val value: Int,
-	val rex: Int,
-	val high: Int,
-	val isRex8: Boolean = false,
-	val noRex: Boolean = false
+	val type   : RegType,
+	val width  : Width,
+	val value  : Int,
+	val rex    : Int,
+	val high   : Int,
+	val rex8 : Boolean = false,
+	val noRex  : Boolean = false
 ) {
 
 	RAX(RegType.R64, Width.QWORD, 0, 0, 0),
@@ -153,10 +154,10 @@ enum class Reg(
 	CL  (RegType.R8, Width.BYTE, 1, 0, 0),
 	DL  (RegType.R8, Width.BYTE, 2, 0, 0),
 	BL  (RegType.R8, Width.BYTE, 3, 0, 0),
-	AH  (RegType.R8, Width.BYTE, 4, 0, 0, isRex8 = true),
-	BH  (RegType.R8, Width.BYTE, 5, 0, 0, isRex8 = true),
-	CH  (RegType.R8, Width.BYTE, 6, 0, 0, isRex8 = true),
-	DH  (RegType.R8, Width.BYTE, 7, 0, 0, isRex8 = true),
+	AH  (RegType.R8, Width.BYTE, 4, 0, 0, rex8 = true),
+	BH  (RegType.R8, Width.BYTE, 5, 0, 0, rex8 = true),
+	CH  (RegType.R8, Width.BYTE, 6, 0, 0, rex8 = true),
+	DH  (RegType.R8, Width.BYTE, 7, 0, 0, rex8 = true),
 	R8B (RegType.R8, Width.BYTE, 0, 1, 0),
 	R9B (RegType.R8, Width.BYTE, 1, 1, 0),
 	R10B(RegType.R8, Width.BYTE, 2, 1, 0),
@@ -171,8 +172,12 @@ enum class Reg(
 	SIL(RegType.R8, Width.BYTE, 2, 1, 0, noRex = true),
 	DIL(RegType.R8, Width.BYTE, 3, 1, 0, noRex = true),
 
-	FS(RegType.SEG, Width.WORD, 0, 0, 0),
-	GS(RegType.SEG, Width.WORD, 0, 0, 0),
+	ES(RegType.SEG, Width.WORD, 0, 0, 0),
+	CS(RegType.SEG, Width.WORD, 1, 0, 0),
+	SS(RegType.SEG, Width.WORD, 2, 0, 0),
+	DS(RegType.SEG, Width.WORD, 3, 0, 0),
+	FS(RegType.SEG, Width.WORD, 4, 0, 0),
+	GS(RegType.SEG, Width.WORD, 5, 0, 0),
 
 	ST0(RegType.ST, Width.TWORD, 0, 0, 0),
 	ST1(RegType.ST, Width.TWORD, 1, 0, 0),
@@ -308,7 +313,7 @@ enum class Reg(
 	CR5(RegType.CR, Width.QWORD, 5, 0, 0),
 	CR6(RegType.CR, Width.QWORD, 6, 0, 0),
 	CR7(RegType.CR, Width.QWORD, 7, 0, 0),
-	CR8(RegType.CR, Width.QWORD, 0, 0, 0),
+	CR8(RegType.CR, Width.QWORD, 0, 1, 0),
 
 	DR0(RegType.DR, Width.QWORD, 0, 0, 0),
 	DR1(RegType.DR, Width.QWORD, 1, 0, 0),
@@ -326,7 +331,7 @@ enum class Reg(
 
 	val string = name.lowercase()
 
-	val isR = type == RegType.R8 || type == RegType.R16 || type == RegType.R32 || type == RegType.R64
+	val isR = type in OpMask.R1111
 	val isA = isR && value == 0 && rex == 0
 	
 }

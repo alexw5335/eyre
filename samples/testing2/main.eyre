@@ -1,5 +1,17 @@
 namespace main
 
 proc main {
-	dppd xmm2, xword [rax], 1
+	mov rax, 1
+	mov eax, 1
+	mov ax, 1
+	mov al, 1
+	mov rax, rcx
+	mov ecx, 1
+	mov fs, [rax]
+	mov [rax], es
+	mov gs, rcx
+	mov rdx, fs
+	mov rsi, ss
+	mov rax, [rax]
+	mov [rax], rax
 }

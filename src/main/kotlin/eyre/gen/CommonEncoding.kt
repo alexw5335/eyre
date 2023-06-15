@@ -14,5 +14,5 @@ data class CommonEncoding(
 	val rexw     : Int,
 	val o16      : Int,
 	val pseudo   : Int,
-	val sseEnc   : OpEnc?
+	val mr       : Boolean
 )

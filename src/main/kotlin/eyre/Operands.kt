@@ -4,17 +4,6 @@ import eyre.Width.*
 
 
 
-enum class SseEnc {
-	NONE,
-	RM,
-	RMI,
-	MRI,
-	MR,
-	MI,
-}
-
-
-
 @JvmInline
 value class SseOps(val value: Int) {
 
@@ -162,12 +151,12 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 	M32(Ops.M, mask = OpMask.DWORD),
 	M64(Ops.M, mask = OpMask.QWORD),
 	M80(Ops.M, mask = OpMask.TWORD),
-	M128(Ops.M, mask = OpMask.XWORD),
+	M128(Ops.M, mask = OpMask.XWORD);
 }
 
 
 
-enum class Ops {
+enum class Ops(val mismatch: Boolean = false) {
 	NONE,
 
 	R,
@@ -201,23 +190,22 @@ enum class Ops {
 	M_R_I8,
 	RM_R_CL,
 
-	// LEA
-	R_MEM,
-	// MOVSX/MOVZX
-	R_RM8,
-	R_RM16,
+	// LEA/LFS/LGS/LSS
+	R_MEM(mismatch = true),
+	// MOVSX/MOVZX/CRC32
+	R_RM8(mismatch = true),
+	R_RM16(mismatch = true),
 	// MOVSXD
-	R_RM32,
-	// CRC32
-	R32_RM,
+	R_RM32(mismatch = true),
 	// INVEPT/INVVPID/INVPCID
-	R64_M128,
+	R64_M128(mismatch = true),
+	// ENQCMD/ENQCMDS/MOVDIR64B
+	RA_M512(mismatch = true),
+
 	// ENTER
 	I16_I8,
 	// UMONITOR
 	RA,
-	// ENQCMD/ENQCMDS/MOVDIR64B
-	RA_M512,
 
 	// MOV
 	O_I,
