@@ -586,6 +586,30 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun encodeMOVRR(op1: Reg, op2: Reg, opcode: Int) {
+		if(group.mnemonic != Mnemonic.MOV) invalidEncoding()
+		if(op2.type != RegType.R64) invalidEncoding()
+		writeRex(0, op1.rex, 0, op2.rex)
+		writer.varLengthInt(opcode)
+		writeModRM(0b11, op1.value, op2.value)
+	}
+
+
+
+	private fun encodeMOVRSEG(op1: Reg, op2: Reg, r: Reg, opcode: Int) {
+		if(group.mnemonic != Mnemonic.MOV) invalidEncoding()
+		when(r.type) {
+			RegType.R16 -> { byte(0x66); writeRex(0, op1.rex, 0, op2.rex) }
+			RegType.R32 -> writeRex(0, op1.rex, 0, op2.rex)
+			RegType.R64 -> writeRex(1, op1.rex, 0, op2.rex)
+			else        -> invalidEncoding()
+		}
+		byte(opcode)
+		writeModRM(0b11, op1.value, op2.value)
+	}
+
+
+
 	/*
 	Assembly
 	 */
@@ -717,12 +741,6 @@ class Assembler(private val context: CompilerContext) {
 		node.prefix?.let { byte(it.value) }
 
 		group = groups[node.mnemonic] ?: invalidEncoding()
-
-		val custom = customEncodings[group.mnemonic]
-		if(custom != null) {
-			custom(node)
-			return
-		}
 
 		if(group.isSse)
 			assembleSse(node)
@@ -970,48 +988,58 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun assemble2RR(op1: Reg, op2: Reg) {
 		when {
-			op1.width != op2.width -> when(op2.width) {
-				BYTE  -> { encoding(Ops.R_RM8); encode2RR(op1, op2) }
-				WORD  -> { encoding(Ops.R_RM16); encode2RR(op1, op2) }
-				DWORD -> { encoding(Ops.R_RM32); encode2RR(op1, op2) }
-				else  -> invalidEncoding()
-			}
-
 			op1.isR && op2.isR -> when {
+				op1.width != op2.width -> when {
+					// R8_CL?
+					Ops.RM_CL in group -> when(op2) {
+						Reg.CL -> { encoding = group[Ops.RM_CL]; encode1R(op1) }
+						else   -> { encoding(Ops.R_R); encode2RR(op1, op2) }
+					}
+
+					Ops.A_DX in group -> when {
+						!op1.isA ||
+						op2 != Reg.DX  -> invalidEncoding()
+						op1 == Reg.AL  -> byte(0xEC)
+						op1 == Reg.AX  -> word(0xED66)
+						op1 == Reg.EAX -> byte(0xED)
+						else           -> invalidEncoding()
+					}
+
+					Ops.DX_A in group -> when {
+						!op2.isA ||
+							op1 != Reg.DX  -> invalidEncoding()
+						op2 == Reg.AL  -> byte(0xEE)
+						op2 == Reg.AX  -> word(0xEF66)
+						op2 == Reg.EAX -> byte(0xEF)
+						else           -> invalidEncoding()
+					}
+
+					else -> when(op2.width) {
+						BYTE  -> { encoding(Ops.R_RM8); encode2RR(op1, op2) }
+						WORD  -> { encoding(Ops.R_RM16); encode2RR(op1, op2) }
+						DWORD -> { encoding(Ops.R_RM32); encode2RR(op1, op2) }
+						else  -> invalidEncoding()
+					}
+				}
+
 				Ops.A_O in group -> when {
 					op1.isA -> { encoding = group[Ops.A_O]; encode1O(op2) }
 					op2.isA -> { encoding = group[Ops.A_O]; encode1O(op1) }
 					else    -> { encoding = group[Ops.R_R]; encode2RR(op1, op2) }
 				}
-				Ops.RM_CL in group -> when(op2) {
-					Reg.CL -> { encoding = group[Ops.RM_CL]; encode1R(op1) }
-					else   -> encode2RR(op1, op2)
-				}
+
 				Ops.R_R in group -> {
 					encoding = group[Ops.R_R]
 					encode2RR(op1, op2)
 				}
-				Ops.A_DX in group -> when {
-					!op1.isA ||
-					op2 != Reg.DX  -> invalidEncoding()
-					op1 == Reg.AL  -> byte(0xEC)
-					op1 == Reg.AX  -> word(0xED66)
-					op1 == Reg.EAX -> byte(0xED)
-					else           -> invalidEncoding()
-				}
-				Ops.DX_A in group -> when {
-					!op2.isA ||
-					op1 != Reg.DX  -> invalidEncoding()
-					op2 == Reg.AL  -> byte(0xEE)
-					op2 == Reg.AX  -> word(0xEF66)
-					op2 == Reg.EAX -> byte(0xEF)
-					else           -> invalidEncoding()
-				}
+
 				else -> invalidEncoding()
 			}
+
 			// FPU
 			op1 == Reg.ST0 -> { encoding(Ops.ST0_ST); encode1ST(op2) }
 			op2 == Reg.ST0 -> { encoding(Ops.ST_ST0); encode1ST(op1) }
+
 			// MOV
 			op1.type == RegType.CR -> encodeMOVRR(op1, op2, 0x220F)
 			op2.type == RegType.CR -> encodeMOVRR(op2, op1, 0x200F)
@@ -1019,6 +1047,7 @@ class Assembler(private val context: CompilerContext) {
 			op2.type == RegType.DR -> encodeMOVRR(op2, op1, 0x210F)
 			op1.type == RegType.SEG -> encodeMOVRSEG(op1, op2, op2, 0x8E)
 			op2.type == RegType.SEG -> encodeMOVRSEG(op2, op1, op1, 0x8C)
+
 			else -> invalidEncoding()
 		}
 	}
@@ -1095,40 +1124,6 @@ class Assembler(private val context: CompilerContext) {
 
 			else -> invalidEncoding()
 		}
-	}
-
-
-
-	/*
-	Custom Encoding
-	 */
-
-
-
-	private val customEncodings = mapOf<Mnemonic, (InsNode) -> Unit>()
-
-
-	
-	private fun encodeMOVRR(op1: Reg, op2: Reg, opcode: Int) {
-		if(group.mnemonic != Mnemonic.MOV) invalidEncoding()
-		if(op2.type != RegType.R64) invalidEncoding()
-		writeRex(0, op1.rex, 0, op2.rex)
-		writer.varLengthInt(opcode)
-		writeModRM(0b11, op1.value, op2.value)
-	}
-	
-	
-	
-	private fun encodeMOVRSEG(op1: Reg, op2: Reg, r: Reg, opcode: Int) {
-		if(group.mnemonic != Mnemonic.MOV) invalidEncoding()
-		when(r.type) {
-			RegType.R16 -> { byte(0x66); writeRex(0, op1.rex, 0, op2.rex) }
-			RegType.R32 -> writeRex(0, op1.rex, 0, op2.rex)
-			RegType.R64 -> writeRex(1, op1.rex, 0, op2.rex)
-			else        -> invalidEncoding()
-		}
-		byte(opcode)
-		writeModRM(0b11, op1.value, op2.value)
 	}
 
 
