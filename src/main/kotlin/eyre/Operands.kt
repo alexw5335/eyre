@@ -138,14 +138,7 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 	RM(Ops.R, Ops.M),
 	R_RM(Ops.R_R, Ops.R_M),
 	RM_R(Ops.R_R, Ops.M_R),
-
-	//XCHG
 	O_A(Ops.A_O),
-	// IMUL
-	R_RM_I8(Ops.R_R_I8, Ops.R_M_I8),
-	// SHLD/SHRD
-	RM_R_I8(Ops.R_R_I8, Ops.M_R_I8),
-
 	MEM(Ops.M, mask = OpMask.NONE),
 	M16(Ops.M, mask = OpMask.WORD),
 	M32(Ops.M, mask = OpMask.DWORD),
@@ -185,10 +178,11 @@ enum class Ops {
 	ST0_ST,
 	A_O,
 
+	// IMUL
 	R_RM_I,
-	R_R_I8,
-	R_M_I8,
-	M_R_I8,
+	R_RM_I8,
+	// SHLD/SHRD
+	RM_R_I8,
 	RM_R_CL,
 
 	// LEA/LFS/LGS/LSS

@@ -4,16 +4,53 @@ import eyre.gen.CommonEncoding
 import eyre.gen.ManualParser
 import eyre.gen.NasmExt
 import eyre.gen.NasmParser
-import eyre.util.Unique
+import eyre.util.hexc16
+import eyre.util.hexc24
+import eyre.util.hexc32
 import eyre.util.hexc8
 
 
 
 fun main() {
 	//compare()
-	genSse()
+	//genSse()
+	genEncodings0()
 }
 
+
+private fun genEncodings0() {
+	val encodings = ManualParser("encodings.txt").let { it.read(); it.encodings }
+	for(e in encodings) {
+		if(e.ops == Ops.NONE && e.sseOps == SseOps.NULL) {
+			val values = ArrayList<Int>()
+			if(e.o16 == 1) values += 0x66
+			if(e.prefix != Prefix.NONE) values += e.prefix.value
+			if(e.rexw == 1) values += 0x48
+			when(e.escape) {
+				Escape.NONE -> { }
+				Escape.E0F -> values += 0x0F
+				Escape.E38 -> { values += 0x0F; values += 0x38 }
+				Escape.E3A -> { values += 0x0F; values += 0x3A }
+				Escape.E00 -> { values += 0x00 }
+			}
+			if(e.opcode and 0xFF00 != 0) values += e.opcode shr 8
+			values += e.opcode and 0xFF
+			print(e.mnemonic)
+			print(" -> ")
+			var value = 0
+			for(i in values.indices)
+				value = value or (values[i] shl (i shl 3))
+			when(values.size) {
+				1 -> print("writer.i8(0x${value.hexc8})")
+				2 -> print("writer.i16(0x${value.hexc16})")
+				3 -> print("writer.i24(0x${value.hexc24})")
+				4 -> print("writer.i32(0x${value.hexc32})")
+				else -> error("Invalid opcode")
+			}
+			println()
+		}
+	}
+}
 
 
 private fun genSse() {

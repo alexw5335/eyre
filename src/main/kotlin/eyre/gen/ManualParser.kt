@@ -5,7 +5,6 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import eyre.util.isHex
 import eyre.Width.*
-import eyre.util.Unique
 
 class ManualParser(private val inputs: List<String>) {
 
@@ -104,7 +103,7 @@ class ManualParser(private val inputs: List<String>) {
 			}
 		}
 
-		if(mnemonic == "WAIT") {
+		if(prefix == Prefix.P9B && opcode == 0) {
 			opcode = 0x9B
 			prefix = Prefix.NONE
 		}
@@ -349,9 +348,8 @@ class ManualParser(private val inputs: List<String>) {
 				Ops.A_O    -> add2(a, r)
 
 				Ops.R_RM_I  -> { add2(r, r, i); add2(r, m, i) }
-				Ops.R_R_I8  -> add2(r, r, Op.I8)
-				Ops.R_M_I8  -> add2(r, m, Op.I8)
-				Ops.M_R_I8  -> add2(m, r, Op.I8)
+				Ops.R_RM_I8 -> { add2(r, r, Op.I8); add2(r, m, Op.I8) }
+				Ops.RM_R_I8 -> { add2(r, r, Op.I8); add2(m, r, Op.I8) }
 				Ops.RM_R_CL -> { add2(r, r, Op.CL); add2(m, r, Op.CL) }
 
 				Ops.R_MEM   -> add2(r, Op.MEM)

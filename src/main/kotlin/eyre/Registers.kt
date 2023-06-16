@@ -3,6 +3,16 @@ package eyre
 import eyre.util.bin44
 
 
+
+@JvmInline
+value class WidthAndMask(private val value: Int) {
+	val width   get() = Width.values[(value and 0xFF).countTrailingZeroBits()]
+	val mask    get() = OpMask(value shr 8)
+	val isValid get() = (value and 0xFF) in mask
+}
+
+
+
 enum class Width(val string: String, val varString: String?, val bytes: Int) {
 
 	BYTE("byte", "db", 1),
@@ -55,8 +65,10 @@ value class OpMask(val value: Int) {
 	val isSingle   get() = value.countOneBits() == 1
 
 	operator fun contains(type: RegType) = (1 shl type.ordinal) and value != 0
-	operator fun contains(reg: Reg)      = (1 shl reg.type.ordinal) and value != 0
-	operator fun contains(width: Width)  = (1 shl width.ordinal) and value != 0
+	operator fun contains(reg: Reg) = (1 shl reg.type.ordinal) and value != 0
+	operator fun contains(width: Width) = (1 shl width.ordinal) and value != 0
+	operator fun contains(int: Int) = (1 shl int) and value != 0
+
 	operator fun plus(other: OpMask) = OpMask(value or other.value)
 
 	companion object {

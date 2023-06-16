@@ -53,6 +53,8 @@ val Int.hex8 get() = hex.zeroPadded(2)
 
 val Int.hex16 get() = hex.zeroPadded(4)
 
+val Int.hex24 get() = hex.zeroPadded(6)
+
 val Int.hex32 get() = hex.zeroPadded(8)
 
 val Int.hexFull get() = "0x$hex"
@@ -70,6 +72,8 @@ val Int.hexc get() = Integer.toHexString(this).uppercase()
 val Int.hexc8 get() = hex8.uppercase()
 
 val Int.hexc16 get() = hex16.uppercase()
+
+val Int.hexc24 get() = hex24.uppercase()
 
 val Int.hexc32 get() = hex32.uppercase()
 
