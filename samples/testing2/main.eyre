@@ -1,45 +1,13 @@
 namespace main
 
-proc main {
-	mov ax, fs
-	mov eax, fs
-	mov rax, fs
-	mov fs, rax
-	mov fs, eax
-	mov fs, ax
 
-	shl rax, cl
-	shl eax, cl
-	shl ax, cl
-	shl al, cl
-	shl rax, 1
-	shl eax, 1
-	shl ax, 1
-	shl al, 1
-	shl rax, 2
-	shl eax, 2
-	shl ax, 2
-	shl al, 2
 
-	movzx rcx, byte [rax]
-	movsx rcx, word [rax]
-	movsxd rcx, dword [rax]
+var message db "Message\0"
 
-	imul rcx, rax, 100
-	imul rcx, rax, 200
-	imul rcx, [rax], 100
-	imul rcx, [rax], 200
 
-	shld rcx, rax, cl
-	shld rcx, rax, 1
-	shld [rcx], rax, cl
-	shld [rcx], rax, 1
-	shrd rcx, rax, cl
-	shrd rcx, rax, 1
-	shrd [rcx], rax, cl
-	shrd [rcx], rax, 1
 
-	addps xmm0, xmm0
-
-	emms
+proc main(40) {
+	lea rcx, [message]
+	dllcall printf
+	dllcall ExitProcess
 }

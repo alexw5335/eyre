@@ -100,15 +100,78 @@ value class OpMask(val value: Int) {
 }
 
 
+/**
+ * - Bits 0-7: type
+ * - Bits 8-11: value
+ * - Bits 12-12: rex8
+ * - Bits 13-13: noRex
+ * - rex =
+ */
+@JvmInline
+value class Register(private val backing: Int) {
+
+	constructor(type: Int, value: Int) : this(type and (value shl 8))
+
+	val type    get() = (backing shr 0)  and 0xFF
+	val ordinal get() = (backing shr 8)  and 0b11111
+	val value   get() = (backing shr 8)  and 0b1111
+	val rex     get() = (backing shr 10) and 1
+	val high    get() = (backing shr 11) and 1
+	val rex8    get() = (backing shr 12) and 1
+	val noRex   get() = (backing shr 13) and 1
+
+	val isR get() = type <= R64
+	val isR8 get() = type == R8
+	val isR16 get() = type == R16
+	val isR32 get() = type == R32
+	val isR64 get() = type == R64
+	val isMM get() = type == MM
+	val isST get() = type == ST
+	val isX get() = type == X
+	val isY get() = type == Y
+	val isZ get() = type == Z
+	val isK get() = type == K
+	val isSEG get() = type == SEG
+	val isCR get() = type == CR
+	val isDR get() = type == DR
+	val isBND get() = type == BND
+
+
+	companion object {
+		const val R8 = 0
+		const val R16 = 1
+		const val R32 = 2
+		const val R64 = 3
+		const val MM = 4
+		const val ST = 5
+		const val X = 6
+		const val Y = 7
+		const val Z = 8
+		const val K = 9
+		const val SEG = 10
+		const val CR = 11
+		const val DR = 12
+		const val BND = 13
+
+		val CL = Register(R8, 1)
+		val AL = Register(R8, 0)
+		val AX = Register(R16, 0)
+		val EAX = Register(R32, 0)
+		val RAX = Register(R64, 0)
+	}
+
+}
+
+
 
 enum class Reg(
-	val type   : RegType,
-	val width  : Width,
-	val value  : Int,
-	val rex    : Int,
-	val high   : Int,
-	val rex8 : Boolean = false,
-	val noRex  : Boolean = false
+	val type  : RegType,
+	val width : Width,
+	val value : Int,
+	val rex   : Int,
+	val high  : Int,
+	val rex8  : Int = 0,
+	val noRex : Int = 0
 ) {
 
 	RAX(RegType.R64, Width.QWORD, 0, 0, 0),
@@ -166,10 +229,10 @@ enum class Reg(
 	CL  (RegType.R8, Width.BYTE, 1, 0, 0),
 	DL  (RegType.R8, Width.BYTE, 2, 0, 0),
 	BL  (RegType.R8, Width.BYTE, 3, 0, 0),
-	AH  (RegType.R8, Width.BYTE, 4, 0, 0, rex8 = true),
-	BH  (RegType.R8, Width.BYTE, 5, 0, 0, rex8 = true),
-	CH  (RegType.R8, Width.BYTE, 6, 0, 0, rex8 = true),
-	DH  (RegType.R8, Width.BYTE, 7, 0, 0, rex8 = true),
+	AH  (RegType.R8, Width.BYTE, 4, 0, 0, rex8 = 1),
+	BH  (RegType.R8, Width.BYTE, 5, 0, 0, rex8 = 1),
+	CH  (RegType.R8, Width.BYTE, 6, 0, 0, rex8 = 1),
+	DH  (RegType.R8, Width.BYTE, 7, 0, 0, rex8 = 1),
 	R8B (RegType.R8, Width.BYTE, 0, 1, 0),
 	R9B (RegType.R8, Width.BYTE, 1, 1, 0),
 	R10B(RegType.R8, Width.BYTE, 2, 1, 0),
@@ -179,10 +242,10 @@ enum class Reg(
 	R14B(RegType.R8, Width.BYTE, 6, 1, 0),
 	R15B(RegType.R8, Width.BYTE, 7, 1, 0),
 	
-	SPL(RegType.R8, Width.BYTE, 0, 1, 0, noRex = true),
-	BPL(RegType.R8, Width.BYTE, 1, 1, 0, noRex = true),
-	SIL(RegType.R8, Width.BYTE, 2, 1, 0, noRex = true),
-	DIL(RegType.R8, Width.BYTE, 3, 1, 0, noRex = true),
+	SPL(RegType.R8, Width.BYTE, 0, 1, 0, noRex = 1),
+	BPL(RegType.R8, Width.BYTE, 1, 1, 0, noRex = 1),
+	SIL(RegType.R8, Width.BYTE, 2, 1, 0, noRex = 1),
+	DIL(RegType.R8, Width.BYTE, 3, 1, 0, noRex = 1),
 
 	ES(RegType.SEG, Width.WORD, 0, 0, 0),
 	CS(RegType.SEG, Width.WORD, 1, 0, 0),
@@ -345,5 +408,4 @@ enum class Reg(
 
 	val isR = type in OpMask.R1111
 	val isA = isR && value == 0 && rex == 0
-	
 }
