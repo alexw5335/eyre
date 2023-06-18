@@ -1,6 +1,8 @@
-package eyre
+package eyre.gen
 
 import eyre.Width.*
+import eyre.OpMask
+import eyre.Width
 
 
 

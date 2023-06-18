@@ -1,9 +1,5 @@
-package eyre
+package eyre.gen
 
-import eyre.gen.CommonEncoding
-import eyre.gen.ManualParser
-import eyre.gen.NasmExt
-import eyre.gen.NasmParser
 import eyre.util.hexc16
 import eyre.util.hexc24
 import eyre.util.hexc32

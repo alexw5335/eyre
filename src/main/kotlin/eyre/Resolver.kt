@@ -144,7 +144,7 @@ class Resolver(private val context: CompilerContext) {
 		is TypedefNode -> node.symbol.type = resolveTypeNode(node.value)
 		is UnaryNode  -> resolveNode(node.node)
 		is BinaryNode -> { resolveNode(node.left); resolveNode(node.right) }
-		is MemNode    -> resolveNode(node.value)
+		is OpNode     -> resolveNode(node.node)
 		is NameNode   -> resolveNameNode(node)
 		is DotNode    -> resolveDotNode(node)
 		is RefNode -> {
@@ -188,9 +188,7 @@ class Resolver(private val context: CompilerContext) {
 
 		is StringNode -> node.symbol = context.addStringLiteral(node.value)
 
-		is ImmNode -> resolveNode(node.value)
-
-		else        -> return
+		else -> return
 	}}
 
 

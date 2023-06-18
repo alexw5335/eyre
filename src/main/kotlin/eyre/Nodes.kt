@@ -36,16 +36,28 @@ sealed interface SymNode : AstNode {
 
 
 
-/**
- * Marker interface for nodes that can be used as operands in instruction nodes.
- */
-sealed interface OpNode : AstNode
+enum class OpNodeType {
+	REG,
+	MEM,
+	IMM;
+}
 
-class RegNode(val value: Reg) : OpNode { val width get() = value.width }
 
-class MemNode(val width: Width?, val value: AstNode) : OpNode
 
-class ImmNode(val width: Width?, val value: AstNode) : OpNode
+class OpNode(
+	val type  : OpNodeType,
+	val width : Width?,
+	val node  : AstNode,
+	val reg   : Reg
+) : AstNode
+
+
+
+class RegNode(val value: Reg) : AstNode
+
+
+
+object NullNode : AstNode
 
 
 

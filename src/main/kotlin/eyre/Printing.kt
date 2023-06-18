@@ -15,7 +15,6 @@ val AstNode.printString: String get() = when(this) {
 	is NameNode       -> name.string
 	is NamespaceNode  -> "namespace ${symbol.name}"
 	is ScopeEndNode   -> "scope end"
-	is MemNode        -> if(width != null) "${width.string} [${value.printString}]" else "[${value.printString}]"
 	is VarResNode     -> "var ${symbol.name}: ${type.printString}"
 	is ArrayNode      -> "${receiver.printString}[${index.printString}]"
 	is ConstNode      -> "const ${symbol.name} = ${value.printString}"
@@ -23,6 +22,15 @@ val AstNode.printString: String get() = when(this) {
 	is FloatNode      -> "$value"
 	is RefNode        -> "${left.printString}::${right.printString}"
 	is EqualsNode     -> "${left.printString} = ${right.printString}"
+
+	is OpNode -> buildString {
+		if(width != null) append("${width.string} ")
+		when(type) {
+			OpNodeType.MEM -> append("[${node.printString}]")
+			OpNodeType.REG -> append(reg.string)
+			OpNodeType.IMM -> append(node.printString)
+		}
+	}
 
 	is TypeNode -> buildString {
 		name?.let(::append)

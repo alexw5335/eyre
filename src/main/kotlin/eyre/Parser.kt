@@ -209,45 +209,18 @@ class Parser(private val context: CompilerContext) {
 			pos++
 			val value = parseExpression()
 			expect(SymToken.RBRACKET)
-			return MemNode(width, value)
+			return OpNode(OpNodeType.MEM, width, value, Reg.AL)
 		}
 
 		return when(val expression = parseExpression()) {
 			is RegNode -> if(width != null)
 				error("Width specifier not allowed")
 			else
-				expression
+				OpNode(OpNodeType.REG, null, NullNode, expression.value)
 			else ->
-				ImmNode(width, expression)
+				OpNode(OpNodeType.IMM, width, expression, Reg.AL)
 		}
 	}
-
-
-
-/*
-	private fun parseOperand(): OpNode {
-		var token = next
-		var width: Width? = null
-
-		if(token is Name) {
-			if(token in Names.widths) {
-				width = Names.widths[token]
-				if(tokens[pos + 1] == SymToken.LBRACKET)
-					token = tokens[++pos]
-			}
-		}
-
-		if(token == SymToken.LBRACKET) {
-			pos++
-			val value = parseExpression()
-			expect(SymToken.RBRACKET)
-			return MemNode(width, value)
-		}
-
-		val expression = parseExpression()
-		return (expression as? OpNode) ?: error("Invalid operand: ${expression.printString}")
-	}
-*/
 
 
 

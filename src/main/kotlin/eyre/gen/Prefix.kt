@@ -1,4 +1,4 @@
-package eyre
+package eyre.gen
 
 enum class Prefix(val value: Int) {
 	NONE(0),

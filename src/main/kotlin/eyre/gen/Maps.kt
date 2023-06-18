@@ -1,6 +1,5 @@
 package eyre.gen
 
-import eyre.Op
 import eyre.Width
 
 object Maps {

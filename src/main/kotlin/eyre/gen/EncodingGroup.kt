@@ -1,5 +1,6 @@
-package eyre
+package eyre.gen
 
+import eyre.Mnemonic
 import eyre.util.bin8888
 
 class EncodingGroup(val mnemonic: Mnemonic) {

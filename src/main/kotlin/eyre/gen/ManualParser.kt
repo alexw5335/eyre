@@ -123,7 +123,8 @@ class ManualParser(private val inputs: List<String>) {
 			}
 		}
 
-		fun add(mnemonic: String, opcode: Int, ops: Ops, prefix: Prefix) = list.add(Encoding(
+		fun add(mnemonic: String, opcode: Int, ops: Ops, prefix: Prefix) = list.add(
+			Encoding(
 			mnemonicMap[mnemonic] ?: error("Unrecognised mnemonic: $mnemonic"),
 			prefix,
 			escape,
@@ -136,7 +137,8 @@ class ManualParser(private val inputs: List<String>) {
 			o16,
 			pseudo,
 			mr
-		))
+		)
+		)
 
 		if(mnemonic == "ADDPD")
 			sse = true

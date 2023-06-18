@@ -1,9 +1,5 @@
 package eyre.gen
 
-import eyre.Escape
-import eyre.Op
-import eyre.Prefix
-
 data class CommonEncoding(
 	val mnemonic : String,
 	val prefix   : Prefix,

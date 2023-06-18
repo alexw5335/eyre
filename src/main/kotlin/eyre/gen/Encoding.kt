@@ -1,4 +1,7 @@
-package eyre
+package eyre.gen
+
+import eyre.Mnemonic
+import eyre.OpMask
 
 data class Encoding(
 	val mnemonic : Mnemonic,
