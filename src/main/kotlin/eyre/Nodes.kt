@@ -49,7 +49,15 @@ class OpNode(
 	val width : Width?,
 	val node  : AstNode,
 	val reg   : Reg
-) : AstNode
+) : AstNode {
+
+	constructor(reg: Reg) : this(OpNodeType.REG, null, NullNode, reg)
+
+	val isReg get() = type == OpNodeType.REG
+	val isMem get() = type == OpNodeType.MEM
+	val isImm get() = type == OpNodeType.IMM
+
+}
 
 
 

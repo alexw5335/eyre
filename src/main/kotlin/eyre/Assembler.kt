@@ -4,6 +4,8 @@ import eyre.util.NativeWriter
 import eyre.Mnemonic.*
 import eyre.Width.*
 import eyre.OpNodeType.*
+import eyre.util.bin
+import eyre.util.bin8
 
 class Assembler(private val context: CompilerContext) {
 
@@ -142,12 +144,248 @@ class Assembler(private val context: CompilerContext) {
 
 
 	/*
+	Immediates
+	 */
+
+
+
+	private var immRelocCount = 0
+
+	private val hasImmReloc get() = immRelocCount > 0
+
+
+
+	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long = when(node) {
+		is IntNode      -> node.value
+		is UnaryNode    -> node.calculate(::resolveImmRec, regValid)
+		is BinaryNode   -> node.calculate(::resolveImmRec, regValid)
+		//is StringNode -> node.value.ascii64()
+
+		is SymNode -> when(val symbol = node.symbol) {
+			is PosSymbol ->
+				if(immRelocCount++ == 0 && !regValid)
+					error("First relocation (absolute or relative) must be positive and absolute")
+				else
+					0L
+			is IntSymbol -> symbol.intValue
+			else -> invalidEncoding()
+		}
+
+		else -> error("Invalid imm node: $node")
+	}
+
+
+
+	private fun resolveImm(node: AstNode): Long {
+		immRelocCount = 0
+		return resolveImmRec(node, true)
+	}
+
+
+
+	private fun writeImm(node: OpNode, width: Width, hasImm64: Boolean = false) {
+		writeImm(node, width, resolveImm(node), hasImm64)
+	}
+
+
+
+	private fun writeImm(
+		node     : OpNode,
+		width    : Width,
+		value    : Long,
+		hasImm64 : Boolean = false,
+		isRel    : Boolean = false
+	) {
+		val actualWidth = if(width == QWORD && !hasImm64) DWORD else width
+		if(node.width != null && node.width != actualWidth) invalidEncoding()
+
+		if(isRel) {
+			if(hasImmReloc)
+				addRelReloc(actualWidth, node.node, 0)
+			writer.writeWidth(actualWidth, value)
+		} else if(immRelocCount == 1) {
+			if(!hasImm64 || width != QWORD)
+				error("Absolute relocations are only allowed with 64-bit operands")
+			addAbsReloc(node.node)
+			writer.advance(8)
+		} else if(hasImmReloc) {
+			addLinkReloc(actualWidth, node.node)
+			writer.advance(actualWidth.bytes)
+		} else if(!writer.writeWidth(actualWidth, value)) {
+			invalidEncoding()
+		}
+	}
+
+
+
+	/*
+	Memory operands
+	 */
+
+
+
+	private var baseReg: Reg? = null
+	private var indexReg: Reg? = null
+	private var indexScale = 0
+	private var aso = 0 // 0 = none, 1 = 32, 2 = 64
+	private var memRelocCount = 0
+	private val hasMemReloc get() = memRelocCount > 0
+
+
+
+	private fun checkAso(width: Width) = when(width) {
+		DWORD -> if(aso == 2) invalidEncoding() else aso = 1
+		QWORD -> if(aso == 1) invalidEncoding() else aso = 2
+		else  -> invalidEncoding()
+	}
+
+
+
+	private fun resolveMemRec(node: AstNode, regValid: Boolean): Long = when(node) {
+		is IntNode    -> node.value
+		is UnaryNode  -> node.calculate(::resolveMemRec, regValid)
+		is BinaryNode -> {
+			val regNode = node.left as? RegNode ?: node.right as? RegNode
+			val intNode = node.left as? IntNode ?: node.right as? IntNode
+			if(node.op == BinaryOp.MUL && regNode != null && intNode != null) {
+				if(indexReg != null && !regValid) invalidEncoding()
+				checkAso(regNode.value.width)
+				indexReg = regNode.value
+				indexScale = intNode.value.toInt()
+				0
+			} else
+				node.calculate(::resolveMemRec, regValid)
+		}
+		is RegNode -> {
+			if(!regValid) invalidEncoding()
+			checkAso(node.value.width)
+			if(baseReg != null) {
+				if(indexReg != null) invalidEncoding()
+				indexReg = node.value
+				indexScale = 1
+			} else
+				baseReg = node.value
+			0
+		}
+		is SymNode -> when(val symbol = node.symbol) {
+			is PosSymbol ->
+				if(memRelocCount++ == 0 && !regValid)
+					error("First relocation (absolute or relative) must be positive and absolute")
+				else
+					0L
+			is IntSymbol -> symbol.intValue
+			is VarAliasSymbol -> resolveMemRec((symbol.node as VarAliasNode).value, regValid)
+			is AliasRefSymbol -> resolveMemRec(symbol.value, regValid) + symbol.offset
+			null -> error("Unresolved symbol: $node")
+			else -> invalidEncoding()
+		}
+
+		else -> error("Invalid mem node: $node")
+	}
+
+
+
+	private fun resolveMem(node: AstNode): Long {
+		baseReg = null
+		indexReg = null
+		indexScale = 0
+		aso = 0
+		memRelocCount = 0
+
+		val disp = resolveMemRec(node, true)
+
+		// RSP and ESP cannot be index registers, swap to base if possible
+		if(baseReg != null && indexReg != null && indexReg!!.value == 4) {
+			if(indexScale != 1) invalidEncoding()
+			val temp = indexReg
+			indexReg = baseReg
+			baseReg = temp
+		}
+
+		if(indexScale.countOneBits() > 1 || indexScale > 8)
+			error("Invalid index: $indexScale")
+
+		if(indexScale == 0)
+			indexReg = null
+
+		return disp
+	}
+
+
+
+	private fun relocAndDisp(mod: Int, disp: Long, node: AstNode) {
+		if(hasMemReloc) {
+			addLinkReloc(DWORD, node)
+			writer.i32(0)
+		} else if(mod == 1) {
+			writer.i8(disp.toInt())
+		} else if(mod == 2) {
+			writer.i32(disp.toInt())
+		}
+	}
+
+
+
+	private fun writeMem(node: AstNode, reg: Int, disp: Long, immLength: Int) {
+		val base  = baseReg
+		val index = indexReg
+		val scale = indexScale.countTrailingZeroBits()
+
+		val mod = when {
+			hasMemReloc -> 2 // disp32
+			disp == 0L -> if(base != null && base.value == 5)
+				1 // disp8, rbp as base needs an empty offset
+			else
+				0 // no disp
+			disp.isImm8 -> 1 // disp8
+			else -> 2 // disp32
+		}
+
+		if(index != null) { // SIB
+			if(base != null) {
+				writeModRM(mod, reg, 0b100)
+				writeSib(scale, index.value, base.value)
+				relocAndDisp(mod, disp, node)
+			} else {
+				writeModRM(mod, reg, 0b100)
+				writeSib(scale, index.value, 0b101)
+				relocAndDisp(mod, disp, node)
+			}
+		} else if(base != null) { // Indirect
+			if(base.value == 5) {
+				writeModRM(mod, reg, 0b100)
+				writeSib(0, 0b100, 0b100)
+			} else {
+				writeModRM(mod, reg, base.value)
+			}
+			relocAndDisp(mod, disp, node)
+		} else if(memRelocCount and 1 == 1) { // RIP-relative
+			writeModRM(0b00, reg, 0b101)
+			addRelReloc(DWORD, node, immLength)
+			dword(0)
+		} else if(mod != 0) { // Absolute 32-bit (Not working?)
+			writeModRM(0b00, reg, 0b100)
+			writeSib(0b00, 0b100, 0b101)
+			relocAndDisp(mod, disp, node)
+		} else {
+			invalidEncoding() // Empty memory operand
+		}
+	}
+
+
+
+
+	/*
 	Writing
 	 */
 
 
 
 	private val OpNode.asReg get() = if(type != REG) invalidEncoding() else reg
+
+	private val OpNode.asMem get() = if(type != MEM) invalidEncoding() else this
+
+	private val OpNode.asImm get() = if(type != IMM) invalidEncoding() else this
 
 	private fun byte(value: Int) = writer.i8(value)
 
@@ -163,14 +401,8 @@ class Assembler(private val context: CompilerContext) {
 		if(mask != OpMask.WORD && width == WORD) writer.i8(0x66)
 	}
 
-	/** [w]: 64-bit override [r]: REG, [x]: INDEX, [b]: RM, BASE, or OPREG */
-	private fun writeRex(w: Int, r: Int, x: Int, b: Int) {
-		val value = 0b0100_0000 or (w shl 3) or (r shl 2) or (x shl 1) or b
-		if(rexRequired || value != 0b0100_0000)
-			if(rexDisallowed)
-				invalidEncoding()
-			else
-				writer.i8(value)
+	private fun writeA32() {
+		if(aso == 1) byte(0x67)
 	}
 
 	private fun writeModRM(mod: Int, reg: Int, rm: Int) {
@@ -207,42 +439,25 @@ class Assembler(private val context: CompilerContext) {
 		}
 	}
 
-	private fun writeOpcode(enc: Enc) {
-		writeEscape(enc)
-		writer.varLengthInt(enc.opcode)
-	}
-
 	private fun writeOpcode(enc: Enc, mask: OpMask, width: Width) {
 		writeEscape(enc)
 		writer.varLengthInt(getOpcode(enc.opcode, mask, width))
 	}
-
-
-
-	private fun writeRex(rex: Rex) {
-		val value = rex.rex
-		if(rex.forced || value != 0)
-			if(rex.banned)
+	
+	/** [w]: 64-bit override [r]: REG, [x]: INDEX, [b]: RM, BASE, or OPREG */
+	private fun writeRex(w: Int, r: Int, x: Int, b: Int, forced: Int, banned: Int) {
+		val value = (w shl 3) or (r shl 2) or (x shl 1) or b
+		if(forced == 1 || value != 0)
+			if(banned == 1)
 				invalidEncoding()
 			else
 				byte(0b0100_0000 or value)
 	}
 
-
-
-	private fun writePreModRM(enc: Enc, width: Width, rex: Rex) {
-		val mask = enc.mask
-		checkWidth(mask, width)
-		writeO16(mask, width)
-		writeRex(rex)
-		writeOpcode(enc, mask, width)
-	}
-
-
-
-	private fun writeModRM(enc: Enc, width: Width, rex: Rex, modrm: ModRM) {
-		writePreModRM(enc, width, rex)
-		writer.i8(modrm.modrm)
+	/** [w]: 64-bit override [r]: REG, [x]: INDEX, [b]: RM, BASE, or OPREG */
+	private fun writeRex(w: Int, r: Int, x: Int, b: Int) {
+		val value = (w shl 3) or (r shl 2) or (x shl 1) or b
+		if(value != 0) byte(0b0100_0000 or value)
 	}
 
 
@@ -262,33 +477,86 @@ class Assembler(private val context: CompilerContext) {
 		writeOpcode(enc, mask, width)
 	}
 
+	private fun Enc.encode1MEM(op1: OpNode) {
+		if(op1.width != null) invalidEncoding()
+		val disp = resolveMem(op1.node)
+		writeA32()
+		writePrefix(this)
+		writeRex(rexw, indexReg?.rex ?: 0, 0, baseReg?.rex ?: 0)
+		writeEscape(this)
+		writer.varLengthInt(opcode)
+		writeMem(op1.node, ext, disp, 0)
+	}
 
+	private fun Enc.encode1M(op1: OpNode, immLength: Int) {
+		val mask = this.mask
+		val width = op1.width ?: invalidEncoding()
+		val disp = resolveMem(op1.node)
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writeA32()
+		writePrefix(this)
+		writeRex(rexw or rexw(mask, width), 0, indexReg?.rex ?: 0, baseReg?.rex ?: 0)
+		writeOpcode(this, mask, width)
+		writeMem(op1.node, ext, disp, immLength)
+	}
 
 	private fun Enc.encode1R(op1: Reg) {
 		val mask = this.mask
 		val width = op1.width
 		checkWidth(mask, width)
 		writeO16(mask, width)
-		writeRex(Rex(rexw(mask, width), 0, 0, op1.rex, op1.rex8, op1.noRex))
-		writeEscape(this)
-		writer.varLengthInt(getOpcode(opcode, mask, width))
-
-		writeModRM(
-			this,
-			op1.width,
-			Rex(0, 0, 0, op1.rex, op1.rex8, op1.noRex),
-			ModRM(0b11, ext, op1.value)
-		)
+		writePrefix(this)
+		writeRex(rexw or rexw(mask, width), 0, 0, op1.rex, op1.rex8, op1.noRex)
+		writeOpcode(this, mask, width)
+		writeModRM(0b11, this.ext, op1.value)
 	}
 
-	private fun encode2RR(enc: Enc, op1: Reg, op2: Reg) {
+	private fun Enc.encode1O(op1: Reg) {
+		val mask = this.mask
+		val width = op1.width
+		checkWidth(mask, width)
+		writeRex(rexw or rexw(mask, width), 0, 0, op1.rex)
+		writeEscape(this)
+		// Only single-byte opcodes use this encoding
+		val opcode = this.opcode + ((mask.value and 1) and (1 shl width.ordinal).inv()) shl 3 + op1.value
+		writer.varLengthInt(opcode)
+	}
+
+	private fun Enc.encode2RM(op1: Reg, op2: OpNode, immLength: Int) {
+		val mask = this.mask
+		val width = op1.width
+		if(op2.width != null && op2.width != op1.width) invalidEncoding()
+		val disp = resolveMem(op2.node)
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writeA32()
+		writePrefix(this)
+		writeRex(rexw or rexw(mask, width), op1.rex, indexReg?.rex ?: 0, baseReg?.rex ?: 0, op1.rex8, op1.noRex)
+		writeOpcode(this, mask, width)
+		writeMem(op2.node, op1.value, disp, immLength)
+	}
+
+	private fun Enc.encode2RR(op1: Reg, op2: Reg) {
+		val mask = this.mask
+		val width = op1.width
 		if(op1.width != op2.width) invalidEncoding()
-		writeModRM(
-			enc,
-			op1.width,
-			Rex(0, op2.rex, 0, op1.rex, op1.rex8 or op2.rex8, op1.noRex or op2.noRex),
-			ModRM(0b11, op2.value, op1.value)
-		)
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writePrefix(this)
+		writeRex(rexw or rexw(mask, width), op2.rex, 0, op1.rex, op1.rex8 or op2.rex8, op1.noRex or op2.noRex)
+		writeOpcode(this, mask, width)
+		writeModRM(0b11, op2.value, op2.value)
+	}
+
+
+
+	private fun Enc.encode1RM(op1: OpNode, immLength: Int) {
+		when(op1.type) {
+			REG -> encode1R(op1.reg)
+			MEM -> encode1M(op1, immLength)
+			IMM -> invalidEncoding()
+		}
 	}
 
 
@@ -503,15 +771,109 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun assemble1(node: InsNode, op1: OpNode) { when(node.mnemonic) {
-		NOT   -> Enc { 0xF6 + EXT2 + R1111 }.encode1R(op1.asReg)
-		NEG   -> Enc { 0xF6 + EXT3 + R1111 }.encode1R(op1.asReg)
-		MUL   -> Enc { 0xF6 + EXT4 + R1111 }.encode1R(op1.asReg)
-		IMUL  -> Enc { 0xF6 + EXT5 + R1111 }.encode1R(op1.asReg)
-		DIV   -> Enc { 0xF6 + EXT6 + R1111 }.encode1R(op1.asReg)
-		IDIV  -> Enc { 0xF6 + EXT7 + R1111 }.encode1R(op1.asReg)
+		PUSH  -> encodePUSH(op1)
+		POP   -> encodePOP(op1)
+		PUSHW -> encodePUSHW(op1)
+		POPW  -> encodePOPW(op1)
+		NOT   -> Enc { 0xF6 + EXT2 + R1111 }.encode1RM(op1, 0)
+		NEG   -> Enc { 0xF6 + EXT3 + R1111 }.encode1RM(op1, 0)
+		MUL   -> Enc { 0xF6 + EXT4 + R1111 }.encode1RM(op1, 0)
+		IMUL  -> Enc { 0xF6 + EXT5 + R1111 }.encode1RM(op1, 0)
+		DIV   -> Enc { 0xF6 + EXT6 + R1111 }.encode1RM(op1, 0)
+		IDIV  -> Enc { 0xF6 + EXT7 + R1111 }.encode1RM(op1, 0)
+		INC   -> Enc { 0xFE + EXT0 + R1111 }.encode1RM(op1, 0)
+		DEC   -> Enc { 0xFE + EXT1 + R1111 }.encode1RM(op1, 0)
+		NOP   -> Enc { E0F + 0x1F + R0110 }.encode1RM(op1, 0)
+
 
 		else -> invalidEncoding()
 	}}
+
+
+
+
+	/*
+	PUSH/POP encodings
+	 */
+
+
+
+	/**
+	 *     FF/6  PUSH   M      0111
+	 *     50    PUSH   O      0101
+	 *     6A    PUSH   I8
+	 *     68    PUSH   I
+	 *     A00F  PUSH   FS
+	 *     A80F  PUSH   GS
+	 */
+	private fun encodePUSH(op1: OpNode) {
+		when(op1.type) {
+			REG -> when(op1.reg) {
+				Reg.FS -> word(0xA00F)
+				Reg.GS -> word(0xA80F)
+				else   -> Enc { 0x50 + R1010 }.encode1O(op1.reg)
+			}
+			MEM -> Enc { 0xFF + R1110 + EXT6 }.encode1M(op1, 0)
+			IMM -> {
+				val imm = resolveImm(op1)
+				if(hasImmReloc) {
+					byte(0x68)
+					addLinkReloc(DWORD, op1)
+					dword(0)
+				} else if(imm.isImm8) {
+					byte(0x6A)
+					byte(imm.toInt())
+				} else if(imm.isImm32) {
+					byte(0x68)
+					dword(imm.toInt())
+				} else {
+					invalidEncoding()
+				}
+			}
+		}
+	}
+
+	/**
+	 *    8F/0  POP  M   0111
+	 *    58    POP  O   0101
+	 *    A10F  POP  FS
+	 *    A90F  POP  GS
+	 */
+	private fun encodePOP(op1: OpNode) {
+		when(op1.type) {
+			REG -> when(op1.reg) {
+				Reg.FS -> word(0xA10F)
+				Reg.GS -> word(0xA90F)
+				else -> Enc { 0x58 + R1010 }.encode1O(op1.reg)
+			}
+			MEM -> Enc { 0x8F + R1110 + EXT0 }.encode1M(op1)
+			else -> invalidEncoding()
+		}
+	}
+
+	/**
+	 *     A00F66  PUSHW  FS
+	 *     A80F66  PUSHW  GS
+	 */
+	private fun encodePUSHW(op1: OpNode) {
+		when(op1.asReg) {
+			Reg.FS -> writer.i24(0xA80F66)
+			Reg.GS -> writer.i32(0xA80F66)
+			else   -> invalidEncoding()
+		}
+	}
+
+	/**
+	 *     A10F66  POPW   FS
+	 *     A90F66  POPW   GS
+	 */
+	private fun encodePOPW(op1: OpNode) {
+		when(op1.asReg) {
+			Reg.FS -> writer.i24(0xA10F66)
+			Reg.GS -> writer.i32(0xA10F66)
+			else   -> invalidEncoding()
+		}
+	}
 
 
 }

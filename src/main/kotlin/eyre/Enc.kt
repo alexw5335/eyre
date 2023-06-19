@@ -44,17 +44,17 @@ class Rex(val value: Int) {
  * - Bits 22-25: Extension
  * - Bits 26-29: Mask
  * - Bits 30-30: REX.W
- * - Bits 31-31: O16
+ * - Bits 31-31: Mismatch
  */
 class Enc(private val value: Int) {
 
-	val opcode get() = ((value shr 0) and 0xFFFF)
-	val escape get() = ((value shr ESCAPE_POS) and 0b111)
-	val prefix get() = ((value shr PREFIX_POS) and 0b111)
-	val ext    get() = ((value shr EXT_POS) and 0b1111)
-	val mask   get() = ((value shr MASK_POS) and 0b1111).let(::OpMask)
-	val rexw   get() = ((value shr REXW_POS) and 0b1)
-	val o16    get() = ((value shr O16_POS) and 0b1)
+	val opcode   get() = ((value shr 0) and 0xFFFF)
+	val escape   get() = ((value shr ESCAPE_POS) and 0b111)
+	val prefix   get() = ((value shr PREFIX_POS) and 0b111)
+	val ext      get() = ((value shr EXT_POS) and 0b1111)
+	val mask     get() = ((value shr MASK_POS) and 0b1111).let(::OpMask)
+	val rexw     get() = ((value shr REXW_POS) and 0b1)
+	val mismatch get() = ((value shr MISMATCH_POS) and 0b1)
 
 	val length get() = 1 + (((opcode + 255) and -256) and 1)
 
@@ -66,6 +66,7 @@ class Enc(private val value: Int) {
 		private const val MASK_POS = 26
 		private const val REXW_POS = 30
 		private const val O16_POS = 31
+		private const val MISMATCH_POS = 32
 
 		const val E0F = 1 shl ESCAPE_POS
 		const val E00 = 2 shl ESCAPE_POS
@@ -105,7 +106,7 @@ class Enc(private val value: Int) {
 		const val R1111 = 15 shl MASK_POS
 
 		const val RW = 1 shl REXW_POS
-		const val O16 = 1 shl O16_POS
+		const val MISMATCH = 1 shl MISMATCH_POS
 
 	}
 

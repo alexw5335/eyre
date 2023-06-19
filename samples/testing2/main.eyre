@@ -1,7 +1,10 @@
 namespace main
 
-
-
 proc main {
+	not r12
+	not r12d
+	not r12w
+	not r12b
 	not ah
+	not sil
 }
