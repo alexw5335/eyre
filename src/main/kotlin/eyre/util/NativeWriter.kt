@@ -174,6 +174,8 @@ class NativeWriter(bytes: ByteArray) {
 	fun f32(pos: Int, value: Float) = Unsafe.instance.putFloat(bytes, pos + 16L, value)
 	fun f64(pos: Int, value: Double) = Unsafe.instance.putDouble(bytes, pos + 16L, value)
 
+	fun i32(value: Long) = i32(value.toUInt().toInt())
+
 
 
 

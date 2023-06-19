@@ -15,7 +15,7 @@ class ModRM(private val value: Int) {
 
 
 
-class Rex(private val value: Int) {
+class Rex(val value: Int) {
 
 	constructor(w: Int, r: Int, x: Int, b: Int, force: Int, ban: Int) : this(
 		(w shl 3) or
@@ -40,21 +40,21 @@ class Rex(private val value: Int) {
 /**
  * - Bits 0-15:  Opcode
  * - Bits 16-18: Escape
- * - Bits 19-22: Prefix
- * - Bits 23-26: Extension
- * - Bits 27-31: Mask
- * - Bits 32-32: REX.W
- * - Bits 33-33: O16
+ * - Bits 19-21: Prefix
+ * - Bits 22-25: Extension
+ * - Bits 26-29: Mask
+ * - Bits 30-30: REX.W
+ * - Bits 31-31: O16
  */
-class Enc(private val value: Long) {
+class Enc(private val value: Int) {
 
-	val opcode get() = ((value shr 0)          and 0xFFFF ).toInt()
-	val escape get() = ((value shr ESCAPE_POS) and 0b111  ).toInt()
-	val prefix get() = ((value shr PREFIX_POS) and 0b111  ).toInt()
-	val ext    get() = ((value shr EXT_POS)    and 0b1111 ).toInt()
-	val mask   get() = ((value shr MASK_POS)   and 0b1111 ).toInt().let(::OpMask)
-	val rw     get() = ((value shr RW_POS)     and 0b1    ).toInt()
-	val o16    get() = ((value shr O16_POS)    and 0b1    ).toInt()
+	val opcode get() = ((value shr 0) and 0xFFFF)
+	val escape get() = ((value shr ESCAPE_POS) and 0b111)
+	val prefix get() = ((value shr PREFIX_POS) and 0b111)
+	val ext    get() = ((value shr EXT_POS) and 0b1111)
+	val mask   get() = ((value shr MASK_POS) and 0b1111).let(::OpMask)
+	val rexw   get() = ((value shr REXW_POS) and 0b1)
+	val o16    get() = ((value shr O16_POS) and 0b1)
 
 	val length get() = 1 + (((opcode + 255) and -256) and 1)
 
@@ -62,10 +62,10 @@ class Enc(private val value: Long) {
 
 		private const val ESCAPE_POS = 16
 		private const val PREFIX_POS = 19
-		private const val EXT_POS = 23
-		private const val MASK_POS = 27
-		private const val RW_POS = 31
-		private const val O16_POS = 32
+		private const val EXT_POS = 22
+		private const val MASK_POS = 26
+		private const val REXW_POS = 30
+		private const val O16_POS = 31
 
 		const val E0F = 1 shl ESCAPE_POS
 		const val E00 = 2 shl ESCAPE_POS
@@ -104,7 +104,7 @@ class Enc(private val value: Long) {
 		const val R1110 = 14 shl MASK_POS
 		const val R1111 = 15 shl MASK_POS
 
-		const val RW = 1 shl RW_POS
+		const val RW = 1 shl REXW_POS
 		const val O16 = 1 shl O16_POS
 
 	}
@@ -113,4 +113,4 @@ class Enc(private val value: Long) {
 
 
 
-inline fun Enc(block: Enc.Companion.() -> Long) = Enc(block(Enc))
+inline fun Enc(block: Enc.Companion.() -> Int) = Enc(block(Enc))

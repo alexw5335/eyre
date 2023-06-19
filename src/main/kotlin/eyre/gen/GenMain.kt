@@ -29,8 +29,8 @@ private fun genEncodings0() {
 				Escape.E3A -> { values += 0x0F; values += 0x3A }
 				Escape.E00 -> { values += 0x00 }
 			}
-			if(e.opcode and 0xFF00 != 0) values += e.opcode shr 8
 			values += e.opcode and 0xFF
+			if(e.opcode and 0xFF00 != 0) values += e.opcode shr 8
 			print(e.mnemonic)
 			print(" -> ")
 			var value = 0
