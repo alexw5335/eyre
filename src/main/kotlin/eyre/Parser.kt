@@ -209,16 +209,16 @@ class Parser(private val context: CompilerContext) {
 			pos++
 			val value = parseExpression()
 			expect(SymToken.RBRACKET)
-			return OpNode(OpNodeType.MEM, width, value, Reg.AL)
+			return OpNode.mem(width, value)
 		}
 
 		return when(val expression = parseExpression()) {
 			is RegNode -> if(width != null)
 				error("Width specifier not allowed")
 			else
-				OpNode(OpNodeType.REG, null, NullNode, expression.value)
+				OpNode.reg(expression.value)
 			else ->
-				OpNode(OpNodeType.IMM, width, expression, Reg.AL)
+				OpNode.imm(width, expression)
 		}
 	}
 

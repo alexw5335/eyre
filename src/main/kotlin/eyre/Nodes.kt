@@ -44,18 +44,23 @@ enum class OpNodeType {
 
 
 
-class OpNode(
+class OpNode private constructor(
 	val type  : OpNodeType,
 	val width : Width?,
 	val node  : AstNode,
 	val reg   : Reg
 ) : AstNode {
 
-	constructor(reg: Reg) : this(OpNodeType.REG, null, NullNode, reg)
-
 	val isReg get() = type == OpNodeType.REG
 	val isMem get() = type == OpNodeType.MEM
 	val isImm get() = type == OpNodeType.IMM
+	val isST get() = reg.type == RegType.ST
+
+	companion object {
+		fun reg(reg: Reg) = OpNode(OpNodeType.REG, null, NullNode, reg)
+		fun mem(width: Width?, mem: AstNode) = OpNode(OpNodeType.MEM, width, mem, Reg.AL)
+		fun imm(width: Width?, imm: AstNode) = OpNode(OpNodeType.IMM, width, imm, Reg.AL)
+	}
 
 }
 

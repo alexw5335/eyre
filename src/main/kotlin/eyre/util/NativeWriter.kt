@@ -147,6 +147,12 @@ class NativeWriter(bytes: ByteArray) {
 		pos += 4
 	}
 
+	fun i40(value: Long) {
+		ensureCapacity(8)
+		Unsafe.instance.putLong(bytes, pos + 16L, value)
+		pos += 5
+	}
+
 	fun i64(value: Long) {
 		ensureCapacity(8)
 		Unsafe.instance.putLong(bytes, pos + 16L, value)

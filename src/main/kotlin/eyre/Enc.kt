@@ -46,7 +46,7 @@ class Rex(val value: Int) {
  * - Bits 30-30: REX.W
  * - Bits 31-31: Mismatch
  */
-class Enc(private val value: Int) {
+class Enc(val value: Int) {
 
 	val opcode   get() = ((value shr 0) and 0xFFFF)
 	val escape   get() = ((value shr ESCAPE_POS) and 0b111)
@@ -65,18 +65,16 @@ class Enc(private val value: Int) {
 		private const val EXT_POS = 22
 		private const val MASK_POS = 26
 		private const val REXW_POS = 30
-		private const val O16_POS = 31
-		private const val MISMATCH_POS = 32
+		private const val MISMATCH_POS = 31
 
 		const val E0F = 1 shl ESCAPE_POS
-		const val E00 = 2 shl ESCAPE_POS
-		const val E38 = 3 shl ESCAPE_POS
-		const val E3A = 4 shl ESCAPE_POS
+		const val E38 = 2 shl ESCAPE_POS
+		const val E3A = 3 shl ESCAPE_POS
 
 		const val P66 = 1 shl PREFIX_POS
-		const val P67 = 2 shl PREFIX_POS
-		const val PF2 = 3 shl PREFIX_POS
-		const val PF3 = 4 shl PREFIX_POS
+		const val PF2 = 2 shl PREFIX_POS
+		const val PF3 = 3 shl PREFIX_POS
+		const val P9B = 4 shl PREFIX_POS
 
 		const val EXT0 = 0 shl EXT_POS
 		const val EXT1 = 1 shl EXT_POS
@@ -89,6 +87,7 @@ class Enc(private val value: Int) {
 		const val EXT8 = 8 shl EXT_POS
 		const val EXT9 = 9 shl EXT_POS
 
+		const val R0000 = 0  shl MASK_POS
 		const val R0001 = 1  shl MASK_POS
 		const val R0010 = 2  shl MASK_POS
 		const val R0011 = 3  shl MASK_POS
