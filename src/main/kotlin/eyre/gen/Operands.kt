@@ -142,6 +142,7 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 	RM_R(Ops.R_R, Ops.M_R),
 	O_A(Ops.A_O),
 	MEM(Ops.M, mask = OpMask.NONE),
+	M8(Ops.M, mask = OpMask.BYTE),
 	M16(Ops.M, mask = OpMask.WORD),
 	M32(Ops.M, mask = OpMask.DWORD),
 	M64(Ops.M, mask = OpMask.QWORD),

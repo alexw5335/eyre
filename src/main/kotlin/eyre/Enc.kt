@@ -107,6 +107,8 @@ class Enc(val value: Int) {
 		const val RW = 1 shl REXW_POS
 		const val MISMATCH = 1 shl MISMATCH_POS
 
+		fun ext(value: Int) = value shl EXT_POS
+
 	}
 
 }
