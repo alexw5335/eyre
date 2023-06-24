@@ -136,10 +136,10 @@ enum class Op(val type: OpType, val width: Width?) {
 
 
 
-enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
+enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null, val mr: Boolean = false) {
 	RM(Ops.R, Ops.M),
 	R_RM(Ops.R_R, Ops.R_M),
-	RM_R(Ops.R_R, Ops.M_R),
+	RM_R(Ops.R_R, Ops.M_R, mr = true),
 	O_A(Ops.A_O),
 	MEM(Ops.M, mask = OpMask.NONE),
 	M8(Ops.M, mask = OpMask.BYTE),
@@ -152,7 +152,7 @@ enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null) {
 
 
 
-enum class Ops {
+enum class Ops(val mr: Boolean = false) {
 
 	NONE,
 
@@ -171,7 +171,7 @@ enum class Ops {
 
 	R_R,
 	R_M,
-	M_R,
+	M_R(mr = true),
 	RM_I,
 	RM_I8,
 	A_I,
@@ -185,8 +185,8 @@ enum class Ops {
 	R_RM_I,
 	R_RM_I8,
 	// SHLD/SHRD
-	RM_R_I8,
-	RM_R_CL,
+	RM_R_I8(mr = true),
+	RM_R_CL(mr = true),
 
 	// LEA/LFS/LGS/LSS
 	R_MEM,
@@ -207,15 +207,15 @@ enum class Ops {
 
 	// MOV
 	O_I,
-	R_SEG,
-	M_SEG,
+	R_SEG(mr = true),
+	M_SEG(mr = true),
 	SEG_R,
 	SEG_M,
 	A_MOF,
 	MOF_A,
-	R_DR,
+	R_DR(mr = true),
 	DR_R,
-	R_CR,
+	R_CR(mr = true),
 	CR_R,
 
 	// IN/OUT

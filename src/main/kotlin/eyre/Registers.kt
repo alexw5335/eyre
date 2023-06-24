@@ -63,6 +63,7 @@ value class OpMask(val value: Int) {
 	val highest    get() = Width.values[32 - value.countLeadingZeroBits()]
 	val lowest     get() = Width.values[value.countLeadingZeroBits()]
 	val isSingle   get() = value.countOneBits() == 1
+	val count      get() = value.countOneBits()
 
 	operator fun contains(type: RegType) = (1 shl type.ordinal) and value != 0
 	operator fun contains(reg: Reg) = (1 shl reg.type.ordinal) and value != 0
@@ -409,4 +410,5 @@ enum class Reg(
 
 	val isR = type in OpMask.R1111
 	val isA = isR && value == 0 && rex == 0
+	val isST = type == RegType.ST
 }

@@ -10,7 +10,9 @@ object Maps {
 	val immTypes   = ImmType.values().associateBy { it.name.lowercase().replace('_', ',') }
 	val tupleTypes = TupleType.values().associateBy { it.name.lowercase() }
 	val opEncs     = OpEnc.values().associateBy { it.string }
-	
+
+	val mrEncs = setOf(OpEnc.MR, OpEnc.MRN, OpEnc.MRX, OpEnc.MRI)
+
 	val multiOps = mapOf(
 		"rm8" to Pair(Op.R8, Op.M8),
 		"rm16" to Pair(Op.R16, Op.M16),

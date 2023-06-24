@@ -1,5 +1,10 @@
 namespace main
 
+
+
 proc main {
-	wrgsbase rax
+	sub rsp, 40
+	lea rcx, ["TEST"]
+	dllcall printf
+	dllcall ExitProcess
 }

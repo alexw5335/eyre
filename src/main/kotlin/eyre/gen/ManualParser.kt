@@ -22,37 +22,37 @@ class ManualParser(private val inputs: List<String>) {
 	private var sse = false
 
 
-	val encodings = ArrayList<Encoding>()
+	val encs = ArrayList<Enc>()
 
-	val groups = HashMap<Mnemonic, EncodingGroup>()
+	val groups = HashMap<Mnemonic, EncGroup>()
 
-	val commonEncodings = ArrayList<CommonEncoding>()
+	val commonEncs = ArrayList<CommonEnc>()
 
 
 
 	fun read() {
 		for(i in inputs.indices) {
 			try {
-				readLine(inputs[i], encodings)
+				readLine(inputs[i], encs)
 			} catch(e: Exception) {
 				System.err.println("Error on line ${i + 1}: ${inputs[i]}")
 				throw e
 			}
 		}
 
-		for(e in encodings)
-			groups.getOrPut(e.mnemonic) { EncodingGroup(e.mnemonic) }.add(e)
+		for(e in encs)
+			groups.getOrPut(e.mnemonic) { EncGroup(e.mnemonic) }.add(e)
 
 		for(g in groups.values)
-			g.encodings.sortBy { it.ops.ordinal }
+			g.encs.sortBy { it.ops.ordinal }
 
-		for(e in encodings)
-			convert(e, commonEncodings)
+		for(e in encs)
+			convert(e, commonEncs)
 	}
 
 
 
-	private fun readLine(input: String, list: ArrayList<Encoding>) {
+	private fun readLine(input: String, list: ArrayList<Enc>) {
 		if(input.isEmpty() || input.startsWith(';')) return
 
 		val parts = input.split(' ').filter { it.isNotEmpty() }
@@ -95,7 +95,6 @@ class ManualParser(private val inputs: List<String>) {
 					0x0F -> if(escape == Escape.NONE) escape = Escape.E0F else opcode = 0x0F
 					0x38 -> if(escape == Escape.E0F) escape = Escape.E38 else opcode = 0x38
 					0x3A -> if(escape == Escape.E0F) escape = Escape.E3A else opcode = 0x3A
-					0x00 -> if(escape == Escape.E0F) escape = Escape.E00 else opcode = 0x00
 					else -> opcode = value
 				}
 			} else {
@@ -124,20 +123,20 @@ class ManualParser(private val inputs: List<String>) {
 		}
 
 		fun add(mnemonic: String, opcode: Int, ops: Ops, prefix: Prefix) = list.add(
-			Encoding(
-			mnemonicMap[mnemonic] ?: error("Unrecognised mnemonic: $mnemonic"),
-			prefix,
-			escape,
-			opcode,
-			mask,
-			ext,
-			ops,
-			sseOps,
-			rexw,
-			o16,
-			pseudo,
-			mr
-		)
+			Enc(
+				mnemonicMap[mnemonic] ?: error("Unrecognised mnemonic: $mnemonic"),
+				prefix,
+				escape,
+				opcode,
+				mask,
+				ext,
+				ops,
+				sseOps,
+				rexw,
+				o16,
+				pseudo,
+				mr
+			)
 		)
 
 		if(mnemonic == "ADDPD")
@@ -148,6 +147,7 @@ class ManualParser(private val inputs: List<String>) {
 
 		if(sse) {
 			val ops = opsString.split('_').map { when(it) {
+				"NONE" -> SseOp.NONE
 				"X"    -> SseOp.X
 				"MM"   -> SseOp.MM
 				"I8"   -> SseOp.I8
@@ -177,14 +177,19 @@ class ManualParser(private val inputs: List<String>) {
 		val multi = multiMap[opsString]
 		val ops = opsMap[opsString]
 
-		if(multi?.mask != null)
-			if(mask.isNotEmpty)
-				error("Mask already present")
-			else
-				mask = multi.mask
+		if(multi != null) {
+			mr = multi.mr
+			if(multi.mask != null)
+				if(mask.isNotEmpty)
+					error("Mask already present")
+				else
+					mask = multi.mask
 
-		if(multi == null && ops == null)
+		} else if(ops != null) {
+			mr = ops.mr
+		} else {
 			error("Unrecognised ops: $opsString")
+		}
 
 		if(mnemonic.endsWith("cc")) {
 			for((postfix, opcodeInc) in Maps.ccList)
@@ -241,23 +246,25 @@ class ManualParser(private val inputs: List<String>) {
 	
 
 
-	fun convert(encoding: Encoding, list: ArrayList<CommonEncoding>) {
+	fun convert(enc: Enc, list: ArrayList<CommonEnc>) {
 		fun add(ops: List<Op>, rexw: Int, o16: Int, opcode: Int) {
-			list.add(CommonEncoding(
-				encoding.mnemonic.name,
-				encoding.prefix,
-				encoding.escape,
+			list.add(CommonEnc(
+				enc.mnemonic.name,
+				enc.prefix,
+				enc.escape,
 				opcode,
-				encoding.ext,
+				enc.ext,
 				ops,
 				rexw,
 				o16,
-				encoding.pseudo,
-				encoding.mr
+				enc.pseudo,
+				enc.mr,
+				isAvx = false,
+				emptyList()
 			))
 		}
 
-		fun add(ops: List<Op>) = add(ops, encoding.rexw, encoding.o16, encoding.opcode)
+		fun add(ops: List<Op>) = add(ops, enc.rexw, enc.o16, enc.opcode)
 
 		fun add(vararg ops: Op) = add(ops.toList())
 
@@ -270,27 +277,27 @@ class ManualParser(private val inputs: List<String>) {
 			SseOp.R16 -> Op.R16
 			SseOp.R32 -> Op.R32
 			SseOp.R64 -> Op.R64
-			SseOp.M -> when(encoding.mask) {
+			SseOp.M -> when(enc.mask) {
 				OpMask.BYTE  -> Op.M8
 				OpMask.WORD  -> Op.M16
 				OpMask.DWORD -> Op.M32
 				OpMask.QWORD -> Op.M64
 				OpMask.XWORD -> Op.M128
 				OpMask.NONE  -> Op.MEM
-				else -> error("Invalid mask: $encoding")
+				else -> error("Invalid mask: $enc")
 			}
 		}
 
-		if(encoding.sseOps != SseOps.NULL) {
-			val op1 = convert(encoding.sseOps.op1)
-			val op2 = convert(encoding.sseOps.op2)
-			val op3 = convert(encoding.sseOps.op3)
+		if(enc.sseOps != SseOps.NULL) {
+			val op1 = convert(enc.sseOps.op1)
+			val op2 = convert(enc.sseOps.op2)
+			val op3 = convert(enc.sseOps.op3)
 			add(if(op3 == Op.NONE) listOf(op1, op2) else listOf(op1, op2, op3))
 			return
 		}
 
-		if(encoding.mask.isEmpty) {
-			when(encoding.ops) {
+		if(enc.mask.isEmpty) {
+			when(enc.ops) {
 				Ops.NONE     -> add()
 				Ops.I16_I8   -> add(Op.I16, Op.I8)
 				Ops.I8       -> add(Op.I8)
@@ -305,36 +312,36 @@ class ManualParser(private val inputs: List<String>) {
 				Ops.ST_ST0   -> add(Op.ST, Op.ST0)
 				Ops.ST0_ST   -> add(Op.ST0, Op.ST)
 				Ops.M        -> add(Op.MEM)
-				else         -> error("Invalid: $encoding")
+				else         -> error("Invalid: $enc")
 			}
 			return
 		}
 
-		encoding.mask.forEachWidth { with(it) {
-			val rexw = if(encoding.rexw == 1)
+		enc.mask.forEachWidth { with(it) {
+			val rexw = if(enc.rexw == 1)
 				1
-			else if(this == QWORD && DWORD in encoding.mask && encoding.ops != Ops.RA_M512 && encoding.ops != Ops.RA)
+			else if(this == QWORD && DWORD in enc.mask && enc.ops != Ops.RA_M512 && enc.ops != Ops.RA)
 				1
 			else
 				0
 
-			val o16 = if(encoding.o16 == 1)
+			val o16 = if(enc.o16 == 1)
 				1
-			else if(this == WORD && encoding.mask != OpMask.WORD)
+			else if(this == WORD && enc.mask != OpMask.WORD)
 				1
 			else
 				0
 
 			val opcode = if(this == BYTE)
-				encoding.opcode
-			else if(encoding.mask != OpMask.BYTE && BYTE in encoding.mask)
-				encoding.opcode + 1
+				enc.opcode
+			else if(enc.mask != OpMask.BYTE && BYTE in enc.mask)
+				enc.opcode + 1
 			else
-				encoding.opcode
+				enc.opcode
 
 			fun add2(vararg ops: Op) = add(ops.toList(), rexw, o16, opcode)
 
-			when(encoding.ops) {
+			when(enc.ops) {
 				Ops.R     -> add2(r)
 				Ops.M     -> add2(m)
 				Ops.O     -> add2(r)

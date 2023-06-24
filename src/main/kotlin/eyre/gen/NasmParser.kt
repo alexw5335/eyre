@@ -8,11 +8,11 @@ import java.nio.file.Paths
 class NasmParser(
 	private val inputs: List<String>,
 	private val includeBase: Boolean,
-	private val extensions: Set<NasmExt>
+	private val extensions: Set<NasmExt>?
 ) {
 
 
-	constructor(path: String, includeBase: Boolean, extensions: Set<NasmExt>) : this(
+	constructor(path: String, includeBase: Boolean, extensions: Set<NasmExt>?) : this(
 		Files.readAllLines(Paths.get(path)),
 		includeBase,
 		extensions
@@ -26,7 +26,7 @@ class NasmParser(
 
 	val lines = ArrayList<NasmLine>()
 
-	val encodings = ArrayList<CommonEncoding>()
+	val commonEncs = ArrayList<CommonEnc>()
 
 
 
@@ -35,7 +35,7 @@ class NasmParser(
 		for(l in rawLines) if(filterLine(l)) filteredRawLines.add(l)
 		for(l in filteredRawLines) scrapeLine(l, lines)
 		for(l in lines) determineOperands(l)
-		for(l in lines) convert(l, encodings)
+		for(l in lines) convert(l, commonEncs)
 	}
 
 
@@ -159,7 +159,7 @@ class NasmParser(
 		if(line.arch == NasmArch.FUTURE && line.extensions.isEmpty() && line.mnemonic.startsWith("K"))
 			line.extensions += NasmExt.NOT_GIVEN
 
-		if(!extensions.containsAll(line.extensions))
+		if(extensions != null && !extensions.containsAll(line.extensions))
 			return
 
 		if(!includeBase && line.extensions.isEmpty())
@@ -323,8 +323,8 @@ class NasmParser(
 
 
 
-	private fun convert(line: NasmLine, list: ArrayList<CommonEncoding>) {
-		fun add(mnemonic: String, opcode: Int) = list.add(CommonEncoding(
+	private fun convert(line: NasmLine, list: ArrayList<CommonEnc>) {
+		fun add(mnemonic: String, opcode: Int) = list.add(CommonEnc(
 			mnemonic,
 			line.prefix,
 			line.escape,
@@ -334,7 +334,9 @@ class NasmParser(
 			line.rexw,
 			line.o16,
 			line.pseudo,
-			line.enc == OpEnc.MR || line.enc == OpEnc.MRI
+			line.enc in Maps.mrEncs,
+			line.vex != null,
+			line.extensions
 		))
 
 		fun addMulti(mnemonic: String, opcode: Int) {
