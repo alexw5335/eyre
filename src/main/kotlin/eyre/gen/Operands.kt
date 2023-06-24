@@ -5,22 +5,29 @@ import eyre.OpMask
 import eyre.Width
 
 
-
+/**
+ * Bits 0-0: size (0 = 1, 1 = 2, not including i8)
+ * Bits 1-1: i8
+ * Bits 2-4: op1
+ * Bits 5-8: op2
+ */
 @JvmInline
 value class SseOps(val value: Int) {
 
-	constructor(op1: SseOp, op2: SseOp, op3: SseOp) :
-		this(op1.ordinal or (op2.ordinal shl 4) or (op3.ordinal shl 8))
+	constructor(size: Int, i8: Int, op1: SseOp, op2: SseOp) :
+		this(size or (i8 shl 1) or (op1.ordinal shl 2) or (op2.ordinal shl 5))
 
-	val op1 get() = SseOp.values[(value shr 0) and 0xF]
-	val op2 get() = SseOp.values[(value shr 4) and 0xF]
-	val op3 get() = SseOp.values[(value shr 8) and 0xF]
+	val size get() = value and 1
+	val i8   get() = (value shr 1) and 1
+	val op1  get() = SseOp.values[(value shr 2) and 0b111]
+	val op2  get() = SseOp.values[(value shr 5) and 0b111]
 
-	override fun toString() = when {
+	override fun toString() = buildString {
+		if()
 		this == NULL      -> "NULL"
 		op1 == SseOp.NONE -> "NONE"
 		op2 == SseOp.NONE -> op1.toString()
-		op3 == SseOp.NONE -> "${op1}_$op2"
+		//op3 == SseOp.NONE -> "${op1}_$op2"
 		else              -> "${op1}_${op2}_$op3"
 	}
 
@@ -33,7 +40,6 @@ enum class SseOp {
 	NONE,
 	X,
 	MM,
-	I8,
 	R8,
 	R16,
 	R32,
