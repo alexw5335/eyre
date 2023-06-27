@@ -59,6 +59,8 @@ class Enc(val value: Int) {
 	val rexw     get() = ((value shr REXW_POS) and 0b1)
 	val mismatch get() = ((value shr MISMATCH_POS) and 0b1)
 
+	fun withP66() = Enc(value or P66)
+
 	val length get() = 1 + (((opcode + 255) and -256) and 1)
 
 	companion object {
@@ -71,10 +73,12 @@ class Enc(val value: Int) {
 		private const val REXW_POS = 30
 		private const val MISMATCH_POS = 31
 
+		const val ENP = 0
 		const val E0F = 1 shl ESCAPE_POS
 		const val E38 = 2 shl ESCAPE_POS
 		const val E3A = 3 shl ESCAPE_POS
 
+		const val PNP = 0
 		const val P66 = 1 shl PREFIX_POS
 		const val PF2 = 2 shl PREFIX_POS
 		const val PF3 = 3 shl PREFIX_POS
@@ -88,8 +92,6 @@ class Enc(val value: Int) {
 		const val EXT5 = 5 shl EXT_POS
 		const val EXT6 = 6 shl EXT_POS
 		const val EXT7 = 7 shl EXT_POS
-		const val EXT8 = 8 shl EXT_POS
-		const val EXT9 = 9 shl EXT_POS
 
 		const val R0000 = 0  shl MASK_POS
 		const val R0001 = 1  shl MASK_POS

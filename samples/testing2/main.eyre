@@ -1,10 +1,5 @@
 namespace main
 
-
-
 proc main {
-	sub rsp, 40
-	lea rcx, ["TEST"]
-	dllcall printf
-	dllcall ExitProcess
+	pabsb xmm31, xmm12
 }
