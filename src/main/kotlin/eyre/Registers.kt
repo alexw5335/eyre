@@ -165,6 +165,9 @@ value class Register(private val backing: Int) {
 
 
 
+/**
+ * - [width] is only to be used with GP, ST, XMM, YMM, and ZMM registers.
+ */
 enum class Reg(
 	val type  : RegType,
 	val width : Width,
@@ -246,8 +249,6 @@ enum class Reg(
 	R13B(RegType.R8, Width.BYTE, 5, 1, 0),
 	R14B(RegType.R8, Width.BYTE, 6, 1, 0),
 	R15B(RegType.R8, Width.BYTE, 7, 1, 0),
-	
-
 
 	ES(RegType.SEG, Width.WORD, 0, 0, 0),
 	CS(RegType.SEG, Width.WORD, 1, 0, 0),
@@ -411,4 +412,5 @@ enum class Reg(
 	val isR = type in OpMask.R1111
 	val isA = isR && value == 0 && rex == 0
 	val isST = type == RegType.ST
+
 }

@@ -6,32 +6,30 @@ import eyre.Width
 
 
 /**
- * Bits 0-0: size (0 = 1, 1 = 2, not including i8)
- * Bits 1-1: i8
- * Bits 2-4: op1
- * Bits 5-8: op2
+ * Bits 0-0: i8
+ * Bits 1-3: op1
+ * Bits 4-7: op2
  */
 @JvmInline
 value class SseOps(val value: Int) {
 
-	constructor(size: Int, i8: Int, op1: SseOp, op2: SseOp) :
-		this(size or (i8 shl 1) or (op1.ordinal shl 2) or (op2.ordinal shl 5))
+	constructor(i8: Boolean, op1: SseOp, op2: SseOp) :
+		this((if(i8) 1 else 0) or (op1.ordinal shl 1) or (op2.ordinal shl 4))
 
-	val size get() = value and 1
 	val i8   get() = (value shr 1) and 1
-	val op1  get() = SseOp.values[(value shr 2) and 0b111]
-	val op2  get() = SseOp.values[(value shr 5) and 0b111]
+	val op1  get() = SseOp.values[(value shr 1) and 0b111]
+	val op2  get() = SseOp.values[(value shr 4) and 0b111]
 
-	override fun toString() = buildString {
-		if()
-		this == NULL      -> "NULL"
+	override fun toString() = when {
 		op1 == SseOp.NONE -> "NONE"
-		op2 == SseOp.NONE -> op1.toString()
-		//op3 == SseOp.NONE -> "${op1}_$op2"
-		else              -> "${op1}_${op2}_$op3"
+		op2 == SseOp.NONE -> if(i8 != 0) "${op1}_I8" else "$op1"
+		else -> if(i8 != 0) "${op1}_${op2}_I8" else "${op1}_${op2}"
 	}
 
-	companion object { val NULL = SseOps(-1) }
+	companion object {
+		val NULL = SseOps(-1)
+	}
+
 }
 
 

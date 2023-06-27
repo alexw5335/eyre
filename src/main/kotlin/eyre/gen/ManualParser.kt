@@ -22,7 +22,7 @@ class ManualParser(private val inputs: List<String>) {
 	private var sse = false
 
 
-	val encs = ArrayList<Enc>()
+	val encs = ArrayList<ManualEnc>()
 
 	val groups = HashMap<Mnemonic, EncGroup>()
 
@@ -52,7 +52,7 @@ class ManualParser(private val inputs: List<String>) {
 
 
 
-	private fun readLine(input: String, list: ArrayList<Enc>) {
+	private fun readLine(input: String, list: ArrayList<ManualEnc>) {
 		if(input.isEmpty() || input.startsWith(';')) return
 
 		val parts = input.split(' ').filter { it.isNotEmpty() }
@@ -123,7 +123,7 @@ class ManualParser(private val inputs: List<String>) {
 		}
 
 		fun add(mnemonic: String, opcode: Int, ops: Ops, prefix: Prefix) = list.add(
-			Enc(
+			ManualEnc(
 				mnemonicMap[mnemonic] ?: error("Unrecognised mnemonic: $mnemonic"),
 				prefix,
 				escape,
@@ -143,31 +143,33 @@ class ManualParser(private val inputs: List<String>) {
 			sse = true
 
 		if(mnemonic == "CMPSD" || mnemonic == "MOVSD")
-			sseOps = SseOps(SseOp.NONE, SseOp.NONE, SseOp.NONE)
+			sseOps = SseOps(false, SseOp.NONE, SseOp.NONE)
+
+		fun toSseOp(string: String) = when(string) {
+			"NONE" -> SseOp.NONE
+			"X"    -> SseOp.X
+			"MM"   -> SseOp.MM
+			"I8"   -> SseOp.NONE
+			"R8"   -> SseOp.R8
+			"R16"  -> SseOp.R16
+			"R32"  -> SseOp.R32
+			"R64"  -> SseOp.R64
+			"MEM"  -> { mask = OpMask.NONE; SseOp.M }
+			"M8"   -> { mask = OpMask.BYTE; SseOp.M }
+			"M16"  -> { mask = OpMask.WORD; SseOp.M }
+			"M32"  -> { mask = OpMask.DWORD; SseOp.M }
+			"M64"  -> { mask = OpMask.QWORD; SseOp.M }
+			"M128" -> { mask = OpMask.XWORD; SseOp.M }
+			else   -> error("Invalid SSE operand: $string")
+		}
 
 		if(sse) {
-			val ops = opsString.split('_').map { when(it) {
-				"NONE" -> SseOp.NONE
-				"X"    -> SseOp.X
-				"MM"   -> SseOp.MM
-				"I8"   -> SseOp.I8
-				"R8"   -> SseOp.R8
-				"R16"  -> SseOp.R16
-				"R32"  -> SseOp.R32
-				"R64"  -> SseOp.R64
-				"MEM"  -> { mask = OpMask.NONE; SseOp.M }
-				"M8"   -> { mask = OpMask.BYTE; SseOp.M }
-				"M16"  -> { mask = OpMask.WORD; SseOp.M }
-				"M32"  -> { mask = OpMask.DWORD; SseOp.M }
-				"M64"  -> { mask = OpMask.QWORD; SseOp.M }
-				"M128" -> { mask = OpMask.XWORD; SseOp.M }
-				else   -> error("Invalid SSE operand: $it")
-			} }
-
+			val ops = opsString.split('_')
 			sseOps = when(ops.size) {
-				1 -> SseOps(ops[0], SseOp.NONE, SseOp.NONE)
-				2 -> SseOps(ops[0], ops[1], SseOp.NONE)
-				3 -> SseOps(ops[0], ops[1], ops[2])
+				0 -> SseOps(false, SseOp.NONE, SseOp.NONE)
+				1 -> error("Invalid SseOps")
+				2 -> SseOps(ops[1] == "I8", toSseOp(ops[0]), toSseOp(ops[1]))
+				3 -> SseOps(if(ops[2] == "I8") true else error("Invalid SseOps"), toSseOp(ops[0]), toSseOp(ops[1]))
 				else -> error("Invalid sse ops")
 			}
 			add(mnemonic, opcode, Ops.NONE, prefix)
@@ -246,7 +248,7 @@ class ManualParser(private val inputs: List<String>) {
 	
 
 
-	fun convert(enc: Enc, list: ArrayList<CommonEnc>) {
+	fun convert(enc: ManualEnc, list: ArrayList<CommonEnc>) {
 		fun add(ops: List<Op>, rexw: Int, o16: Int, opcode: Int) {
 			list.add(CommonEnc(
 				enc.mnemonic.name,
@@ -272,7 +274,6 @@ class ManualParser(private val inputs: List<String>) {
 			SseOp.NONE -> Op.NONE
 			SseOp.X -> Op.X
 			SseOp.MM -> Op.MM
-			SseOp.I8 -> Op.I8
 			SseOp.R8 -> Op.R8
 			SseOp.R16 -> Op.R16
 			SseOp.R32 -> Op.R32
@@ -290,8 +291,8 @@ class ManualParser(private val inputs: List<String>) {
 
 		if(enc.sseOps != SseOps.NULL) {
 			val op1 = convert(enc.sseOps.op1)
-			val op2 = convert(enc.sseOps.op2)
-			val op3 = convert(enc.sseOps.op3)
+			val op2 = if(enc.sseOps.i8 == 1) Op.I8 else convert(enc.sseOps.op2)
+			val op3 = if(enc.sseOps.i8 == 1) Op.I8 else Op.NONE
 			add(if(op3 == Op.NONE) listOf(op1, op2) else listOf(op1, op2, op3))
 			return
 		}
