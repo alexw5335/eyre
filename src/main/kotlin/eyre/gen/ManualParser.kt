@@ -167,7 +167,7 @@ class ManualParser(private val inputs: List<String>) {
 			val ops = opsString.split('_')
 			sseOps = when(ops.size) {
 				0 -> SseOps(false, SseOp.NONE, SseOp.NONE)
-				1 -> error("Invalid SseOps")
+				1 -> if(ops[0] == "NONE") SseOps(false, SseOp.NONE, SseOp.NONE) else error("Invalid SseOps: $ops")
 				2 -> SseOps(ops[1] == "I8", toSseOp(ops[0]), toSseOp(ops[1]))
 				3 -> SseOps(if(ops[2] == "I8") true else error("Invalid SseOps"), toSseOp(ops[0]), toSseOp(ops[1]))
 				else -> error("Invalid sse ops")

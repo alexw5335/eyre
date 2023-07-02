@@ -41,13 +41,19 @@ class Rex(val value: Int) {
 
 
 /**
- * - Bits 0-15:  Opcode
- * - Bits 16-18: Escape
- * - Bits 19-21: Prefix
- * - Bits 22-25: Extension
- * - Bits 26-29: Mask
- * - Bits 30-30: REX.W
- * - Bits 31-31: Mismatch
+ * - Note: 2-byte opcodes are only used by encodings that don't use this class, including:
+ *     - FPU encodings
+ *     - XABORT I8
+ *     - XBEGIN REL32
+ *     - HRESET I8
+ *
+ * - Bits 0-7:  Opcode
+ * - Bits 8-10: Escape
+ * - Bits 11-13: Prefix
+ * - Bits 14-17: Extension
+ * - Bits 18-21: Mask
+ * - Bits 22-22: REX.W
+ * - Bits 23-23: Mismatch
  */
 class Enc(val value: Int) {
 
@@ -66,12 +72,12 @@ class Enc(val value: Int) {
 	companion object {
 
 		private const val OPCODE_POS = 0
-		private const val ESCAPE_POS = 16
-		private const val PREFIX_POS = 19
-		private const val EXT_POS = 22
-		private const val MASK_POS = 26
-		private const val REXW_POS = 30
-		private const val MM_POS = 31
+		private const val ESCAPE_POS = 8
+		private const val PREFIX_POS = 11
+		private const val EXT_POS = 14
+		private const val MASK_POS = 18
+		private const val REXW_POS = 22
+		private const val MM_POS = 23
 
 		const val ENP = 0
 		const val E0F = 1 shl ESCAPE_POS
@@ -112,8 +118,6 @@ class Enc(val value: Int) {
 
 		const val RW = 1 shl REXW_POS
 		const val MM = 1 shl MM_POS
-
-		fun ext(value: Int) = value shl EXT_POS
 
 	}
 
