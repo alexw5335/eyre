@@ -4,27 +4,22 @@ import eyre.Escape
 import eyre.Prefix
 import eyre.util.hexc8
 
-fun main() {
-	Encs.genSse()
-}
-
-
 object Encs {
 
 
-	private val nasmParser = NasmParser("nasm.txt", true, null)
+	val nasmParser = NasmParser("nasm.txt", true, null)
 
-	private val manualParser = ManualParser("encodings.txt")
+	val manualParser = ManualParser("encs_gp.txt")
 
-	private val nasmLines get() = nasmParser.lines
+	val nasmLines get() = nasmParser.lines
 
-	private val nasmEncs get() = nasmParser.commonEncs
+	val nasmEncs get() = nasmParser.commonEncs
 
-	private val manualEncs get() = manualParser.commonEncs
+	val manualEncs get() = manualParser.commonEncs
 
-	private val nasmMap = HashMap<String, ArrayList<CommonEnc>>()
+	val nasmMap = HashMap<String, ArrayList<CommonEnc>>()
 
-	private val manualMap = HashMap<String, ArrayList<CommonEnc>>()
+	val manualMap = HashMap<String, ArrayList<CommonEnc>>()
 
 
 
@@ -33,6 +28,16 @@ object Encs {
 		manualParser.read()
 		for(e in nasmEncs) nasmMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
 		for(e in manualEncs) manualMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
+	}
+
+
+
+	fun testOpcodes() {
+		for(e in manualEncs) {
+			if(e.opcode and 0xFF00 == 0) continue
+			if(e.ops.isEmpty()) continue
+			println(e)
+		}
 	}
 
 

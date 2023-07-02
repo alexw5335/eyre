@@ -51,13 +51,13 @@ class Rex(val value: Int) {
  */
 class Enc(val value: Int) {
 
-	val opcode   get() = ((value shr OPCODE_POS) and 0xFFFF)
-	val escape   get() = ((value shr ESCAPE_POS) and 0b111)
-	val prefix   get() = ((value shr PREFIX_POS) and 0b111)
-	val ext      get() = ((value shr EXT_POS) and 0b1111)
-	val mask     get() = ((value shr MASK_POS) and 0b1111).let(::OpMask)
-	val rexw     get() = ((value shr REXW_POS) and 0b1)
-	val mismatch get() = ((value shr MISMATCH_POS) and 0b1)
+	val opcode get() = ((value shr OPCODE_POS) and 0xFFFF)
+	val escape get() = ((value shr ESCAPE_POS) and 0b111)
+	val prefix get() = ((value shr PREFIX_POS) and 0b111)
+	val ext    get() = ((value shr EXT_POS) and 0b1111)
+	val mask   get() = ((value shr MASK_POS) and 0b1111).let(::OpMask)
+	val rexw   get() = ((value shr REXW_POS) and 0b1)
+	val mm     get() = ((value shr MM_POS) and 0b1)
 
 	fun withP66() = Enc(value or P66)
 
@@ -71,7 +71,7 @@ class Enc(val value: Int) {
 		private const val EXT_POS = 22
 		private const val MASK_POS = 26
 		private const val REXW_POS = 30
-		private const val MISMATCH_POS = 31
+		private const val MM_POS = 31
 
 		const val ENP = 0
 		const val E0F = 1 shl ESCAPE_POS
@@ -111,7 +111,7 @@ class Enc(val value: Int) {
 		const val R1111 = 15 shl MASK_POS
 
 		const val RW = 1 shl REXW_POS
-		const val MISMATCH = 1 shl MISMATCH_POS
+		const val MM = 1 shl MM_POS
 
 		fun ext(value: Int) = value shl EXT_POS
 

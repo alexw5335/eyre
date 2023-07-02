@@ -1,5 +1,10 @@
 namespace main
 
 proc main {
-	pabsb xmm31, xmm12
+	crc32 r12, cl
+	crc32 r12, rcx
+	crc32 eax, ecx
+	crc32 eax, cx
+	umonitor r12
+	umonitor edx
 }
