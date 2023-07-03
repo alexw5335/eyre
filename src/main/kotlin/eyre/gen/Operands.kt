@@ -16,7 +16,7 @@ value class SseOps(val value: Int) {
 	constructor(i8: Boolean, op1: SseOp, op2: SseOp) :
 		this((if(i8) 1 else 0) or (op1.ordinal shl 1) or (op2.ordinal shl 4))
 
-	val i8   get() = (value shr 1) and 1
+	val i8   get() = value and 1
 	val op1  get() = SseOp.values[(value shr 1) and 0b111]
 	val op2  get() = SseOp.values[(value shr 4) and 0b111]
 

@@ -54,6 +54,7 @@ class ManualParser(private val inputs: List<String>) {
 
 	private fun readLine(input: String, list: ArrayList<ManualEnc>) {
 		if(input.isEmpty() || input.startsWith(';')) return
+		if(sse) return
 
 		val parts = input.split(' ').filter { it.isNotEmpty() }
 
@@ -139,8 +140,10 @@ class ManualParser(private val inputs: List<String>) {
 			)
 		)
 
-		if(mnemonic == "ADDPD")
+		if(mnemonic == "MOVD") {
 			sse = true
+			return
+		}
 
 		if(mnemonic == "CMPSD" || mnemonic == "MOVSD")
 			sseOps = SseOps(false, SseOp.NONE, SseOp.NONE)

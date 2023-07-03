@@ -177,7 +177,7 @@ value class GpEnc(val value: Int) {
  *     Bits 11-12: escape  2
  *     Bits 13-15: ext     3  /0../7
  *     Bits 16-23: ops     8
- *     Bits 24-24: rex.w   1
+ *     Bits 24-24: rw      1
  *     Bits 25-25: o16     1
  *     Bits 26-26: mr      1
  */
@@ -190,18 +190,18 @@ value class SseEnc(val value: Int) {
 		escape : Int,
 		ext    : Int,
 		ops    : SseOps,
-		rexw   : Int,
+		rw     : Int,
 		o16    : Int,
 		mr     : Int,
 	) : this(
 		(opcode shl 0) or
-			(prefix shl 8) or
-			(escape shl 11) or
-			(ext shl 13) or
-			(ops.value shl 16) or
-			(rexw shl 24) or
-			(o16 shl 25) or
-			(mr shl 26)
+		(prefix shl 8) or
+		(escape shl 11) or
+		(ext shl 13) or
+		(ops.value shl 16) or
+		(rw shl 24) or
+		(o16 shl 25) or
+		(mr shl 26)
 	)
 
 	val opcode  get() = ((value shr 0 ) and 0xFF)
@@ -209,7 +209,7 @@ value class SseEnc(val value: Int) {
 	val escape  get() = ((value shr 11) and 0b11)
 	val ext     get() = ((value shr 13) and 0b1111)
 	val ops     get() = ((value shr 16) and 0xFF).let(::SseOps)
-	val rexw    get() = ((value shr 24) and 0b1)
+	val rw      get() = ((value shr 24) and 0b1)
 	val o16     get() = ((value shr 25) and 0b1)
 	val mr      get() = ((value shr 26) and 0b1)
 

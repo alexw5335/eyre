@@ -1,15 +1,17 @@
 package eyre.gen
 
 import eyre.Escape
+import eyre.Mnemonic
 import eyre.Prefix
+import eyre.SseEnc
 import eyre.util.hexc8
 
-object Encs {
+object EncGen {
 
 
 	val nasmParser = NasmParser("nasm.txt", true, null)
 
-	val manualParser = ManualParser("encs_gp.txt")
+	val manualParser = ManualParser("encodings.txt")
 
 	val nasmLines get() = nasmParser.lines
 
@@ -32,24 +34,69 @@ object Encs {
 
 
 
-	fun testOpcodes() {
-		for(e in manualEncs) {
-			if(e.opcode and 0xFF00 == 0) continue
-			if(e.ops.isEmpty()) continue
-			println(e)
+	fun genSseEncs2() {
+		val encs = sseEncs()
+		val map = HashMap<String, ArrayList<Int>>()
+
+		for(e in encs) {
+			val sseOps = when(e.ops.size) {
+				0 -> SseOps(false, SseOp.NONE, SseOp.NONE)
+				2 -> SseOps(e.ops[1] == Op.I8, e.ops[0].toSseOp(), e.ops[1].toSseOp())
+				3 -> SseOps(e.ops[2] == Op.I8, e.ops[0].toSseOp(), e.ops[1].toSseOp())
+				else -> error("Invalid SSE encoding: $this")
+			}
+
+			val sseEnc = SseEnc(
+				e.opcode,
+				e.prefix.ordinal,
+				e.escape.ordinal,
+				e.ext.coerceAtLeast(0),
+				sseOps,
+				e.rexw,
+				e.o16,
+				if(e.mr) 1 else 0
+			)
+
+			map.getOrPut(e.mnemonic, ::ArrayList).add(sseEnc.value)
 		}
+
+		println("val sseEncs = mapOf<Mnemonic, IntArray>(")
+		for((mnemonic, values) in map) {
+			println("\t$mnemonic to intArrayOf(${values.joinToString()}),")
+		}
+		println(")")
 	}
 
 
 
-	fun genSse() {
+	private fun Op.toSseOp() = when(this) {
+		Op.R8 -> SseOp.R8
+		Op.R16 -> SseOp.R16
+		Op.R32 -> SseOp.R32
+		Op.R64 -> SseOp.R64
+		Op.MM -> SseOp.MM
+		Op.X -> SseOp.X
+		Op.I8 -> SseOp.NONE
+		Op.M8, Op.M16, Op.M32, Op.M64, Op.M128, Op.M256, Op.M512 -> SseOp.M
+		else -> error("Invalid SSE operand: $this")
+	}
+
+
+
+	private fun sseEncs() = buildList {
 		val mnemonics = HashSet<String>()
-		nasmEncs
-			.filter { !it.isAvx && (it.ops.contains(Op.X) || it.ops.contains(Op.MM)) }
-			.forEach { mnemonics += it.mnemonic }
-		val encs = nasmEncs
-			.filter { it.mnemonic in mnemonics }
-			.sortedBy { it.mnemonic }
+		for(n in nasmEncs)
+			if(!n.isAvx && (n.ops.contains(Op.X) || n.ops.contains(Op.MM)))
+				mnemonics += n.mnemonic
+		for(n in nasmEncs)
+			if(n.mnemonic in mnemonics)
+				add(n)
+	}.sortedBy(CommonEnc::mnemonic)
+
+
+
+	fun genSseEncs() {
+		val encs = sseEncs()
 
 		for(e in encs) {
 			when(e.mnemonic) {

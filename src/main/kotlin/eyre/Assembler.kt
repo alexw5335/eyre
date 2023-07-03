@@ -537,11 +537,13 @@ class Assembler(private val context: CompilerContext) {
 	private val OpNode.asImm get() = if(type != IMM) invalid() else this
 
 	private fun byte(value: Int) = writer.i8(value)
-
+	
 	private fun word(value: Int) = writer.i16(value)
 
 	private fun dword(value: Int) = writer.i32(value)
 
+	private fun Any.pseudo(value: Int) = byte(value)
+	
 	/** [w]: 64-bit override [r]: REG, [x]: INDEX, [b]: RM, BASE, or OPREG */
 	private fun writeRex(w: Int, r: Int, x: Int, b: Int) {
 		val value = 0b0100_0000 or (w shl 3) or (r shl 2) or (x shl 1) or b
@@ -857,20 +859,22 @@ class Assembler(private val context: CompilerContext) {
 		writeMem(op2.node, op1.value, disp, immLength)
 	}
 
-	private fun Enc.encode2XXM(op1: Reg, op2: OpNode, width: Width, immLength: Int) {
+	private fun Enc.encode2XXM(op1: OpNode, op2: OpNode, width: Width, immLength: Int) {
+		if(op1.reg.type != RegType.X) invalid()
 		when(op2.type) {
-			REG -> encode2XX(op1, op2.reg)
-			MEM -> encode2XM(op1, op2, width, immLength)
+			REG -> encode2XX(op1.reg, op2.reg)
+			MEM -> encode2XM(op1.reg, op2, width, immLength)
 			IMM -> invalid()
 		}
 	}
 
-	private fun Enc.encode2XXM128(op1: Reg, op2: OpNode) = encode2XXM(op1, op2, XWORD, 0)
-	private fun Enc.encode2XXM64(op1: Reg, op2: OpNode) = encode2XXM(op1, op2, QWORD, 0)
-	private fun Enc.encode2XXM32(op1: Reg, op2: OpNode) = encode2XXM(op1, op2, DWORD, 0)
+	private fun Enc.encode2XXM128(op1: OpNode, op2: OpNode) = encode2XXM(op1, op2, XWORD, 0)
+	private fun Enc.encode2XXM64(op1: OpNode, op2: OpNode) = encode2XXM(op1, op2, QWORD, 0)
+	private fun Enc.encode2XXM32(op1: OpNode, op2: OpNode) = encode2XXM(op1, op2, DWORD, 0)
+	private fun Enc.encode2XXM16(op1: OpNode, op2: OpNode) = encode2XXM(op1, op2, WORD, 0)
 
 	private fun Enc.encode3XXMI8(op1: OpNode, op2: OpNode, op3: OpNode, width: Width) {
-		encode2XXM(op1.asReg, op2.asMem, width, 1)
+		encode2XXM(op1, op2.asMem, width, 1)
 		writeImm(op3.asImm, BYTE)
 	}
 
@@ -1492,25 +1496,24 @@ class Assembler(private val context: CompilerContext) {
 			WORD -> { byte(0x66); Enc { PF2+E38+0xF1+R0100+MM }.encode2RRM(op1.asReg, op2, 0) }
 			else -> Enc { PF2+E38+0xF1+R1100 }.encode2RRM(op1.asReg, op2, 0)
 		}
-		
-		PACKUSDW -> Enc { P66+E38+0x2B }.encode2XXM128(op1.asReg, op2)
-		ADDPD      -> Enc { P66+E0F+0x58 }.encode2XXM128(op1.asReg, op2)
-		ADDPS      -> Enc { PNP+E0F+0x58 }.encode2XXM128(op1.asReg, op2)
-		ADDSD      -> Enc { PF3+E0F+0x58 }.encode2XXM64(op1.asReg, op2)
-		ADDSS      -> Enc { PF3+E0F+0x58 }.encode2XXM32(op1.asReg, op2)
-		ADDSUBPD   -> Enc { P66+E0F+0xD0 }.encode2XXM128(op1.asReg, op2)
-		ADDSUBPS   -> Enc { PF2+E0F+0xD0 }.encode2XXM128(op1.asReg, op2)
-		AESDEC     -> Enc { P66+E38+0xDE }.encode2XXM128(op1.asReg, op2)
-		AESDECLAST -> Enc { P66+E38+0xDF }.encode2XXM128(op1.asReg, op2)
-		AESENC     -> Enc { P66+E38+0xDC }.encode2XXM128(op1.asReg, op2)
-		AESENCLAST -> Enc { P66+E38+0xDD }.encode2XXM128(op1.asReg, op2)
-		AESIMC     -> Enc { P66+E38+0xDB }.encode2XXM128(op1.asReg, op2)
-		ANDNPD     -> Enc { P66+E0F+0x55 }.encode2XXM128(op1.asReg, op2)
-		ANDNPS     -> Enc { PNP+E0F+0x55 }.encode2XXM128(op1.asReg, op2)
-		ANDPD      -> Enc { PF3+E0F+0x54 }.encode2XXM64(op1.asReg, op2)
-		ANDPS      -> Enc { PF3+E0F+0x54 }.encode2XXM32(op1.asReg, op2)
-		BLENDVPD   -> Enc { P66+E38+0x15 }.encode2XXM128(op1.asReg, op2)
-		BLENDVPS   -> Enc { P66+E38+0x14 }.encode2XXM128(op1.asReg, op2)
+
+/*		ADDPD      -> Enc { P66+E0F+0x58 }.encode2XXM128(op1, op2)
+		ADDPS      -> Enc { PNP+E0F+0x58 }.encode2XXM128(op1, op2)
+		ADDSD      -> Enc { PF3+E0F+0x58 }.encode2XXM64(op1, op2)
+		ADDSS      -> Enc { PF3+E0F+0x58 }.encode2XXM32(op1, op2)
+		ADDSUBPD   -> Enc { P66+E0F+0xD0 }.encode2XXM128(op1, op2)
+		ADDSUBPS   -> Enc { PF2+E0F+0xD0 }.encode2XXM128(op1, op2)
+		AESDEC     -> Enc { P66+E38+0xDE }.encode2XXM128(op1, op2)
+		AESDECLAST -> Enc { P66+E38+0xDF }.encode2XXM128(op1, op2)
+		AESENC     -> Enc { P66+E38+0xDC }.encode2XXM128(op1, op2)
+		AESENCLAST -> Enc { P66+E38+0xDD }.encode2XXM128(op1, op2)
+		AESIMC     -> Enc { P66+E38+0xDB }.encode2XXM128(op1, op2)
+		ANDNPD     -> Enc { P66+E0F+0x55 }.encode2XXM128(op1, op2)
+		ANDNPS     -> Enc { PNP+E0F+0x55 }.encode2XXM128(op1, op2)
+		ANDPD      -> Enc { PF3+E0F+0x54 }.encode2XXM64(op1, op2)
+		ANDPS      -> Enc { PF3+E0F+0x54 }.encode2XXM32(op1, op2)
+		BLENDVPD   -> Enc { P66+E38+0x15 }.encode2XXM128(op1, op2)
+		BLENDVPS   -> Enc { P66+E38+0x14 }.encode2XXM128(op1, op2)*/
 
 		PSHUFB     -> encode2EEM(0x00, op1, op2, true)
 		PHADDW     -> encode2EEM(0x01, op1, op2, true)
@@ -1582,9 +1585,154 @@ class Assembler(private val context: CompilerContext) {
 		PSRLQ      -> encodePSLLW(0xD2, 0x73, 2, op1, op2)
 		PSRAW      -> encodePSLLW(0xE1, 0x71, 4, op1, op2)
 		PSRAD      -> encodePSLLW(0xE2, 0x72, 4, op1, op2)
+
+		// Packed Integer Format Conversion
+		PMOVSXBW -> Enc { P66+E38+0x20 }.encode2XXM64(op1, op2)
+		PMOVSXBD -> Enc { P66+E38+0x21 }.encode2XXM32(op1, op2)
+		PMOVSXBQ -> Enc { P66+E38+0x22 }.encode2XXM16(op1, op2)
+		PMOVSXWD -> Enc { P66+E38+0x23 }.encode2XXM64(op1, op2)
+		PMOVSXWQ -> Enc { P66+E38+0x24 }.encode2XXM32(op1, op2)
+		PMOVSXDQ -> Enc { P66+E38+0x25 }.encode2XXM64(op1, op2)
+		PMOVZXBW -> Enc { P66+E38+0x30 }.encode2XXM64(op1, op2)
+		PMOVZXBD -> Enc { P66+E38+0x31 }.encode2XXM32(op1, op2)
+		PMOVZXBQ -> Enc { P66+E38+0x32 }.encode2XXM16(op1, op2)
+		PMOVZXWD -> Enc { P66+E38+0x33 }.encode2XXM64(op1, op2)
+		PMOVZXWQ -> Enc { P66+E38+0x34 }.encode2XXM32(op1, op2)
+		PMOVZXDQ -> Enc { P66+E38+0x35 }.encode2XXM64(op1, op2)
+
+		// SSE4.1 Packed Integer MIN/MAX
+		PMINSB -> Enc { P66+E38+0x38 }.encode2XXM128(op1, op2)
+		PMINSD -> Enc { P66+E38+0x39 }.encode2XXM128(op1, op2)
+		PMINUW -> Enc { P66+E38+0x3A }.encode2XXM128(op1, op2)
+		PMINUD -> Enc { P66+E38+0x3B }.encode2XXM128(op1, op2)
+		PMAXSB -> Enc { P66+E38+0x3C }.encode2XXM128(op1, op2)
+		PMAXSD -> Enc { P66+E38+0x3D }.encode2XXM128(op1, op2)
+		PMAXUW -> Enc { P66+E38+0x3E }.encode2XXM128(op1, op2)
+		PMAXUD -> Enc { P66+E38+0x3F }.encode2XXM128(op1, op2)
+
+		PTEST -> Enc { P66+E38+0x17 }.encode2XXM128(op1, op2)
+		PCMPEQQ -> Enc { P66+E38+0x29 }.encode2XXM128(op1, op2)
+		PACKUSDW -> Enc { P66+E38+0x2B }.encode2XXM128(op1, op2)
+		PHMINPOSUW -> Enc { P66+E38+0x41 }.encode2XXM128(op1, op2)
+		
+		SHA1NEXTE   -> Enc { E38+0xC8 }.encode2XXM128(op1, op2)
+		SHA1MSG1    -> Enc { E38+0xC9 }.encode2XXM128(op1, op2)
+		SHA1MSG2    -> Enc { E38+0xCA }.encode2XXM128(op1, op2)
+		SHA256RNDS2 -> Enc { E38+0xCB }.encode2XXM128(op1, op2)
+		SHA256MSG1  -> Enc { E38+0xCC }.encode2XXM128(op1, op2)
+		SHA256MSG2  -> Enc { E38+0xCD }.encode2XXM128(op1, op2)
+
+		CMPEQPS    -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(0)
+		CMPLTPS    -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(1)
+		CMPLEPS    -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(2)
+		CMPUNORDPS -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(3)
+		CMPNEQPS   -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(4)
+		CMPNLTPS   -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(5)
+		CMPNLEPS   -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(6)
+		CMPORDPS   -> Enc { PNP+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(7)
+		CMPEQPD    -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(0)
+		CMPLTPD    -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(1)
+		CMPLEPD    -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(2)
+		CMPUNORDPD -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(3)
+		CMPNEQPD   -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(4)
+		CMPNLTPD   -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(5)
+		CMPNLEPD   -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(6)
+		CMPORDPD   -> Enc { P66+E0F+0xC2 }.encode2XXM128(op1, op2).pseudo(7)
+		CMPEQSD    -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(0)
+		CMPLTSD    -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(1)
+		CMPLESD    -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(2)
+		CMPUNORDSD -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(3)
+		CMPNEQSD   -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(4)
+		CMPNLTSD   -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(5)
+		CMPNLESD   -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(6)
+		CMPORDSD   -> Enc { PF2+E0F+0xC2 }.encode2XXM64(op1, op2).pseudo(7)
+		CMPEQSS    -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(0)
+		CMPLTSS    -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(1)
+		CMPLESS    -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(2)
+		CMPUNORDSS -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(3)
+		CMPNEQSS   -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(4)
+		CMPNLTSS   -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(5)
+		CMPNLESS   -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(6)
+		CMPORDSS   -> Enc { PF3+E0F+0xC2 }.encode2XXM32(op1, op2).pseudo(7)
+		
+		SQRTPS   -> Enc { PNP+E0F+0x51 }.encode2XXM128(op1, op2)
+		SQRTPD   -> Enc { P66+E0F+0x51 }.encode2XXM128(op1, op2)
+		SQRTSD   -> Enc { PF2+E0F+0x51 }.encode2XXM64(op1, op2)
+		SQRTSS   -> Enc { PF3+E0F+0x51 }.encode2XXM32(op1, op2)
+		RSQRTPS  -> Enc { PNP+E0F+0x52 }.encode2XXM128(op1, op2)
+		RSQRTSS  -> Enc { PF3+E0F+0x52 }.encode2XXM32(op1, op2)
+		RCPPS    -> Enc { PNP+E0F+0x53 }.encode2XXM128(op1, op2)
+		RCPSS    -> Enc { PF3+E0F+0x53 }.encode2XXM32(op1, op2)
+		ANDPS    -> Enc { PNP+E0F+0x54 }.encode2XXM128(op1, op2)
+		ANDPD    -> Enc { P66+E0F+0x54 }.encode2XXM128(op1, op2)
+		ANDNPS   -> Enc { PNP+E0F+0x55 }.encode2XXM128(op1, op2)
+		ANDNPD   -> Enc { P66+E0F+0x55 }.encode2XXM128(op1, op2)
+		ORPS     -> Enc { PNP+E0F+0x56 }.encode2XXM128(op1, op2)
+		ORPD     -> Enc { P66+E0F+0x56 }.encode2XXM128(op1, op2)
+		XORPS    -> Enc { PNP+E0F+0x57 }.encode2XXM128(op1, op2)
+		XORPD    -> Enc { P66+E0F+0x57 }.encode2XXM128(op1, op2)
+		ADDPS    -> Enc { PNP+E0F+0x58 }.encode2XXM128(op1, op2)
+		ADDPD    -> Enc { P66+E0F+0x58 }.encode2XXM128(op1, op2)
+		ADDSD    -> Enc { PF2+E0F+0x58 }.encode2XXM64(op1, op2)
+		ADDSS    -> Enc { PF3+E0F+0x58 }.encode2XXM32(op1, op2)
+		MULPS    -> Enc { PNP+E0F+0x59 }.encode2XXM128(op1, op2)
+		MULPD    -> Enc { P66+E0F+0x59 }.encode2XXM128(op1, op2)
+		MULSD    -> Enc { PF2+E0F+0x59 }.encode2XXM64(op1, op2)
+		MULSS    -> Enc { PF3+E0F+0x59 }.encode2XXM32(op1, op2)
+		SUBPS    -> Enc { PNP+E0F+0x5C }.encode2XXM128(op1, op2)
+		SUBPD    -> Enc { P66+E0F+0x5C }.encode2XXM128(op1, op2)
+		SUBSD    -> Enc { PF2+E0F+0x5C }.encode2XXM64(op1, op2)
+		SUBSS    -> Enc { PF3+E0F+0x5C }.encode2XXM32(op1, op2)
+		MINPS    -> Enc { PNP+E0F+0x5D }.encode2XXM128(op1, op2)
+		MINPD    -> Enc { P66+E0F+0x5D }.encode2XXM128(op1, op2)
+		MINSD    -> Enc { PF2+E0F+0x5D }.encode2XXM64(op1, op2)
+		MINSS    -> Enc { PF3+E0F+0x5D }.encode2XXM32(op1, op2)
+		DIVPS    -> Enc { PNP+E0F+0x5E }.encode2XXM128(op1, op2)
+		DIVPD    -> Enc { P66+E0F+0x5E }.encode2XXM128(op1, op2)
+		DIVSD    -> Enc { PF2+E0F+0x5E }.encode2XXM64(op1, op2)
+		DIVSS    -> Enc { PF3+E0F+0x5E }.encode2XXM32(op1, op2)
+		MAXPS    -> Enc { PNP+E0F+0x5F }.encode2XXM128(op1, op2)
+		MAXPD    -> Enc { P66+E0F+0x5F }.encode2XXM128(op1, op2)
+		MAXSD    -> Enc { PF2+E0F+0x5F }.encode2XXM64(op1, op2)
+		MAXSS    -> Enc { PF3+E0F+0x5F }.encode2XXM32(op1, op2)
 		
 		else -> invalid()
 	}}
+
+
+	/**
+	 *     0F 6E  MOVD  MM_RM32
+	 *     0F 7E  MOVD  RM64_MM
+	 *     66 0F 6E  MOVD  X_RM32
+	 *     66 0F 7E  MOVD  RM32_X
+	 */
+	private fun encodeMOVD(op1: OpNode, op2: OpNode) {
+		
+	}
+
+
+	/**
+	 * 0F 6E     MOVQ  MM_RM64  RW
+	 * 0F 7E     MOVQ  RM64_MM  RW
+	 * 66 0F 6E  MOVQ  X_RM64   RW
+	 * 66 0F 7E  MOVQ  RM64_X   RW
+	 * 0F 6F     MOVQ  MM_MMM
+	 * 0F 7F     MOVQ  MMM_MM
+	 * F3 0F 7E  MOVQ  X_XM64
+	 * 66 0F D6  MOVQ  XM64_X
+	 */
+	private fun encodeMOVQ(op1: OpNode, op2: OpNode) {
+
+	}
+
+	//0F 6E     MOVQ  MM_RM    1000  RW
+	//0F 7E     MOVQ  RM_MM    1000  RW
+	//66 0F 6E  MOVQ  X_RM     1000  RW
+	//66 0F 7E  MOVQ  RM_X     1000  RW
+	//0F 6F     MOVQ  MM_MMM64
+	//0F 7F     MOVQ  MMM64_MM
+	//F3 0F 7E  MOVQ  X_XM64
+	//66 0F D6  MOVQ  XM64_X
 
 
 
@@ -1596,7 +1744,18 @@ class Assembler(private val context: CompilerContext) {
 		AESKEYGENASSIST -> Enc { P66+E3A+0xDF }.encode3XXMI8(op1, op2, op3, XWORD)
 		BLENDPD -> Enc { P66+E3A+0x0D }.encode3XXMI8(op1, op2, op3, XWORD)
 		BLENDPS -> Enc { P66+E3A+0x0C }.encode3XXMI8(op1, op2, op3, XWORD)
-
+		MPSADBW -> Enc { P66+E3A+0x42 }.encode3XXMI8(op1, op2, op3, XWORD)
+		SHA1RNDS4 -> Enc { E3A+0xCC }.encode3XXMI8(op1, op2, op3, XWORD)
+		PCMPESTRM -> Enc { P66+E3A+0x60 }.encode3XXMI8(op1, op2, op3, XWORD)
+		PCMPESTRI -> Enc { P66+E3A+0x61 }.encode3XXMI8(op1, op2, op3, XWORD)
+		PCMPISTRM -> Enc { P66+E3A+0x62 }.encode3XXMI8(op1, op2, op3, XWORD)
+		PCMPISTRI -> Enc { P66+E3A+0x63 }.encode3XXMI8(op1, op2, op3, XWORD)
+		
+		SHA256RNDS2 -> if(op3.reg == Reg.XMM0)
+			Enc { E38+0xCB }.encode2XXM128(op1, op2)
+		else 
+			invalid()
+		
 		else -> invalid()
 	}}
 
@@ -2168,7 +2327,6 @@ class Assembler(private val context: CompilerContext) {
 			encode2EEM(opcode1, op1, op2)
 		}
 	}
-
 
 
 }
