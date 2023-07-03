@@ -782,6 +782,10 @@ class Assembler(private val context: CompilerContext) {
 		}
 	}
 
+	private fun encode2EEM(opcode: Int, op1: OpNode, op2: OpNode, p38: Boolean = false) {
+		Enc { opcode + if(p38) E38 else E0F }.encode2EEM(op1.asReg, op2)
+	}
+
 	private fun Enc.encode2EEM(op1: Reg, op2: OpNode) {
 		when(op2.type) {
 			REG -> when(op1.type) {
@@ -795,6 +799,23 @@ class Assembler(private val context: CompilerContext) {
 				else       -> invalid()
 			}
 			IMM -> invalid()
+		}
+	}
+
+	private fun encode1E(opcode: Int, ext: Int, op1: Reg) {
+		when(op1.type) {
+			RegType.MM -> {
+				word(0x0F or (opcode shl 8))
+				writeModRM(0b11, ext, op1.value)
+			}
+			RegType.X -> {
+				if(op1.high == 1) invalid()
+				byte(0x66)
+				writeRex(0, op1.rex, 0, 0)
+				word(0x0F or (opcode shl 8))
+				writeModRM(0b11, ext, op1.value)
+			}
+			else -> invalid()
 		}
 	}
 
@@ -1471,15 +1492,8 @@ class Assembler(private val context: CompilerContext) {
 			WORD -> { byte(0x66); Enc { PF2+E38+0xF1+R0100+MM }.encode2RRM(op1.asReg, op2, 0) }
 			else -> Enc { PF2+E38+0xF1+R1100 }.encode2RRM(op1.asReg, op2, 0)
 		}
-
-		PABSB -> Enc { E38+0x1C }.encode2EEM(op1.asReg, op2)
-		PABSW -> Enc { E38+0x1D }.encode2EEM(op1.asReg, op2)
-		PABSD -> Enc { E38+0x1E }.encode2EEM(op1.asReg, op2)
-		PACKSSDW -> Enc { E0F+0x6B }.encode2EEM(op1.asReg, op2)
-		PACKSSWB -> Enc { E0F+0x63 }.encode2EEM(op1.asReg, op2)
 		
 		PACKUSDW -> Enc { P66+E38+0x2B }.encode2XXM128(op1.asReg, op2)
-
 		ADDPD      -> Enc { P66+E0F+0x58 }.encode2XXM128(op1.asReg, op2)
 		ADDPS      -> Enc { PNP+E0F+0x58 }.encode2XXM128(op1.asReg, op2)
 		ADDSD      -> Enc { PF3+E0F+0x58 }.encode2XXM64(op1.asReg, op2)
@@ -1498,6 +1512,77 @@ class Assembler(private val context: CompilerContext) {
 		BLENDVPD   -> Enc { P66+E38+0x15 }.encode2XXM128(op1.asReg, op2)
 		BLENDVPS   -> Enc { P66+E38+0x14 }.encode2XXM128(op1.asReg, op2)
 
+		PSHUFB     -> encode2EEM(0x00, op1, op2, true)
+		PHADDW     -> encode2EEM(0x01, op1, op2, true)
+		PHADDD     -> encode2EEM(0x02, op1, op2, true)
+		PHADDSW    -> encode2EEM(0x03, op1, op2, true)
+		PMADDUBSW  -> encode2EEM(0x04, op1, op2, true)
+		PHSUBW     -> encode2EEM(0x05, op1, op2, true)
+		PHSUBD     -> encode2EEM(0x06, op1, op2, true)
+		PHSUBSW    -> encode2EEM(0x07, op1, op2, true)
+		PSIGNB     -> encode2EEM(0x08, op1, op2, true)
+		PSIGNW     -> encode2EEM(0x09, op1, op2, true)
+		PSIGND     -> encode2EEM(0x0A, op1, op2, true)
+		PMULHRSW   -> encode2EEM(0x0B, op1, op2, true)
+		PABSB      -> encode2EEM(0x1C, op1, op2, true)
+		PABSW      -> encode2EEM(0x1D, op1, op2, true)
+		PABSD      -> encode2EEM(0x1E, op1, op2, true)
+		PUNPCKLBW  -> encode2EEM(0x60, op1, op2)
+		PUNPCKLWD  -> encode2EEM(0x61, op1, op2)
+		PUNPCKLDQ  -> encode2EEM(0x62, op1, op2)
+		PACKSSWB   -> encode2EEM(0x63, op1, op2)
+		PCMPGTB    -> encode2EEM(0x64, op1, op2)
+		PCMPGTW    -> encode2EEM(0x65, op1, op2)
+		PCMPGTD    -> encode2EEM(0x66, op1, op2)
+		PACKUSWB   -> encode2EEM(0x67, op1, op2)
+		PUNPCKHBW  -> encode2EEM(0x68, op1, op2)
+		PUNPCKHWD  -> encode2EEM(0x69, op1, op2)
+		PUNPCKHDQ  -> encode2EEM(0x6A, op1, op2)
+		PACKSSDW   -> encode2EEM(0x6B, op1, op2)
+		PCMPEQB    -> encode2EEM(0x74, op1, op2)
+		PCMPEQW    -> encode2EEM(0x75, op1, op2)
+		PCMPEQD    -> encode2EEM(0x76, op1, op2)
+		PADDQ      -> encode2EEM(0xD4, op1, op2)
+		PMULLW     -> encode2EEM(0xD5, op1, op2)
+		PSUBUSB    -> encode2EEM(0xD8, op1, op2)
+		PSUBUSW    -> encode2EEM(0xD9, op1, op2)
+		PMINUB     -> encode2EEM(0xDA, op1, op2)
+		PAND       -> encode2EEM(0xDB, op1, op2)
+		PADDUSB    -> encode2EEM(0xDC, op1, op2)
+		PADDUSW    -> encode2EEM(0xDD, op1, op2)
+		PMAXUB     -> encode2EEM(0xDE, op1, op2)
+		PANDN      -> encode2EEM(0xDF, op1, op2)
+		PAVGB      -> encode2EEM(0xE0, op1, op2)
+		PAVGW      -> encode2EEM(0xE3, op1, op2)
+		PMULHUW    -> encode2EEM(0xE4, op1, op2)
+		PMULHW     -> encode2EEM(0xE5, op1, op2)
+		PSUBSB     -> encode2EEM(0xE8, op1, op2)
+		PSUBSW     -> encode2EEM(0xE9, op1, op2)
+		PMINSW     -> encode2EEM(0xEA, op1, op2)
+		POR        -> encode2EEM(0xEB, op1, op2)
+		PADDSB     -> encode2EEM(0xEC, op1, op2)
+		PADDSW     -> encode2EEM(0xED, op1, op2)
+		PMAXSW     -> encode2EEM(0xEE, op1, op2)
+		PXOR       -> encode2EEM(0xEF, op1, op2)
+		PMULUDQ    -> encode2EEM(0xF4, op1, op2)
+		PMADDWD    -> encode2EEM(0xF5, op1, op2)
+		PSADBW     -> encode2EEM(0xF6, op1, op2)
+		PSUBB      -> encode2EEM(0xF8, op1, op2)
+		PSUBW      -> encode2EEM(0xF9, op1, op2)
+		PSUBD      -> encode2EEM(0xFA, op1, op2)
+		PSUBQ      -> encode2EEM(0xFB, op1, op2)
+		PADDB      -> encode2EEM(0xFC, op1, op2)
+		PADDW      -> encode2EEM(0xFD, op1, op2)
+		PADDD      -> encode2EEM(0xFE, op1, op2)
+		PSLLW      -> encodePSLLW(0xF1, 0x71, 6, op1, op2)
+		PSLLD      -> encodePSLLW(0xF2, 0x72, 6, op1, op2)
+		PSLLQ      -> encodePSLLW(0xF3, 0x73, 6, op1, op2)
+		PSRLW      -> encodePSLLW(0xD1, 0x71, 2, op1, op2)
+		PSRLD      -> encodePSLLW(0xD2, 0x72, 2, op1, op2)
+		PSRLQ      -> encodePSLLW(0xD2, 0x73, 2, op1, op2)
+		PSRAW      -> encodePSLLW(0xE1, 0x71, 4, op1, op2)
+		PSRAD      -> encodePSLLW(0xE2, 0x72, 4, op1, op2)
+		
 		else -> invalid()
 	}}
 
@@ -1514,7 +1599,6 @@ class Assembler(private val context: CompilerContext) {
 
 		else -> invalid()
 	}}
-
 
 
 
@@ -2056,6 +2140,35 @@ class Assembler(private val context: CompilerContext) {
 	/*
 	AVX/SSE
 	 */
+
+
+	/**
+	 *     0F F1    PSLLW  E_EM
+	 *     0F 71/6  PSLLW  E_I8
+	 *     0F F2    PSLLD  E_EM
+	 *     0F 72/6  PSLLD  E_I8
+	 *     0F F3    PSLLQ  E_EM
+	 *     0F 73/6  PSLLQ  E_I8
+	 *     0F D1    PSRLW  E_EM
+	 *     0F 71/2  PSRLW  E_I8
+	 *     0F D2    PSRLD  E_EM
+	 *     0F 72/2  PSRLD  E_I8
+	 *     0F D3    PSRLQ  E_EM
+	 *     0F 73/2  PSRLQ  E_I8
+	 *     0F E1    PSRAW  E_EM
+	 *     0F 71/4  PSRAW  E_I8
+	 *     0F E2    PSRAD  E_EM
+	 *     0F 72/4  PSRAD  E_I8
+	 */
+	private fun encodePSLLW(opcode1: Int, opcode2: Int, ext: Int, op1: OpNode, op2: OpNode) {
+		if(op2.isImm) {
+			encode1E(opcode2, ext, op1.reg)
+			writeImm(op2, BYTE)
+		} else {
+			encode2EEM(opcode1, op1, op2)
+		}
+	}
+
 
 
 }
