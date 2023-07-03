@@ -1,9 +1,6 @@
 package eyre.gen
 
-import eyre.Escape
-import eyre.Mnemonic
-import eyre.Prefix
-import eyre.SseEnc
+import eyre.*
 import eyre.util.hexc8
 
 object EncGen {
@@ -38,7 +35,26 @@ object EncGen {
 		val encs = sseEncs()
 		val map = HashMap<String, ArrayList<Int>>()
 
+
 		for(e in encs) {
+			var width = Width.BYTE
+
+			fun Op.toSseOp() = when(this) {
+				Op.R8 -> SseOp.R8
+				Op.R16 -> SseOp.R16
+				Op.R32 -> SseOp.R32
+				Op.R64 -> SseOp.R64
+				Op.MM -> SseOp.MM
+				Op.X -> SseOp.X
+				Op.I8 -> SseOp.NONE
+				Op.M8 -> { width = Width.BYTE; SseOp.M }
+				Op.M16 -> { width = Width.WORD; SseOp.M }
+				Op.M32 -> { width = Width.DWORD; SseOp.M }
+				Op.M64 -> { width = Width.QWORD; SseOp.M }
+				Op.M128 -> { width = Width.XWORD; SseOp.M }
+				else -> error("Invalid SSE operand: $this")
+			}
+
 			val sseOps = when(e.ops.size) {
 				0 -> SseOps(false, SseOp.NONE, SseOp.NONE)
 				2 -> SseOps(e.ops[1] == Op.I8, e.ops[0].toSseOp(), e.ops[1].toSseOp())
@@ -52,6 +68,7 @@ object EncGen {
 				e.escape.ordinal,
 				e.ext.coerceAtLeast(0),
 				sseOps,
+				width,
 				e.rexw,
 				e.o16,
 				if(e.mr) 1 else 0
@@ -65,20 +82,6 @@ object EncGen {
 			println("\t$mnemonic to intArrayOf(${values.joinToString()}),")
 		}
 		println(")")
-	}
-
-
-
-	private fun Op.toSseOp() = when(this) {
-		Op.R8 -> SseOp.R8
-		Op.R16 -> SseOp.R16
-		Op.R32 -> SseOp.R32
-		Op.R64 -> SseOp.R64
-		Op.MM -> SseOp.MM
-		Op.X -> SseOp.X
-		Op.I8 -> SseOp.NONE
-		Op.M8, Op.M16, Op.M32, Op.M64, Op.M128, Op.M256, Op.M512 -> SseOp.M
-		else -> error("Invalid SSE operand: $this")
 	}
 
 
