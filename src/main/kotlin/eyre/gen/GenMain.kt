@@ -1,5 +1,5 @@
 package eyre.gen
 
 fun main() {
-	EncGen.genSseEncs2()
+	EncGen.run()
 }

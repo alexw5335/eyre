@@ -157,12 +157,12 @@ class ManualParser(private val inputs: List<String>) {
 			"R16"  -> SseOp.R16
 			"R32"  -> SseOp.R32
 			"R64"  -> SseOp.R64
-			"MEM"  -> { mask = OpMask.NONE; SseOp.M }
-			"M8"   -> { mask = OpMask.BYTE; SseOp.M }
-			"M16"  -> { mask = OpMask.WORD; SseOp.M }
-			"M32"  -> { mask = OpMask.DWORD; SseOp.M }
-			"M64"  -> { mask = OpMask.QWORD; SseOp.M }
-			"M128" -> { mask = OpMask.XWORD; SseOp.M }
+			"MEM"  -> { mask = OpMask.NONE; SseOp.MEM }
+			"M8"   -> { mask = OpMask.BYTE; SseOp.M8 }
+			"M16"  -> { mask = OpMask.WORD; SseOp.M16 }
+			"M32"  -> { mask = OpMask.DWORD; SseOp.M32 }
+			"M64"  -> { mask = OpMask.QWORD; SseOp.M64 }
+			"M128" -> { mask = OpMask.XWORD; SseOp.M128 }
 			else   -> error("Invalid SSE operand: $string")
 		}
 
@@ -275,21 +275,18 @@ class ManualParser(private val inputs: List<String>) {
 
 		fun convert(op: SseOp) = when(op) {
 			SseOp.NONE -> Op.NONE
-			SseOp.X -> Op.X
-			SseOp.MM -> Op.MM
-			SseOp.R8 -> Op.R8
-			SseOp.R16 -> Op.R16
-			SseOp.R32 -> Op.R32
-			SseOp.R64 -> Op.R64
-			SseOp.M -> when(enc.mask) {
-				OpMask.BYTE  -> Op.M8
-				OpMask.WORD  -> Op.M16
-				OpMask.DWORD -> Op.M32
-				OpMask.QWORD -> Op.M64
-				OpMask.XWORD -> Op.M128
-				OpMask.NONE  -> Op.MEM
-				else -> error("Invalid mask: $enc")
-			}
+			SseOp.X    -> Op.X
+			SseOp.MM   -> Op.MM
+			SseOp.R8   -> Op.R8
+			SseOp.R16  -> Op.R16
+			SseOp.R32  -> Op.R32
+			SseOp.R64  -> Op.R64
+			SseOp.MEM  -> Op.MEM
+			SseOp.M8   -> Op.M8
+			SseOp.M16  -> Op.M16
+			SseOp.M32  -> Op.M32
+			SseOp.M64  -> Op.M64
+			SseOp.M128 -> Op.M128
 		}
 
 		if(enc.sseOps != SseOps.NULL) {

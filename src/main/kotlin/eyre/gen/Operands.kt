@@ -42,7 +42,14 @@ enum class SseOp {
 	R16,
 	R32,
 	R64,
-	M;
+	MEM,
+	M8,
+	M16,
+	M32,
+	M64,
+	M128;
+
+	val isM get() = ordinal > MEM.ordinal
 
 	companion object { val values = values() }
 }

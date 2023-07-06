@@ -1,8 +1,10 @@
 package eyre
 
 import eyre.gen.Ops
+import eyre.gen.SseOp
 import eyre.gen.SseOps
 import eyre.util.bin8888
+import eyre.util.hexc8
 
 
 class ModRM(private val value: Int) {
@@ -176,11 +178,12 @@ value class GpEnc(val value: Int) {
  *     Bits 08-10: prefix  3
  *     Bits 11-12: escape  2
  *     Bits 13-15: ext     3  /0../7
- *     Bits 16-23: ops     8
- *     Bits 24-26: width   3  BYTE WORD DWORD QWORD XWORD
- *     Bits 27-27: rw      1
- *     Bits 28-28: o16     1
- *     Bits 29-29: mr      1
+ *     Bits 16-19: op1     4
+ *     Bits 20-23: op2     4
+ *     Bits 24-24: i8      1
+ *     Bits 25-25: rw      1
+ *     Bits 26-26: o16     1
+ *     Bits 27-27: mr      1
  */
 @JvmInline
 value class SseEnc(val value: Int) {
@@ -190,32 +193,83 @@ value class SseEnc(val value: Int) {
 		prefix : Int,
 		escape : Int,
 		ext    : Int,
-		ops    : SseOps,
-		width  : Width,
+		op1    : SseOp,
+		op2    : SseOp,
+		i8     : Int,
 		rw     : Int,
 		o16    : Int,
 		mr     : Int,
 	) : this(
-		(opcode shl 0) or
-		(prefix shl 8) or
-		(escape shl 11) or
-		(ext shl 13) or
-		(ops.value shl 16) or
-		(width.ordinal shl 24) or
-		(rw shl 27) or
-		(o16 shl 28) or
-		(mr shl 29)
+		(opcode shl OPCODE_POS) or
+		(prefix shl PREFIX_POS) or
+		(escape shl ESCAPE_POS) or
+		(ext shl EXT_POS) or
+		(op1.ordinal shl OP1_POS) or
+		(op2.ordinal shl OP2_POS) or
+		(i8 shl I8_POS) or
+		(rw shl RW_POS) or
+		(o16 shl O16_POS) or
+		(mr shl MR_POS)
 	)
 
-	val opcode  get() = ((value shr 0 ) and 0xFF)
-	val prefix  get() = ((value shr 8 ) and 0b11)
-	val escape  get() = ((value shr 11) and 0b11)
-	val ext     get() = ((value shr 13) and 0b1111)
-	val ops     get() = ((value shr 16) and 0xFF).let(::SseOps)
-	val width   get() = ((value shr 24) and 0b111).let(Width.values::get)
-	val rw      get() = ((value shr 27) and 0b1)
-	val o16     get() = ((value shr 28) and 0b1)
-	val mr      get() = ((value shr 29) and 0b1)
+	val opcode  get() = ((value shr OPCODE_POS) and 0xFF)
+	val prefix  get() = ((value shr PREFIX_POS) and 0b11)
+	val escape  get() = ((value shr ESCAPE_POS) and 0b11)
+	val ext     get() = ((value shr EXT_POS) and 0xF)
+	val op1     get() = ((value shr OP1_POS) and 0xF).let(SseOp.values::get)
+	val op2     get() = ((value shr OP2_POS) and 0xF).let(SseOp.values::get)
+	val i8      get() = ((value shr I8_POS) and 0b1)
+	val rw      get() = ((value shr RW_POS) and 0b1)
+	val o16     get() = ((value shr O16_POS) and 0b1)
+	val mr      get() = ((value shr MR_POS) and 0b1)
+
+	fun equalExceptMem(other: SseEnc) =
+		(other.i8 == i8) && (
+			(op1.isM && other.op1.isM && op1 != other.op1 && op2 == other.op2) ||
+			(op2.isM && other.op2.isM && op2 != other.op2 && op1 == other.op1)
+		)
+
+	fun withoutMemWidth() = when {
+		op1.isM -> SseEnc((value and (0xF shl OP1_POS).inv()) or (SseOp.MEM.ordinal shl OP1_POS))
+		op2.isM -> SseEnc((value and (0xF shl OP2_POS).inv()) or (SseOp.MEM.ordinal shl OP2_POS))
+		else    -> this
+	}
+
+	override fun toString() = buildString {
+		Prefix.values()[prefix].string?.let { append("$it ") }
+		Escape.values()[escape].string?.let { append("$it ") }
+		append(opcode.hexc8)
+		if(ext != 0) append("/$ext")
+		if(op1 == SseOp.NONE) {
+			append(" NONE")
+		} else {
+			append(" $op1")
+			if(op2 != SseOp.NONE)
+				append("_$op2")
+		}
+		if(i8 == 1) append("_I8")
+		append("  ")
+		if(rw == 1) append("RW ")
+		if(o16 == 1) append("O16 ")
+		if(mr == 1) append("MR ")
+	}
+
+	fun compareOps(ops: Int) = value and 0b1_11111111_00000000_00000000 == ops
+
+	companion object {
+		fun makeOps(op1: SseOp, op2: SseOp, i8: Int) =
+			(op1.ordinal shl OP1_POS) or (op2.ordinal shl OP2_POS) or (i8 shl I8_POS)
+		const val OPCODE_POS = 0
+		const val PREFIX_POS = 8
+		const val ESCAPE_POS = 11
+		const val EXT_POS = 13
+		const val OP1_POS = 16
+		const val OP2_POS = 20
+		const val I8_POS = 24
+		const val RW_POS = 25
+		const val O16_POS = 26
+		const val MR_POS = 27
+	}
 
 }
 

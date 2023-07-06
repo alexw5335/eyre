@@ -5,7 +5,8 @@ import eyre.Width.*
 import eyre.OpNodeType.*
 import eyre.Mnemonic.*
 import eyre.gen.SseOp
-import eyre.gen.SseOps
+import eyre.util.bin32
+import eyre.util.bin8888
 
 class Assembler(private val context: CompilerContext) {
 
@@ -76,12 +77,18 @@ class Assembler(private val context: CompilerContext) {
 	private fun handleInstruction(node: InsNode) {
 		node.prefix?.let { byte(it.value) }
 
-		when {
-			node.op1 == null -> assemble0(node)
-			node.op2 == null -> assemble1(node, node.op1)
-			node.op3 == null -> assemble2(node, node.op1, node.op2)
-			node.op4 == null -> assemble3(node, node.op1, node.op2, node.op3)
-			else             -> invalid()
+		val sseEncs = Encs.sseEncs[node.mnemonic]
+		if(sseEncs != null) {
+			assembleSse(sseEncs, node.op1 ?: invalid(), node.op2 ?: invalid(), node.op3)
+			return
+		}
+
+		when(node.size) {
+			0    -> assemble0(node)
+			1    -> assemble1(node, node.op1!!)
+			2    -> assemble2(node, node.op1!!, node.op2!!)
+			3    -> assemble3(node, node.op1!!, node.op2!!, node.op3!!)
+			else -> invalid()
 		}
 	}
 
@@ -1424,31 +1431,102 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private val OpNode.sseOp get() = when(type) {
-		MEM -> SseOp.M
-		REG -> when(reg.type) {
-			RegType.R8 -> SseOp.R8
-			RegType.R16 -> SseOp.R16
-			RegType.R32 -> SseOp.R32
-			RegType.R64 -> SseOp.R64
-			RegType.MM -> SseOp.MM
-			RegType.X -> SseOp.X
-			else -> invalid()
+	private fun assembleSse(encodings: IntArray, op1: OpNode, op2: OpNode, op3: OpNode?) {
+		fun enc(op1: SseOp, op2: SseOp, i8: Boolean): SseEnc {
+			val ops = SseEnc.makeOps(op1, op2, if(i8) 1 else 0)
+			for(e in encodings)
+				if(SseEnc(e).compareOps(ops))
+					return SseEnc(e)
+			invalid()
 		}
-		IMM -> invalid()
+
+		val i8 = op3 != null && op3.isImm
+
+		when(op1.type) {
+			REG -> when(op2.type) {
+				REG -> encodeSseRR(enc(op1.reg.sseOp(), op2.reg.sseOp(), i8), op1.reg, op2.reg, op3)
+				MEM -> encodeSseRM(enc(op1.reg.sseOp(), op2.sseOp(), i8), op1.reg, op2, op3)
+				IMM -> encodeSseRI(enc(op1.reg.sseOp(), SseOp.NONE, false), op1.reg, op2, op3)
+			}
+			MEM -> when(op2.type) {
+				REG  -> encodeSseRM(enc(op1.sseOp(), op2.reg.sseOp(), i8), op2.reg, op1, op3)
+				else -> invalid()
+			}
+			IMM -> invalid()
+		}
 	}
 
+	private fun Reg.sseOp() = when(type) {
+		RegType.R8  -> SseOp.R8
+		RegType.R16 -> SseOp.R16
+		RegType.R32 -> SseOp.R32
+		RegType.R64 -> SseOp.R64
+		RegType.MM  -> SseOp.MM
+		RegType.X   -> SseOp.X
+		else        -> invalid()
+	}
 
+	private fun OpNode.sseOp() = when(width) {
+		null  -> SseOp.MEM
+		BYTE  -> SseOp.M8
+		WORD  -> SseOp.M16
+		DWORD -> SseOp.M32
+		QWORD -> SseOp.M64
+		XWORD -> SseOp.M128
+		else  -> invalid()
+	}
 
-	private fun assemble2Sse(node: InsNode, op1: OpNode, op2: OpNode) {
-		val encodings = Encs.sseEncs[node.mnemonic] ?: invalid()
-		val sseOps = when(op1.type) {
-			REG ->
+	private fun writeSseOpcode(enc: SseEnc) {
+		when(enc.escape) {
+			0 -> { }
+			1 -> byte(0x0F)
+			2 -> word(0x380F)
+			3 -> word(0x3A0F)
 		}
-		val sseOps = SseOps(op2.isImm, op1, SseOp.NONE)
-		for(e in encodings) {
-			val
+		byte(enc.opcode)
+	}
+
+	private fun writeSsePrefix(enc: SseEnc) {
+		when(enc.prefix) {
+			0 -> { }
+			1 -> byte(0x66)
+			2 -> byte(0xF2)
+			3 -> byte(0xF3)
 		}
+	}
+
+	private fun encodeSseRR(enc: SseEnc, op1: Reg, op2: Reg, op3: OpNode?) {
+		val first = if(enc.mr == 0) op1 else op2
+		val second = if(enc.mr == 0) op2 else op1
+		if(op1.high != 0 || op2.high != 0) invalid()
+		if(enc.o16 == 1) byte(0x66)
+		writeSsePrefix(enc)
+		writeRex(enc.rw, first.rex, 0, second.rex)
+		writeSseOpcode(enc)
+		writeModRM(0b11, first.value, second.value)
+		if(enc.i8 == 1) writeImm(op3!!, BYTE)
+	}
+
+	private fun encodeSseRM(enc: SseEnc, op1: Reg, op2: OpNode, op3: OpNode?) {
+		if(op1.high != 0) invalid()
+		val disp = resolveMem(op2.node)
+		writeA32()
+		if(enc.o16 == 1) byte(0x66)
+		writeSsePrefix(enc)
+		writeRex(enc.rw, op1.rex, indexRex, baseRex)
+		writeSseOpcode(enc)
+		writeMem(op2, op1.value, disp, 0)
+		if(enc.i8 == 1) writeImm(op3!!, BYTE)
+	}
+
+	private fun encodeSseRI(enc: SseEnc, op1: Reg, op2: OpNode, op3: OpNode?) {
+		if(op3 != null) invalid()
+		if(enc.o16 == 1) byte(0x66)
+		writeSsePrefix(enc)
+		writeRex(enc.rw, op1.rex, 0, 0)
+		writeSseOpcode(enc)
+		writeModRM(0b11, enc.ext, op1.value)
+		writeImm(op2, BYTE)
 	}
 
 

@@ -31,35 +31,50 @@ object EncGen {
 
 
 
-	fun genSseEncs2() {
-		val encs = sseEncs()
-		val map = HashMap<String, ArrayList<Int>>()
+	fun run() {
+		genSseEncMap()
+	}
 
+
+
+	/*
+	MMX/SSE instruction generation
+	 */
+
+
+
+	/**
+	 * Generates a mapping of mnemonics to lists of non-human-readable [SseEnc] values for use in code.
+	 */
+	fun genSseEncMap() {
+		val encs = sseEncs()
+		val map = HashMap<String, ArrayList<SseEnc>>()
+
+		fun Op?.toSseOp() = when(this) {
+			null    -> SseOp.NONE
+			Op.NONE -> SseOp.NONE
+			Op.I8   -> SseOp.NONE
+			Op.R8   -> SseOp.R8
+			Op.R16  -> SseOp.R16
+			Op.R32  -> SseOp.R32
+			Op.R64  -> SseOp.R64
+			Op.MM   -> SseOp.MM
+			Op.X    -> SseOp.X
+			Op.M8   -> SseOp.M8
+			Op.M16  -> SseOp.M16
+			Op.M32  -> SseOp.M32
+			Op.M64  -> SseOp.M64
+			Op.M128 -> SseOp.M128
+			else    -> error("Invalid SSE operand: $this")
+		}
 
 		for(e in encs) {
-			var width = Width.BYTE
-
-			fun Op.toSseOp() = when(this) {
-				Op.R8 -> SseOp.R8
-				Op.R16 -> SseOp.R16
-				Op.R32 -> SseOp.R32
-				Op.R64 -> SseOp.R64
-				Op.MM -> SseOp.MM
-				Op.X -> SseOp.X
-				Op.I8 -> SseOp.NONE
-				Op.M8 -> { width = Width.BYTE; SseOp.M }
-				Op.M16 -> { width = Width.WORD; SseOp.M }
-				Op.M32 -> { width = Width.DWORD; SseOp.M }
-				Op.M64 -> { width = Width.QWORD; SseOp.M }
-				Op.M128 -> { width = Width.XWORD; SseOp.M }
-				else -> error("Invalid SSE operand: $this")
-			}
-
-			val sseOps = when(e.ops.size) {
-				0 -> SseOps(false, SseOp.NONE, SseOp.NONE)
-				2 -> SseOps(e.ops[1] == Op.I8, e.ops[0].toSseOp(), e.ops[1].toSseOp())
-				3 -> SseOps(e.ops[2] == Op.I8, e.ops[0].toSseOp(), e.ops[1].toSseOp())
-				else -> error("Invalid SSE encoding: $this")
+			val op1 = e.ops.getOrNull(0).toSseOp()
+			val op2 = e.ops.getOrNull(1).toSseOp()
+			val i8 = when(e.ops.size) {
+				2    -> e.ops[1] == Op.I8
+				3    -> e.ops[2] == Op.I8
+				else -> false
 			}
 
 			val sseEnc = SseEnc(
@@ -67,25 +82,41 @@ object EncGen {
 				e.prefix.ordinal,
 				e.escape.ordinal,
 				e.ext.coerceAtLeast(0),
-				sseOps,
-				width,
+				op1,
+				op2,
+				if(i8) 1 else 0,
 				e.rexw,
 				e.o16,
 				if(e.mr) 1 else 0
 			)
 
-			map.getOrPut(e.mnemonic, ::ArrayList).add(sseEnc.value)
+			map.getOrPut(e.mnemonic, ::ArrayList).add(sseEnc)
+		}
+
+		val toAdd = ArrayList<SseEnc>()
+
+		for((_, list) in map) {
+			for(e in list)
+				if(e.op1.isM || e.op2.isM)
+					if(list.none { it.equalExceptMem(e) })
+						toAdd += e.withoutMemWidth()
+			if(toAdd.isNotEmpty()) {
+				list += toAdd
+				toAdd.clear()
+			}
 		}
 
 		println("val sseEncs = mapOf<Mnemonic, IntArray>(")
-		for((mnemonic, values) in map) {
-			println("\t$mnemonic to intArrayOf(${values.joinToString()}),")
-		}
+		for((mnemonic, values) in map)
+			println("\tMnemonic.$mnemonic to intArrayOf(${values.joinToString { it.value.toString() }}),")
 		println(")")
 	}
 
 
 
+	/**
+	 * Gathers the instructions of all mnemonics that contain any MMX/SSE operands
+	 */
 	private fun sseEncs() = buildList {
 		val mnemonics = HashSet<String>()
 		for(n in nasmEncs)
@@ -98,7 +129,10 @@ object EncGen {
 
 
 
-	fun genSseEncs() {
+	/**
+	 * Generates an expanded human-readable list of all MMX/SSE instructions.
+	 */
+	fun genSseEncList() {
 		val encs = sseEncs()
 
 		for(e in encs) {
@@ -137,6 +171,12 @@ object EncGen {
 			}.let(::println)
 		}
 	}
+
+
+
+	/*
+	Manual/NASM instruction comparisons
+	 */
 
 
 
@@ -181,7 +221,15 @@ object EncGen {
 
 
 
-	/** NASM -> Manual ignored mnemonics */
+	/*
+	Collections
+	 */
+
+
+
+	/**
+	 * NASM -> Manual ignored mnemonics
+	 */
 	private val nasmToManualIgnoredMnemonics = setOf(
 		// Custom
 		"IN", "OUT", "MOV", "ENTER", "XCHG", "LAR", "LSL",
@@ -199,7 +247,9 @@ object EncGen {
 
 
 
-	/** Manual -> NASM ignored mnemonics */
+	/**
+	 * Manual -> NASM ignored mnemonics
+	 */
 	private val manualToNasmIgnoredMnemonics = nasmToManualIgnoredMnemonics + setOf(
 		// Custom opcodes
 		"POPW",
@@ -232,6 +282,9 @@ object EncGen {
 
 
 
+	/**
+	 * NASM extensions that only contain general-purpose operands
+	 */
 	private val gpExtensions = setOf(
 		NasmExt.CET, NasmExt.FPU, NasmExt.ENQCMD, NasmExt.HRESET,
 		NasmExt.INVPCID, NasmExt.MPX, NasmExt.PCONFIG, NasmExt.PREFETCHI,
@@ -240,11 +293,21 @@ object EncGen {
 		NasmExt.WRMSRNS,
 	)
 
+
+
+	/**
+	 * NASM extensions that contain any MMX or XMM operands.
+	 */
 	private val mmxSseExtensions = setOf(
 		NasmExt.MMX, NasmExt.SSE, NasmExt.SSE2, NasmExt.SSE3, NasmExt.SSE41,
 		NasmExt.SSE42, NasmExt.SSE4A, NasmExt.SSE5, NasmExt.SSSE3, NasmExt.SHA
 	)
 
+
+
+	/**
+	 * NASM extensions that contain any AVX or AVX-512 operands.
+	 */
 	private val avxExtensions = setOf(
 		NasmExt.AVX,
 		NasmExt.AVX2
