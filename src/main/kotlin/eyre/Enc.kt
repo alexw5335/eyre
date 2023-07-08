@@ -1,45 +1,8 @@
 package eyre
 
-import eyre.gen.Ops
-import eyre.gen.SseOp
-import eyre.gen.SseOps
-import eyre.util.bin8888
+import eyre.gen.*
 import eyre.util.hexc8
 
-
-class ModRM(private val value: Int) {
-
-	constructor(mod: Int, reg: Int, rm: Int) : this((mod shl 6) or (reg shl 3) or rm)
-
-	val modrm get() = value
-	val mod   get() = value shr 6
-	val reg   get() = (value shr 3) and 0b111
-	val rm    get() = value and 0b111
-
-}
-
-
-
-class Rex(val value: Int) {
-
-	constructor(w: Int, r: Int, x: Int, b: Int, force: Int, ban: Int) : this(
-		(w shl 3) or
-			(r shl 2) or
-			(x shl 1) or
-			(b shl 0) or
-			(force shl 4) or
-			(ban shl 5)
-	)
-
-	val w      get() = (value shr 3) and 1
-	val r      get() = (value shr 2) and 1
-	val x      get() = (value shr 1) and 1
-	val b      get() = (value shr 0) and 1
-	val rex    get() = value and 0b1111
-	val forced get() = (value shr 4) and 1 == 1
-	val banned get() = (value shr 5) and 1 == 1
-
-}
 
 
 /**
@@ -131,47 +94,48 @@ inline fun Enc(block: Enc.Companion.() -> Int) = Enc(block(Enc))
 
 
 
-/**
- *     Bits 00-15: opcode  16
- *     Bits 16-18: prefix  3
- *     Bits 19-20: escape  2
- *     Bits 21-23: ext     3  /0../7
- *     Bits 24-29: mask    6  BYTE WORD DWORD QWORD TWORD XWORD
- *     Bits 30-30: rex.w   1
- *     Bits 31-31: o16     1
- */
-@JvmInline
-value class GpEnc(val value: Int) {
-
-	constructor(
-		opcode : Int,
-		prefix : Int,
-		escape : Int,
-		ext    : Int,
-		mask   : OpMask,
-		rexw   : Int,
-		o16    : Int,
-	) : this(
-		(opcode shl 0) or
-			(prefix shl 16) or
-			(escape shl 19) or
-			(ext shl 21) or
-			(mask.value shl 24) or
-			(rexw shl 30) or
-			(o16 shl 31)
-	)
-
-	val opcode  get() = ((value shr 0 ) and 0xFFFF)
-	val prefix  get() = ((value shr 16) and 0b11)
-	val escape  get() = ((value shr 19) and 0b11)
-	val ext     get() = ((value shr 21) and 0b1111)
-	val mask    get() = ((value shr 24) and 0b111111).let(::OpMask)
-	val rexw    get() = ((value shr 30) and 0b1)
-	val o16     get() = ((value shr 31) and 0b1)
-
-}
+class AvxEnc(
+	val opcode: Int,
+	val prefix: Prefix,
+	val escape: Escape,
+	val ext: Int,
+	val op1: AvxOp,
+	val op2: AvxOp,
+	val op3: AvxOp,
+	val op4: AvxOp,
+	val vl: Int,
+	val vw: Int,
+	val tt: TupleType,
+	val opEnc: AvxOpEnc,
+	val sae: Boolean,
+	val er: Boolean,
+	val bcst: Int,
+	val vsib: Int
+)
 
 
+
+/*@JvmInline
+value class AvxEnc(val value: Long) {
+	companion object {
+		const val OPCODE_POS = 0  // 8
+		const val PREFIX_POS = 8  // 3
+		const val ESCAPE_POS = 11 // 2
+		const val EXT_POS    = 13 // 3
+		const val OP1_POS    = 16 // 5
+		const val OP2_POS    = 21 // 5
+		const val OP3_POS    = 26 // 5
+		const val OP4_POS    = 31 // 5
+		const val VL_POS     = 36 // 2  L0 L128 L256 L512
+		const val VW_POS     = 38 // 1  W0 W1
+		const val TT_POS     = 39 // 4  16
+		const val OPENC_POS  = 43 // 4  10
+		const val SAE_POS    = 47 // 1
+		const val ER_POS     = 48 // 1
+		const val BCST_POS   = 49 // 2  NONE B16 B32 B64
+		const val VSIB_POS   = 51 // 2  X Y Z (mem op must be DWORD or QWORD)
+	}
+}*/
 
 /**
  *     Bits 00-07: opcode  8
@@ -216,8 +180,8 @@ value class SseEnc(val value: Int) {
 	val prefix  get() = ((value shr PREFIX_POS) and 0b11)
 	val escape  get() = ((value shr ESCAPE_POS) and 0b11)
 	val ext     get() = ((value shr EXT_POS) and 0xF)
-	val op1     get() = ((value shr OP1_POS) and 0xF).let(SseOp.values::get)
-	val op2     get() = ((value shr OP2_POS) and 0xF).let(SseOp.values::get)
+	val op1     get() = ((value shr OP1_POS) and 0xF).let(SseOp.entries::get)
+	val op2     get() = ((value shr OP2_POS) and 0xF).let(SseOp.entries::get)
 	val i8      get() = ((value shr I8_POS) and 0b1)
 	val rw      get() = ((value shr RW_POS) and 0b1)
 	val o16     get() = ((value shr O16_POS) and 0b1)
@@ -236,8 +200,8 @@ value class SseEnc(val value: Int) {
 	}
 
 	override fun toString() = buildString {
-		Prefix.values()[prefix].string?.let { append("$it ") }
-		Escape.values()[escape].string?.let { append("$it ") }
+		Prefix.entries[prefix].string?.let { append("$it ") }
+		Escape.entries[escape].string?.let { append("$it ") }
 		append(opcode.hexc8)
 		if(ext != 0) append("/$ext")
 		if(op1 == SseOp.NONE) {
@@ -270,58 +234,5 @@ value class SseEnc(val value: Int) {
 		const val O16_POS = 26
 		const val MR_POS = 27
 	}
-
-}
-
-
-
-data class ManualEnc(
-	val mnemonic : Mnemonic,
-	val prefix   : Prefix,
-	val escape   : Escape,
-	val opcode   : Int,
-	val mask     : OpMask,
-	val ext      : Int,
-	val ops      : Ops,
-	val sseOps   : SseOps,
-	val rexw     : Int,
-	val o16      : Int,
-	val pseudo   : Int,
-	val mr       : Boolean
-) {
-	val actualExt = if(ext == -1) 0 else ext
-}
-
-
-
-class EncGroup(val mnemonic: Mnemonic) {
-
-
-	var isSse = false
-
-	val encs = ArrayList<ManualEnc>()
-
-	var ops = 0L
-
-	fun add(enc: ManualEnc) {
-		if(enc.sseOps != SseOps.NULL) {
-			isSse = true
-			if(encs.any { it.sseOps == SseOps.NULL })
-				error("Mixed SSE and GP encodings: $mnemonic")
-			encs += enc
-		} else if(enc.ops in this) {
-			//encs[enc.ops.index] = enc
-		} else {
-			ops = ops or (1L shl enc.ops.ordinal)
-			encs += enc
-		}
-	}
-
-	private val Ops.index get() = (ops and ((1L shl ordinal) - 1)).countOneBits()
-
-	operator fun get(ops: Ops) = encs[ops.index]
-	operator fun contains(operands: Ops) = this.ops and (1L shl operands.ordinal) != 0L
-	operator fun get(ops: SseOps) = encs.first { it.sseOps == ops }
-	override fun toString() = "Group($mnemonic, ${ops.toInt().bin8888}, ${encs.joinToString()})"
 
 }

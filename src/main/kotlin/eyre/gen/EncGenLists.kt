@@ -2,14 +2,14 @@ package eyre.gen
 
 import eyre.Width
 
-object Maps {
+object EncGenLists {
 
-	val arches     = NasmArch.values().associateBy { it.name.trimStart('_') }
-	val extensions = NasmExt.values().associateBy { it.name.trimStart('_') }
-	val vsibs      = VSib.values().associateBy { it.name.lowercase() }
-	val immTypes   = ImmType.values().associateBy { it.name.lowercase().replace('_', ',') }
-	val tupleTypes = TupleType.values().associateBy { it.name.lowercase() }
-	val opEncs     = OpEnc.values().associateBy { it.string }
+	val arches     = NasmArch.entries.associateBy { it.name.trimStart('_') }
+	val extensions = NasmExt.entries.associateBy { it.name.trimStart('_') }
+	val vsibs      = VSib.entries.associateBy { it.name.lowercase() }
+	val immTypes   = ImmType.entries.associateBy { it.name.lowercase().replace('_', ',') }
+	val tupleTypes = TupleType.entries.associateBy { it.name.lowercase() }
+	val opEncs     = OpEnc.entries.associateBy { it.string }
 
 	val mrEncs = setOf(OpEnc.MR, OpEnc.MRN, OpEnc.MRX, OpEnc.MRI)
 
@@ -114,6 +114,27 @@ object Maps {
 		"SZ" to Width.ZWORD
 	)
 
+	val pseudoMnemonics = setOf(
+		"DLLCALL",
+		"RETURN"
+	)
+
+	val additionalMnemonics = setOf(
+		// Custom
+		"POPW",
+		"PUSHW",
+		"LEAVEW",
+		"ENTER",
+		"WAIT",
+		"JMPF",
+		"CALLF",
+		"ENTERW",
+		"SYSEXITQ",
+		"SYSRETQ",
+		// Found in Intel manual but not in NASM
+		"AOR",
+	)
+
 	val invalidMnemonics = setOf(
 		// Two immediates
 		"ENTER",
@@ -139,25 +160,11 @@ object Maps {
 		// BND
 		"BNDMK",
 		"BNDCL",
-		"BNDCL",
-		"BNDCL",
-		"BNDCU",
 		"BNDCU",
 		"BNDCU",
 		"BNDCN",
-		"BNDCN",
-		"BNDCN",
-		"BNDMOV",
-		"BNDMOV",
-		"BNDMOV",
 		"BNDMOV",
 		"BNDLDX",
-		"BNDLDX",
-		"BNDLDX",
-		"BNDSTX",
-		"BNDSTX",
-		"BNDSTX",
-		"BNDSTX",
 		"BNDSTX",
 	)
 

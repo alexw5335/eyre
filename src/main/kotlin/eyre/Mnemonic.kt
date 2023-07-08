@@ -786,8 +786,8 @@ enum class Mnemonic {
 
 	val isCustom get() = this == DLLCALL || this == RETURN
 
-	val string = name.lowercase()
+	enum class Type { GP, SSE, AVX, PSEUDO }
 
-	companion object { val values = values() }
+	val string = name.lowercase()
 
 }

@@ -1,36 +1,7 @@
 package eyre.gen
 
 import eyre.Width.*
-import eyre.OpMask
 import eyre.Width
-
-
-/**
- * Bits 0-0: i8
- * Bits 1-3: op1
- * Bits 4-7: op2
- */
-@JvmInline
-value class SseOps(val value: Int) {
-
-	constructor(i8: Boolean, op1: SseOp, op2: SseOp) :
-		this((if(i8) 1 else 0) or (op1.ordinal shl 1) or (op2.ordinal shl 4))
-
-	val i8   get() = value and 1
-	val op1  get() = SseOp.values[(value shr 1) and 0b111]
-	val op2  get() = SseOp.values[(value shr 4) and 0b111]
-
-	override fun toString() = when {
-		op1 == SseOp.NONE -> "NONE"
-		op2 == SseOp.NONE -> if(i8 != 0) "${op1}_I8" else "$op1"
-		else -> if(i8 != 0) "${op1}_${op2}_I8" else "${op1}_${op2}"
-	}
-
-	companion object {
-		val NULL = SseOps(-1)
-	}
-
-}
 
 
 
@@ -51,7 +22,43 @@ enum class SseOp {
 
 	val isM get() = ordinal > MEM.ordinal
 
-	companion object { val values = values() }
+}
+
+
+
+enum class AvxOpEnc {
+	NONE,
+	M, R,
+	RM, MR, VM,
+	RVM, MVR, RMV,
+	RVMS;
+}
+
+
+
+enum class AvxOp {
+	NONE,
+	X,
+	Y,
+	Z,
+	R8,
+	R16,
+	R32,
+	R64,
+	I8,
+	K,
+	T,
+	MEM,
+	M8,
+	M16,
+	M32,
+	M64,
+	M128,
+	M256,
+	M512;
+
+	val isM get() = ordinal > MEM.ordinal
+
 }
 
 
@@ -64,7 +71,8 @@ enum class OpType {
 	C,
 	ST,
 	MISC,
-	REL
+	REL,
+	VM;
 }
 
 
@@ -117,12 +125,12 @@ enum class Op(val type: OpType, val width: Width?) {
 	Y(OpType.MISC, YWORD),
 	Z(OpType.MISC, ZWORD),
 
-	VM32X(OpType.MISC, XWORD),
-	VM64X(OpType.MISC, XWORD),
-	VM32Y(OpType.MISC, YWORD),
-	VM64Y(OpType.MISC, YWORD),
-	VM32Z(OpType.MISC, ZWORD),
-	VM64Z(OpType.MISC, ZWORD),
+	VM32X(OpType.VM, XWORD),
+	VM64X(OpType.VM, XWORD),
+	VM32Y(OpType.VM, YWORD),
+	VM64Y(OpType.VM, YWORD),
+	VM32Z(OpType.VM, ZWORD),
+	VM64Z(OpType.VM, ZWORD),
 
 	K(OpType.MISC, null),
 
@@ -143,96 +151,4 @@ enum class Op(val type: OpType, val width: Width?) {
 	FS(OpType.MISC, null),
 	GS(OpType.MISC, null),
 	
-}
-
-
-
-enum class MultiOps(vararg val parts: Ops, val mask: OpMask? = null, val mr: Boolean = false) {
-	RM(Ops.R, Ops.M),
-	R_RM(Ops.R_R, Ops.R_M),
-	RM_R(Ops.R_R, Ops.M_R, mr = true),
-	O_A(Ops.A_O),
-	MEM(Ops.M, mask = OpMask.NONE),
-	M8(Ops.M, mask = OpMask.BYTE),
-	M16(Ops.M, mask = OpMask.WORD),
-	M32(Ops.M, mask = OpMask.DWORD),
-	M64(Ops.M, mask = OpMask.QWORD),
-	M80(Ops.M, mask = OpMask.TWORD),
-	M128(Ops.M, mask = OpMask.XWORD);
-}
-
-
-
-enum class Ops(val mr: Boolean = false) {
-
-	NONE,
-
-	R,
-	M,
-	I8,
-	I16,
-	I32,
-	AX,
-	REL8,
-	REL32,
-	ST,
-	FS,
-	GS,
-	O,
-
-	R_R,
-	R_M,
-	M_R(mr = true),
-	RM_I,
-	RM_I8,
-	A_I,
-	RM_1,
-	RM_CL,
-	ST_ST0,
-	ST0_ST,
-	A_O,
-
-	// IMUL
-	R_RM_I,
-	R_RM_I8,
-	// SHLD/SHRD
-	RM_R_I8(mr = true),
-	RM_R_CL(mr = true),
-
-	// LEA/LFS/LGS/LSS
-	R_MEM,
-	// MOVSX/MOVZX/CRC32
-	R_RM8,
-	R_RM16,
-	// MOVSXD
-	R_RM32,
-	// INVEPT/INVVPID/INVPCID
-	R_M128,
-	// ENQCMD/ENQCMDS/MOVDIR64B
-	RA_M512,
-
-	// ENTER
-	I16_I8,
-	// UMONITOR
-	RA,
-
-	// MOV
-	O_I,
-	R_SEG(mr = true),
-	M_SEG(mr = true),
-	SEG_R,
-	SEG_M,
-	A_MOF,
-	MOF_A,
-	R_DR(mr = true),
-	DR_R,
-	R_CR(mr = true),
-	CR_R,
-
-	// IN/OUT
-	A_I8,
-	I8_A,
-	A_DX,
-	DX_A,
-
 }

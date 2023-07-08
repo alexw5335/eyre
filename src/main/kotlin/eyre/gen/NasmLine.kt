@@ -56,13 +56,6 @@ class NasmLine(val raw: RawNasmLine) {
 	var multi2 = Op.NONE
 	var multiIndex = -1
 
-
-
-	fun addedOpcode(value: Int) =
-		opcode + (value shl ((oplen - 1) shl 3))
-
-
-
 	fun addOpcode(value: Int) {
 		if(oplen == 0) when(value) {
 			0x0F -> if(escape == Escape.NONE) { escape = Escape.E0F; return }
@@ -71,8 +64,6 @@ class NasmLine(val raw: RawNasmLine) {
 		}
 		opcode = opcode or (value shl (oplen++ shl 3))
 	}
-
-
 
 	override fun toString() = raw.toString()
 

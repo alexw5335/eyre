@@ -6,7 +6,7 @@ import eyre.util.bin44
 
 @JvmInline
 value class WidthAndMask(private val value: Int) {
-	val width   get() = Width.values[(value and 0xFF).countTrailingZeroBits()]
+	val width   get() = Width.entries[(value and 0xFF).countTrailingZeroBits()]
 	val mask    get() = OpMask(value shr 8)
 	val isValid get() = (value and 0xFF) in mask
 }
@@ -29,8 +29,6 @@ enum class Width(val string: String, val varString: String?, val bytes: Int) {
 	private val max: Long = (1L shl ((bytes shl 3) - 1)) - 1
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
-
-	companion object { val values = values() }
 
 }
 
@@ -60,8 +58,8 @@ value class OpMask(val value: Int) {
 
 	val isEmpty    get() = value == 0
 	val isNotEmpty get() = value != 0
-	val highest    get() = Width.values[32 - value.countLeadingZeroBits()]
-	val lowest     get() = Width.values[value.countLeadingZeroBits()]
+	val highest    get() = Width.entries[32 - value.countLeadingZeroBits()]
+	val lowest     get() = Width.entries[value.countLeadingZeroBits()]
 	val isSingle   get() = value.countOneBits() == 1
 	val count      get() = value.countOneBits()
 
@@ -93,7 +91,7 @@ value class OpMask(val value: Int) {
 	override fun toString() = value.bin44
 
 	inline fun forEachWidth(block: (Width) -> Unit) {
-		for(width in Width.values)
+		for(width in Width.entries)
 			if(width in this)
 				block(width)
 	}

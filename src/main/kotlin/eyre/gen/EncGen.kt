@@ -2,37 +2,63 @@ package eyre.gen
 
 import eyre.*
 import eyre.util.hexc8
+import java.nio.file.Files
+import java.nio.file.Paths
 
 object EncGen {
 
 
-	val nasmParser = NasmParser("nasm.txt", true, null)
+	private val nasmParser = NasmParser(Files.readAllLines(Paths.get("nasm.txt")))
 
-	val manualParser = ManualParser("encodings.txt")
+	private val nasmEncs get() = nasmParser.encs
 
-	val nasmLines get() = nasmParser.lines
-
-	val nasmEncs get() = nasmParser.commonEncs
-
-	val manualEncs get() = manualParser.commonEncs
-
-	val nasmMap = HashMap<String, ArrayList<CommonEnc>>()
-
-	val manualMap = HashMap<String, ArrayList<CommonEnc>>()
+	private val nasmMap = HashMap<String, ArrayList<NasmEnc>>()
 
 
 
 	init {
 		nasmParser.read()
-		manualParser.read()
-		for(e in nasmEncs) nasmMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
-		for(e in manualEncs) manualMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
+		for(e in nasmEncs)
+			nasmMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
 	}
 
 
 
 	fun run() {
-		genSseEncMap()
+		genMnemonics()
+	}
+
+
+
+
+	/*
+	Mnemonic generation
+	 */
+
+
+
+	private fun genMnemonics() {
+		val mnemonics = HashMap<String, Mnemonic.Type>()
+
+		for(e in nasmEncs) {
+			when {
+				e.isAvx ->
+					mnemonics[e.mnemonic] = Mnemonic.Type.AVX
+				Op.X in e.ops || Op.MM in e.ops ->
+					if(mnemonics[e.mnemonic] != Mnemonic.Type.AVX)
+						mnemonics[e.mnemonic] = Mnemonic.Type.SSE
+				else ->
+					if(mnemonics[e.mnemonic] == null)
+						mnemonics[e.mnemonic] = Mnemonic.Type.GP
+			}
+		}
+
+		for(m in EncGenLists.pseudoMnemonics)
+			println("$m(Type.PSEUDO),")
+		for(m in EncGenLists.additionalMnemonics)
+			println("$m(Type.GP),")
+		for((mnemonic, type) in mnemonics.entries.sortedBy { it.key })
+			println("$mnemonic(Type.$type),")
 	}
 
 
@@ -125,7 +151,7 @@ object EncGen {
 		for(n in nasmEncs)
 			if(n.mnemonic in mnemonics)
 				add(n)
-	}.sortedBy(CommonEnc::mnemonic)
+	}.sortedBy(NasmEnc::mnemonic)
 
 
 
@@ -169,53 +195,6 @@ object EncGen {
 				if(e.rexw == 1) append(" RW")
 				if(e.pseudo >= 0) append(" :${e.pseudo}")
 			}.let(::println)
-		}
-	}
-
-
-
-	/*
-	Manual/NASM instruction comparisons
-	 */
-
-
-
-	private fun compare(nasm: CommonEnc, manual: CommonEnc): Boolean {
-		if(nasm.ops.singleOrNull() == Op.MEM && manual.ops.size == 1 && manual.ops[0].type == OpType.M)
-			return nasm.equals(manual, true)
-		return nasm.equals(manual, false)
-	}
-
-
-
-	fun compareNasmToManual() {
-		println("Comparing NASM -> Manual")
-		for((mnemonic, nasms) in nasmMap) {
-			if(nasms.any { it.isAvx }) continue
-			if(mnemonic in nasmToManualIgnoredMnemonics) continue
-			val manuals = manualMap[mnemonic] ?: error("Missing mnemonic: $mnemonic")
-			for(nasm in nasms) {
-				if(manuals.any { compare(nasm, it) }) continue
-				println(nasm)
-				for(manual in manuals)
-					println("\t$manual")
-			}
-		}
-	}
-
-
-
-	fun compareManualToNasm() {
-		println("Comparing Manual -> NASM")
-		for((mnemonic, manuals) in manualMap) {
-			if(mnemonic in manualToNasmIgnoredMnemonics) continue
-			val nasms = nasmMap[mnemonic] ?: error("Missing mnemonic: $mnemonic")
-			outer@ for(manual in manuals) {
-				if(nasms.any { compare(it, manual) }) continue
-				println(manual)
-				for(nasm in nasms)
-					println("\t$nasm")
-			}
 		}
 	}
 

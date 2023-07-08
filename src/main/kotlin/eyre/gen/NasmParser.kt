@@ -2,22 +2,8 @@ package eyre.gen
 
 import eyre.*
 import eyre.util.isHex
-import java.nio.file.Files
-import java.nio.file.Paths
 
-class NasmParser(
-	private val inputs: List<String>,
-	private val includeBase: Boolean,
-	private val extensions: Set<NasmExt>?
-) {
-
-
-	constructor(path: String, includeBase: Boolean, extensions: Set<NasmExt>?) : this(
-		Files.readAllLines(Paths.get(path)),
-		includeBase,
-		extensions
-	)
-
+class NasmParser(private val inputs: List<String>) {
 
 
 	val rawLines = ArrayList<RawNasmLine>()
@@ -26,7 +12,7 @@ class NasmParser(
 
 	val lines = ArrayList<NasmLine>()
 
-	val commonEncs = ArrayList<CommonEnc>()
+	val encs = ArrayList<NasmEnc>()
 
 
 
@@ -35,7 +21,7 @@ class NasmParser(
 		for(l in rawLines) if(filterLine(l)) filteredRawLines.add(l)
 		for(l in filteredRawLines) scrapeLine(l, lines)
 		for(l in lines) determineOperands(l)
-		for(l in lines) convert(l, commonEncs)
+		for(l in lines) convert(l, encs)
 	}
 
 
@@ -80,11 +66,11 @@ class NasmParser(
 		line.mnemonic == "PUSH" && line.operands[0] == "imm64" -> false
 		"r+mi:" in line.parts -> false
 		line.mnemonic == "aw" -> true
-		line.mnemonic in Maps.essentialMnemonics -> true
+		line.mnemonic in EncGenLists.essentialMnemonics -> true
 		"ND" in line.extras && line.operands[0] != "void" -> false
-		line.mnemonic in Maps.invalidMnemonics -> false
-		Maps.invalidExtras.any(line.extras::contains) -> false
-		Maps.invalidOperands.any(line.operands::contains) -> false
+		line.mnemonic in EncGenLists.invalidMnemonics -> false
+		EncGenLists.invalidExtras.any(line.extras::contains) -> false
+		EncGenLists.invalidOperands.any(line.operands::contains) -> false
 		else -> true
 	}
 
@@ -94,10 +80,10 @@ class NasmParser(
 		val line = NasmLine(raw)
 
 		for(extra in raw.extras) when(extra) {
-			in Maps.arches -> line.arch = Maps.arches[extra]!!
-			in Maps.extensions -> line.extensions += Maps.extensions[extra]!!
-			in Maps.opWidths -> line.opSize = Maps.opWidths[extra]!!
-			in Maps.ignoredExtras -> continue
+			in EncGenLists.arches -> line.arch = EncGenLists.arches[extra]!!
+			in EncGenLists.extensions -> line.extensions += EncGenLists.extensions[extra]!!
+			in EncGenLists.opWidths -> line.opSize = EncGenLists.opWidths[extra]!!
+			in EncGenLists.ignoredExtras -> continue
 			"SM"  -> line.sm = true
 			"SM2" -> line.sm = true
 			"AR0" -> line.ar = 0
@@ -107,9 +93,9 @@ class NasmParser(
 		}
 
 		for(part in raw.parts) when {
-			part in Maps.immTypes -> line.immType = Maps.immTypes[part]!!
-			part in Maps.vsibs -> line.vsib = Maps.vsibs[part]!!
-			part in Maps.ignoredParts -> continue
+			part in EncGenLists.immTypes -> line.immType = EncGenLists.immTypes[part]!!
+			part in EncGenLists.vsibs -> line.vsib = EncGenLists.vsibs[part]!!
+			part in EncGenLists.ignoredParts -> continue
 			part.startsWith("vex")    -> line.vex = part
 			part.startsWith("evex")   -> line.vex = part
 			part.endsWith("+c")       -> { line.cc = true; line.addOpcode(part.dropLast(2).toInt(16)) }
@@ -127,9 +113,9 @@ class NasmParser(
 
 			part.contains(':') -> {
 				val array = part.split(':').filter { it.isNotEmpty() }
-				line.enc = Maps.opEncs[array[0]] ?: raw.error("Invalid ops: ${array[0]}")
+				line.enc = EncGenLists.opEncs[array[0]] ?: raw.error("Invalid ops: ${array[0]}")
 				if(array.size > 1)
-					line.tuple = Maps.tupleTypes[array[1]] ?: raw.error("Invalid tuple type")
+					line.tuple = EncGenLists.tupleTypes[array[1]] ?: raw.error("Invalid tuple type")
 				if(array.size == 3)
 					line.vex = array[2]
 			}
@@ -158,12 +144,6 @@ class NasmParser(
 
 		if(line.arch == NasmArch.FUTURE && line.extensions.isEmpty() && line.mnemonic.startsWith("K"))
 			line.extensions += NasmExt.NOT_GIVEN
-
-		if(extensions != null && !extensions.containsAll(line.extensions))
-			return
-
-		if(!includeBase && line.extensions.isEmpty())
-			return
 
 		list += line
 
@@ -208,8 +188,8 @@ class NasmParser(
 		val widths = arrayOfNulls<Width>(4)
 
 		if(line.sm) {
-			Maps.ops[strings[0]]?.width?.let { widths[1] = it }
-			Maps.ops[strings[1]]?.width?.let { widths[0] = it }
+			EncGenLists.ops[strings[0]]?.width?.let { widths[1] = it }
+			EncGenLists.ops[strings[1]]?.width?.let { widths[0] = it }
 		}
 
 		if(line.ar >= 0)
@@ -232,7 +212,7 @@ class NasmParser(
 			if(string.endsWith("|rs4"))  { line.rs4  = true; string = string.dropLast(4) }
 
 			val multi: Pair<Op, Op>? = when(string) {
-				in Maps.multiOps -> Maps.multiOps[string]!!
+				in EncGenLists.multiOps -> EncGenLists.multiOps[string]!!
 
 				"xmmrm" -> when(widths[i]) {
 					Width.DWORD -> Op.X to Op.M32
@@ -274,7 +254,7 @@ class NasmParser(
 					else     -> Op.I64
 				}
 
-				in Maps.ops -> Maps.ops[string]!!
+				in EncGenLists.ops -> EncGenLists.ops[string]!!
 				
 				"mem" -> when(widths[i]) {
 					null        -> Op.MEM
@@ -323,8 +303,8 @@ class NasmParser(
 
 
 
-	private fun convert(line: NasmLine, list: ArrayList<CommonEnc>) {
-		fun add(mnemonic: String, opcode: Int) = list.add(CommonEnc(
+	private fun convert(line: NasmLine, list: ArrayList<NasmEnc>) {
+		fun add(mnemonic: String, opcode: Int) = list.add(NasmEnc(
 			mnemonic,
 			line.prefix,
 			line.escape,
@@ -334,9 +314,10 @@ class NasmParser(
 			line.rexw,
 			line.o16,
 			line.pseudo,
-			line.enc in Maps.mrEncs,
+			line.enc in EncGenLists.mrEncs,
 			line.vex != null,
-			line.extensions
+			line.extensions,
+			line.enc
 		))
 
 		fun addMulti(mnemonic: String, opcode: Int) {
@@ -351,7 +332,7 @@ class NasmParser(
 		}
 		
 		if(line.cc)
-			for((postfix, opcodeInc) in Maps.ccList)
+			for((postfix, opcodeInc) in EncGenLists.ccList)
 				addMulti(line.mnemonic.dropLast(2) + postfix, line.opcode + opcodeInc)
 		else
 			addMulti(line.mnemonic, line.opcode)

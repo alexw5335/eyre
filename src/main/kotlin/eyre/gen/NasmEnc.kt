@@ -4,7 +4,7 @@ import eyre.Escape
 import eyre.Prefix
 import eyre.util.hexc8
 
-class CommonEnc(
+class NasmEnc(
 	val mnemonic : String,
 	val prefix   : Prefix,
 	val escape   : Escape,
@@ -16,10 +16,11 @@ class CommonEnc(
 	val pseudo   : Int,
 	val mr       : Boolean,
 	val isAvx    : Boolean,
-	val nasmExts : List<NasmExt>
+	val exts     : List<NasmExt>,
+	val opEnc    : OpEnc,
 ) {
 
-	fun equals(other: CommonEnc, ignoreOps: Boolean) =
+	fun equals(other: NasmEnc, ignoreOps: Boolean) =
 		mnemonic == other.mnemonic &&
 		prefix == other.prefix &&
 		escape == other.escape &&
