@@ -24,11 +24,10 @@ val AstNode.printString: String get() = when(this) {
 	is EqualsNode     -> "${left.printString} = ${right.printString}"
 
 	is OpNode -> buildString {
-		if(width != null) append("${width.string} ")
 		when(type) {
-			OpNodeType.MEM -> append("[${node.printString}]")
+			OpNodeType.MEM -> { if(width != null) append("${width.string} "); append("[${node.printString}]") }
 			OpNodeType.REG -> append(reg.string)
-			OpNodeType.IMM -> append(node.printString)
+			OpNodeType.IMM -> { if(width != null) append("${width.string} "); append(node.printString) }
 		}
 	}
 

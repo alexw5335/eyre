@@ -1,14 +1,35 @@
 package eyre
 
+import eyre.util.Util
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.relativeTo
 
 /**
  * Token and node lines aren't working properly
  */
 class Compiler(private val context: CompilerContext) {
+
+	companion object {
+		fun create(directory: String, files: List<String>): Compiler {
+			val srcFiles = files.map {
+				val root = Paths.get(directory)
+				val path = root.resolve(it)
+				val relPath = path.relativeTo(root)
+				SrcFile(path, relPath)
+			}
+
+			val context = CompilerContext(srcFiles)
+			context.loadDllDefFromResources("kernel32")
+			context.loadDllDefFromResources("user32")
+			context.loadDllDefFromResources("gdi32")
+			context.loadDllDefFromResources("msvcrt")
+
+			return Compiler(context)
+		}
+	}
 
 
 	private fun SymbolTable.addDefaultSymbols() {
@@ -56,28 +77,9 @@ class Compiler(private val context: CompilerContext) {
 
 
 
-	private fun run(vararg params: String) {
-		val process = Runtime.getRuntime().exec(params)
-		val reader = BufferedReader(InputStreamReader(process.inputStream))
-
-		while(true) println(reader.readLine() ?: break)
-
-		process.errorReader().readText().let {
-			if(it.isNotEmpty()) {
-				print("\u001B[31m$it\\u001B[0m")
-				error("Process failed")
-			}
-		}
-
-		process.waitFor()
-	}
-
-
-
-
 	private fun dumpbin() {
 		printHeader("DUMPBIN")
-		run("dumpbin", "/ALL", "test.exe")
+		Util.run("dumpbin", "/ALL", "test.exe")
 	}
 
 
@@ -96,7 +98,7 @@ class Compiler(private val context: CompilerContext) {
 			println()
 			printHeader("${symbol.qualifiedName} ($pos, $size)")
 			Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
-			run("ndisasm", "-b64", "test.bin")
+			Util.run("ndisasm", "-b64", "test.bin")
 		}
 
 		println()

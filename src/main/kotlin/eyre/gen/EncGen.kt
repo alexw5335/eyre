@@ -10,14 +10,17 @@ object EncGen {
 
 	private val nasmParser = NasmParser(Files.readAllLines(Paths.get("nasm.txt")))
 
-	private val nasmEncs get() = nasmParser.encs
+	private val nasmEncs: List<NasmEnc>
 
 	private val nasmMap = HashMap<String, ArrayList<NasmEnc>>()
+
+	private val mnemonicsByName = Mnemonic.entries.associateBy { it.name }
 
 
 
 	init {
 		nasmParser.read()
+		nasmEncs = nasmParser.encs.sortedBy { it.mnemonic }
 		for(e in nasmEncs)
 			nasmMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
 	}
@@ -25,9 +28,122 @@ object EncGen {
 
 
 	fun run() {
-		genMnemonics()
+		test()
 	}
 
+
+
+	private fun encsOfType(type: Mnemonic.Type) = nasmEncs
+		.filter { mnemonicsByName[it.mnemonic]!!.type == type }
+
+
+
+	/*
+	Testing
+	 */
+
+
+
+	private fun Op?.toOpNode(rex: Boolean): OpNode? = when(this) {
+		null -> null
+		Op.NONE -> null
+		Op.R8 -> OpNode.reg(if(rex) Reg.R14B else Reg.CL)
+		Op.R16 -> OpNode.reg(if(rex) Reg.R14W else Reg.CX)
+		Op.R32 -> OpNode.reg(if(rex) Reg.R14D else Reg.ECX)
+		Op.R64 -> OpNode.reg(if(rex) Reg.R14 else Reg.RCX)
+		Op.MEM -> OpNode.mem(null, RegNode(Reg.R14))
+		Op.M8 -> OpNode.mem(Width.BYTE, RegNode(Reg.R14))
+		Op.M16 -> OpNode.mem(Width.WORD, RegNode(Reg.R14))
+		Op.M32 -> OpNode.mem(Width.DWORD, RegNode(Reg.R14))
+		Op.M64 -> OpNode.mem(Width.QWORD, RegNode(Reg.R14))
+		Op.M80 -> OpNode.mem(Width.TWORD, RegNode(Reg.R14))
+		Op.M128 -> OpNode.mem(Width.XWORD, RegNode(Reg.R14))
+		Op.M256 -> OpNode.mem(Width.YWORD, RegNode(Reg.R14))
+		Op.M512 -> OpNode.mem(Width.ZWORD, RegNode(Reg.R14))
+		Op.I8 -> OpNode.imm(null, IntNode(10))
+		Op.I16 -> OpNode.imm(null, IntNode(10))
+		Op.I32 -> OpNode.imm(null, IntNode(10))
+		Op.I64 -> OpNode.imm(null, IntNode(10))
+		Op.AL -> OpNode.reg(Reg.AL)
+		Op.AX -> OpNode.reg(Reg.AX)
+		Op.EAX -> OpNode.reg(Reg.EAX)
+		Op.RAX -> OpNode.reg(Reg.RAX)
+		Op.CL -> OpNode.reg(Reg.CL)
+		Op.ECX -> OpNode.reg(Reg.ECX)
+		Op.RCX -> OpNode.reg(Reg.RCX)
+		Op.DX -> OpNode.reg(Reg.DX)
+		Op.REL8 -> OpNode.imm(null, IntNode(10))
+		Op.REL16 -> OpNode.imm(null, IntNode(10))
+		Op.REL32 -> OpNode.imm(null, IntNode(10))
+		Op.ST -> OpNode.reg(Reg.ST3)
+		Op.ST0 -> OpNode.reg(Reg.ST0)
+		Op.ONE -> OpNode.imm(null, IntNode(1))
+		Op.MM -> OpNode.reg(Reg.MM3)
+		Op.X -> OpNode.reg(if(rex) Reg.XMM14 else Reg.XMM3)
+		Op.Y -> OpNode.reg(if(rex) Reg.YMM14 else Reg.YMM3)
+		Op.Z -> OpNode.reg(if(rex) Reg.ZMM14 else Reg.ZMM3)
+		Op.VM32X -> TODO()
+		Op.VM64X -> TODO()
+		Op.VM32Y -> TODO()
+		Op.VM64Y -> TODO()
+		Op.VM32Z -> TODO()
+		Op.VM64Z -> TODO()
+		Op.K -> OpNode.reg(Reg.K3)
+		Op.BND -> OpNode.reg(Reg.BND3)
+		Op.T -> TODO()
+		Op.MOFFS8 -> TODO()
+		Op.MOFFS16 -> TODO()
+		Op.MOFFS32 -> TODO()
+		Op.MOFFS64 -> TODO()
+		Op.SEG -> OpNode.reg(Reg.FS)
+		Op.CR -> OpNode.reg(Reg.CR3)
+		Op.DR -> OpNode.reg(Reg.DR3)
+		Op.FS -> OpNode.reg(Reg.FS)
+		Op.GS -> OpNode.reg(Reg.GS)
+	}
+
+
+
+	private fun test() {
+		val nasmBuilder = StringBuilder()
+		val context = CompilerContext(emptyList())
+		val assembler = Assembler(context)
+		nasmBuilder.appendLine("BITS 64")
+
+		for(e in nasmEncs) {
+			when(e.mnemonic) {
+				"PMULUDQ", "PSUBQ", "PSHUFW", "PSHUFD", "PSHUFHW", "PSHUFLW", "PALIGNR" -> continue
+			}
+			if(e.ops.any { it.type == OpType.MOFFS }) continue
+			if(e.mnemonic in nasmToManualIgnoredMnemonics) continue
+			if(e.isAvx) continue
+
+			val mnemonic = Mnemonic.entries.first { it.name == e.mnemonic }
+
+			val op1 = e.ops.getOrNull(0).toOpNode(false)
+			val op2 = e.ops.getOrNull(1).toOpNode(false)
+			val op3 = e.ops.getOrNull(2).toOpNode(false)
+			val op4 = e.ops.getOrNull(3).toOpNode(false)
+
+			val node = InsNode(
+				null,
+				mnemonic,
+				e.ops.size,
+				op1,
+				op2,
+				op3,
+				op4
+			)
+
+			//assembler.assembleForTesting(node, false)
+
+			nasmBuilder.appendLine(node.printString.replace("xword", "oword"))
+		}
+
+		//Files.write(Paths.get("test.eyre.obj"), context.textWriter.getTrimmedBytes())
+		Files.writeString(Paths.get("test.asm"), nasmBuilder.toString())
+		//Util.run("nasm", "-fwin64", "test.asm")
+	}
 
 
 
@@ -64,6 +180,46 @@ object EncGen {
 
 
 	/*
+	AVX Instruction generation
+	 */
+
+
+
+	fun genAvxEncMap() {
+		val encs = encsOfType(Mnemonic.Type.AVX)
+		val map = HashMap<String, ArrayList<AvxEnc>>()
+
+		fun Op?.toAvxOp() = when(this) {
+			null    -> AvxOp.NONE
+			Op.X    -> AvxOp.X
+			Op.Y    -> AvxOp.Y
+			Op.Z    -> AvxOp.Z
+			Op.R8   -> AvxOp.R8
+			Op.R16  -> AvxOp.R16
+			Op.R32  -> AvxOp.R32
+			Op.R64  -> AvxOp.R64
+			Op.I8   -> AvxOp.I8
+			Op.K    -> AvxOp.K
+			Op.T    -> AvxOp.T
+			Op.MEM  -> AvxOp.MEM
+			Op.M8   -> AvxOp.M8
+			Op.M16  -> AvxOp.M16
+			Op.M32  -> AvxOp.M32
+			Op.M64  -> AvxOp.M64
+			Op.M128 -> AvxOp.M128
+			Op.M256 -> AvxOp.M256
+			Op.M512 -> AvxOp.M512
+			else    -> error("Invalid AVX op")
+		}
+
+		for(e in encs) {
+			
+		}
+	}
+
+
+
+	/*
 	MMX/SSE instruction generation
 	 */
 
@@ -73,7 +229,7 @@ object EncGen {
 	 * Generates a mapping of mnemonics to lists of non-human-readable [SseEnc] values for use in code.
 	 */
 	fun genSseEncMap() {
-		val encs = sseEncs()
+		val encs = encsOfType(Mnemonic.Type.SSE)
 		val map = HashMap<String, ArrayList<SseEnc>>()
 
 		fun Op?.toSseOp() = when(this) {
@@ -141,25 +297,10 @@ object EncGen {
 
 
 	/**
-	 * Gathers the instructions of all mnemonics that contain any MMX/SSE operands
-	 */
-	private fun sseEncs() = buildList {
-		val mnemonics = HashSet<String>()
-		for(n in nasmEncs)
-			if(!n.isAvx && (n.ops.contains(Op.X) || n.ops.contains(Op.MM)))
-				mnemonics += n.mnemonic
-		for(n in nasmEncs)
-			if(n.mnemonic in mnemonics)
-				add(n)
-	}.sortedBy(NasmEnc::mnemonic)
-
-
-
-	/**
 	 * Generates an expanded human-readable list of all MMX/SSE instructions.
 	 */
 	fun genSseEncList() {
-		val encs = sseEncs()
+		val encs = encsOfType(Mnemonic.Type.SSE)
 
 		for(e in encs) {
 			when(e.mnemonic) {

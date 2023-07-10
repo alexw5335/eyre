@@ -241,22 +241,20 @@ enum class VSib {
 
 
 
-enum class VexL {
-	NONE,
-	L128,
-	L256,
-	L512,
-	L0,
-	LZ,
-	L1,
-	LIG;
+enum class VexL(val value: Int) {
+	LIG(0),
+	L0(0),
+	LZ(0),
+	L1(1),
+	L128(1),
+	L256(2),
+	L512(3);
 }
 
 
 
-enum class VexW {
-	NONE,
-	W0,
-	W1,
-	WIG;
+enum class VexW(val value: Int) {
+	WIG(0),
+	W0(0),
+	W1(1);
 }

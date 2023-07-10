@@ -21,6 +21,8 @@ class Assembler(private val context: CompilerContext) {
 
 	private var section = Section.TEXT
 
+	private lateinit var currentIns: InsNode
+
 
 
 	fun assemble() {
@@ -52,7 +54,9 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun invalid(): Nothing = error("Invalid encoding")
+	private fun invalid(): Nothing {
+		error("Invalid encoding: ${currentIns.printString}")
+	}
 
 
 
@@ -74,12 +78,27 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleInstruction(node: InsNode) {
+	fun assembleForTesting(node: InsNode, expectingError: Boolean): Pair<Int, Int> {
+		val start = writer.pos
+		handleInstruction(node)
+		try {
+			handleInstruction(node)
+		} catch(e: Exception) {
+			if(expectingError) return Pair(0, 0)
+			throw e
+		}
+		return Pair(start, writer.pos - start)
+	}
+
+
+
+	fun handleInstruction(node: InsNode) {
+		currentIns = node
+
 		node.prefix?.let { byte(it.value) }
 
-		val sseEncs = Encs.sseEncs[node.mnemonic]
-		if(sseEncs != null) {
-			assembleSse(sseEncs, node.op1 ?: invalid(), node.op2 ?: invalid(), node.op3)
+		if(node.mnemonic.type == Mnemonic.Type.SSE) {
+			assembleSse(Encs.sseEncs[node.mnemonic] ?: invalid(), node.op1, node.op2, node.op3)
 			return
 		}
 
@@ -1369,7 +1388,7 @@ class Assembler(private val context: CompilerContext) {
 		LSS     -> Enc { E0F+0xB2+R1110 }.encode2RMEM(op1.asReg, op2.asMem)
 		LFS     -> Enc { E0F+0xB4+R1110 }.encode2RMEM(op1.asReg, op2.asMem)
 		LGS     -> Enc { E0F+0xB5+R1110 }.encode2RMEM(op1.asReg, op2.asMem)
-		POPCNT  -> Enc { PF3+E0F+0xB8 }.encode2RRM(op1.asReg, op2, 0)
+		POPCNT  -> Enc { PF3+E0F+0xB8+R1110 }.encode2RRM(op1.asReg, op2, 0)
 		BSF     -> Enc { E0F+0xBC+R1110 }.encode2RRM(op1.asReg, op2, 0)
 		BSR     -> Enc { E0F+0xBD+R1110 }.encode2RRM(op1.asReg, op2, 0)
 		TZCNT   -> Enc { PF3+E0F+0xBC+R1110 }.encode2RRM(op1.asReg, op2, 0)
@@ -1431,7 +1450,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun assembleSse(encodings: IntArray, op1: OpNode, op2: OpNode, op3: OpNode?) {
+	private fun assembleSse(encodings: IntArray, op1: OpNode?, op2: OpNode?, op3: OpNode?) {
 		fun enc(op1: SseOp, op2: SseOp, i8: Boolean): SseEnc {
 			val ops = SseEnc.makeOps(op1, op2, if(i8) 1 else 0)
 			for(e in encodings)
@@ -1441,6 +1460,12 @@ class Assembler(private val context: CompilerContext) {
 		}
 
 		val i8 = op3 != null && op3.isImm
+
+		if(op1 == null || op2 == null) {
+			if(op1 != null || op2 != null) invalid()
+			byte(enc(SseOp.NONE, SseOp.NONE, false).opcode)
+			return
+		}
 
 		when(op1.type) {
 			REG -> when(op2.type) {

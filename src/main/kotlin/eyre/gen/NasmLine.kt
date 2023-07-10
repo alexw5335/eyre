@@ -33,10 +33,10 @@ class NasmLine(val raw: RawNasmLine) {
 	var vsib: VSib? = null
 	var is4 = false
 	var tuple: TupleType? = null
-	var k = false
-	var z = false
+	var k   = false
+	var z   = false
 	var sae = false
-	var er = false
+	var er  = false
 	var b16 = false
 	var b32 = false
 	var b64 = false
@@ -46,8 +46,8 @@ class NasmLine(val raw: RawNasmLine) {
 	var ndd = false
 	var dds = false
 	var star = false
-	var vexl = VexL.NONE
-	var vexw = VexW.NONE
+	var vexl = VexL.LIG
+	var vexw = VexW.WIG
 	var map5 = false
 	var map6 = false
 

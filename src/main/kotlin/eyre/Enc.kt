@@ -95,22 +95,23 @@ inline fun Enc(block: Enc.Companion.() -> Int) = Enc(block(Enc))
 
 
 class AvxEnc(
-	val opcode: Int,
-	val prefix: Prefix,
-	val escape: Escape,
-	val ext: Int,
-	val op1: AvxOp,
-	val op2: AvxOp,
-	val op3: AvxOp,
-	val op4: AvxOp,
-	val vl: Int,
-	val vw: Int,
-	val tt: TupleType,
-	val opEnc: AvxOpEnc,
-	val sae: Boolean,
-	val er: Boolean,
-	val bcst: Int,
-	val vsib: Int
+	val opcode : Int,
+	val prefix : Prefix,
+	val escape : Escape,
+	val ext    : Int,
+	val op1    : AvxOp,
+	val op2    : AvxOp,
+	val op3    : AvxOp,
+	val op4    : AvxOp,
+	val vl     : Int,
+	val vw     : Int,
+	val tt     : TupleType,
+	val opEnc  : AvxOpEnc,
+	val sae    : Boolean,
+	val er     : Boolean,
+	val bcst   : Int,
+	val vsib   : Int,
+	val evex   : Boolean
 )
 
 
@@ -134,6 +135,7 @@ value class AvxEnc(val value: Long) {
 		const val ER_POS     = 48 // 1
 		const val BCST_POS   = 49 // 2  NONE B16 B32 B64
 		const val VSIB_POS   = 51 // 2  X Y Z (mem op must be DWORD or QWORD)
+		const val EVEX_POS   = 53 // 1
 	}
 }*/
 

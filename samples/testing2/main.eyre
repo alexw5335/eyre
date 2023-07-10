@@ -1,10 +1,5 @@
 namespace main
 
 proc main {
-	paddq mm1, mm2
-	paddq mm3, [rax]
-	paddq mm4, qword [rax]
-	paddq xmm4, xmm12
-	paddq xmm14, [rax]
-	paddq xmm15, xword [rax]
+	adc eax, ecx
 }

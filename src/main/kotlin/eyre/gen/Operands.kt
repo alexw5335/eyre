@@ -72,7 +72,8 @@ enum class OpType {
 	ST,
 	MISC,
 	REL,
-	VM;
+	VM,
+	MOFFS;
 }
 
 
@@ -138,10 +139,10 @@ enum class Op(val type: OpType, val width: Width?) {
 
 	T(OpType.MISC, null),
 
-	MOFFS8(OpType.MISC, BYTE),
-	MOFFS16(OpType.MISC, WORD),
-	MOFFS32(OpType.MISC, DWORD),
-	MOFFS64(OpType.MISC, QWORD),
+	MOFFS8(OpType.MOFFS, BYTE),
+	MOFFS16(OpType.MOFFS, WORD),
+	MOFFS32(OpType.MOFFS, DWORD),
+	MOFFS64(OpType.MOFFS, QWORD),
 
 	SEG(OpType.MISC, null),
 

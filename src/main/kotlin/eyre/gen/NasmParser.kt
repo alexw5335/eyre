@@ -62,11 +62,11 @@ class NasmParser(private val inputs: List<String>) {
 
 
 	private fun filterLine(line: RawNasmLine) = when {
+		line.mnemonic in EncGenLists.essentialMnemonics -> true
 		(line.mnemonic == "PINSRB" || line.mnemonic == "PINSRW") && "mem" in line.operands -> false
 		line.mnemonic == "PUSH" && line.operands[0] == "imm64" -> false
 		"r+mi:" in line.parts -> false
 		line.mnemonic == "aw" -> true
-		line.mnemonic in EncGenLists.essentialMnemonics -> true
 		"ND" in line.extras && line.operands[0] != "void" -> false
 		line.mnemonic in EncGenLists.invalidMnemonics -> false
 		EncGenLists.invalidExtras.any(line.extras::contains) -> false

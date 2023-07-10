@@ -172,7 +172,8 @@ object EncGenLists {
 		"SYSCALL",
 		"SYSRET",
 		"LZCNT",
-		"PRETETCHW"
+		"PREFETCHW",
+		"SAL"
 	)
 
 	val invalidExtras = setOf(

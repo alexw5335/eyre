@@ -2,6 +2,7 @@ package eyre
 
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
+import kotlin.enums.EnumEntries
 
 
 interface Intern {
@@ -11,7 +12,7 @@ interface Intern {
 
 
 
-class InternRange<T>(private val range: IntRange, private val elements: Array<T>) {
+class InternRange<T>(private val range: IntRange, private val elements: List<T>) {
 	operator fun contains(intern: Name) = intern.id in range
 	operator fun get(intern: Name) = elements[intern.id - range.first]
 }
@@ -70,18 +71,18 @@ object Names : Interner<String, Name>() {
 
 	operator fun get(key: String) = map[key] ?: addInternal(key, Name(count++, key.hashCode(), key))
 
-	private fun<T> createRange(elements: Array<T>, supplier: (T) -> String?): InternRange<T> {
+	private fun<T : Enum<T>> createRange(elements: EnumEntries<T>, supplier: (T) -> String?): InternRange<T> {
 		val range = IntRange(count, count + elements.size - 1)
 		for(e in elements) supplier(e)?.let(::add)
 		return InternRange(range, elements)
 	}
 
-	val keywords     = createRange(Keyword.values(), Keyword::string)
-	val widths       = createRange(Width.values(), Width::string)
-	val varWidths    = createRange(Width.values(), Width::varString)
-	val registers    = createRange(Reg.values(), Reg::string)
-	val prefixes     = createRange(InsPrefix.values(), InsPrefix::string)
-	val mnemonics    = createRange(Mnemonic.values(), Mnemonic::string)
+	val keywords     = createRange(Keyword.entries, Keyword::string)
+	val widths       = createRange(Width.entries, Width::string)
+	val varWidths    = createRange(Width.entries, Width::varString)
+	val registers    = createRange(Reg.entries, Reg::string)
+	val prefixes     = createRange(InsPrefix.entries, InsPrefix::string)
+	val mnemonics    = createRange(Mnemonic.entries, Mnemonic::string)
 
 	val EMPTY = add("")
 	val MAIN  = add("main")
