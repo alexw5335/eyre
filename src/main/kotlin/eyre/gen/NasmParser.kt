@@ -211,21 +211,21 @@ class NasmParser(private val inputs: List<String>) {
 			if(string.endsWith("|rs2"))  { line.rs2  = true; string = string.dropLast(4) }
 			if(string.endsWith("|rs4"))  { line.rs4  = true; string = string.dropLast(4) }
 
-			val multi: Pair<Op, Op>? = when(string) {
+			val multi: NasmMultiOp? = when(string) {
 				in EncGenLists.multiOps -> EncGenLists.multiOps[string]!!
 
 				"xmmrm" -> when(widths[i]) {
-					Width.DWORD -> Op.X to Op.M32
-					Width.QWORD -> Op.X to Op.M64
-					Width.XWORD -> Op.X to Op.M128
-					null        -> Op.X to Op.M128
+					Width.DWORD -> NasmMultiOp.XM32
+					Width.QWORD -> NasmMultiOp.XM64
+					Width.XWORD -> NasmMultiOp.XM128
+					null        -> NasmMultiOp.XM128
 					else        -> line.raw.error("Invalid width: ${widths[i]}")
 				}
 
 				"mmxrm" -> when(widths[i]) {
-					Width.QWORD -> Op.MM to Op.M64
+					Width.QWORD -> NasmMultiOp.MMM64
 					Width.XWORD -> if(line.mnemonic == "PMULUDQ" || line.mnemonic == "PSUBQ")
-						Op.MM to Op.M64
+						NasmMultiOp.MMM64
 					else
 						line.raw.error("Invalid width: ${widths[i]}")
 					else -> line.raw.error("Invalid width: ${widths[i]}")
@@ -238,8 +238,7 @@ class NasmParser(private val inputs: List<String>) {
 				if(line.multiIndex >= 0) 
 					line.raw.error("Multiple multi ops")
 				line.multiIndex = line.ops.size
-				line.multi1 = multi.first
-				line.multi2 = multi.second
+				line.multi = multi
 				line.ops.add(Op.NONE)
 				continue
 			}
@@ -309,22 +308,34 @@ class NasmParser(private val inputs: List<String>) {
 			line.prefix,
 			line.escape,
 			opcode,
-			line.ext,
-			ArrayList(line.ops),
+			line.ext.coerceAtLeast(0),
+			line.ext >= 0,
+			line.extensions,
+			line.enc,
+			ArrayList<Op>(line.ops),
+			ArrayList<OpKind>(line.ops).also { if(line.multi != null) it[line.multiIndex] = line.multi!! },
 			line.rexw,
 			line.o16,
 			line.pseudo,
 			line.enc in EncGenLists.mrEncs,
+			line.vexw,
+			line.vexl,
+			line.tuple,
+			line.sae,
+			line.er,
+			when { line.b16 -> 1; line.b32 -> 2; line.b64 -> 3; else -> 0 },
+			line.vsib,
+			line.k,
+			line.z,
 			line.vex != null,
-			line.extensions,
-			line.enc
+			line.isEvex
 		))
 
 		fun addMulti(mnemonic: String, opcode: Int) {
-			if(line.multiIndex >= 0) {
-				line.ops[line.multiIndex] = line.multi1
+			if(line.multi != null) {
+				line.ops[line.multiIndex] = line.multi!!.first
 				add(mnemonic, opcode)
-				line.ops[line.multiIndex] = line.multi2
+				line.ops[line.multiIndex] = line.multi!!.second
 				add(mnemonic, opcode)
 			} else {
 				add(mnemonic, opcode)

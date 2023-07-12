@@ -10,32 +10,9 @@ object EncGenLists {
 	val immTypes   = ImmType.entries.associateBy { it.name.lowercase().replace('_', ',') }
 	val tupleTypes = TupleType.entries.associateBy { it.name.lowercase() }
 	val opEncs     = OpEnc.entries.associateBy { it.string }
+	val multiOps   = NasmMultiOp.entries.associateBy { it.string }
 
 	val mrEncs = setOf(OpEnc.MR, OpEnc.MRN, OpEnc.MRX, OpEnc.MRI)
-
-	val multiOps = mapOf(
-		"rm8" to Pair(Op.R8, Op.M8),
-		"rm16" to Pair(Op.R16, Op.M16),
-		"rm32" to Pair(Op.R32, Op.M32),
-		"rm64" to Pair(Op.R64, Op.M64),
-		"mmxrm64" to Pair(Op.MM, Op.M64),
-		"xmmrm8" to Pair(Op.X, Op.M8),
-		"xmmrm16" to Pair(Op.X, Op.M16),
-		"xmmrm32" to Pair(Op.X, Op.M32),
-		"xmmrm64" to Pair(Op.X, Op.M64),
-		"xmmrm128" to Pair(Op.X, Op.M128),
-		"xmmrm256" to Pair(Op.X, Op.M256),
-		"ymmrm16" to Pair(Op.Y, Op.M16),
-		"ymmrm128" to Pair(Op.Y, Op.M128),
-		"ymmrm256" to Pair(Op.Y, Op.M256),
-		"zmmrm16" to Pair(Op.Z, Op.M16),
-		"zmmrm128" to Pair(Op.Z, Op.M128),
-		"zmmrm512" to Pair(Op.Z, Op.M512),
-		"krm8" to Pair(Op.K, Op.M8),
-		"krm16" to Pair(Op.K, Op.M16),
-		"krm32" to Pair(Op.K, Op.M32),
-		"krm64" to Pair(Op.K, Op.M64)
-	)
 	
 	val ops = mapOf(
 		"reg8" to Op.R8,

@@ -167,20 +167,20 @@ class DllDef(val name: Name, val exports: Set<Name>)
 
 
 
-enum class Prefix(val value: Int, val string: String?, val avxString: String) {
-	NONE(0, null, "NP"),
-	P66(0x66, "66", "66"),
-	PF2(0xF2, "F2", "F2"),
-	PF3(0xF3, "F3", "F3"),
-	P9B(0x9B, "9B", "9B"),
-	P67(0x67, "67", "67");
+enum class Prefix(val avxValue: Int, val value: Int, val string: String?, val avxString: String) {
+	NONE(0, 0, null, "NP"),
+	P66(1, 0x66, "66", "66"),
+	PF2(3, 0xF2, "F2", "F2"),
+	PF3(2, 0xF3, "F3", "F3"),
+	P9B(0, 0x9B, "9B", "9B"),
+	P67(0, 0x67, "67", "67");
 }
 
 
 
-enum class Escape(val string: String?, val avxString: String) {
-	NONE(null, "NE"),
-	E0F("0F", "0F"),
-	E38("0F 38", "38"),
-	E3A("0F 3A", "3A");
+enum class Escape(val avxValue: Int, val string: String?, val avxString: String) {
+	NONE(0, null, "NE"),
+	E0F(1, "0F", "0F"),
+	E38(2, "0F 38", "38"),
+	E3A(3, "0F 3A", "3A");
 }

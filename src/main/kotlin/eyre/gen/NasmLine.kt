@@ -52,12 +52,11 @@ class NasmLine(val raw: RawNasmLine) {
 	var map6 = false
 
 	val ops = ArrayList<Op>()
-	var multi1 = Op.NONE
-	var multi2 = Op.NONE
+	var multi: NasmMultiOp? = null
 	var multiIndex = -1
 
 	fun addOpcode(value: Int) {
-		if(oplen == 0) when(value) {
+		if(vex == null && oplen == 0) when(value) {
 			0x0F -> if(escape == Escape.NONE) { escape = Escape.E0F; return }
 			0x38 -> if(escape == Escape.E0F) { escape = Escape.E38; return }
 			0x3A -> if(escape == Escape.E0F) { escape = Escape.E3A; return }

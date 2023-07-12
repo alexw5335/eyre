@@ -1,7 +1,11 @@
 package eyre
 
+import eyre.gen.EncGen
+
 object Encs {
 
+
+	val avxEncs = EncGen.genAvxEncMap()
 
 	val sseEncs = mapOf<Mnemonic, IntArray>(
 		Mnemonic.PCMPESTRM to intArrayOf(17897824, 29432160, 24189280),

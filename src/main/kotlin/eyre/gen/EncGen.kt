@@ -1,6 +1,7 @@
 package eyre.gen
 
 import eyre.*
+import eyre.util.Unique
 import eyre.util.hexc8
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -28,7 +29,9 @@ object EncGen {
 
 
 	fun run() {
-		test()
+		for(e in nasmEncs)
+			if(e.exts.singleOrNull() == NasmExt.AVX)
+				println(e.compactAvxString())
 	}
 
 
@@ -116,7 +119,7 @@ object EncGen {
 			}
 			if(e.ops.any { it.type == OpType.MOFFS }) continue
 			if(e.mnemonic in nasmToManualIgnoredMnemonics) continue
-			if(e.isAvx) continue
+			if(e.avx) continue
 
 			val mnemonic = Mnemonic.entries.first { it.name == e.mnemonic }
 
@@ -158,7 +161,7 @@ object EncGen {
 
 		for(e in nasmEncs) {
 			when {
-				e.isAvx ->
+				e.avx ->
 					mnemonics[e.mnemonic] = Mnemonic.Type.AVX
 				Op.X in e.ops || Op.MM in e.ops ->
 					if(mnemonics[e.mnemonic] != Mnemonic.Type.AVX)
@@ -185,9 +188,9 @@ object EncGen {
 
 
 
-	fun genAvxEncMap() {
+	fun genAvxEncMap(): Map<Mnemonic, List<AvxEnc>> {
 		val encs = encsOfType(Mnemonic.Type.AVX)
-		val map = HashMap<String, ArrayList<AvxEnc>>()
+		val map = HashMap<Mnemonic, ArrayList<AvxEnc>>()
 
 		fun Op?.toAvxOp() = when(this) {
 			null    -> AvxOp.NONE
@@ -209,12 +212,72 @@ object EncGen {
 			Op.M128 -> AvxOp.M128
 			Op.M256 -> AvxOp.M256
 			Op.M512 -> AvxOp.M512
-			else    -> error("Invalid AVX op")
+			Op.VM32X, Op.VM32Y, Op.VM32Z -> AvxOp.M32
+			Op.VM64X, Op.VM64Y, Op.VM64Z -> AvxOp.M64
+			else    -> error("Invalid AVX op: $this")
+		}
+
+		fun OpEnc.toAvxOpEnc(): AvxOpEnc = when(this) {
+			OpEnc.NONE -> AvxOpEnc.NONE
+			OpEnc.M -> AvxOpEnc.M
+			OpEnc.R -> AvxOpEnc.R
+			OpEnc.RMI,
+			OpEnc.RM -> AvxOpEnc.RM
+			OpEnc.MRI,
+			OpEnc.MR -> AvxOpEnc.MR
+			OpEnc.VMI,
+			OpEnc.VM -> AvxOpEnc.VM
+			OpEnc.RVMI,
+			OpEnc.RVM -> AvxOpEnc.RVM
+			OpEnc.MVR -> AvxOpEnc.MVR
+			OpEnc.RMVI,
+			OpEnc.RMV -> AvxOpEnc.RMV
+			OpEnc.RVMS -> AvxOpEnc.RVMS
+			else -> error("Invalid avx op enc: $this")
 		}
 
 		for(e in encs) {
-			
+			val avxEnc = AvxEnc(
+				e.opcode,
+				e.prefix,
+				e.escape,
+				e.ext,
+				e.hasExt,
+				e.ops.map { it.toAvxOp() },
+				e.ops.getOrNull(0).toAvxOp(),
+				e.ops.getOrNull(1).toAvxOp(),
+				e.ops.getOrNull(2).toAvxOp(),
+				e.ops.getOrNull(3).toAvxOp(),
+				e.vexl.value,
+				e.vexw.value,
+				e.tuple,
+				e.opEnc.toAvxOpEnc(),
+				e.sae,
+				e.er,
+				e.bcst,
+				e.vsib,
+				e.k,
+				e.z,
+				e.evex
+			)
+
+			map.getOrPut(mnemonicsByName[e.mnemonic]!!, ::ArrayList) += avxEnc
 		}
+
+		val toAdd = ArrayList<AvxEnc>()
+
+		for((_, list) in map) {
+			for(e in list)
+				if(e.op1.isM || e.op2.isM)
+					if(list.none { it.equalExceptMem(e) })
+						toAdd += e.withoutMemWidth()
+			if(toAdd.isNotEmpty()) {
+				list += toAdd
+				toAdd.clear()
+			}
+		}
+
+		return map
 	}
 
 
@@ -267,7 +330,7 @@ object EncGen {
 				op1,
 				op2,
 				if(i8) 1 else 0,
-				e.rexw,
+				e.rw,
 				e.o16,
 				if(e.mr) 1 else 0
 			)
@@ -333,7 +396,7 @@ object EncGen {
 				append(" ")
 				if(e.mr) append(" MR")
 				if(e.o16 == 1) append(" O16")
-				if(e.rexw == 1) append(" RW")
+				if(e.rw == 1) append(" RW")
 				if(e.pseudo >= 0) append(" :${e.pseudo}")
 			}.let(::println)
 		}

@@ -1905,7 +1905,16 @@ enum class Mnemonic(val type: Type) {
 	XSUSLDTRK(Type.GP),
 	XTEST(Type.GP);
 
-	enum class Type { GP, SSE, AVX, PSEUDO }
+	enum class Type {
+		/** Mnemonic does not fit into any of the other types */
+		GP,
+		/** Mnemonic has at least one encoding that contains an MM or XMM register */
+		SSE,
+		/** Mnemonic has at least one encoding that uses VEX or EVEX */
+		AVX,
+		/** Mnemonic is specific to the Eyre assembly language */
+		PSEUDO
+	}
 
 	val string = name.lowercase()
 

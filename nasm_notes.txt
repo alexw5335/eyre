@@ -308,6 +308,7 @@ if_("AMD",               "AMD-specific");
 - f3i: Only used 10 times, just add f3 to the front of the opcode?
 - ERROR? PMULUDQ and PSUBQ with MMX registers should be SQ not SO
 - ERROR? PSHUFW/PSHUFD/PSHUFHW/PSHUFLW/PALIGNR with explicit memory width causes error
+- ERROR? Intel manual gives tuple type for VEX instruction VCVTTSD2SI
 
 - If prefix (66, F2, F3), escape (0F, 0F 38, 0F 3A) and wait (9B) are removed, then opcodes don't exceed 2 bytes
 	- 5 FPU instructions start with 9B and have two other opcode bytes

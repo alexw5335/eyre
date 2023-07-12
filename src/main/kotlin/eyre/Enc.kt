@@ -20,19 +20,16 @@ import eyre.util.hexc8
  * - Bits 22-22: REX.W
  * - Bits 23-23: Mismatch
  */
-class Enc(val value: Int) {
+@JvmInline
+value class Enc(val value: Int) {
 
-	val opcode get() = ((value shr OPCODE_POS) and 0xFFFF)
+	val opcode get() = ((value shr OPCODE_POS) and 0xFF)
 	val escape get() = ((value shr ESCAPE_POS) and 0b111)
 	val prefix get() = ((value shr PREFIX_POS) and 0b111)
-	val ext    get() = ((value shr EXT_POS) and 0b1111)
-	val mask   get() = ((value shr MASK_POS) and 0b1111).let(::OpMask)
-	val rexw   get() = ((value shr REXW_POS) and 0b1)
-	val mm     get() = ((value shr MM_POS) and 0b1)
-
-	fun withP66() = Enc(value or P66)
-
-	val length get() = 1 + (((opcode + 255) and -256) and 1)
+	val ext    get() = ((value shr EXT_POS)    and 0xF)
+	val mask   get() = ((value shr MASK_POS)   and 0xF).let(::OpMask)
+	val rexw   get() = ((value shr REXW_POS)   and 0b1)
+	val mm     get() = ((value shr MM_POS)     and 0b1)
 
 	companion object {
 
@@ -94,25 +91,55 @@ inline fun Enc(block: Enc.Companion.() -> Int) = Enc(block(Enc))
 
 
 
-class AvxEnc(
+
+data class AvxEnc(
 	val opcode : Int,
 	val prefix : Prefix,
 	val escape : Escape,
 	val ext    : Int,
+	val hasExt : Boolean,
+	val ops    : List<AvxOp>,
 	val op1    : AvxOp,
 	val op2    : AvxOp,
 	val op3    : AvxOp,
 	val op4    : AvxOp,
-	val vl     : Int,
-	val vw     : Int,
-	val tt     : TupleType,
+	val l      : Int,
+	val w      : Int,
+	val tuple  : TupleType?,
 	val opEnc  : AvxOpEnc,
 	val sae    : Boolean,
 	val er     : Boolean,
 	val bcst   : Int,
-	val vsib   : Int,
+	val vsib   : VSib?,
+	val k      : Boolean,
+	val z      : Boolean,
 	val evex   : Boolean
-)
+) {
+
+	fun equalExceptMem(other: AvxEnc): Boolean {
+		if(other.ops.size != ops.size)
+			return false
+		for(i in ops.indices)
+			if(other.ops[i] != ops[i])
+				return other.ops[i].isM && ops[i].isM
+		return false
+	}
+
+	fun withoutMemWidth(): AvxEnc {
+		val index = ops.indexOfFirst { it.isM }
+		val copyOps = ArrayList(ops)
+		copyOps[index] = AvxOp.MEM
+		return when(index) {
+			0    -> copy(ops = copyOps, op1 = AvxOp.MEM)
+			1    -> copy(ops = copyOps, op2 = AvxOp.MEM)
+			2    -> copy(ops = copyOps, op3 = AvxOp.MEM)
+			3    -> copy(ops = copyOps, op4 = AvxOp.MEM)
+			else -> error("Invalid index")
+		}
+	}
+
+}
+
 
 
 

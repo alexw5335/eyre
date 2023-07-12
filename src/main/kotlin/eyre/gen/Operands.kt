@@ -78,7 +78,37 @@ enum class OpType {
 
 
 
-enum class Op(val type: OpType, val width: Width?) {
+sealed interface OpKind
+
+
+
+enum class NasmMultiOp(val string: String, val first: Op, val second: Op) : OpKind {
+	RM8("rm8", Op.R8, Op.M8),
+	RM16("rm16", Op.R16, Op.M16),
+	RM32("rm32", Op.R32, Op.M32),
+	RM64("rm64", Op.R64, Op.M64),
+	MMM64("mmxrm64", Op.MM, Op.M64),
+	XM8("xmmrm8", Op.X, Op.M8),
+	XM16("xmmrm16", Op.X, Op.M16),
+	XM32("xmmrm32", Op.X, Op.M32),
+	XM64("xmmrm64", Op.X, Op.M64),
+	XM128("xmmrm128", Op.X, Op.M128),
+	XM256("xmmrm256", Op.X, Op.M256),
+	YM16("ymmrm16", Op.Y, Op.M16),
+	YM128("ymmrm128", Op.Y, Op.M128),
+	YM256("ymmrm256", Op.Y, Op.M256),
+	ZM16("zmmrm16", Op.Z, Op.M16),
+	ZM128("zmmrm128", Op.Z, Op.M128),
+	ZM512("zmmrm512", Op.Z, Op.M512),
+	KM8("krm8", Op.K, Op.M8),
+	KM16("krm16", Op.K, Op.M16),
+	KM32("krm32", Op.K, Op.M32),
+	KM64("krm64", Op.K, Op.M64);
+}
+
+
+
+enum class Op(val type: OpType, val width: Width?) : OpKind {
 
 	NONE(OpType.MISC, null),
 

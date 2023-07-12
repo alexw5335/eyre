@@ -4,9 +4,9 @@ import eyre.util.NativeWriter
 import eyre.Width.*
 import eyre.OpNodeType.*
 import eyre.Mnemonic.*
+import eyre.gen.AvxOp
+import eyre.gen.AvxOpEnc
 import eyre.gen.SseOp
-import eyre.util.bin32
-import eyre.util.bin8888
 
 class Assembler(private val context: CompilerContext) {
 
@@ -99,15 +99,16 @@ class Assembler(private val context: CompilerContext) {
 
 		if(node.mnemonic.type == Mnemonic.Type.SSE) {
 			assembleSse(Encs.sseEncs[node.mnemonic] ?: invalid(), node.op1, node.op2, node.op3)
-			return
-		}
-
-		when(node.size) {
-			0    -> assemble0(node)
-			1    -> assemble1(node, node.op1!!)
-			2    -> assemble2(node, node.op1!!, node.op2!!)
-			3    -> assemble3(node, node.op1!!, node.op2!!, node.op3!!)
-			else -> invalid()
+		} else if(node.mnemonic.type == Mnemonic.Type.AVX) {
+			assembleAvx(Encs.avxEncs[node.mnemonic] ?: invalid(), node.op1, node.op2, node.op3, node.op4)
+		} else {
+			when(node.size) {
+				0    -> assemble0(node)
+				1    -> assemble1(node, node.op1!!)
+				2    -> assemble2(node, node.op1!!, node.op2!!)
+				3    -> assemble3(node, node.op1!!, node.op2!!, node.op3!!)
+				else -> invalid()
+			}
 		}
 	}
 
@@ -398,7 +399,9 @@ class Assembler(private val context: CompilerContext) {
 	private var memRelocCount = 0
 	private val hasMemReloc get() = memRelocCount > 0
 	private val indexRex get() = indexReg?.rex ?: 0
+	private val indexVexRex get() = (indexReg?.rex ?: 0).inv() and 1
 	private val baseRex get() = baseReg?.rex ?: 0
+	private val baseVexRex get() = (baseReg?.rex ?: 0).inv() and 1
 
 
 
@@ -570,8 +573,17 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun dword(value: Int) = writer.i32(value)
 
-	private fun Any.pseudo(value: Int) = byte(value)
-	
+	/** [r]: ~REX.R (reg), [x]: ~REX.X (index), [b]: ~REX.B (rm, base, opreg), [esc]: Opcode escape */
+	private fun writeVEX1(r: Int, x: Int, b: Int, esc: Int) {
+		byte((r shl 7) or (x shl 6) or (b shl 5) or esc)
+	}
+
+	/** [w]: VEX.W, [vvvv]: register, [l]: 128-bit or 256-bit, [pp]: SIMD prefix */
+	private fun writeVEX2(w: Int, vvvv: Int, l: Int, pp: Int) {
+		byte((w shl 7) or (vvvv shl 3) or (l shl 2) or pp)
+	}
+
+
 	/** [w]: 64-bit override [r]: REG, [x]: INDEX, [b]: RM, BASE, or OPREG */
 	private fun writeRex(w: Int, r: Int, x: Int, b: Int) {
 		val value = 0b0100_0000 or (w shl 3) or (r shl 2) or (x shl 1) or b
@@ -1441,6 +1453,102 @@ class Assembler(private val context: CompilerContext) {
 		SHRD -> encodeSHLD(0xAC, op1, op2.asReg, op3)
 		else -> invalid()
 	}}
+
+
+
+	/*
+	AVX
+	 */
+
+
+
+	private fun OpNode?.toAvxOp(): AvxOp = when {
+		this == null -> AvxOp.NONE
+		type == REG -> when(reg.type) {
+			RegType.R8  -> AvxOp.R8
+			RegType.R16 -> AvxOp.R16
+			RegType.R32 -> AvxOp.R32
+			RegType.R64 -> AvxOp.R64
+			RegType.X   -> AvxOp.X
+			RegType.Y   -> AvxOp.Y
+			RegType.Z   -> AvxOp.Z
+			RegType.K   -> AvxOp.K
+			RegType.T   -> AvxOp.T
+			else        -> invalid()
+		}
+		type == MEM -> when(width) {
+			null  -> AvxOp.MEM
+			BYTE  -> AvxOp.M8
+			WORD  -> AvxOp.M16
+			DWORD -> AvxOp.M32
+			QWORD -> AvxOp.M64
+			XWORD -> AvxOp.M128
+			YWORD -> AvxOp.M256
+			ZWORD -> AvxOp.M512
+			else  -> invalid()
+		}
+		type == IMM -> AvxOp.I8
+		else -> invalid()
+	}
+
+
+
+	private fun assembleAvx(encodings: List<AvxEnc>, op1: OpNode?, op2: OpNode?, op3: OpNode?, op4: OpNode?) {
+		val high = (op1?.high ?: 0) or (op2?.high ?: 0) or (op3?.high ?: 0) or (op4?.high ?: 0) != 0
+		if(high) invalid()
+		val avxOp1 = op1.toAvxOp()
+		val avxOp2 = op2.toAvxOp()
+		val avxOp3 = op3.toAvxOp()
+		val avxOp4 = op4.toAvxOp()
+		val enc = encodings.firstOrNull {
+			it.op1 == avxOp1 && it.op2 == avxOp2 && it.op3 == avxOp3 && it.op4 == avxOp4
+		} ?: invalid()
+		when {
+			op1 == null -> invalid()
+			op2 == null -> invalid()
+			op3 == null -> if(op1.isReg && op2.isReg)
+				encodeAvx2RR(enc, op1.reg, op2.reg)
+			else if(op1.isReg && op2.isMem)
+				encodeAvx2RM(enc, op1.reg, op2)
+			else invalid()
+			op4 == null -> invalid()
+			else        -> invalid()
+		}
+	}
+
+
+
+	private fun encodeAvx2RR(enc: AvxEnc, op1: Reg, op2: Reg) {
+		byte(0xC4)
+
+		if(enc.opEnc == AvxOpEnc.VM) {
+			writeVEX1(1, 1, op2.vexRex, enc.escape.avxValue)
+			writeVEX2(enc.w, op1.vexValue, enc.l, enc.prefix.avxValue)
+			byte(enc.opcode)
+			writeModRM(0b11, enc.ext, op2.value)
+		} else if(enc.opEnc == AvxOpEnc.RM) {
+			writeVEX1(op1.vexRex, 1, op2.vexRex, enc.escape.avxValue)
+			writeVEX2(enc.w, 0b1111, enc.l, enc.prefix.avxValue)
+			byte(enc.opcode)
+			writeModRM(0b11, op1.value, op2.value)
+		} else {
+			writeVEX1(op2.vexRex, 1, op1.vexRex, enc.escape.avxValue)
+			writeVEX2(enc.w, 0b1111, enc.l, enc.prefix.avxValue)
+			byte(enc.opcode)
+			writeModRM(0b11, op2.value, op1.value)
+		}
+	}
+
+
+
+	private fun encodeAvx2RM(enc: AvxEnc, op1: Reg, op2: OpNode) {
+		val disp = resolveMem(op2.node)
+		byte(0xC4)
+		writeVEX1(op1.vexRex, indexVexRex, baseVexRex, enc.escape.avxValue)
+		writeVEX2(enc.w, 0b1111, enc.l, enc.prefix.avxValue)
+		byte(enc.opcode)
+		writeMem(op2.node, op1.value, disp, 0)
+	}
 
 
 

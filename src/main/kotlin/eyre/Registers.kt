@@ -45,6 +45,7 @@ enum class RegType {
 	Z,
 	MM,
 	K,
+	T,
 	SEG,
 	BND,
 	CR,
@@ -403,9 +404,21 @@ enum class Reg(
 	BND0(RegType.BND, Width.XWORD, 0, 0, 0),
 	BND1(RegType.BND, Width.XWORD, 1, 0, 0),
 	BND2(RegType.BND, Width.XWORD, 2, 0, 0),
-	BND3(RegType.BND, Width.XWORD, 3, 0, 0);
+	BND3(RegType.BND, Width.XWORD, 3, 0, 0),
+
+	TMM0(RegType.T, Width.BYTE, 0, 0, 0),
+	TMM1(RegType.T, Width.BYTE, 1, 0, 0),
+	TMM2(RegType.T, Width.BYTE, 2, 0, 0),
+	TMM3(RegType.T, Width.BYTE, 3, 0, 0),
+	TMM4(RegType.T, Width.BYTE, 4, 0, 0),
+	TMM5(RegType.T, Width.BYTE, 5, 0, 0),
+	TMM6(RegType.T, Width.BYTE, 6, 0, 0),
+	TMM7(RegType.T, Width.BYTE, 7, 0, 0);
 
 	val string = name.lowercase()
+
+	val vexRex get() = rex.inv() and 1
+	val vexValue get() = (value or (rex shl 3)).inv() and 0b1111
 
 	val isR = type in OpMask.R1111
 	val isA = isR && value == 0 && rex == 0
