@@ -1916,6 +1916,10 @@ enum class Mnemonic(val type: Type) {
 		PSEUDO
 	}
 
+	val isGp  get() = type == Type.GP
+	val isSse get() = type == Type.SSE
+	val isAvx get() = type == Type.AVX
+
 	val string = name.lowercase()
 
 }

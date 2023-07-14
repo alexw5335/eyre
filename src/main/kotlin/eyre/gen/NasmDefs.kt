@@ -83,7 +83,7 @@ enum class NasmExt {
 	BMI2,
 	// 14, GP
 	CET,
-	// 1, CMPccXADD (ignore)
+	// 1, CMPccXADD
 	CMPCCXADD,
 	// 4, R32_M512, R64_M512
 	ENQCMD,

@@ -1519,19 +1519,20 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encodeAvx2RR(enc: AvxEnc, op1: Reg, op2: Reg) {
-		byte(0xC4)
-
 		if(enc.opEnc == AvxOpEnc.VM) {
+			byte(0xC4)
 			writeVEX1(1, 1, op2.vexRex, enc.escape.avxValue)
 			writeVEX2(enc.w, op1.vexValue, enc.l, enc.prefix.avxValue)
 			byte(enc.opcode)
 			writeModRM(0b11, enc.ext, op2.value)
 		} else if(enc.opEnc == AvxOpEnc.RM) {
+			byte(0xC4)
 			writeVEX1(op1.vexRex, 1, op2.vexRex, enc.escape.avxValue)
 			writeVEX2(enc.w, 0b1111, enc.l, enc.prefix.avxValue)
 			byte(enc.opcode)
 			writeModRM(0b11, op1.value, op2.value)
 		} else {
+			byte(0xC4)
 			writeVEX1(op2.vexRex, 1, op1.vexRex, enc.escape.avxValue)
 			writeVEX2(enc.w, 0b1111, enc.l, enc.prefix.avxValue)
 			byte(enc.opcode)

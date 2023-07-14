@@ -1,43 +1,39 @@
 package eyre.gen
 
 import eyre.*
-import eyre.util.Unique
-import eyre.util.hexc8
+import eyre.util.associateFlatMap
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.random.Random
 
 object EncGen {
 
 
-	private val nasmParser = NasmParser(Files.readAllLines(Paths.get("nasm.txt")))
-
-	private val nasmEncs: List<NasmEnc>
-
-	private val nasmMap = HashMap<String, ArrayList<NasmEnc>>()
-
-	private val mnemonicsByName = Mnemonic.entries.associateBy { it.name }
-
-
-
-	init {
-		nasmParser.read()
-		nasmEncs = nasmParser.encs.sortedBy { it.mnemonic }
-		for(e in nasmEncs)
-			nasmMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
-	}
+	private val nasmParser = NasmParser(Files.readAllLines(Paths.get("nasm.txt"))).also { it.read() }
+	private val encs = nasmParser.encs
+	private val mnemonicMap = Mnemonic.entries.associateBy { it.name }
+	private val gpEncs = encs.filter { it.mnemonic.isGp }
+	private val sseEncs = encs.filter { it.mnemonic.isSse }
+	private val avxEncs = encs.filter { it.mnemonic.isAvx }
 
 
 
 	fun run() {
-		for(e in nasmEncs)
-			if(e.exts.singleOrNull() == NasmExt.AVX)
-				println(e.compactAvxString())
+		test()
 	}
 
 
 
-	private fun encsOfType(type: Mnemonic.Type) = nasmEncs
-		.filter { mnemonicsByName[it.mnemonic]!!.type == type }
+	private fun test() {
+		val map = sseEncs.associateFlatMap { it.mnemonic }
+		val lists = ArrayList<ArrayList<Mnemonic>>()
+		for(i in 0 ..< 32) lists.add(ArrayList())
+		for((mnemonic, encs) in map)
+			lists[encs.size].add(mnemonic)
+		for((i, list) in lists.withIndex())
+			if(list.isNotEmpty())
+				println("$i: $list")
+	}
 
 
 
@@ -47,7 +43,7 @@ object EncGen {
 
 
 
-	private fun Op?.toOpNode(rex: Boolean): OpNode? = when(this) {
+	/*private fun Op?.toOpNode(rex: Boolean): OpNode? = when(this) {
 		null -> null
 		Op.NONE -> null
 		Op.R8 -> OpNode.reg(if(rex) Reg.R14B else Reg.CL)
@@ -146,7 +142,7 @@ object EncGen {
 		//Files.write(Paths.get("test.eyre.obj"), context.textWriter.getTrimmedBytes())
 		Files.writeString(Paths.get("test.asm"), nasmBuilder.toString())
 		//Util.run("nasm", "-fwin64", "test.asm")
-	}
+	}*/
 
 
 
@@ -159,16 +155,16 @@ object EncGen {
 	private fun genMnemonics() {
 		val mnemonics = HashMap<String, Mnemonic.Type>()
 
-		for(e in nasmEncs) {
+		for(e in encs) {
 			when {
 				e.avx ->
-					mnemonics[e.mnemonic] = Mnemonic.Type.AVX
+					mnemonics[e.mnemonic.name] = Mnemonic.Type.AVX
 				Op.X in e.ops || Op.MM in e.ops ->
-					if(mnemonics[e.mnemonic] != Mnemonic.Type.AVX)
-						mnemonics[e.mnemonic] = Mnemonic.Type.SSE
+					if(mnemonics[e.mnemonic.name] != Mnemonic.Type.AVX)
+						mnemonics[e.mnemonic.name] = Mnemonic.Type.SSE
 				else ->
-					if(mnemonics[e.mnemonic] == null)
-						mnemonics[e.mnemonic] = Mnemonic.Type.GP
+					if(mnemonics[e.mnemonic.name] == null)
+						mnemonics[e.mnemonic.name] = Mnemonic.Type.GP
 			}
 		}
 
@@ -189,7 +185,6 @@ object EncGen {
 
 
 	fun genAvxEncMap(): Map<Mnemonic, List<AvxEnc>> {
-		val encs = encsOfType(Mnemonic.Type.AVX)
 		val map = HashMap<Mnemonic, ArrayList<AvxEnc>>()
 
 		fun Op?.toAvxOp() = when(this) {
@@ -236,7 +231,7 @@ object EncGen {
 			else -> error("Invalid avx op enc: $this")
 		}
 
-		for(e in encs) {
+		for(e in avxEncs) {
 			val avxEnc = AvxEnc(
 				e.opcode,
 				e.prefix,
@@ -261,7 +256,7 @@ object EncGen {
 				e.evex
 			)
 
-			map.getOrPut(mnemonicsByName[e.mnemonic]!!, ::ArrayList) += avxEnc
+			map.getOrPut(e.mnemonic, ::ArrayList) += avxEnc
 		}
 
 		val toAdd = ArrayList<AvxEnc>()
@@ -292,8 +287,7 @@ object EncGen {
 	 * Generates a mapping of mnemonics to lists of non-human-readable [SseEnc] values for use in code.
 	 */
 	fun genSseEncMap() {
-		val encs = encsOfType(Mnemonic.Type.SSE)
-		val map = HashMap<String, ArrayList<SseEnc>>()
+		val map = HashMap<Mnemonic, ArrayList<SseEnc>>()
 
 		fun Op?.toSseOp() = when(this) {
 			null    -> SseOp.NONE
@@ -313,7 +307,7 @@ object EncGen {
 			else    -> error("Invalid SSE operand: $this")
 		}
 
-		for(e in encs) {
+		for(e in sseEncs) {
 			val op1 = e.ops.getOrNull(0).toSseOp()
 			val op2 = e.ops.getOrNull(1).toSseOp()
 			val i8 = when(e.ops.size) {
@@ -359,51 +353,6 @@ object EncGen {
 
 
 
-	/**
-	 * Generates an expanded human-readable list of all MMX/SSE instructions.
-	 */
-	fun genSseEncList() {
-		val encs = encsOfType(Mnemonic.Type.SSE)
-
-		for(e in encs) {
-			when(e.mnemonic) {
-				"CRC32",
-				"EMMS",
-				"LFENCE",
-				"MFENCE",
-				"LDMXCSR",
-				"STMXCSR",
-				"CLFLUSH" -> continue
-			}
-
-			buildString {
-				val list = ArrayList<String>()
-				if(e.prefix != Prefix.NONE) list += e.prefix.value.hexc8
-				when(e.escape) {
-					Escape.NONE -> { }
-					Escape.E0F -> list += "0F"
-					Escape.E38 -> { list += "0F"; list += "38" }
-					Escape.E3A -> { list += "0F"; list += "3A" }
-				}
-				if(e.opcode and 0xFF00 != 0) error("Invalid opcode: $e")
-				list += e.opcode.hexc8
-				append(list.joinToString(" "))
-				if(e.ext >= 0) append("/${e.ext}")
-				append("  ")
-				append(e.mnemonic)
-				append("  ")
-				append(e.ops.joinToString("_"))
-				append(" ")
-				if(e.mr) append(" MR")
-				if(e.o16 == 1) append(" O16")
-				if(e.rw == 1) append(" RW")
-				if(e.pseudo >= 0) append(" :${e.pseudo}")
-			}.let(::println)
-		}
-	}
-
-
-
 	/*
 	Collections
 	 */
@@ -434,7 +383,6 @@ object EncGen {
 	 * Manual -> NASM ignored mnemonics
 	 */
 	private val manualToNasmIgnoredMnemonics = nasmToManualIgnoredMnemonics + setOf(
-		// Custom opcodes
 		"POPW",
 		"PUSHW",
 		"LEAVEW",
@@ -444,23 +392,7 @@ object EncGen {
 		"CALLF",
 		"ENTERW",
 		"SYSEXITQ",
-		"SYSRETQ",
-
-		// Found in Intel manual but not in NASM
-		"AOR",
-		"GF2P8MULB",
-		"GF2P8AFFINEINVQB",
-		"GF2P8AFFINEQB",
-		"SHA256RNDS2",
-		"SHA1NEXTE",
-		"PREFETCHW",
-		"TZCNT",
-		"SAL",
-		"SHA256MSG1",
-		"SHA256MSG2",
-		"SHA1MSG2",
-		"SHA1MSG1",
-		"SHA1RNDS4",
+		"SYSRETQ"
 	)
 
 
@@ -489,11 +421,21 @@ object EncGen {
 
 
 	/**
-	 * NASM extensions that contain any AVX or AVX-512 operands.
+	 * - NASM extensions that contain any AVX or AVX-512 operands.
+	 * - Does not contain all VEX encodings. Some are contained within extensions that also include AVX-512 encodings
+	 * - None of these extensions overlap. All of them should be the sole extension of their encodings
+	 * - GFNI and VAES are not included as they overlap with AVX-512
 	 */
 	private val avxExtensions = setOf(
 		NasmExt.AVX,
-		NasmExt.AVX2
+		NasmExt.AVX2,
+		NasmExt.AVXIFMA,
+		NasmExt.AVXNECONVERT,
+		NasmExt.AVXVNNIINT8,
+		NasmExt.BMI1,
+		NasmExt.BMI2,
+		NasmExt.CMPCCXADD,
+		NasmExt.FMA
 	)
 
 

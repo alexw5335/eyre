@@ -52,8 +52,6 @@ class NasmLine(val raw: RawNasmLine) {
 	var map6 = false
 
 	val ops = ArrayList<Op>()
-	var multi: NasmMultiOp? = null
-	var multiIndex = -1
 
 	fun addOpcode(value: Int) {
 		if(vex == null && oplen == 0) when(value) {

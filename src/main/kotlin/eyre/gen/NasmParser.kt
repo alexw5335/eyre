@@ -13,7 +13,11 @@ class NasmParser(private val inputs: List<String>) {
 	val lines = ArrayList<NasmLine>()
 
 	val encs = ArrayList<NasmEnc>()
+	
+	val expandedEncs = ArrayList<NasmEnc>()
 
+	val encsMap = HashMap<Mnemonic, ArrayList<NasmEnc>>()
+	
 
 
 	fun read() {
@@ -21,7 +25,10 @@ class NasmParser(private val inputs: List<String>) {
 		for(l in rawLines) if(filterLine(l)) filteredRawLines.add(l)
 		for(l in filteredRawLines) scrapeLine(l, lines)
 		for(l in lines) determineOperands(l)
-		for(l in lines) convert(l, encs)
+		for(l in lines) convertLine(l, encs)
+		encs.sortBy { it.mnemonic }
+		for(e in encs) expandEnc(e, expandedEncs)
+		for(e in encs) encsMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
 	}
 
 
@@ -211,38 +218,6 @@ class NasmParser(private val inputs: List<String>) {
 			if(string.endsWith("|rs2"))  { line.rs2  = true; string = string.dropLast(4) }
 			if(string.endsWith("|rs4"))  { line.rs4  = true; string = string.dropLast(4) }
 
-			val multi: NasmMultiOp? = when(string) {
-				in EncGenLists.multiOps -> EncGenLists.multiOps[string]!!
-
-				"xmmrm" -> when(widths[i]) {
-					Width.DWORD -> NasmMultiOp.XM32
-					Width.QWORD -> NasmMultiOp.XM64
-					Width.XWORD -> NasmMultiOp.XM128
-					null        -> NasmMultiOp.XM128
-					else        -> line.raw.error("Invalid width: ${widths[i]}")
-				}
-
-				"mmxrm" -> when(widths[i]) {
-					Width.QWORD -> NasmMultiOp.MMM64
-					Width.XWORD -> if(line.mnemonic == "PMULUDQ" || line.mnemonic == "PSUBQ")
-						NasmMultiOp.MMM64
-					else
-						line.raw.error("Invalid width: ${widths[i]}")
-					else -> line.raw.error("Invalid width: ${widths[i]}")
-				}
-				
-				else -> null
-			}
-			
-			if(multi != null) {
-				if(line.multiIndex >= 0) 
-					line.raw.error("Multiple multi ops")
-				line.multiIndex = line.ops.size
-				line.multi = multi
-				line.ops.add(Op.NONE)
-				continue
-			}
-
 			val operand: Op = when(string) {
 				"void" -> continue
 
@@ -254,6 +229,23 @@ class NasmParser(private val inputs: List<String>) {
 				}
 
 				in EncGenLists.ops -> EncGenLists.ops[string]!!
+
+				"xmmrm" -> when(widths[i]) {
+					Width.DWORD -> Op.XM32
+					Width.QWORD -> Op.XM64
+					Width.XWORD -> Op.XM128
+					null        -> Op.XM128
+					else        -> line.raw.error("Invalid width: ${widths[i]}")
+				}
+				
+				"mmxrm" -> when(widths[i]) {
+					Width.QWORD -> Op.MMM64
+					Width.XWORD -> when(line.mnemonic) {
+						"PMULUDQ", "PSUBQ" -> Op.MMM64
+						else -> line.raw.error("Invalid width: ${widths[i]}")
+					}
+					else -> line.raw.error("Invalid width: ${widths[i]}")
+				}
 				
 				"mem" -> when(widths[i]) {
 					null        -> Op.MEM
@@ -295,58 +287,62 @@ class NasmParser(private val inputs: List<String>) {
 
 				else -> line.raw.error("Unrecognised operand: $string")
 			}
-
+			
 			line.ops += operand
 		}
 	}
 
 
 
-	private fun convert(line: NasmLine, list: ArrayList<NasmEnc>) {
-		fun add(mnemonic: String, opcode: Int) = list.add(NasmEnc(
-			mnemonic,
-			line.prefix,
-			line.escape,
-			opcode,
-			line.ext.coerceAtLeast(0),
-			line.ext >= 0,
-			line.extensions,
-			line.enc,
-			ArrayList<Op>(line.ops),
-			ArrayList<OpKind>(line.ops).also { if(line.multi != null) it[line.multiIndex] = line.multi!! },
-			line.rexw,
-			line.o16,
-			line.pseudo,
-			line.enc in EncGenLists.mrEncs,
-			line.vexw,
-			line.vexl,
-			line.tuple,
-			line.sae,
-			line.er,
-			when { line.b16 -> 1; line.b32 -> 2; line.b64 -> 3; else -> 0 },
-			line.vsib,
-			line.k,
-			line.z,
-			line.vex != null,
-			line.isEvex
-		))
+	private fun NasmLine.toEnc(mnemonic: String, opcode: Int) = NasmEnc(
+		null,
+		EncGenLists.mnemonics[mnemonic] ?: error("Unrecognised mnemonic: $mnemonic"),
+		prefix,
+		escape,
+		opcode,
+		ext.coerceAtLeast(0),
+		ext >= 0,
+		extensions,
+		enc,
+		ArrayList<Op>(ops),
+		rexw,
+		o16,
+		pseudo,
+		enc in EncGenLists.mrEncs,
+		vexw,
+		vexl,
+		tuple,
+		sae,
+		er,
+		when { b16 -> 1; b32 -> 2; b64 -> 3; else -> 0 },
+		vsib,
+		k,
+		z,
+		vex != null,
+		isEvex
+	)
 
-		fun addMulti(mnemonic: String, opcode: Int) {
-			if(line.multi != null) {
-				line.ops[line.multiIndex] = line.multi!!.first
-				add(mnemonic, opcode)
-				line.ops[line.multiIndex] = line.multi!!.second
-				add(mnemonic, opcode)
-			} else {
-				add(mnemonic, opcode)
-			}
-		}
-		
+
+
+	private fun convertLine(line: NasmLine, list: ArrayList<NasmEnc>) {
 		if(line.cc)
 			for((postfix, opcodeInc) in EncGenLists.ccList)
-				addMulti(line.mnemonic.dropLast(2) + postfix, line.opcode + opcodeInc)
+				list += line.toEnc(line.mnemonic.replace("cc", postfix), line.opcode + opcodeInc)
 		else
-			addMulti(line.mnemonic, line.opcode)
+			list += line.toEnc(line.mnemonic, line.opcode)
+	}
+
+
+
+	private fun expandEnc(enc: NasmEnc, list: ArrayList<NasmEnc>) {
+		for((i, m) in enc.ops.withIndex()) {
+			if(m.isMulti) {
+				list += enc.copy(parent = enc, ops = ArrayList(enc.ops).also { it[i] = m.multi1 })
+				list += enc.copy(parent = enc, ops = ArrayList(enc.ops).also { it[i] = m.multi2 })
+				return
+			}
+		}
+		list += enc
 	}
 
 

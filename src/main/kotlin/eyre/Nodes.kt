@@ -58,7 +58,7 @@ class OpNode private constructor(
 	val isST get() = reg.type == RegType.ST
 
 	companion object {
-		fun reg(reg: Reg) = OpNode(OpNodeType.REG, reg.width, NullNode, reg, reg.high)
+		fun reg(reg: Reg) = OpNode(OpNodeType.REG, if(reg.isR) Reg.type.width else null, NullNode, reg, reg.high)
 		fun mem(width: Width?, mem: AstNode) = OpNode(OpNodeType.MEM, width, mem, Reg.BND0, 0)
 		fun imm(width: Width?, imm: AstNode) = OpNode(OpNodeType.IMM, width, imm, Reg.BND0, 0)
 	}
@@ -71,7 +71,7 @@ class RegNode(val value: Reg) : AstNode
 
 
 
-object NullNode : AstNode
+data object NullNode : AstNode
 
 
 

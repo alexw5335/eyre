@@ -4,15 +4,6 @@ import eyre.util.bin44
 
 
 
-@JvmInline
-value class WidthAndMask(private val value: Int) {
-	val width   get() = Width.entries[(value and 0xFF).countTrailingZeroBits()]
-	val mask    get() = OpMask(value shr 8)
-	val isValid get() = (value and 0xFF) in mask
-}
-
-
-
 enum class Width(val string: String, val varString: String?, val bytes: Int) {
 
 	BYTE("byte", "db", 1),
@@ -34,22 +25,22 @@ enum class Width(val string: String, val varString: String?, val bytes: Int) {
 
 
 
-enum class RegType {
-	R8,
-	R16,
-	R32,
-	R64,
-	ST,
-	X,
-	Y,
-	Z,
-	MM,
-	K,
-	T,
-	SEG,
-	BND,
-	CR,
-	DR;
+enum class RegType(val width: Width, val isGp: Boolean) {
+	R8(Width.BYTE, ),
+	R16(Width.WORD),
+	R32(Width.DWORD),
+	R64(Width.QWORD),
+	ST(Width.TWORD),
+	X(Width.XWORD),
+	Y(Width.YWORD),
+	Z(Width.ZWORD),
+	MM(null),
+	K(null),
+	T(null),
+	SEG(null),
+	BND(null),
+	CR(null),
+	DR(null);
 }
 
 
@@ -65,9 +56,9 @@ value class OpMask(val value: Int) {
 	val count      get() = value.countOneBits()
 
 	operator fun contains(type: RegType) = (1 shl type.ordinal) and value != 0
-	operator fun contains(reg: Reg) = (1 shl reg.type.ordinal) and value != 0
-	operator fun contains(width: Width) = (1 shl width.ordinal) and value != 0
-	operator fun contains(int: Int) = (1 shl int) and value != 0
+	operator fun contains(reg: Reg)      = (1 shl reg.type.ordinal) and value != 0
+	operator fun contains(width: Width)  = (1 shl width.ordinal) and value != 0
+	operator fun contains(int: Int)      = (1 shl int) and value != 0
 
 	operator fun plus(other: OpMask) = OpMask(value or other.value)
 
@@ -101,11 +92,14 @@ value class OpMask(val value: Int) {
 
 
 /**
- * - Bits 0-7: type
- * - Bits 8-11: value
- * - Bits 12-12: rex8
- * - Bits 13-13: noRex
- * - rex =
+ *     00  4  type
+ *     04  3  value
+ *     04  3  value
+ *     07  1  rex
+ *     08  1  high
+ *     09  1  rex8
+ *     10  1  noRex
+ *     11     size
  */
 @JvmInline
 value class Register(private val backing: Int) {
@@ -120,47 +114,61 @@ value class Register(private val backing: Int) {
 	val rex8    get() = (backing shr 12) and 1
 	val noRex   get() = (backing shr 13) and 1
 
-	val isR get() = type <= R64
-	val isR8 get() = type == R8
+	val gpWidth get() = Width.entries[type]
+
+	val isR   get() = type <= R64
+	val isR8  get() = type == R8
 	val isR16 get() = type == R16
 	val isR32 get() = type == R32
 	val isR64 get() = type == R64
-	val isMM get() = type == MM
-	val isST get() = type == ST
-	val isX get() = type == X
-	val isY get() = type == Y
-	val isZ get() = type == Z
-	val isK get() = type == K
+	val isMM  get() = type == MM
+	val isST  get() = type == ST
+	val isX   get() = type == X
+	val isY   get() = type == Y
+	val isZ   get() = type == Z
+	val isK   get() = type == K
 	val isSEG get() = type == SEG
-	val isCR get() = type == CR
-	val isDR get() = type == DR
+	val isCR  get() = type == CR
+	val isDR  get() = type == DR
 	val isBND get() = type == BND
 
 
 	companion object {
-		const val R8 = 0
-		const val R16 = 1
-		const val R32 = 2
-		const val R64 = 3
-		const val MM = 4
-		const val ST = 5
-		const val X = 6
-		const val Y = 7
-		const val Z = 8
-		const val K = 9
+		const val R8  = 0  // BYTE
+		const val R16 = 1  // WORD
+		const val R32 = 2  // DWORD
+		const val R64 = 3  // QWORD
+		const val ST  = 5  // TWORD
+		const val X   = 6  // XWORD
+		const val Y   = 7  // YWORD
+		const val Z   = 8  // ZWORD
+		const val MM  = 4
+		const val K   = 9
 		const val SEG = 10
-		const val CR = 11
-		const val DR = 12
+		const val CR  = 11
+		const val DR  = 12
 		const val BND = 13
+		const val TMM = 14
 
-		val CL = Register(R8, 1)
 		val AL = Register(R8, 0)
-		val AX = Register(R16, 0)
-		val EAX = Register(R32, 0)
-		val RAX = Register(R64, 0)
+		val CL = Register(R8, 1)
+		val DL = Register(R8, 2)
+		val BL = Register(R8, 3)
+		val AH = Register(R8, 4)
+		val CH = Register(R8, 5)
+		val DH = Register(R8, 6)
+		val BH = Register(R8, 7)
+		val SIL = Register((R8 or (1 shl 9)), 7)
+		val DIL = Register((R8 or (1 shl 10)), 8)
+
 	}
 
 }
+
+
+
+
+inline fun Register(block: Register.Companion.() -> Int) = Register(block(Register))
 
 
 
@@ -177,39 +185,27 @@ enum class Reg(
 	val noRex : Int = 0
 ) {
 
-	RAX(RegType.R64, Width.QWORD, 0, 0, 0),
-	RCX(RegType.R64, Width.QWORD, 1, 0, 0),
-	RDX(RegType.R64, Width.QWORD, 2, 0, 0),
-	RBX(RegType.R64, Width.QWORD, 3, 0, 0),
-	RSP(RegType.R64, Width.QWORD, 4, 0, 0),
-	RBP(RegType.R64, Width.QWORD, 5, 0, 0),
-	RSI(RegType.R64, Width.QWORD, 6, 0, 0),
-	RDI(RegType.R64, Width.QWORD, 7, 0, 0),
-	R8 (RegType.R64, Width.QWORD, 0, 1, 0),
-	R9 (RegType.R64, Width.QWORD, 1, 1, 0),
-	R10(RegType.R64, Width.QWORD, 2, 1, 0),
-	R11(RegType.R64, Width.QWORD, 3, 1, 0),
-	R12(RegType.R64, Width.QWORD, 4, 1, 0),
-	R13(RegType.R64, Width.QWORD, 5, 1, 0),
-	R14(RegType.R64, Width.QWORD, 6, 1, 0),
-	R15(RegType.R64, Width.QWORD, 7, 1, 0),
+	AL  (RegType.R8, Width.BYTE, 0, 0, 0),
+	CL  (RegType.R8, Width.BYTE, 1, 0, 0),
+	DL  (RegType.R8, Width.BYTE, 2, 0, 0),
+	BL  (RegType.R8, Width.BYTE, 3, 0, 0),
+	AH  (RegType.R8, Width.BYTE, 4, 0, 0, noRex = 1),
+	BH  (RegType.R8, Width.BYTE, 5, 0, 0, noRex = 1),
+	CH  (RegType.R8, Width.BYTE, 6, 0, 0, noRex = 1),
+	DH  (RegType.R8, Width.BYTE, 7, 0, 0, noRex = 1),
+	R8B (RegType.R8, Width.BYTE, 0, 1, 0),
+	R9B (RegType.R8, Width.BYTE, 1, 1, 0),
+	R10B(RegType.R8, Width.BYTE, 2, 1, 0),
+	R11B(RegType.R8, Width.BYTE, 3, 1, 0),
+	R12B(RegType.R8, Width.BYTE, 4, 1, 0),
+	R13B(RegType.R8, Width.BYTE, 5, 1, 0),
+	R14B(RegType.R8, Width.BYTE, 6, 1, 0),
+	R15B(RegType.R8, Width.BYTE, 7, 1, 0),
 
-	EAX (RegType.R32, Width.DWORD, 0, 0, 0),
-	ECX (RegType.R32, Width.DWORD, 1, 0, 0),
-	EDX (RegType.R32, Width.DWORD, 2, 0, 0),
-	EBX (RegType.R32, Width.DWORD, 3, 0, 0),
-	ESP (RegType.R32, Width.DWORD, 4, 0, 0),
-	EBP (RegType.R32, Width.DWORD, 5, 0, 0),
-	ESI (RegType.R32, Width.DWORD, 6, 0, 0),
-	EDI (RegType.R32, Width.DWORD, 7, 0, 0),
-	R8D (RegType.R32, Width.DWORD, 0, 1, 0),
-	R9D (RegType.R32, Width.DWORD, 1, 1, 0),
-	R10D(RegType.R32, Width.DWORD, 2, 1, 0),
-	R11D(RegType.R32, Width.DWORD, 3, 1, 0),
-	R12D(RegType.R32, Width.DWORD, 4, 1, 0),
-	R13D(RegType.R32, Width.DWORD, 5, 1, 0),
-	R14D(RegType.R32, Width.DWORD, 6, 1, 0),
-	R15D(RegType.R32, Width.DWORD, 7, 1, 0),
+	SPL (RegType.R8, Width.BYTE, 4, 0, 0, rex8 = 1),
+	BPL (RegType.R8, Width.BYTE, 5, 0, 0, rex8 = 1),
+	SIL (RegType.R8, Width.BYTE, 6, 0, 0, rex8 = 1),
+	DIL (RegType.R8, Width.BYTE, 7, 0, 0, rex8 = 1),
 
 	AX  (RegType.R16, Width.WORD, 0, 0, 0),
 	CX  (RegType.R16, Width.WORD, 1, 0, 0),
@@ -228,26 +224,39 @@ enum class Reg(
 	R14W(RegType.R16, Width.WORD, 6, 1, 0),
 	R15W(RegType.R16, Width.WORD, 7, 1, 0),
 
-	AL  (RegType.R8, Width.BYTE, 0, 0, 0),
-	CL  (RegType.R8, Width.BYTE, 1, 0, 0),
-	DL  (RegType.R8, Width.BYTE, 2, 0, 0),
-	BL  (RegType.R8, Width.BYTE, 3, 0, 0),
-	AH  (RegType.R8, Width.BYTE, 4, 0, 0, noRex = 1),
-	BH  (RegType.R8, Width.BYTE, 5, 0, 0, noRex = 1),
-	CH  (RegType.R8, Width.BYTE, 6, 0, 0, noRex = 1),
-	DH  (RegType.R8, Width.BYTE, 7, 0, 0, noRex = 1),
-	SPL (RegType.R8, Width.BYTE, 4, 0, 0, rex8 = 1),
-	BPL (RegType.R8, Width.BYTE, 5, 0, 0, rex8 = 1),
-	SIL (RegType.R8, Width.BYTE, 6, 0, 0, rex8 = 1),
-	DIL (RegType.R8, Width.BYTE, 7, 0, 0, rex8 = 1),
-	R8B (RegType.R8, Width.BYTE, 0, 1, 0),
-	R9B (RegType.R8, Width.BYTE, 1, 1, 0),
-	R10B(RegType.R8, Width.BYTE, 2, 1, 0),
-	R11B(RegType.R8, Width.BYTE, 3, 1, 0),
-	R12B(RegType.R8, Width.BYTE, 4, 1, 0),
-	R13B(RegType.R8, Width.BYTE, 5, 1, 0),
-	R14B(RegType.R8, Width.BYTE, 6, 1, 0),
-	R15B(RegType.R8, Width.BYTE, 7, 1, 0),
+	EAX (RegType.R32, Width.DWORD, 0, 0, 0),
+	ECX (RegType.R32, Width.DWORD, 1, 0, 0),
+	EDX (RegType.R32, Width.DWORD, 2, 0, 0),
+	EBX (RegType.R32, Width.DWORD, 3, 0, 0),
+	ESP (RegType.R32, Width.DWORD, 4, 0, 0),
+	EBP (RegType.R32, Width.DWORD, 5, 0, 0),
+	ESI (RegType.R32, Width.DWORD, 6, 0, 0),
+	EDI (RegType.R32, Width.DWORD, 7, 0, 0),
+	R8D (RegType.R32, Width.DWORD, 0, 1, 0),
+	R9D (RegType.R32, Width.DWORD, 1, 1, 0),
+	R10D(RegType.R32, Width.DWORD, 2, 1, 0),
+	R11D(RegType.R32, Width.DWORD, 3, 1, 0),
+	R12D(RegType.R32, Width.DWORD, 4, 1, 0),
+	R13D(RegType.R32, Width.DWORD, 5, 1, 0),
+	R14D(RegType.R32, Width.DWORD, 6, 1, 0),
+	R15D(RegType.R32, Width.DWORD, 7, 1, 0),
+
+	RAX(RegType.R64, Width.QWORD, 0, 0, 0),
+	RCX(RegType.R64, Width.QWORD, 1, 0, 0),
+	RDX(RegType.R64, Width.QWORD, 2, 0, 0),
+	RBX(RegType.R64, Width.QWORD, 3, 0, 0),
+	RSP(RegType.R64, Width.QWORD, 4, 0, 0),
+	RBP(RegType.R64, Width.QWORD, 5, 0, 0),
+	RSI(RegType.R64, Width.QWORD, 6, 0, 0),
+	RDI(RegType.R64, Width.QWORD, 7, 0, 0),
+	R8 (RegType.R64, Width.QWORD, 0, 1, 0),
+	R9 (RegType.R64, Width.QWORD, 1, 1, 0),
+	R10(RegType.R64, Width.QWORD, 2, 1, 0),
+	R11(RegType.R64, Width.QWORD, 3, 1, 0),
+	R12(RegType.R64, Width.QWORD, 4, 1, 0),
+	R13(RegType.R64, Width.QWORD, 5, 1, 0),
+	R14(RegType.R64, Width.QWORD, 6, 1, 0),
+	R15(RegType.R64, Width.QWORD, 7, 1, 0),
 
 	ES(RegType.SEG, Width.WORD, 0, 0, 0),
 	CS(RegType.SEG, Width.WORD, 1, 0, 0),
@@ -420,8 +429,36 @@ enum class Reg(
 	val vexRex get() = rex.inv() and 1
 	val vexValue get() = (value or (rex shl 3)).inv() and 0b1111
 
-	val isR = type in OpMask.R1111
+	val isR = type.ordinal <= RegType.R64.ordinal
 	val isA = isR && value == 0 && rex == 0
-	val isST = type == RegType.ST
+
+	companion object {
+		val R8_OFFSET = AL.ordinal
+		val R16_OFFSET = AX.ordinal
+		val R32_OFFSET = EAX.ordinal
+		val R64_OFFSET = RAX.ordinal
+		val ST_OFFSET = ST0.ordinal
+		val XMM_OFFSET = XMM0.ordinal
+		val YMM_OFFSET = YMM0.ordinal
+		val ZMM_OFFSET = ZMM0.ordinal
+		val MM_OFFSET = MM0.ordinal
+		val CR_OFFSET = CR0.ordinal
+		val DR_OFFSET = DR0.ordinal
+		val K_OFFSET = K0.ordinal
+
+		fun r8(index: Int) = entries[R8_OFFSET + index]
+		fun r8Rex(index: Int) = entries[R8_OFFSET + 16 + index]
+		fun r16(index: Int) = entries[R16_OFFSET + index]
+		fun r32(index: Int) = entries[R32_OFFSET + index]
+		fun r64(index: Int) = entries[R64_OFFSET + index]
+		fun st(index: Int) = entries[ST_OFFSET + index]
+		fun x(index: Int) = entries[XMM_OFFSET + index]
+		fun y(index: Int) = entries[YMM_OFFSET + index]
+		fun z(index: Int) = entries[ZMM_OFFSET + index]
+		fun mm(index: Int) = entries[MM_OFFSET + index]
+		fun cr(index: Int) = entries[CR_OFFSET + index]
+		fun dr(index: Int) = entries[DR_OFFSET + index]
+		fun k(index: Int) = entries[K_OFFSET + index]
+	}
 
 }

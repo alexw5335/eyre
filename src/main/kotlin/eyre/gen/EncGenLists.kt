@@ -1,5 +1,6 @@
 package eyre.gen
 
+import eyre.Mnemonic
 import eyre.Width
 
 object EncGenLists {
@@ -10,59 +11,12 @@ object EncGenLists {
 	val immTypes   = ImmType.entries.associateBy { it.name.lowercase().replace('_', ',') }
 	val tupleTypes = TupleType.entries.associateBy { it.name.lowercase() }
 	val opEncs     = OpEnc.entries.associateBy { it.string }
-	val multiOps   = NasmMultiOp.entries.associateBy { it.string }
+	val ops        = Op.entries.associateBy { it.nasmString }
+	val mnemonics  = Mnemonic.entries.associateBy { it.name }
 
 	val mrEncs = setOf(OpEnc.MR, OpEnc.MRN, OpEnc.MRX, OpEnc.MRI)
-	
-	val ops = mapOf(
-		"reg8" to Op.R8,
-		"reg16" to Op.R16,
-		"reg32" to Op.R32,
-		"reg64" to Op.R64,
-		"mem8" to Op.M8,
-		"mem16" to Op.M16,
-		"mem32" to Op.M32,
-		"mem64" to Op.M64,
-		"mem80" to Op.M80,
-		"mem128" to Op.M128,
-		"mem256" to Op.M256,
-		"mem512" to Op.M512,
-		"imm8" to Op.I8,
-		"imm16" to Op.I16,
-		"imm32" to Op.I32,
-		"imm64" to Op.I64,
-		"reg_al" to Op.AL,
-		"reg_ax" to Op.AX,
-		"reg_eax" to Op.EAX,
-		"reg_rax" to Op.RAX,
-		"reg_dx" to Op.DX,
-		"reg_cl" to Op.CL,
-		"reg_ecx" to Op.ECX,
-		"reg_rcx" to Op.RCX,
-		"unity" to Op.ONE,
-		"fpureg" to Op.ST,
-		"fpu0" to Op.ST0,
-		"mmxreg" to Op.MM,
-		"xmmreg" to Op.X,
-		"ymmreg" to Op.Y,
-		"zmmreg" to Op.Z,
-		"xmem32" to Op.VM32X,
-		"xmem64" to Op.VM64X,
-		"ymem32" to Op.VM32Y,
-		"ymem64" to Op.VM64Y,
-		"zmem32" to Op.VM32Z,
-		"zmem64" to Op.VM64Z,
-		"kreg" to Op.K,
-		"bndreg" to Op.BND,
-		"tmmreg" to Op.T,
-		"reg_sreg" to Op.SEG,
-		"reg_creg" to Op.CR,
-		"reg_dreg" to Op.DR,
-		"reg_fs" to Op.FS,
-		"reg_gs" to Op.GS,
-	)
-	
-	val ccList = arrayOf(
+
+	val ccList = arrayOf<Pair<String, Int>>(
 		"O" to 0,
 		"NO" to 1,
 		"B" to 2, "NAE" to 2, "C" to 2,

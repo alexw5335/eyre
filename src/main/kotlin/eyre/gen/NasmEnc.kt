@@ -1,6 +1,7 @@
 package eyre.gen
 
 import eyre.Escape
+import eyre.Mnemonic
 import eyre.Prefix
 import eyre.util.hexc8
 
@@ -10,8 +11,9 @@ import eyre.util.hexc8
  *     VEX.L/VEX/VEX.W: AVX/AVX512
  *     SAE/ER/BCST/VSIB/EVEX/TUPLE/K/Z: AVX512
  */
-class NasmEnc(
-	val mnemonic : String,
+data class NasmEnc(
+	val parent   : NasmEnc?,
+	val mnemonic : Mnemonic,
 	val prefix   : Prefix,
 	val escape   : Escape,
 	val opcode   : Int,
@@ -20,7 +22,6 @@ class NasmEnc(
 	val exts     : List<NasmExt>,
 	val opEnc    : OpEnc,
 	val ops      : List<Op>,
-	val multiOps : List<OpKind>,
 	val rw       : Int,
 	val o16      : Int,
 	val pseudo   : Int,
@@ -37,6 +38,9 @@ class NasmEnc(
 	val avx      : Boolean,
 	val evex     : Boolean
 ) {
+
+	val opsString = ops.joinToString("_")
+	val isChild = parent != null
 
 	fun compactAvxString() = buildString {
 		if(evex) append("E.") else append("V.")
@@ -58,7 +62,7 @@ class NasmEnc(
 		append(opcode.hexc8)
 		if(hasExt) append("/$ext")
 		append("  $mnemonic  ")
-		append(ops.joinToString("_"))
+		append(opsString)
 		append("  ")
 		if(pseudo >= 0) append(":$pseudo  ")
 		append("$opEnc  ")
@@ -81,7 +85,7 @@ class NasmEnc(
 			append("${vexl.name}.${prefix.avxString}.${escape.avxString}.${vexw.name} ${opcode.hexc8}")
 			if(hasExt) append("/$ext")
 			append("  $mnemonic  ")
-			append(ops.joinToString("_"))
+			append(opsString)
 			append("  ")
 			if(pseudo >= 0) append(":$pseudo  ")
 			append("$opEnc  ")
@@ -105,11 +109,12 @@ class NasmEnc(
 		append((opcode and 0xFF).hexc8)
 		if(ext >= 0) append("/$ext")
 		append("  $mnemonic  ")
-		if(ops.isNotEmpty()) append(ops.joinToString("_")) else append("NONE")
+		if(ops.isNotEmpty()) append(opsString) else append("NONE")
 		append("  ")
 		if(rw == 1) append("RW ")
 		if(o16 == 1) append("O16 ")
 		if(pseudo >= 0) append(":$pseudo ")
 		if(mr) append("MR ")
 	}
+
 }
