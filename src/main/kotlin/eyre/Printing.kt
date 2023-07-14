@@ -4,6 +4,8 @@ package eyre
 
 
 
+val InsNode.nasmString: String get() = printString.replace("xword", "oword")
+
 val AstNode.printString: String get() = when(this) {
 	is LabelNode      -> "label ${symbol.name}"
 	is StringNode     -> "\"$value\""

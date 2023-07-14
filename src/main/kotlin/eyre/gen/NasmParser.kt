@@ -194,6 +194,12 @@ class NasmParser(private val inputs: List<String>) {
 		val strings = line.raw.operands
 		val widths = arrayOfNulls<Width>(4)
 
+		if(line.mnemonic == "ENTER") {
+			line.ops += Op.I16
+			line.ops += Op.I8
+			return
+		}
+
 		if(line.sm) {
 			EncGenLists.ops[strings[0]]?.width?.let { widths[1] = it }
 			EncGenLists.ops[strings[1]]?.width?.let { widths[0] = it }

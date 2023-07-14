@@ -79,28 +79,21 @@ class NativeReader(val bytes: ByteArray) {
 
 
 	fun bytes(pos: Int, dst: ByteArray, dstPos: Int, length: Int): ByteArray {
-		Unsafe.instance.copyMemory(bytes, 16L + pos, dst, 16L + dstPos, length.toLong())
+		System.arraycopy(bytes, pos, dst, dstPos, length)
 		return dst
 	}
 
 	fun bytes(dst: ByteArray, dstPos: Int, length: Int): ByteArray {
-		Unsafe.instance.copyMemory(bytes, 16L + pos, dst, 16L + dstPos, length.toLong())
+		System.arraycopy(bytes, pos, dst, dstPos, length)
 		pos += length
 		return dst
 	}
 
-	fun bytes(pos: Int, length: Int): ByteArray {
-		val bytes = ByteArray(length)
-		Unsafe.instance.copyMemory(bytes, 16L + pos, bytes, 16L, length.toLong())
-		return bytes
-	}
+	fun bytes(pos: Int, length: Int) = bytes.copyOfRange(pos, pos + length)
 
-	fun bytes(length: Int): ByteArray {
-		val bytes = ByteArray(length)
-		Unsafe.instance.copyMemory(bytes, 16L + pos, bytes, 16L, length.toLong())
-		pos += length
-		return bytes
-	}
+	fun bytes(length: Int) = bytes.copyOfRange(pos, pos + length)
+
+	fun bytesFromPos() = bytes.copyOfRange(pos, bytes.size)
 
 
 

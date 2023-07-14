@@ -67,12 +67,8 @@ object EncGenLists {
 	)
 
 	val invalidMnemonics = setOf(
-		// Two immediates
-		"ENTER",
 		// Obsolete
 		"JMPE",
-		// Not found in Intel manual
-		"CMPccXADD",
 		// Unnecessary size specifiers
 		"RETN",
 		"RETQ",
@@ -88,15 +84,6 @@ object EncGenLists {
 		"INT01",
 		"INT03",
 		"SKINIT",
-		// BND
-		"BNDMK",
-		"BNDCL",
-		"BNDCU",
-		"BNDCU",
-		"BNDCN",
-		"BNDMOV",
-		"BNDLDX",
-		"BNDSTX",
 	)
 
 	val essentialMnemonics = setOf(

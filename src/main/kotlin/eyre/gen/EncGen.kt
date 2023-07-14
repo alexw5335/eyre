@@ -1,10 +1,12 @@
 package eyre.gen
 
 import eyre.*
-import eyre.util.associateFlatMap
+import eyre.util.NativeReader
+import eyre.util.Util
+import eyre.util.hex8
 import java.nio.file.Files
 import java.nio.file.Paths
-import kotlin.random.Random
+import kotlin.math.min
 
 object EncGen {
 
@@ -19,20 +21,7 @@ object EncGen {
 
 
 	fun run() {
-		test()
-	}
-
-
-
-	private fun test() {
-		val map = sseEncs.associateFlatMap { it.mnemonic }
-		val lists = ArrayList<ArrayList<Mnemonic>>()
-		for(i in 0 ..< 32) lists.add(ArrayList())
-		for((mnemonic, encs) in map)
-			lists[encs.size].add(mnemonic)
-		for((i, list) in lists.withIndex())
-			if(list.isNotEmpty())
-				println("$i: $list")
+		testNasmEncs()
 	}
 
 
@@ -43,90 +32,90 @@ object EncGen {
 
 
 
-	/*private fun Op?.toOpNode(rex: Boolean): OpNode? = when(this) {
-		null -> null
-		Op.NONE -> null
-		Op.R8 -> OpNode.reg(if(rex) Reg.R14B else Reg.CL)
-		Op.R16 -> OpNode.reg(if(rex) Reg.R14W else Reg.CX)
-		Op.R32 -> OpNode.reg(if(rex) Reg.R14D else Reg.ECX)
-		Op.R64 -> OpNode.reg(if(rex) Reg.R14 else Reg.RCX)
-		Op.MEM -> OpNode.mem(null, RegNode(Reg.R14))
-		Op.M8 -> OpNode.mem(Width.BYTE, RegNode(Reg.R14))
-		Op.M16 -> OpNode.mem(Width.WORD, RegNode(Reg.R14))
-		Op.M32 -> OpNode.mem(Width.DWORD, RegNode(Reg.R14))
-		Op.M64 -> OpNode.mem(Width.QWORD, RegNode(Reg.R14))
-		Op.M80 -> OpNode.mem(Width.TWORD, RegNode(Reg.R14))
-		Op.M128 -> OpNode.mem(Width.XWORD, RegNode(Reg.R14))
-		Op.M256 -> OpNode.mem(Width.YWORD, RegNode(Reg.R14))
-		Op.M512 -> OpNode.mem(Width.ZWORD, RegNode(Reg.R14))
-		Op.I8 -> OpNode.imm(null, IntNode(10))
-		Op.I16 -> OpNode.imm(null, IntNode(10))
-		Op.I32 -> OpNode.imm(null, IntNode(10))
-		Op.I64 -> OpNode.imm(null, IntNode(10))
-		Op.AL -> OpNode.reg(Reg.AL)
-		Op.AX -> OpNode.reg(Reg.AX)
-		Op.EAX -> OpNode.reg(Reg.EAX)
-		Op.RAX -> OpNode.reg(Reg.RAX)
-		Op.CL -> OpNode.reg(Reg.CL)
-		Op.ECX -> OpNode.reg(Reg.ECX)
-		Op.RCX -> OpNode.reg(Reg.RCX)
-		Op.DX -> OpNode.reg(Reg.DX)
-		Op.REL8 -> OpNode.imm(null, IntNode(10))
+	private fun Op?.toNode(): OpNode? = when(this) {
+		null     -> null
+		Op.NONE  -> null
+		Op.R8    -> OpNode.reg(Reg.DL)
+		Op.R16   -> OpNode.reg(Reg.DX)
+		Op.R32   -> OpNode.reg(Reg.EDX)
+		Op.R64   -> OpNode.reg(Reg.RDX)
+		Op.MEM   -> OpNode.mem(null, RegNode(Reg.RAX))
+		Op.M8    -> OpNode.mem(Width.BYTE, RegNode(Reg.RDX))
+		Op.M16   -> OpNode.mem(Width.WORD, RegNode(Reg.RDX))
+		Op.M32   -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
+		Op.M64   -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
+		Op.M80   -> OpNode.mem(Width.TWORD, RegNode(Reg.RDX))
+		Op.M128  -> OpNode.mem(Width.XWORD, RegNode(Reg.RDX))
+		Op.M256  -> OpNode.mem(Width.YWORD, RegNode(Reg.RDX))
+		Op.M512  -> OpNode.mem(Width.ZWORD, RegNode(Reg.RDX))
+		Op.I8    -> OpNode.imm(null, IntNode(10))
+		Op.I16   -> OpNode.imm(null, IntNode(10))
+		Op.I32   -> OpNode.imm(null, IntNode(10))
+		Op.I64   -> OpNode.imm(null, IntNode(10))
+		Op.AL    -> OpNode.reg(Reg.AL)
+		Op.AX    -> OpNode.reg(Reg.AX)
+		Op.EAX   -> OpNode.reg(Reg.EAX)
+		Op.RAX   -> OpNode.reg(Reg.RAX)
+		Op.CL    -> OpNode.reg(Reg.CL)
+		Op.ECX   -> OpNode.reg(Reg.ECX)
+		Op.RCX   -> OpNode.reg(Reg.RCX)
+		Op.DX    -> OpNode.reg(Reg.DX)
+		Op.REL8  -> OpNode.imm(null, IntNode(10))
 		Op.REL16 -> OpNode.imm(null, IntNode(10))
 		Op.REL32 -> OpNode.imm(null, IntNode(10))
-		Op.ST -> OpNode.reg(Reg.ST3)
-		Op.ST0 -> OpNode.reg(Reg.ST0)
-		Op.ONE -> OpNode.imm(null, IntNode(1))
-		Op.MM -> OpNode.reg(Reg.MM3)
-		Op.X -> OpNode.reg(if(rex) Reg.XMM14 else Reg.XMM3)
-		Op.Y -> OpNode.reg(if(rex) Reg.YMM14 else Reg.YMM3)
-		Op.Z -> OpNode.reg(if(rex) Reg.ZMM14 else Reg.ZMM3)
+		Op.ST    -> OpNode.reg(Reg.ST3)
+		Op.ST0   -> OpNode.reg(Reg.ST0)
+		Op.ONE   -> OpNode.imm(null, IntNode(1))
+		Op.MM    -> OpNode.reg(Reg.MM3)
+		Op.X     -> OpNode.reg(Reg.XMM3)
+		Op.Y     -> OpNode.reg(Reg.YMM3)
+		Op.Z     -> OpNode.reg(Reg.ZMM3)
+		Op.K     -> OpNode.reg(Reg.K3)
+		Op.BND   -> OpNode.reg(Reg.BND3)
+		Op.T     -> OpNode.reg(Reg.TMM3)
+		Op.SEG   -> OpNode.reg(Reg.FS)
+		Op.CR    -> OpNode.reg(Reg.CR3)
+		Op.DR    -> OpNode.reg(Reg.DR3)
+		Op.FS    -> OpNode.reg(Reg.FS)
+		Op.GS    -> OpNode.reg(Reg.GS)
 		Op.VM32X -> TODO()
 		Op.VM64X -> TODO()
 		Op.VM32Y -> TODO()
 		Op.VM64Y -> TODO()
 		Op.VM32Z -> TODO()
 		Op.VM64Z -> TODO()
-		Op.K -> OpNode.reg(Reg.K3)
-		Op.BND -> OpNode.reg(Reg.BND3)
-		Op.T -> TODO()
-		Op.MOFFS8 -> TODO()
-		Op.MOFFS16 -> TODO()
-		Op.MOFFS32 -> TODO()
-		Op.MOFFS64 -> TODO()
-		Op.SEG -> OpNode.reg(Reg.FS)
-		Op.CR -> OpNode.reg(Reg.CR3)
-		Op.DR -> OpNode.reg(Reg.DR3)
-		Op.FS -> OpNode.reg(Reg.FS)
-		Op.GS -> OpNode.reg(Reg.GS)
+		else     -> error("Invalid op: $this")
 	}
 
 
 
-	private fun test() {
+	class EncTest(val node: InsNode, val pos: Int, val length: Int) {
+		override fun toString() = "node=${node.printString}, pos=$pos, length=$length"
+	}
+
+
+
+	private fun testNasmEncs() {
 		val nasmBuilder = StringBuilder()
+		nasmBuilder.appendLine("BITS 64")
 		val context = CompilerContext(emptyList())
 		val assembler = Assembler(context)
-		nasmBuilder.appendLine("BITS 64")
+		val tests = ArrayList<EncTest>()
+		var error = false
 
-		for(e in nasmEncs) {
-			when(e.mnemonic) {
-				"PMULUDQ", "PSUBQ", "PSHUFW", "PSHUFD", "PSHUFHW", "PSHUFLW", "PALIGNR" -> continue
-			}
-			if(e.ops.any { it.type == OpType.MOFFS }) continue
-			if(e.mnemonic in nasmToManualIgnoredMnemonics) continue
-			if(e.avx) continue
+		for(e in nasmParser.expandedEncs.filter { it.mnemonic.type == Mnemonic.Type.GP }) {
+			if(e.ops.any { it.type == OpType.MOFFS || it.type == OpType.VM }) continue
+			if(e.mnemonic in ignoredTestingMnemonics) continue
+			if(e.evex) continue
 
-			val mnemonic = Mnemonic.entries.first { it.name == e.mnemonic }
-
-			val op1 = e.ops.getOrNull(0).toOpNode(false)
-			val op2 = e.ops.getOrNull(1).toOpNode(false)
-			val op3 = e.ops.getOrNull(2).toOpNode(false)
-			val op4 = e.ops.getOrNull(3).toOpNode(false)
+			val op1 = e.ops.getOrNull(0).toNode()
+			val op2 = e.ops.getOrNull(1).toNode()
+			val op3 = e.ops.getOrNull(2).toNode()
+			val op4 = e.ops.getOrNull(3).toNode()
 
 			val node = InsNode(
 				null,
-				mnemonic,
+				e.mnemonic,
 				e.ops.size,
 				op1,
 				op2,
@@ -134,15 +123,41 @@ object EncGen {
 				op4
 			)
 
-			//assembler.assembleForTesting(node, false)
-
-			nasmBuilder.appendLine(node.printString.replace("xword", "oword"))
+			nasmBuilder.appendLine(node.nasmString)
+			try {
+				val (start, length) = assembler.assembleForTesting(node, false)
+				tests += EncTest(node, start, length)
+			} catch(e: Exception) {
+				e.printStackTrace()
+				error = true
+			}
 		}
 
-		//Files.write(Paths.get("test.eyre.obj"), context.textWriter.getTrimmedBytes())
-		Files.writeString(Paths.get("test.asm"), nasmBuilder.toString())
-		//Util.run("nasm", "-fwin64", "test.asm")
-	}*/
+		if(error) error("Assembler encountered one or more errors")
+
+		val nasmInputPath = Paths.get("test.asm")
+		Files.writeString(nasmInputPath, nasmBuilder.toString())
+		Util.run("nasm", "-fwin64", "test.asm")
+		val nasmOutputPath = Paths.get("test.obj")
+		val reader = NativeReader(Files.readAllBytes(nasmOutputPath))
+		reader.pos = 20
+		if(reader.ascii(5) != ".text") error("NASM error")
+		val nasmBytes = reader.bytes(reader.i32(40), reader.i32(36))
+		val eyreBytes = context.textWriter.getTrimmedBytes()
+
+		for(test in tests) {
+			println(test)
+			if(eyreBytes.size < test.pos + test.length) error("?")
+			for(i in 0 ..< test.length) {
+				if(nasmBytes[test.pos + i] != eyreBytes[test.pos + i]) {
+					println("ERROR: ${test.node.printString}")
+					for(j in 0 ..< test.length)
+						println("$j ${nasmBytes[test.pos + j].hex8} ${eyreBytes[test.pos + j].hex8}")
+					return
+				}
+			}
+		}
+	}
 
 
 
@@ -356,6 +371,51 @@ object EncGen {
 	/*
 	Collections
 	 */
+
+
+
+	private val ignoredTestingMnemonics = setOf(
+		// NASM width errors
+		Mnemonic.PMULUDQ,
+		Mnemonic.PSUBQ,
+		Mnemonic.PSHUFW,
+		Mnemonic.PSHUFD,
+		Mnemonic.PSHUFHW,
+		Mnemonic.PSHUFLW,
+		Mnemonic.PALIGNR,
+		// Custom mnemonics
+		Mnemonic.POPW,
+		Mnemonic.PUSHW,
+		Mnemonic.LEAVEW,
+		Mnemonic.ENTER,
+		Mnemonic.WAIT,
+		Mnemonic.JMPF,
+		Mnemonic.CALLF,
+		Mnemonic.ENTERW,
+		Mnemonic.SYSEXITQ,
+		Mnemonic.SYSRETQ,
+		// TEMP
+		Mnemonic.BNDCL,
+		Mnemonic.BNDCN,
+		Mnemonic.BNDCU,
+		Mnemonic.BNDLDX,
+		Mnemonic.BNDMK,
+		Mnemonic.BNDMOV,
+		Mnemonic.BNDSTX,
+		// TEMP: SREG
+		Mnemonic.MOV,
+		// TEMP: NASM allows MEM as second operand
+		Mnemonic.TEST,
+		// Explicit operands
+		Mnemonic.LOOP,
+		Mnemonic.LOOPE,
+		Mnemonic.LOOPNE,
+		Mnemonic.LOOPNZ,
+		Mnemonic.LOOPZ,
+		Mnemonic.HRESET,
+		// NASM gives M64, Intel gives M8
+		Mnemonic.PREFETCHW,
+	)
 
 
 

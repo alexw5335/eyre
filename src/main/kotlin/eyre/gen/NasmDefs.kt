@@ -188,6 +188,8 @@ enum class OpEnc(val string: String?) {
 	RMX("rmx"),
 	MXR("mxr"),
 	MRX("mrx"),
+	// BND-only
+	MRV("mrv"),
 	RMVI("rmvi");
 }
 
