@@ -309,6 +309,9 @@ if_("AMD",               "AMD-specific");
 - ERROR? PMULUDQ and PSUBQ with MMX registers should be SQ not SO
 - ERROR? PSHUFW/PSHUFD/PSHUFHW/PSHUFLW/PALIGNR with explicit memory width causes error
 - ERROR? Intel manual gives tuple type for VEX instruction VCVTTSD2SI
+- ERROR? Intel gives F3 prefix for PTWRITE, NASM gives no prefix
+- ERROR?: SETcc has /0, but should have no extension?
+- ERROR?: RETW IMM16 is missing o16
 
 - If prefix (66, F2, F3), escape (0F, 0F 38, 0F 3A) and wait (9B) are removed, then opcodes don't exceed 2 bytes
 	- 5 FPU instructions start with 9B and have two other opcode bytes
@@ -383,9 +386,6 @@ F2 0F 2D  CVTSD2SI   R_XM64   1100
 F3 0F 2D  CVTSS2SI   R_XM32   1100
 F2 0F 2C  CVTTSD2SI  R_XM64   1100
 F3 0F 2C  CVTTSS2SI  R_XM32   1100
-
-ERROR: PTWRITE is missing F3 prefix
-ERROR: SETcc has /0, but should have no extension?
 
 E.NP.3A.W0 66  VFPCLASSPH  K_SMB16_I8  full
 E.66.3A.W0 66  VFPCLASSPS  K_SMB32_I8  full

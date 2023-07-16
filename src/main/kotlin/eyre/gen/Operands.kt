@@ -13,6 +13,7 @@ enum class SseOp {
 	R16,
 	R32,
 	R64,
+	I8,
 	MEM,
 	M8,
 	M16,
@@ -26,12 +27,41 @@ enum class SseOp {
 
 
 
-enum class AvxOpEnc {
-	NONE,
-	M, R,
-	RM, MR, VM,
-	RVM, MVR, RMV,
-	RVMS;
+enum class SimdOpEnc(vararg val encs: OpEnc) {
+	R(OpEnc.R, OpEnc.RI),
+	M(OpEnc.M, OpEnc.MI),
+	RM(OpEnc.RM, OpEnc.RMV, OpEnc.RMI, OpEnc.RMVI),
+	RV(OpEnc.RVM, OpEnc.RVMI, OpEnc.RVMS),
+	MR(OpEnc.MR, OpEnc.MRI, OpEnc.MRN, OpEnc.MRV),
+	MV(OpEnc.MVR),
+	VM(OpEnc.VM, OpEnc.VMI);
+}
+
+
+
+enum class SimdOp(val op: Op) {
+	NONE(Op.NONE),
+	R8(Op.R8),
+	R16(Op.R16),
+	R32(Op.R32),
+	R64(Op.R64),
+	MM(Op.MM),
+	X(Op.X),
+	Y(Op.Y),
+	Z(Op.Z),
+	K(Op.K),
+	T(Op.T),
+	I8(Op.I8),
+	MEM(Op.MEM),
+	M8(Op.M8),
+	M16(Op.M16),
+	M32(Op.M32),
+	M64(Op.M64),
+	M128(Op.M128),
+	M256(Op.M256),
+	M512(Op.M512);
+
+	val isM get() = ordinal >= MEM.ordinal
 }
 
 

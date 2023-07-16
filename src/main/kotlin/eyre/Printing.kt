@@ -4,7 +4,29 @@ package eyre
 
 
 
-val InsNode.nasmString: String get() = printString.replace("xword", "oword")
+val OpNode.nasmString get() = buildString {
+	when(type) {
+		OpNodeType.MEM -> { if(width != null) append("${width.nasmString} "); append("[${node.printString}]") }
+		OpNodeType.REG -> append(reg.string)
+		OpNodeType.IMM -> append(node.printString)
+	}
+}
+
+
+
+val InsNode.nasmString: String get() = buildString {
+	append(mnemonic.string)
+	if(op1 == null) return@buildString
+	append(" ${op1.nasmString}")
+	if(op2 == null) return@buildString
+	append(", ${op2.nasmString}")
+	if(op3 == null) return@buildString
+	append(", ${op3.nasmString}")
+	if(op4 == null) return@buildString
+	append(", ${op4.nasmString}")
+}
+
+
 
 val AstNode.printString: String get() = when(this) {
 	is LabelNode      -> "label ${symbol.name}"

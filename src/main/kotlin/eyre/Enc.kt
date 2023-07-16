@@ -91,6 +91,59 @@ inline fun Enc(block: Enc.Companion.() -> Int) = Enc(block(Enc))
 
 
 
+class SimdGroup(val mnemonic: Mnemonic) {
+	val encs = ArrayList<SimdEnc>()
+	fun add(enc: SimdEnc) { encs += enc }
+}
+
+
+
+/**
+ *     00 8 opcode
+ *     08 2 prefix
+ *     10 2 escape
+ *     12 3 ext
+ *     15 5 op1
+ *     20 5 op2
+ *     25 5 op3
+ *     30 5 op4
+ *     31 1 O16 / VEX.L
+ *     32 1 REX.W / VEX.W
+ *     33 1 sae
+ *     34 1 er
+ *     35 2 bcst
+ *     37 3 vsib
+ *     40 1 k
+ *     41 1 z
+ *     42 1 evex
+ *     43 3 opEnc
+ *     46   size
+ */
+data class SimdEnc(
+	val mnemonic : Mnemonic,
+	val opcode   : Int,
+	val prefix   : Prefix,
+	val escape   : Escape,
+	val ext      : Int,
+	val hasExt   : Boolean,
+	val ops      : List<SimdOp>,
+	val o16      : Int,
+	val rw       : Int,
+	val vl       : Int,
+	val vw       : Int,
+	val tuple    : TupleType?,
+	val opEnc    : SimdOpEnc,
+	val sae      : Boolean,
+	val er       : Boolean,
+	val bcst     : Int,
+	val vsib     : VSib?,
+	val k        : Boolean,
+	val z        : Boolean,
+	val vex      : Boolean,
+	val evex     : Boolean
+)
+
+
 
 data class AvxEnc(
 	val opcode : Int,
@@ -106,7 +159,7 @@ data class AvxEnc(
 	val l      : Int,
 	val w      : Int,
 	val tuple  : TupleType?,
-	val opEnc  : AvxOpEnc,
+	val opEnc  : SimdOpEnc,
 	val sae    : Boolean,
 	val er     : Boolean,
 	val bcst   : Int,
@@ -167,16 +220,16 @@ value class AvxEnc(val value: Long) {
 }*/
 
 /**
- *     Bits 00-07: opcode  8
- *     Bits 08-10: prefix  3
- *     Bits 11-12: escape  2
- *     Bits 13-15: ext     3  /0../7
- *     Bits 16-19: op1     4
- *     Bits 20-23: op2     4
- *     Bits 24-24: i8      1
- *     Bits 25-25: rw      1
- *     Bits 26-26: o16     1
- *     Bits 27-27: mr      1
+ *     00 8 opcode
+ *     08 3 prefix
+ *     11 2 escape
+ *     13 3 ext
+ *     16 4 op1
+ *     20 4 op2
+ *     24 4 op3
+ *     25 1 rw
+ *     26 1 o16
+ *     27 1 mr
  */
 @JvmInline
 value class SseEnc(val value: Int) {
@@ -188,7 +241,7 @@ value class SseEnc(val value: Int) {
 		ext    : Int,
 		op1    : SseOp,
 		op2    : SseOp,
-		i8     : Int,
+		op3    : SseOp,
 		rw     : Int,
 		o16    : Int,
 		mr     : Int,
@@ -199,7 +252,7 @@ value class SseEnc(val value: Int) {
 		(ext shl EXT_POS) or
 		(op1.ordinal shl OP1_POS) or
 		(op2.ordinal shl OP2_POS) or
-		(i8 shl I8_POS) or
+		(op3.ordinal shl OP3_POS) or
 		(rw shl RW_POS) or
 		(o16 shl O16_POS) or
 		(mr shl MR_POS)
@@ -211,16 +264,14 @@ value class SseEnc(val value: Int) {
 	val ext     get() = ((value shr EXT_POS) and 0xF)
 	val op1     get() = ((value shr OP1_POS) and 0xF).let(SseOp.entries::get)
 	val op2     get() = ((value shr OP2_POS) and 0xF).let(SseOp.entries::get)
-	val i8      get() = ((value shr I8_POS) and 0b1)
+	val op3     get() = ((value shr OP3_POS) and 0xF).let(SseOp.entries::get)
 	val rw      get() = ((value shr RW_POS) and 0b1)
 	val o16     get() = ((value shr O16_POS) and 0b1)
 	val mr      get() = ((value shr MR_POS) and 0b1)
 
 	fun equalExceptMem(other: SseEnc) =
-		(other.i8 == i8) && (
-			(op1.isM && other.op1.isM && op1 != other.op1 && op2 == other.op2) ||
-			(op2.isM && other.op2.isM && op2 != other.op2 && op1 == other.op1)
-		)
+		(op1.isM && other.op1.isM && op1 != other.op1 && op2 == other.op2 && op3 == other.op3) ||
+		(op2.isM && other.op2.isM && op2 != other.op2 && op1 == other.op1 && op3 == other.op3)
 
 	fun withoutMemWidth() = when {
 		op1.isM -> SseEnc((value and (0xF shl OP1_POS).inv()) or (SseOp.MEM.ordinal shl OP1_POS))
@@ -233,32 +284,32 @@ value class SseEnc(val value: Int) {
 		Escape.entries[escape].string?.let { append("$it ") }
 		append(opcode.hexc8)
 		if(ext != 0) append("/$ext")
+
 		if(op1 == SseOp.NONE) {
 			append(" NONE")
 		} else {
 			append(" $op1")
-			if(op2 != SseOp.NONE)
-				append("_$op2")
+			if(op2 != SseOp.NONE) append("_$op2")
+			if(op3 != SseOp.NONE) append("_$op3")
 		}
-		if(i8 == 1) append("_I8")
 		append("  ")
 		if(rw == 1) append("RW ")
 		if(o16 == 1) append("O16 ")
 		if(mr == 1) append("MR ")
 	}
 
-	fun compareOps(ops: Int) = value and 0b1_11111111_00000000_00000000 == ops
+	fun compareOps(ops: Int) = value and 0b1111_11111111_00000000_00000000 == ops
 
 	companion object {
-		fun makeOps(op1: SseOp, op2: SseOp, i8: Int) =
-			(op1.ordinal shl OP1_POS) or (op2.ordinal shl OP2_POS) or (i8 shl I8_POS)
+		fun makeOps(op1: SseOp, op2: SseOp, op3: SseOp) =
+			(op1.ordinal shl OP1_POS) or (op2.ordinal shl OP2_POS) or (op3.ordinal shl OP3_POS)
 		const val OPCODE_POS = 0
 		const val PREFIX_POS = 8
 		const val ESCAPE_POS = 11
 		const val EXT_POS = 13
 		const val OP1_POS = 16
 		const val OP2_POS = 20
-		const val I8_POS = 24
+		const val OP3_POS = 24
 		const val RW_POS = 25
 		const val O16_POS = 26
 		const val MR_POS = 27

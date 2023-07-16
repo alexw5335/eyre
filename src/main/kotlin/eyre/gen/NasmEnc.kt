@@ -40,7 +40,6 @@ data class NasmEnc(
 ) {
 
 	val opsString = ops.joinToString("_")
-	val isChild = parent != null
 
 	fun compactAvxString() = buildString {
 		if(evex) append("E.") else append("V.")

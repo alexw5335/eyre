@@ -17,6 +17,7 @@ enum class Width(val string: String, val varString: String?, val bytes: Int) {
 	private val max: Long = if(bytes > 8) 0 else (1L shl ((bytes shl 3) - 1)) - 1
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
+	val nasmString = if(string == "xword") "oword" else string
 
 }
 

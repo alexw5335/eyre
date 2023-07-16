@@ -1,6 +1,7 @@
 namespace main
 
 proc main {
-	blsi r14, rdx
-	//vtestpd ymm1, yword [r14 + r15 * 8 + 0x10]
+	vzeroupper
+	vzeroall
+	tilerelease
 }

@@ -5,7 +5,8 @@ import eyre.Width.*
 import eyre.OpNodeType.*
 import eyre.Mnemonic.*
 import eyre.gen.AvxOp
-import eyre.gen.AvxOpEnc
+import eyre.gen.SimdOp
+import eyre.gen.SimdOpEnc
 import eyre.gen.SseOp
 
 class Assembler(private val context: CompilerContext) {
@@ -96,19 +97,20 @@ class Assembler(private val context: CompilerContext) {
 
 		node.prefix?.let { byte(it.value) }
 
-		if(node.mnemonic.type == Mnemonic.Type.SSE) {
-			assembleSse(Encs.sseEncs[node.mnemonic] ?: invalid(), node.op1, node.op2, node.op3)
-		} else if(node.mnemonic.type == Mnemonic.Type.AVX) {
-			assembleAvx(Encs.avxEncs[node.mnemonic] ?: invalid(), node.op1, node.op2, node.op3, node.op4)
-		} else {
-			when(node.size) {
-				0    -> assemble0(node)
-				1    -> assemble1(node, node.op1!!)
-				2    -> assemble2(node, node.op1!!, node.op2!!)
-				3    -> assemble3(node, node.op1!!, node.op2!!, node.op3!!)
-				else -> invalid()
-			}
+		if(node.size == 0) {
+			assemble0(node)
+			return
 		}
+
+		if(node.mnemonic.type == Mnemonic.Type.SSE || node.mnemonic.type == Mnemonic.Type.AVX) {
+			assembleSimd(node)
+		} else when(node.size) {
+			1 -> assemble1(node, node.op1!!)
+			2 -> assemble2(node, node.op1!!, node.op2!!)
+			3 -> assemble3(node, node.op1!!, node.op2!!, node.op3!!)
+			else -> invalid()
+		}
+
 	}
 
 
@@ -742,6 +744,7 @@ class Assembler(private val context: CompilerContext) {
 		val mask = this.mask
 		val width = op1.width
 		checkWidth(mask, width)
+		writeO16(mask, width)
 		writeRex(rexw or rexw(mask, width), 0, 0, op1.rex)
 		writeEscape(this)
 		// Only single-byte opcodes use this encoding
@@ -1032,6 +1035,9 @@ class Assembler(private val context: CompilerContext) {
 		SAVEPREVSSP -> writer.i32(0xEA010FF3)
 		UD1         -> writer.i16(0xB90F)
 		UD2         -> writer.i16(0x0B0F)
+		VZEROUPPER  -> writer.i24(0x7778C5)
+		VZEROALL    -> writer.i24(0x777CC5)
+		TILERELEASE -> writer.i40(0xC0497802C4)
 		RETURN      -> encodeRETURN()
 		else        -> invalid()
 	}}
@@ -1214,7 +1220,7 @@ class Assembler(private val context: CompilerContext) {
 		
 		FIST -> when(op1.asMem.width) {
 			WORD  -> encode1MAny(0xDF, 2, op1)
-			DWORD -> encode1MAny(0xD8, 2, op1)
+			DWORD -> encode1MAny(0xDB, 2, op1)
 			else  -> invalid()
 		}
 		
@@ -1323,7 +1329,7 @@ class Assembler(private val context: CompilerContext) {
 		IMUL -> Enc { E0F + 0xAF + R1110 }.encode2RRM(op1.asReg, op2, 0)
 
 		MOVSXD -> when(op2.width) {
-			DWORD -> Enc { 0x63 + R1000 + MM }.encode2RRM(op1.reg, op2, 0)
+			DWORD -> Enc { 0x63 + R1100 + MM }.encode2RRM(op1.reg, op2, 0)
 			else -> invalid()
 		}
 
@@ -1484,6 +1490,287 @@ class Assembler(private val context: CompilerContext) {
 	}}
 
 
+	/*
+	SIMD
+	 */
+
+
+	/*a
+	X_X
+	X_M128
+	X_M64
+	X_M32
+	X_X_I8
+	X_M128_I8
+	R32_R32_R32
+	R32_R32_M32
+	R64_R64_R64
+	R64_R64_M64
+	R32_M32_R32
+	R64_M64_R64
+	R32_R32
+	R32_M32
+	R64_R64
+	R64_M64
+	M32_R32_R32
+	M64_R64_R64
+	X_M32_I8
+	MM_X
+	MM_M128
+	X_MM
+	MM_M64
+	R32_X
+	R32_M64
+	R64_X
+	X_R32
+	X_R64
+	R64_M32
+	R32_X_I8
+	M32_X_I8
+	R64_X_I8
+	K_K_K
+	K_K
+	K_M8
+	M8_K
+	K_R32
+	R32_K
+	K_M32
+	M32_K
+	K_M64
+	M64_K
+	K_R64
+	R64_K
+	K_M16
+	M16_K
+	K_K_I8
+	M512
+	MM_MM
+	M128_X
+	MM_R32
+	MM_M32
+	R32_MM
+	M32_MM
+	M32_X
+	M64_X
+	M64_MM
+	MM_R64
+	R64_MM
+	MM_MM_I8
+	MM_M64_I8
+	M8_X_I8
+	M64_X_I8
+	R32_MM_I8
+	M16_X_I8
+	X_R8_I8
+	X_M8_I8
+	X_R32_I8
+	X_R64_I8
+	X_M64_I8
+	MM_R16_I8
+	MM_M16_I8
+	MM_R32_I8
+	X_R16_I8
+	X_M16_I8
+	X_M16
+	MM_I8
+	X_I8
+	R32_R32_I8
+	R32_M32_I8
+	R64_R64_I8
+	R64_M64_I8
+	T_T_T
+	T_MEM
+	MEM_T
+	T
+	Z_Z_M128
+	X_X_X
+	X_X_M128
+	Y_Y_Y
+	Y_Y_M256
+	Z_Z_Z
+	Z_Z_M512
+	X_X_M16
+	Y_Y_M16
+	Z_Z_M16
+	X_X_M64
+	X_X_M32
+	X_X_X_I8
+	X_X_M128_I8
+	Y_Y_Y_I8
+	Y_Y_M256_I8
+	Z_Z_Z_I8
+	Z_Z_M512_I8
+	X_X_X_X
+	X_X_M128_X
+	Y_Y_Y_Y
+	Y_Y_M256_Y
+	Y_M128
+	Y_X
+	Y_M64
+	Z_X
+	Z_M64
+	Z_M128
+	Z_M256
+	Y_M32
+	Z_M32
+	K_X_X
+	K_X_M128
+	K_Y_Y
+	K_Y_M256
+	K_Z_Z
+	K_Z_M512
+	K_X_M64
+	K_X_M32
+	K_X_X_I8
+	K_X_M128_I8
+	K_Y_Y_I8
+	K_Y_M256_I8
+	K_Z_Z_I8
+	K_Z_M512_I8
+	K_X_M16_I8
+	K_Y_M16_I8
+	K_Z_M16_I8
+	X_X_M64_I8
+	K_X_M64_I8
+	K_X_M32_I8
+	M256_Y
+	M512_Z
+	Y_Y
+	Z_Z
+	Z_Y
+	Y_M256
+	Z_M512
+	X_Y
+	X_M256
+	Y_Z
+	Y_M512
+	X_Y_I8
+	M128_Y_I8
+	Y_Z_I8
+	M256_Z_I8
+	R32_M16
+	R64_M16
+	X_X_R32
+	X_X_R64
+	Y_Y_M128
+	Y_Y_I8
+	Y_M256_I8
+	Z_Z_I8
+	Z_M512_I8
+	X_X_M16_I8
+	X_Z_I8
+	M128_Z_I8
+	X_X_M32_I8
+	K_X_I8
+	K_M128_I8
+	K_Y_I8
+	K_M256_I8
+	K_Z_I8
+	K_M512_I8
+	K_M64_I8
+	K_M16_I8
+	K_M32_I8
+	X_VM64X_X
+	Y_VM64X_Y
+	X_VM64X
+	Y_VM64X
+	Z_VM64Y
+	X_VM32X_X
+	Y_VM32Y_Y
+	X_VM32X
+	Y_VM32Y
+	Z_VM32Z
+	VM64Y
+	VM32Z
+	VM64Z
+	Y_VM64Y_Y
+	Y_VM64Y
+	Z_VM64Z
+	X_VM32Y_X
+	X_VM32Y
+	Y_VM32Z
+	Y_Y_X_I8
+	Y_Y_M128_I8
+	Z_Z_X_I8
+	Z_Z_M128_I8
+	Z_Z_Y_I8
+	Z_Z_M256_I8
+	M32
+	M128_X_X
+	M256_Y_Y
+	R64_Y
+	R32_Y
+	M16_X
+	X_R16
+	R16_X
+	K_Y_M128
+	K_Z_M128
+	X_M8
+	Y_M8
+	Z_M8
+	X_R8
+	Y_R8
+	Y_R16
+	Y_R32
+	Y_R64
+	Z_R8
+	Z_R16
+	Z_R32
+	Z_R64
+	X_K
+	Y_K
+	Z_K
+	Y_M16
+	Z_M16
+	R8_X_I8
+	R16_X_I8
+	X_X_M8_I8
+	X_X_R8_I8
+	X_X_R32_I8
+	X_X_R64_I8
+	X_X_R16_I8
+	K_X
+	K_Y
+	K_Z
+	X_Z
+	M64_Y
+	M128_Z
+	M128_Y
+	M256_Z
+	M32_Y
+	M64_Z
+	VM32X_X
+	VM32Y_Y
+	VM32Z_Z
+	VM64X_X
+	VM64X_Y
+	VM64Y_Z
+	VM32Y_X
+	VM32Z_Y
+	VM64Y_Y
+	VM64Z_Z
+	Y_Y_X
+	Z_Z_X
+	 */
+
+
+	private fun assembleSimd(node: InsNode) {
+		val group = Encs.simdEncs[node.mnemonic] ?: invalid()
+	}
+
+
+	//		when {
+	//			op1 == null -> invalid()
+	//			op2 == null -> invalid()
+	//			op3 == null -> if(op1.isReg && op2.isReg)
+	//				encodeAvx2RR(enc, op1.reg, op2.reg)
+	//			else if(op1.isReg && op2.isMem)
+	//				encodeAvx2RM(enc, op1.reg, op2)
+	//			else invalid()
+	//			op4 == null -> invalid()
+	//			else        -> invalid()
+	//		}
+
 
 	/*
 	AVX
@@ -1548,13 +1835,13 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encodeAvx2RR(enc: AvxEnc, op1: Reg, op2: Reg) {
-		if(enc.opEnc == AvxOpEnc.VM) {
+		if(enc.opEnc == SimdOpEnc.VM) {
 			byte(0xC4)
 			writeVEX1(1, 1, op2.vexRex, enc.escape.avxValue)
 			writeVEX2(enc.w, op1.vexValue, enc.l, enc.prefix.avxValue)
 			byte(enc.opcode)
 			writeModRM(0b11, enc.ext, op2.value)
-		} else if(enc.opEnc == AvxOpEnc.RM) {
+		} else if(enc.opEnc == SimdOpEnc.RM) {
 			byte(0xC4)
 			writeVEX1(op1.vexRex, 1, op2.vexRex, enc.escape.avxValue)
 			writeVEX2(enc.w, 0b1111, enc.l, enc.prefix.avxValue)
@@ -1589,30 +1876,30 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun assembleSse(encodings: IntArray, op1: OpNode?, op2: OpNode?, op3: OpNode?) {
-		fun enc(op1: SseOp, op2: SseOp, i8: Boolean): SseEnc {
-			val ops = SseEnc.makeOps(op1, op2, if(i8) 1 else 0)
+		fun enc(op1: SseOp, op2: SseOp, op3: SseOp): SseEnc {
+			val ops = SseEnc.makeOps(op1, op2, op3)
 			for(e in encodings)
 				if(SseEnc(e).compareOps(ops))
 					return SseEnc(e)
-			invalid()
+			invalid("$op1, $op2, $op3    " + encodings.joinToString { SseEnc(it).toString() })
 		}
 
-		val i8 = op3 != null && op3.isImm
+		if(op1 == null || op2 == null) invalid()
 
-		if(op1 == null || op2 == null) {
-			if(op1 != null || op2 != null) invalid()
-			byte(enc(SseOp.NONE, SseOp.NONE, false).opcode)
-			return
+		val sseOp3 = when {
+			op3 == null -> SseOp.NONE
+			!op3.isImm  -> invalid()
+			else        -> SseOp.I8
 		}
 
 		when(op1.type) {
 			REG -> when(op2.type) {
-				REG -> encodeSseRR(enc(op1.reg.sseOp(), op2.reg.sseOp(), i8), op1.reg, op2.reg, op3)
-				MEM -> encodeSseRM(enc(op1.reg.sseOp(), op2.sseOp(), i8), op1.reg, op2, op3)
-				IMM -> encodeSseRI(enc(op1.reg.sseOp(), SseOp.NONE, false), op1.reg, op2, op3)
+				REG -> encodeSseRR(enc(op1.reg.sseOp(), op2.reg.sseOp(), sseOp3), op1.reg, op2.reg, op3)
+				MEM -> encodeSseRM(enc(op1.reg.sseOp(), op2.sseOp(), sseOp3), op1.reg, op2, op3)
+				IMM -> encodeSseRI(enc(op1.reg.sseOp(), SseOp.I8, SseOp.NONE), op1.reg, op2, op3)
 			}
 			MEM -> when(op2.type) {
-				REG  -> encodeSseRM(enc(op1.sseOp(), op2.reg.sseOp(), i8), op2.reg, op1, op3)
+				REG  -> encodeSseRM(enc(op1.sseOp(), op2.reg.sseOp(), sseOp3), op2.reg, op1, op3)
 				else -> invalid()
 			}
 			IMM -> invalid()
@@ -1667,7 +1954,7 @@ class Assembler(private val context: CompilerContext) {
 		writeRex(enc.rw, first.rex, 0, second.rex)
 		writeSseOpcode(enc)
 		writeModRM(0b11, first.value, second.value)
-		if(enc.i8 == 1) writeImm(op3!!, BYTE)
+		if(op3 != null) writeImm(op3, BYTE)
 	}
 
 	private fun encodeSseRM(enc: SseEnc, op1: Reg, op2: OpNode, op3: OpNode?) {
@@ -1679,7 +1966,7 @@ class Assembler(private val context: CompilerContext) {
 		writeRex(enc.rw, op1.rex, indexRex, baseRex)
 		writeSseOpcode(enc)
 		writeMem(op2, op1.value, disp, 0)
-		if(enc.i8 == 1) writeImm(op3!!, BYTE)
+		if(op3 != null) writeImm(op3, BYTE)
 	}
 
 	private fun encodeSseRI(enc: SseEnc, op1: Reg, op2: OpNode, op3: OpNode?) {
@@ -1776,7 +2063,7 @@ class Assembler(private val context: CompilerContext) {
 		when {
 			!op1.isA -> invalid()
 			op2.reg == Reg.DX -> when(op1.width) {
-				BYTE  -> byte(0xE4)
+				BYTE  -> byte(0xEC)
 				WORD  -> word(0xED66)
 				DWORD -> byte(0xED)
 				else  -> invalid()
@@ -2104,7 +2391,7 @@ class Assembler(private val context: CompilerContext) {
 				Reg.GS -> word(0xA80F)
 				else   -> Enc { 0x50 + R1010 }.encode1O(op1.reg)
 			}
-			MEM -> Enc { 0xFF + R1110 + EXT6 }.encode1M(op1, 0)
+			MEM -> Enc { 0xFF + R1010 + EXT6 }.encode1M(op1, 0)
 			IMM -> {
 				val imm = resolveImm(op1)
 
@@ -2141,7 +2428,7 @@ class Assembler(private val context: CompilerContext) {
 				Reg.GS -> word(0xA90F)
 				else -> Enc { 0x58 + R1010 }.encode1O(op1.reg)
 			}
-			MEM -> Enc { 0x8F + R1110 + EXT0 }.encode1M(op1, 0)
+			MEM -> Enc { 0x8F + R1010 + EXT0 }.encode1M(op1, 0)
 			else -> invalid()
 		}
 	}
@@ -2181,7 +2468,7 @@ class Assembler(private val context: CompilerContext) {
 		when(op1.type) {
 			MEM -> when(op1.width) {
 				DWORD -> encode1MAny(0xD8, extension, op1)
-				QWORD -> encode1MAny(0xDE, extension, op1)
+				QWORD -> encode1MAny(0xDC, extension, op1)
 				else -> invalid()
 			}
 			REG -> word(opcode + (op1.asST.value shl 8))
