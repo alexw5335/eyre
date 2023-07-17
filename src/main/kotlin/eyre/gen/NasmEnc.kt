@@ -39,6 +39,8 @@ data class NasmEnc(
 	val evex     : Boolean
 ) {
 
+	val simdOpEnc = SimdOpEnc.entries.firstOrNull { opEnc in it.encs }
+
 	val opsString = ops.joinToString("_")
 
 	fun compactAvxString() = buildString {

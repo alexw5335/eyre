@@ -7,24 +7,38 @@ import eyre.util.Util
 import eyre.util.hex8
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.random.Random
 
+@Suppress("unused")
 object EncGen {
 
 
 	private val nasmParser = NasmParser(Files.readAllLines(Paths.get("nasm.txt"))).also { it.read() }
 	private val encs = nasmParser.expandedEncs
-	private val mnemonicMap = Mnemonic.entries.associateBy { it.name }
 	private val gpEncs = encs.filter { it.mnemonic.isGp }
 	private val sseEncs = encs.filter { it.mnemonic.isSse }
 	private val avxEncs = encs.filter { it.mnemonic.isAvx }
 
 
 
-	// AVX/AVX512/MMX/SSE: any IMM ops are always I8 and always the last operand. None have multiple IMM ops.
+	val simdMap = HashMap<Mnemonic, ArrayList<NasmEnc>>().apply {
+		for(enc in encs)
+			if(enc.mnemonic.isSse || enc.mnemonic.isAvx)
+				getOrPut(enc.mnemonic, ::ArrayList).add(enc)
+	}
+
+
 
 	fun run() {
-
+		for(e in encs)
+			if(e.avx && !e.evex && e.ops.size == 3)
+				if(e.ops.count { it.type.isReg } == 2 && e.ops.count { it.type.isM } == 1)
+					Unique.print(e.opEnc)
+		//testEncs(false)
 	}
+
+	// RRR: RVM RMV MVR
+	// RRM: RVM RMV MRV MVR
 
 
 
@@ -65,14 +79,14 @@ object EncGen {
 		Op.REL8  -> OpNode.imm(null, IntNode(10))
 		Op.REL16 -> OpNode.imm(null, IntNode(10))
 		Op.REL32 -> OpNode.imm(null, IntNode(10))
-		Op.ST    -> OpNode.reg(Reg.ST3)
+		Op.ST    -> OpNode.reg(Reg.st(Random.nextInt(8)))
 		Op.ST0   -> OpNode.reg(Reg.ST0)
 		Op.ONE   -> OpNode.imm(null, IntNode(1))
-		Op.MM    -> OpNode.reg(Reg.MM3)
-		Op.X     -> OpNode.reg(Reg.XMM3)
-		Op.Y     -> OpNode.reg(Reg.YMM3)
-		Op.Z     -> OpNode.reg(Reg.ZMM3)
-		Op.K     -> OpNode.reg(Reg.K3)
+		Op.MM    -> OpNode.reg(Reg.mm(Random.nextInt(8)))
+		Op.X     -> OpNode.reg(Reg.x(Random.nextInt(16)))
+		Op.Y     -> OpNode.reg(Reg.y(Random.nextInt(16)))
+		Op.Z     -> OpNode.reg(Reg.z(Random.nextInt(16)))
+		Op.K     -> OpNode.reg(Reg.k(Random.nextInt(8)))
 		Op.BND   -> OpNode.reg(Reg.BND3)
 		Op.T     -> OpNode.reg(Reg.TMM3)
 		Op.SEG   -> OpNode.reg(Reg.FS)
@@ -80,12 +94,12 @@ object EncGen {
 		Op.DR    -> OpNode.reg(Reg.DR3)
 		Op.FS    -> OpNode.reg(Reg.FS)
 		Op.GS    -> OpNode.reg(Reg.GS)
-		Op.VM32X -> TODO()
-		Op.VM64X -> TODO()
-		Op.VM32Y -> TODO()
-		Op.VM64Y -> TODO()
-		Op.VM32Z -> TODO()
-		Op.VM64Z -> TODO()
+		Op.VM32X -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
+		Op.VM64X -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
+		Op.VM32Y -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
+		Op.VM64Y -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
+		Op.VM32Z -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
+		Op.VM64Z -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
 		else     -> error("Invalid op: $this")
 	}
 
@@ -97,7 +111,7 @@ object EncGen {
 
 
 
-	private fun testEncs() {
+	private fun testEncs(allowErrors: Boolean) {
 		val nasmBuilder = StringBuilder()
 		nasmBuilder.appendLine("BITS 64")
 		val context = CompilerContext(emptyList())
@@ -105,23 +119,26 @@ object EncGen {
 		val tests = ArrayList<EncTest>()
 		var error = false
 
-		val testing = listOf(Op.X, Op.X)
+		//val testing = listOf(Op.Y, Op.Y, Op.Y)
 
 		for(e in encs) {
 			if(e.ops.any { it.type == OpType.MOFFS || it.type == OpType.VM || it.type == OpType.REL }) continue
 			if(e.mnemonic in ignoredTestingMnemonics) continue
-			if(e.avx) continue
-			if(e.ops != testing) continue
+			if(e.evex) continue
+			if(!e.avx) continue
+			//if(e.ops != testing) continue
 
 			val op1 = e.ops.getOrNull(0).toNode()
 			val op2 = e.ops.getOrNull(1).toNode()
 			val op3 = e.ops.getOrNull(2).toNode()
 			val op4 = e.ops.getOrNull(3).toNode()
+			val high = (op1?.high ?: 0) or (op2?.high ?: 0) or (op3?.high ?: 0) or (op4?.high ?: 0)
 
 			val node = InsNode(
 				null,
 				e.mnemonic,
 				e.ops.size,
+				high,
 				op1,
 				op2,
 				op3,
@@ -130,15 +147,19 @@ object EncGen {
 
 			nasmBuilder.appendLine(node.nasmString)
 			try {
-				val (start, length) = assembler.assembleForTesting(node, false)
+				val (start, length) = assembler.assembleForTesting(node)
 				tests += EncTest(node, start, length)
 			} catch(e: Exception) {
 				e.printStackTrace()
 				error = true
+				if(!allowErrors) break
 			}
 		}
 
-		if(error) error("Assembler encountered one or more errors")
+		if(error) {
+			System.err.println("Assembler encountered one or more errors")
+			return
+		}
 
 		val nasmInputPath = Paths.get("test.asm")
 		Files.writeString(nasmInputPath, nasmBuilder.toString())
@@ -194,123 +215,6 @@ object EncGen {
 			println("$m(Type.GP),")
 		for((mnemonic, type) in mnemonics.entries.sortedBy { it.key })
 			println("$mnemonic(Type.$type),")
-	}
-
-
-
-	/*
-	AVX Instruction generation
-	 */
-
-
-
-	fun genSimdMap(): Map<Mnemonic, SimdGroup> {
-		val map = HashMap<Mnemonic, SimdGroup>()
-		fun Op.toSimdOp() = SimdOp.entries.firstOrNull { it.op == this } ?: error("Invalid SIMD op: $this")
-
-		for(e in encs) {
-			if(e.mnemonic.type != Mnemonic.Type.SSE && e.mnemonic.type != Mnemonic.Type.AVX) continue
-			Unique.print(e.opsString)
-			if(e.ops.isEmpty()) continue
-			if(e.opcode and 0xFF00 != 0) error("Invalid opcode: $e")
-			if(e.ops.any { it.type == OpType.VM }) continue
-
-			val simdEnc = SimdEnc(
-				e.mnemonic,
-				e.opcode,
-				e.prefix,
-				e.escape,
-				e.ext.coerceAtLeast(0),
-				e.hasExt,
-				e.ops.map { it.toSimdOp() },
-				e.o16,
-				e.rw,
-				e.vexl.value,
-				e.vexw.value,
-				e.tuple,
-				SimdOpEnc.entries.firstOrNull { e.opEnc in it.encs} ?: error("Invalid SIMD op enc: ${e.opEnc}"),
-				e.sae,
-				e.er,
-				e.bcst,
-				e.vsib,
-				e.k,
-				e.z,
-				e.avx && !e.evex,
-				e.evex
-			)
-
-			map.getOrPut(e.mnemonic) { SimdGroup(e.mnemonic) }.add(simdEnc)
-		}
-
-
-		return map
-	}
-
-
-
-	/*
-	MMX/SSE instruction generation
-	 */
-
-
-
-	/**
-	 * Generates a mapping of mnemonics to lists of non-human-readable [SseEnc] values for use in code.
-	 */
-	fun genSseEncMap() {
-		val map = HashMap<Mnemonic, ArrayList<SseEnc>>()
-
-		for(e in sseEncs) {
-			fun Op?.toSseOp() = when(this) {
-				null    -> SseOp.NONE
-				Op.NONE -> SseOp.NONE
-				Op.I8   -> SseOp.I8
-				Op.R8   -> SseOp.R8
-				Op.R16  -> SseOp.R16
-				Op.R32  -> SseOp.R32
-				Op.R64  -> SseOp.R64
-				Op.MM   -> SseOp.MM
-				Op.X    -> SseOp.X
-				Op.M8   -> SseOp.M8
-				Op.M16  -> SseOp.M16
-				Op.M32  -> SseOp.M32
-				Op.M64  -> SseOp.M64
-				Op.M128 -> SseOp.M128
-				else    -> error("Invalid SSE operand: $e")
-			}
-			val sseEnc = SseEnc(
-				e.opcode,
-				e.prefix.ordinal,
-				e.escape.ordinal,
-				e.ext.coerceAtLeast(0),
-				e.ops.getOrNull(0).toSseOp(),
-				e.ops.getOrNull(1).toSseOp(),
-				e.ops.getOrNull(2).toSseOp(),
-				e.rw,
-				e.o16,
-				if(e.mr) 1 else 0
-			)
-
-			map.getOrPut(e.mnemonic, ::ArrayList).add(sseEnc)
-		}
-
-		val toAdd = ArrayList<SseEnc>()
-
-		for((_, list) in map) {
-			for(e in list)
-				if(e.op1.isM || e.op2.isM)
-					if(list.none { it.equalExceptMem(e) })
-						toAdd += e.withoutMemWidth()
-			if(toAdd.isNotEmpty()) {
-				list += toAdd
-				toAdd.clear()
-			}
-		}
-
-		println("val sseEncs = mapOf<Mnemonic, IntArray>(")
-		for((mnemonic, values) in map)
-			println("\tMnemonic.$mnemonic to intArrayOf(${values.joinToString { it.value.toString() }}),")
-		println(")")
 	}
 
 

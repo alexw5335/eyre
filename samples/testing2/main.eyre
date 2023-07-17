@@ -1,7 +1,5 @@
 namespace main
 
 proc main {
-	vzeroupper
-	vzeroall
-	tilerelease
+	vcvtdq2ps ymm14, ymm13
 }

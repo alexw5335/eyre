@@ -10,6 +10,8 @@ object Unique : Iterable<Unique.Holder> {
 
 	fun add(value: String) = set.getOrPut(value) { Holder(value, 0) }.count++
 
+	fun print(value: Any) = print(value.toString())
+
 	fun print(value: String, print: String = value) {
 		if(value in set) return
 		add(value)

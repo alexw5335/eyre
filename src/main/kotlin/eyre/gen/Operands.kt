@@ -93,18 +93,24 @@ enum class AvxOp {
 
 
 
-enum class OpType {
-	R,
+enum class OpType(val isReg: Boolean = false) {
+	R(true),
 	M,
 	I,
-	A,
-	C,
-	ST,
+	A(true),
+	C(true),
+	ST(true),
+	S(true),
+	K(true),
+	T(true),
+	MM(true),
 	MISC,
 	REL,
 	VM,
 	MOFFS,
 	MULTI;
+
+	val isM get() = this == M || this == VM
 }
 
 
@@ -153,19 +159,19 @@ enum class Op(
 	ST("fpureg", OpType.ST, TWORD),
 	ST0("fpu0", OpType.ST, TWORD),
 	ONE("unity", OpType.MISC, null),
-	MM("mmxreg", OpType.MISC, QWORD),
-	X("xmmreg", OpType.MISC, XWORD),
-	Y("ymmreg", OpType.MISC, YWORD),
-	Z("zmmreg", OpType.MISC, ZWORD),
+	MM("mmxreg", OpType.MM, QWORD),
+	X("xmmreg", OpType.S, XWORD),
+	Y("ymmreg", OpType.S, YWORD),
+	Z("zmmreg", OpType.S, ZWORD),
 	VM32X("xmem32", OpType.VM, XWORD),
 	VM64X("xmem64", OpType.VM, XWORD),
 	VM32Y("ymem32", OpType.VM, YWORD),
 	VM64Y("ymem64", OpType.VM, YWORD),
 	VM32Z("zmem32", OpType.VM, ZWORD),
 	VM64Z("zmem64", OpType.VM, ZWORD),
-	K("kreg", OpType.MISC, null),
+	K("kreg", OpType.K, null),
 	BND("bndreg", OpType.MISC, null),
-	T("tmmreg", OpType.MISC, null),
+	T("tmmreg", OpType.T, null),
 	MOFFS8(null, OpType.MOFFS, BYTE),
 	MOFFS16(null, OpType.MOFFS, WORD),
 	MOFFS32(null, OpType.MOFFS, DWORD),
@@ -202,5 +208,5 @@ enum class Op(
 		this(nasmName, OpType.MULTI, null, op1, op2)
 
 	val isMulti get() = type == OpType.MULTI
-	
+
 }

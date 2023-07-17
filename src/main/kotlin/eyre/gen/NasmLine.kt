@@ -47,7 +47,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var dds = false
 	var star = false
 	var vexl = VexL.LIG
-	var vexw = VexW.WIG
+	var vexw = VexW.WIG // Assuming that omission of VEX.W implies WIG (not certain)
 	var map5 = false
 	var map6 = false
 

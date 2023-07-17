@@ -297,16 +297,16 @@ enum class Reg(val type  : RegType, val index : Int) {
 
 	val string = name.lowercase()
 
-	val width = type.width
-	val value = (index and 0b111)
-	val rex = (index shr 3) and 1
-	val high = (index shr 4) and 1
-	val vexRex get() = rex.inv() and 1
-	val vexValue get() = (value or (rex shl 3)).inv() and 0b1111
-	val isR = type.ordinal <= RegType.R64.ordinal
-	val isA = isR && value == 0 && rex == 0
-	val rex8 = if(type == RegType.R8 && value in 4..7 && name.endsWith('L')) 1 else 0
-	val noRex = if(type == RegType.R8 && value in 4..7 && name.endsWith('H')) 1 else 0
+	val width    = type.width
+	val value    = (index and 0b111)
+	val rex      = (index shr 3) and 1
+	val high     = (index shr 4) and 1
+	val vexRex   = rex xor 1
+	val vvvvValue = (value or (rex shl 3)).inv() and 0b1111
+	val isR      = type.ordinal <= RegType.R64.ordinal
+	val isA      = isR && value == 0 && rex == 0
+	val rex8     = if(type == RegType.R8 && value in 4..7 && name.endsWith('L')) 1 else 0
+	val noRex    = if(type == RegType.R8 && value in 4..7 && name.endsWith('H')) 1 else 0
 
 	companion object {
 		fun r8(index: Int) = entries[AL.ordinal + index]
