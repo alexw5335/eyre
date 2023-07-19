@@ -101,21 +101,21 @@ data class NasmEnc(
 				3 -> append("B64 ")
 			}
 			vsib?.let { append("$it ") }
-			return@buildString
+		} else {
+			prefix.string?.let { append("$it ") }
+			escape.string?.let { append("$it ") }
+			if(opcode and 0xFF00 != 0) append("${(opcode shr 8).hexc8} ")
+			append((opcode and 0xFF).hexc8)
+			if(ext >= 0) append("/$ext")
+			append("  $mnemonic  ")
+			if(ops.isNotEmpty()) append(opsString) else append("NONE")
+			append("  ")
+			if(rw == 1) append("RW ")
+			if(o16 == 1) append("O16 ")
+			if(pseudo >= 0) append(":$pseudo ")
+			if(mr) append("MR ")
 		}
-
-		prefix.string?.let { append("$it ") }
-		escape.string?.let { append("$it ") }
-		if(opcode and 0xFF00 != 0) append("${(opcode shr 8).hexc8} ")
-		append((opcode and 0xFF).hexc8)
-		if(ext >= 0) append("/$ext")
-		append("  $mnemonic  ")
-		if(ops.isNotEmpty()) append(opsString) else append("NONE")
-		append("  ")
-		if(rw == 1) append("RW ")
-		if(o16 == 1) append("O16 ")
-		if(pseudo >= 0) append(":$pseudo ")
-		if(mr) append("MR ")
+		trimEnd()
 	}
 
 }

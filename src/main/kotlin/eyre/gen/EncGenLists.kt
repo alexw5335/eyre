@@ -27,7 +27,7 @@ object EncGenLists {
 		"NBE" to 7, "A" to 7,
 		"S" to 8,
 		"NS" to 9,
-		"P" to 9, "PE" to 10,
+		"P" to 10, "PE" to 10,
 		"NP" to 11, "PO" to 11,
 		"L" to 12, "NGE" to 12,
 		"NL" to 13, "GE" to 13,

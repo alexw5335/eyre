@@ -110,7 +110,7 @@ enum class OpType(val isReg: Boolean = false) {
 	MOFFS,
 	MULTI;
 
-	val isM get() = this == M || this == VM
+	val isMem get() = this == M || this == VM
 }
 
 

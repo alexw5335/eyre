@@ -1,5 +1,7 @@
 package eyre
 
+import kotlin.random.Random
+
 
 
 enum class Width(val string: String, val varString: String?, val bytes: Int) {
@@ -307,13 +309,16 @@ enum class Reg(val type  : RegType, val index : Int) {
 	val isA      = isR && value == 0 && rex == 0
 	val rex8     = if(type == RegType.R8 && value in 4..7 && name.endsWith('L')) 1 else 0
 	val noRex    = if(type == RegType.R8 && value in 4..7 && name.endsWith('H')) 1 else 0
+	val isInvalidIndex = value == 4
+	val isInvalidBase get() = this == RBP || this == EBP
+	val isValidBase get() = this != RBP && this != EBP
 
 	companion object {
 		fun r8(index: Int) = entries[AL.ordinal + index]
 		fun r8Rex(index: Int) = entries[AL.ordinal + 16 + index]
 		fun r16(index: Int) = entries[AX.ordinal + index]
 		fun r32(index: Int) = entries[EAX.ordinal + index]
-		fun r64(index: Int) = entries[RAX.ordinal + index]
+		fun r64(index: Int = Random.nextInt(16)) = entries[RAX.ordinal + index]
 		fun st(index: Int) = entries[ST0.ordinal + index]
 		fun x(index: Int) = entries[XMM0.ordinal + index]
 		fun y(index: Int) = entries[YMM0.ordinal + index]

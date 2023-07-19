@@ -2,8 +2,8 @@ package eyre.gen
 
 import eyre.*
 import eyre.util.NativeReader
-import eyre.util.Unique
 import eyre.util.Util
+import eyre.util.bin233
 import eyre.util.hex8
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -21,24 +21,24 @@ object EncGen {
 
 
 
-	val simdMap = HashMap<Mnemonic, ArrayList<NasmEnc>>().apply {
+	val map = HashMap<Mnemonic, ArrayList<NasmEnc>>().apply {
 		for(enc in encs)
-			if(enc.mnemonic.isSse || enc.mnemonic.isAvx)
-				getOrPut(enc.mnemonic, ::ArrayList).add(enc)
+			getOrPut(enc.mnemonic, ::ArrayList).add(enc)
 	}
 
 
 
 	fun run() {
-		for(e in encs)
+		/*for(e in encs)
 			if(e.avx && !e.evex && e.ops.size == 3)
 				if(e.ops.count { it.type.isReg } == 2 && e.ops.count { it.type.isM } == 1)
 					Unique.print(e.opEnc)
-		//testEncs(false)
+		testEncs(false)
+		val code = "inc dword [r13+rax*4]"
+		println(code)
+		val bytes = Util.nasmAssemble(code)
+		for(i in bytes.indices) println("$i:  ${bytes[i].hex8}  ${bytes[i].bin233}")*/
 	}
-
-	// RRR: RVM RMV MVR
-	// RRM: RVM RMV MRV MVR
 
 
 
@@ -48,22 +48,45 @@ object EncGen {
 
 
 
+	private fun randomMem(width: Width?): OpNode {
+		val index = BinaryNode(
+			BinaryOp.MUL,
+			RegNode(Reg.r64().let { if(it.isInvalidIndex) Reg.RAX else it }),
+			IntNode(1L shl Random.nextInt(3))
+		)
+		val base = RegNode(Reg.r64().let { if(it.isInvalidBase) Reg.RAX else it })
+		val disp = IntNode(Random.nextInt(512).toLong())
+		fun add(a: AstNode, b: AstNode) = BinaryNode(BinaryOp.ADD, a, b)
+		val node = when(Random.nextInt(6)) {
+			0 -> base
+			1 -> index
+			2 -> add(base, index)
+			3 -> add(base, disp)
+			4 -> add(index, disp)
+			5 -> add(base, add(index, disp))
+			else -> error("?")
+		}
+		return OpNode.mem(width, node)
+	}
+
+
+
 	private fun Op?.toNode(): OpNode? = when(this) {
 		null     -> null
 		Op.NONE  -> null
-		Op.R8    -> OpNode.reg(Reg.DL)
-		Op.R16   -> OpNode.reg(Reg.DX)
-		Op.R32   -> OpNode.reg(Reg.EDX)
-		Op.R64   -> OpNode.reg(Reg.RDX)
-		Op.MEM   -> OpNode.mem(null, RegNode(Reg.RAX))
-		Op.M8    -> OpNode.mem(Width.BYTE, RegNode(Reg.RDX))
-		Op.M16   -> OpNode.mem(Width.WORD, RegNode(Reg.RDX))
-		Op.M32   -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
-		Op.M64   -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
-		Op.M80   -> OpNode.mem(Width.TWORD, RegNode(Reg.RDX))
-		Op.M128  -> OpNode.mem(Width.XWORD, RegNode(Reg.RDX))
-		Op.M256  -> OpNode.mem(Width.YWORD, RegNode(Reg.RDX))
-		Op.M512  -> OpNode.mem(Width.ZWORD, RegNode(Reg.RDX))
+		Op.R8    -> OpNode.reg(Reg.r8(Random.nextInt(16).let { if(it in 4..7) it + 4 else it }))
+		Op.R16   -> OpNode.reg(Reg.r16(Random.nextInt(16)))
+		Op.R32   -> OpNode.reg(Reg.r32(Random.nextInt(16)))
+		Op.R64   -> OpNode.reg(Reg.r64(Random.nextInt(16)))
+		Op.MEM   -> randomMem(null)
+		Op.M8    -> randomMem(Width.BYTE)
+		Op.M16   -> randomMem(Width.WORD)
+		Op.M32   -> randomMem(Width.DWORD)
+		Op.M64   -> randomMem(Width.QWORD)
+		Op.M80   -> randomMem(Width.TWORD)
+		Op.M128  -> randomMem(Width.XWORD)
+		Op.M256  -> randomMem(Width.YWORD)
+		Op.M512  -> randomMem(Width.ZWORD)
 		Op.I8    -> OpNode.imm(Width.BYTE, IntNode(10))
 		Op.I16   -> OpNode.imm(null, IntNode(10))
 		Op.I32   -> OpNode.imm(null, IntNode(10))
@@ -105,8 +128,8 @@ object EncGen {
 
 
 
-	class EncTest(val node: InsNode, val pos: Int, val length: Int) {
-		override fun toString() = "node=${node.printString}, pos=$pos, length=$length"
+	data class EncTest(val node: InsNode, val enc: NasmEnc?, val pos: Int, val length: Int) {
+		override fun toString() = "${node.printString}    $enc    ($pos, $length)"
 	}
 
 
@@ -119,14 +142,10 @@ object EncGen {
 		val tests = ArrayList<EncTest>()
 		var error = false
 
-		//val testing = listOf(Op.Y, Op.Y, Op.Y)
-
 		for(e in encs) {
 			if(e.ops.any { it.type == OpType.MOFFS || it.type == OpType.VM || it.type == OpType.REL }) continue
 			if(e.mnemonic in ignoredTestingMnemonics) continue
 			if(e.evex) continue
-			if(!e.avx) continue
-			//if(e.ops != testing) continue
 
 			val op1 = e.ops.getOrNull(0).toNode()
 			val op2 = e.ops.getOrNull(1).toNode()
@@ -148,7 +167,8 @@ object EncGen {
 			nasmBuilder.appendLine(node.nasmString)
 			try {
 				val (start, length) = assembler.assembleForTesting(node)
-				tests += EncTest(node, start, length)
+				val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc(node)!! else null
+				tests += EncTest(node, nasmEnc, start, length)
 			} catch(e: Exception) {
 				e.printStackTrace()
 				error = true
@@ -176,7 +196,7 @@ object EncGen {
 			if(eyreBytes.size < test.pos + test.length) error("?")
 			for(i in 0 ..< test.length) {
 				if(nasmBytes[test.pos + i] != eyreBytes[test.pos + i]) {
-					println("ERROR: ${test.node.printString}")
+					println("ERROR: ${test.node.printString}    ${test.enc}")
 					for(j in 0 ..< test.length)
 						println("$j ${nasmBytes[test.pos + j].hex8} ${eyreBytes[test.pos + j].hex8}")
 					return
@@ -198,6 +218,8 @@ object EncGen {
 
 		for(e in encs) {
 			when {
+				e.ops.isEmpty() ->
+					mnemonics[e.mnemonic.name] = Mnemonic.Type.GP
 				e.avx ->
 					mnemonics[e.mnemonic.name] = Mnemonic.Type.AVX
 				Op.X in e.ops || Op.MM in e.ops ->
@@ -256,7 +278,7 @@ object EncGen {
 		// TEMP: SREG
 		Mnemonic.MOV,
 		// TEMP: NASM allows MEM as second operand
-		Mnemonic.TEST,
+		//Mnemonic.TEST,
 		// Explicit operands
 		Mnemonic.LOOP,
 		Mnemonic.LOOPE,
@@ -280,7 +302,17 @@ object EncGen {
 		// NASM gives two versions, one without REX.W
 		Mnemonic.SLDT,
 		// ?
-		Mnemonic.XABORT
+		Mnemonic.XABORT,
+		// ?
+		Mnemonic.TILELOADD,
+		Mnemonic.TILELOADDT1,
+		Mnemonic.TILESTORED,
+		// ? Not sure what's wrong, RRMR seems to be assembled as RRRR by NASM?
+		Mnemonic.VBLENDVPD,
+		Mnemonic.VBLENDVPS,
+		Mnemonic.VPBLENDVB,
+		// Multiple valid encodings
+		Mnemonic.PEXTRW,
 	)
 
 
