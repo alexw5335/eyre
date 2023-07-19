@@ -250,8 +250,8 @@ class Linker(private val context: CompilerContext) {
 
 	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long {
 		if(node is IntNode) return node.value
-		if(node is UnaryNode) return node.calculate(::resolveImmRec, regValid)
-		if(node is BinaryNode) return node.calculate(::resolveImmRec, regValid)
+		if(node is UnaryNode) return node.calculate(regValid, ::resolveImmRec)
+		if(node is BinaryNode) return node.calculate(regValid, ::resolveImmRec)
 
 		if(node is SymNode) {
 			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {

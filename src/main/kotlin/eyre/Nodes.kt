@@ -180,13 +180,13 @@ Helper functions
 
 
 
-fun UnaryNode.calculate(function: (AstNode, Boolean) -> Long, validity: Boolean) = op.calculate(
+fun UnaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long) = op.calculate(
 	function(node, validity && (op == UnaryOp.POS))
 )
 
 
 
-fun BinaryNode.calculate(function: (AstNode, Boolean) -> Long, validity: Boolean) = op.calculate(
+fun BinaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long) = op.calculate(
 	function(left, validity && (op == BinaryOp.ADD || op == BinaryOp.SUB)),
 	function(right, validity && (op == BinaryOp.ADD))
 )

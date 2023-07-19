@@ -39,60 +39,6 @@ enum class SimdOpEnc(vararg val encs: OpEnc) {
 
 
 
-enum class SimdOp(val op: Op) {
-	NONE(Op.NONE),
-	R8(Op.R8),
-	R16(Op.R16),
-	R32(Op.R32),
-	R64(Op.R64),
-	MM(Op.MM),
-	X(Op.X),
-	Y(Op.Y),
-	Z(Op.Z),
-	K(Op.K),
-	T(Op.T),
-	I8(Op.I8),
-	MEM(Op.MEM),
-	M8(Op.M8),
-	M16(Op.M16),
-	M32(Op.M32),
-	M64(Op.M64),
-	M128(Op.M128),
-	M256(Op.M256),
-	M512(Op.M512);
-
-	val isM get() = ordinal >= MEM.ordinal
-}
-
-
-
-enum class AvxOp {
-	NONE,
-	X,
-	Y,
-	Z,
-	R8,
-	R16,
-	R32,
-	R64,
-	I8,
-	K,
-	T,
-	MEM,
-	M8,
-	M16,
-	M32,
-	M64,
-	M128,
-	M256,
-	M512;
-
-	val isM get() = ordinal > MEM.ordinal
-
-}
-
-
-
 enum class OpType(val isReg: Boolean = false) {
 	R(true),
 	M,
@@ -116,6 +62,85 @@ enum class OpType(val isReg: Boolean = false) {
 
 
 sealed interface OpKind
+
+
+
+@JvmInline
+value class TempOps(val value: Int) {
+
+	constructor(
+		op1: TempOp,
+		op2: TempOp,
+		op3: TempOp,
+		op4: TempOp,
+		mem: Boolean,
+		width: Width,
+		vsib: Int
+	) : this(
+		(op1.ordinal shl OP1_POS) or
+		(op2.ordinal shl OP2_POS) or
+		(op3.ordinal shl OP3_POS) or
+		(op4.ordinal shl OP4_POS) or
+		(if(mem) 1 shl MEM_POS else 0) or
+		(width.ordinal shl WIDTH_POS) or
+		(vsib shl VSIB_POS)
+	)
+
+	val op1   get() = ((value shr OP1_POS) and 31).let(TempOp.entries::get)
+	val op2   get() = ((value shr OP2_POS) and 31).let(TempOp.entries::get)
+	val op3   get() = ((value shr OP3_POS) and 31).let(TempOp.entries::get)
+	val op4   get() = ((value shr OP4_POS) and 31).let(TempOp.entries::get)
+	val mem   get() = ((value shr MEM_POS) and 1) == 1
+	val width get() = ((value shr WIDTH_POS) and 15).let(Width.entries::get)
+	val vsib  get() = ((value shr VSIB_POS) and 3)
+
+	companion object {
+		const val OP1_POS = 0
+		const val OP2_POS = 5
+		const val OP3_POS = 10
+		const val OP4_POS = 15
+		const val MEM_POS = 20
+		const val WIDTH_POS = 21
+		const val VSIB_POS = 25
+	}
+
+}
+
+
+
+data class Temp(
+	val op1   : TempOp,
+	val op2   : TempOp,
+	val op3   : TempOp,
+	val op4   : TempOp,
+	val width : Width?,
+	val vsib  : Int
+)
+
+
+
+enum class TempOp(val op: Op?) {
+	NONE(Op.NONE),
+	R8(Op.R8),
+	R16(Op.R16),
+	R32(Op.R32),
+	R64(Op.R64),
+	MEM(null),
+	I8(Op.I8),
+	K(Op.K),
+	T(Op.T),
+	X(Op.X),
+	Y(Op.Y),
+	Z(Op.Z),
+	MM(Op.MM);
+	companion object {
+		fun from(op: Op?) = when {
+			op == null -> NONE
+			op.type.isMem -> MEM
+			else -> entries.firstOrNull { it.op == op } ?: NONE
+		}
+	}
+}
 
 
 

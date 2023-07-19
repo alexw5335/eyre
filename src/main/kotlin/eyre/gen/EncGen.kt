@@ -28,16 +28,7 @@ object EncGen {
 
 
 	fun run() {
-		for((m, encs) in nasmParser.encsMap) {
-			var hasM = false
-			var hasVM = false
-			for(e in encs) {
-				if(e.ops.any { it.type == OpType.VM }) hasVM = true
-				if(e.ops.any { it.type == OpType.M }) hasM = true
-			}
-			if(hasVM) println(m)
-		}
-		//testEncs(false)
+		testEncs(false)
 	}
 
 

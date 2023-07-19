@@ -323,8 +323,8 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long = when(node) {
 		is IntNode      -> node.value
-		is UnaryNode    -> node.calculate(::resolveImmRec, regValid)
-		is BinaryNode   -> node.calculate(::resolveImmRec, regValid)
+		is UnaryNode    -> node.calculate(regValid, ::resolveImmRec)
+		is BinaryNode   -> node.calculate(regValid, ::resolveImmRec)
 		//is StringNode -> node.value.ascii64()
 
 		is SymNode -> when(val symbol = node.symbol) {
@@ -395,12 +395,29 @@ class Assembler(private val context: CompilerContext) {
 		var scale = 0
 		var index = Reg.RAX
 		var base = Reg.RAX
-		var disp = 0
 		var aso = 0
-		var reloc = 0
+		var relocs = 0
 		var hasBase = false
 		var hasIndex = false
-		var regValid = true
+		var vsib = 0
+		var disp = 0L
+
+		fun reset() {
+			node = NullNode
+			resetBase()
+			resetIndex()
+			scale = 0
+			aso = 0
+			relocs = 0
+			vsib = 0
+			disp = 0L
+		}
+
+		val rexX get() = index.rex
+		val rexB get() = base.rex
+		val vexX get() = index.vexRex
+		val vexB get() = base.vexRex
+		val hasReloc get() = relocs != 0
 
 		fun resetBase() { hasBase = false; base = Reg.RAX }
 		fun resetIndex() { hasIndex = false; index = Reg.RAX }
@@ -408,102 +425,81 @@ class Assembler(private val context: CompilerContext) {
 		fun assignIndex(reg: Reg) { hasIndex = true; index = reg }
 		fun swapBaseIndex() { val temp = index; index = base; base = temp }
 
-		fun checkAso(width: Width) = when(width) {
-			DWORD -> if(aso == 2) invalid() else aso = 1
-			QWORD -> if(aso == 1) invalid() else aso = 2
-			else  -> invalid()
+		fun checkReg(reg: Reg) {
+			when(reg.type) {
+				RegType.R32 -> if(aso == 2) invalid() else aso = 1
+				RegType.R64 -> if(aso == 1) invalid() else aso = 2
+				RegType.X   -> vsib = 1
+				RegType.Y   -> vsib = 2
+				RegType.Z   -> vsib = 3
+				else        -> invalid()
+			}
 		}
 
 	}
 
-	private var base = Reg.RAX
-	private var index = Reg.RAX
-	private var hasBase = false
-	private var hasIndex = false
-	private var scale = 0
-	private var aso = 0 // 0 = none, 1 = 32, 2 = 64
-	private var memRelocCount = 0
-	private val hasMemReloc get() = memRelocCount > 0
-	private var vsib = 0 // 0 = none, 1 = xmem, 2 = ymem, 3 = zmem
-
-	private fun resetBase() { hasBase = false; base = Reg.RAX }
-	private fun resetIndex() { hasIndex = false; index = Reg.RAX }
-	private fun setBase(reg: Reg) { hasBase = true; base = reg }
-	private fun setIndex(reg: Reg) { hasIndex = true; index = reg }
-	private fun swapBaseIndex() { val temp = index; index = base; base = temp }
-
-	private fun checkMemReg(reg: Reg) {
-		when(reg.type) {
-			RegType.R32 -> if(aso == 2) invalid() else aso = 1
-			RegType.R64 -> if(aso == 1) invalid() else aso = 2
-			RegType.X   -> vsib = 1
-			RegType.Y   -> vsib = 2
-			RegType.Z   -> vsib = 3
-			else        -> invalid()
-		}
-	}
 
 
-
-	private fun resolveMemRec(node: AstNode, regValid: Boolean): Long = when(node) {
-		is IntNode    -> node.value
-		is UnaryNode  -> node.calculate(::resolveMemRec, regValid)
-		is BinaryNode -> {
+	private fun resolveMemRec(node: AstNode, mem: Mem, regValid: Boolean): Long {
+		if(node is IntNode)
+			return node.value
+		if(node is UnaryNode)
+			return node.calculate(regValid) { n, v -> resolveMemRec(n, mem, v) }
+		if(node is BinaryNode) {
 			val regNode = node.left as? RegNode ?: node.right as? RegNode
 			val intNode = node.left as? IntNode ?: node.right as? IntNode
 			if(node.op == BinaryOp.MUL && regNode != null && intNode != null) {
-				if(hasIndex && !regValid) invalid()
-				checkMemReg(regNode.value)
-				setIndex(regNode.value)
-				scale = intNode.value.toInt()
-				0
-			} else
-				node.calculate(::resolveMemRec, regValid)
-		}
-		is RegNode -> {
-			if(!regValid) invalid()
-			checkMemReg(node.value)
-			if(hasBase) {
-				if(hasIndex) invalid()
-				setIndex(node.value)
-				scale = 1
-			} else {
-				setBase(node.value)
+				if(mem.hasIndex && !regValid) invalid()
+				mem.checkReg(regNode.value)
+				mem.assignIndex(regNode.value)
+				mem.scale = intNode.value.toInt()
+				return 0
 			}
-			0
+			return node.calculate(regValid) { n, v -> resolveMemRec(n, mem, v) }
 		}
-		is SymNode -> when(val symbol = node.symbol) {
-			is PosSymbol ->
-				if(memRelocCount++ == 0 && !regValid)
+		if(node is RegNode) {
+			if(!regValid) invalid()
+			mem.checkReg(node.value)
+			if(mem.hasBase) {
+				if(mem.hasIndex) invalid()
+				mem.assignIndex(node.value)
+				mem.scale = 1
+			} else {
+				mem.assignBase(node.value)
+			}
+			return 0
+		}
+		if(node is SymNode) {
+			val symbol = node.symbol
+			if(symbol is PosSymbol)
+				if(mem.relocs++ == 0 && !regValid)
 					invalid("First relocation (absolute or relative) must be positive and absolute")
 				else
-					0L
-			is IntSymbol -> symbol.intValue
-			is VarAliasSymbol -> resolveMemRec((symbol.node as VarAliasNode).value, regValid)
-			is AliasRefSymbol -> resolveMemRec(symbol.value, regValid) + symbol.offset
-			null -> invalid("Unresolved symbol: $node")
-			else -> invalid()
+					return 0L
+			if(symbol is IntSymbol) return symbol.intValue
+			if(symbol is VarAliasSymbol) return resolveMemRec((symbol.node as VarAliasNode).value, mem, regValid)
+			if(symbol is AliasRefSymbol) return resolveMemRec(symbol.value, mem, regValid) + symbol.offset
+			if(symbol == null) invalid("Unresolved symbol: $node")
+			invalid("Invalid symbol: $symbol")
 		}
-
-		else -> invalid("Invalid mem node: $node")
+		error("Invalid mem node: $node")
 	}
 
 
 
-	private fun resolveMem(node: AstNode): Long {
-		resetBase()
-		resetIndex()
-		scale  = 0
-		aso = 0
-		memRelocCount = 0
-
-		val disp = resolveMemRec(node, true)
-
+	private fun Mem.postResolve() {
 		if(vsib != 0) {
-			if(index.isR) {
-				if(scale != 1) invalid()
-				swapBaseIndex()
+			if(!index.isV) {
+				if(hasIndex) {
+					if(scale != 1) invalid()
+					swapBaseIndex()
+				} else {
+					assignIndex(base)
+					resetBase()
+				}
 			}
+			if(scale.countOneBits() > 1 || scale > 8) invalid()
+			return
 		}
 
 		// Index cannot be ESP/RSP, swap to base if possible
@@ -511,7 +507,7 @@ class Assembler(private val context: CompilerContext) {
 			when {
 				scale != 1 -> invalid()
 				hasBase    -> swapBaseIndex()
-				else       -> { setBase(index); resetIndex() }
+				else       -> { assignBase(index); resetIndex() }
 			}
 		} else if(hasIndex && base.value == 5 && scale == 1 && index.value != 5) {
 			swapBaseIndex()
@@ -523,33 +519,40 @@ class Assembler(private val context: CompilerContext) {
 		// 5: [R*5] -> [R+R*4], [R+R*5] -> invalid
 		when(scale) {
 			0 -> resetIndex()
-			1 -> if(!hasBase) { setBase(index); resetIndex() }
-			2 -> if(!hasBase) { scale = 1; setBase(index) }
-			3 -> if(!hasBase) { scale = 2; setBase(index) } else invalid()
+			1 -> if(!hasBase) { assignBase(index); resetIndex() }
+			2 -> if(!hasBase) { scale = 1; assignBase(index) }
+			3 -> if(!hasBase) { scale = 2; assignBase(index) } else invalid()
 			4 -> { }
-			5 -> if(!hasBase) { scale = 4; setBase(index) } else invalid()
+			5 -> if(!hasBase) { scale = 4; assignBase(index) } else invalid()
 			6 -> invalid()
 			7 -> invalid()
 			8 -> { }
 			else -> invalid("Invalid SIB scale: $scale")
 		}
-
-		return disp
 	}
 
 
 
-	private fun relocAndDisp(mod: Int, disp: Long, node: AstNode) { when {
-		hasMemReloc -> { addLinkReloc(DWORD, node); writer.i32(0) }
-		mod == 1 -> writer.i8(disp.toInt())
-		mod == 2 -> writer.i32(disp.toInt())
-	} }
+	private fun resolveMem(node: AstNode): Mem {
+		val mem = Mem()
+		mem.disp = resolveMemRec(node, mem, true)
+		mem.postResolve()
+		return mem
+	}
 
 
 
-	private fun writeMem(node: AstNode, reg: Int, disp: Long, immLength: Int) {
+	private fun Mem.write(reg: Int, immLength: Int) {
+		fun relocAndDisp(mod: Int) {
+			when {
+				hasReloc -> { addLinkReloc(DWORD, node); writer.i32(0) }
+				mod == 1 -> writer.i8(disp.toInt())
+				mod == 2 -> writer.i32(disp.toInt())
+			}
+		}
+
 		val mod = when {
-			hasMemReloc -> 2 // disp32, can't be sure of size
+			hasReloc    -> 2 // disp32, can't be sure of size
 			disp == 0L  -> 0 // no disp
 			disp.isImm8 -> 1 // disp8
 			else        -> 2 // disp32
@@ -564,32 +567,31 @@ class Assembler(private val context: CompilerContext) {
 				} else {
 					writeModRM(mod, reg, 0b100)
 					writeSib(scale.countTrailingZeroBits(), index.value, base.value)
-					relocAndDisp(mod, disp, node)
+					relocAndDisp(mod)
 				}
 			} else { // Index only, requires disp32
 				writeModRM(0, reg, 0b100)
 				writeSib(scale.countTrailingZeroBits(), index.value, 0b101)
-				relocAndDisp(0b10, disp, node)
+				relocAndDisp(0b10)
 			}
 		} else if(hasBase) { // Indirect: [R] or [R+DISP]
 			if(base.value == 4) { // [RSP/R12] -> [RSP/R12+NONE*1] (same with DISP)
 				writeModRM(mod, reg, 0b100)
 				byte(0b00_100_100)
-				relocAndDisp(mod, disp, node)
+				relocAndDisp(mod)
 			} else if(base.value == 5 && mod == 0) { // [RBP/R13] -> [RBP/R13+0]
 				word(0b00000000_01_000_101 or (reg shl 3))
 			} else {
 				writeModRM(mod, reg, base.value)
-				relocAndDisp(mod, disp, node)
+				relocAndDisp(mod)
 			}
-		} else if(memRelocCount and 1 == 1) { // RIP-relative (odd reloc count)
+		} else if(relocs and 1 == 1) { // RIP-relative (odd reloc count)
 			writeModRM(0b00, reg, 0b101)
 			addRelReloc(DWORD, node, immLength)
 			dword(0)
 		} else { // Absolute 32-bit or empty memory operand
-			writeModRM(0b00, reg, 0b100)
-			writeSib(0b00, 0b100, 0b101)
-			relocAndDisp(2, disp, node)
+			word(0b00_100_101_00_000_100 or (reg shl 3))
+			relocAndDisp(0b10)
 		}
 	}
 
@@ -654,8 +656,9 @@ class Assembler(private val context: CompilerContext) {
 		if(mask.value != 0b10 && width == WORD) writer.i8(0x66)
 	}
 
-	private fun writeA32() {
-		if(aso == 1) byte(0x67)
+	private fun writeA32(mem: Mem) {
+		if(mem.vsib != 0) invalid("VSIB not valid here")
+		if(mem.aso == 1) byte(0x67)
 	}
 
 	private fun writeModRM(mod: Int, reg: Int, rm: Int) {
@@ -718,21 +721,21 @@ class Assembler(private val context: CompilerContext) {
 	private fun Enc.encode1MEM(op1: OpNode) {
 		if(!op1.isMem) invalid()
 		if(op1.width != null) invalid()
-		val disp = resolveMem(op1.node)
-		writeA32()
+		val mem = resolveMem(op1.node)
+		writeA32(mem)
 		writePrefix(this)
-		writeRex(rexw, 0, index.rex, base.rex)
+		writeRex(rexw, 0, mem.rexX, mem.rexB)
 		writeOpcode(this)
-		writeMem(op1.node, ext, disp, 0)
+		mem.write(ext, 0)
 	}
 
 	/** Used by FPU encodings whose widths have already been checked */
 	private fun encode1MAny(opcode: Int, ext: Int, op1: OpNode) {
-		val disp = resolveMem(op1.node)
-		writeA32()
-		writeRex(0, 0, index.rex, base.rex)
+		val mem = resolveMem(op1.node)
+		writeA32(mem)
+		writeRex(0, 0, mem.rexX, mem.rexB)
 		writer.varLengthInt(opcode)
-		writeMem(op1.node, ext, disp, 0)
+		mem.write(ext, 0)
 	}
 
 	private fun Enc.encode1M8(op1: OpNode) = encode1MSingle(op1, BYTE)
@@ -740,37 +743,38 @@ class Assembler(private val context: CompilerContext) {
 	private fun Enc.encode1M32(op1: OpNode) = encode1MSingle(op1, DWORD)
 	private fun Enc.encode1M64(op1: OpNode) = encode1MSingle(op1, QWORD)
 
+	
 	private fun Enc.encode1MSingle(op1: OpNode, width: Width) {
 		if(!op1.isMem) invalid()
 		if(op1.width != null && width != op1.width) invalid()
-		val disp = resolveMem(op1.node)
-		writeA32()
+		val mem = resolveMem(op1.node)
+		writeA32(mem)
 		writePrefix(this)
-		writeRex(rexw, 0, index.rex, base.rex)
+		writeRex(rexw, 0, mem.rexX, mem.rexB)
 		writeOpcode(this)
-		writeMem(op1.node, ext, disp, 0)
+		mem.write(ext, 0)
 	}
 
 	private fun Enc.encode1M(op1: OpNode, immLength: Int) {
 		val mask = this.mask
-		val disp = resolveMem(op1.node)
+		val mem = resolveMem(op1.node)
 
 		if(mask.value.countOneBits() == 1) {
-			writeA32()
+			writeA32(mem)
 			writePrefix(this)
-			writeRex(rexw, 0, index.rex, base.rex)
+			writeRex(rexw, 0, mem.rexX, mem.rexB)
 			writeEscape(this)
 			writer.varLengthInt(opcode)
-			writeMem(op1.node, ext, disp, immLength)
+			mem.write(ext, immLength)
 		} else {
 			val width = op1.width ?: invalid()
 			checkWidth(mask, width)
 			writeO16(mask, width)
-			writeA32()
+			writeA32(mem)
 			writePrefix(this)
-			writeRex(rexw or rexw(mask, width), 0, index.rex, base.rex)
+			writeRex(rexw or rexw(mask, width), 0, mem.rexX, mem.rexB)
 			writeOpcode(this, mask, width)
-			writeMem(op1.node, ext, disp, immLength)
+			mem.write(ext, immLength)
 		}
 	}
 
@@ -813,26 +817,26 @@ class Assembler(private val context: CompilerContext) {
 	private fun Enc.encode2RAM512(op1: Reg, op2: OpNode) {
 		if(op2.width != null && op2.width != ZWORD) invalid()
 		if(op1.type == RegType.R32) byte(0x67)else if(op1.type != RegType.R64) invalid()
-		val disp = resolveMem(op2.node)
-		writeA32()
+		val mem = resolveMem(op2.node)
+		writeA32(mem)
 		writePrefix(this)
-		writeRex(0, op1.rex, index.rex, base.rex)
+		writeRex(0, op1.rex, mem.rexX, mem.rexB)
 		writeOpcode(this)
-		writeMem(op2.node, op1.value, disp, 0)
+		mem.write(op1.value, 0)
 	}
 
 	private fun Enc.encode2RM(op1: Reg, op2: OpNode, immLength: Int) {
 		val mask = this.mask
 		val width = op1.width
 		if(mm == 0 && op2.width != null && op2.width != op1.width) invalid()
-		val disp = resolveMem(op2.node)
+		val mem = resolveMem(op2.node)
 		checkWidth(mask, width)
 		writeO16(mask, width)
-		writeA32()
+		writeA32(mem)
 		writePrefix(this)
-		writeRex(rexw or rexw(mask, width), op1.rex, index.rex, base.rex, op1.rex8, op1.noRex)
+		writeRex(rexw or rexw(mask, width), op1.rex, mem.rexX, mem.rexB, op1.rex8, op1.noRex)
 		writeOpcode(this, mask, width)
-		writeMem(op2.node, op1.value, disp, immLength)
+		mem.write(op1.value, immLength)
 	}
 
 	private fun Enc.encode2RR(op1: Reg, op2: Reg) {
@@ -1544,42 +1548,81 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun OpNode.toOp(): Op = when(type) {
-		REG -> when(reg.type) {
-			RegType.R8  -> Op.R8
-			RegType.R16 -> Op.R16
-			RegType.R32 -> Op.R32
-			RegType.R64 -> Op.R64
-			RegType.MM  -> Op.MM
-			RegType.X   -> Op.X
-			RegType.Y   -> Op.Y
-			RegType.Z   -> Op.Z
-			RegType.K   -> Op.K
-			RegType.T   -> Op.T
-			RegType.ST  -> Op.ST
-			else        -> invalid()
-		}
-		MEM -> when(width) {
-			null  -> Op.MEM
-			BYTE  -> Op.M8
-			WORD  -> Op.M16
-			DWORD -> Op.M32
-			QWORD -> Op.M64
-			TWORD -> Op.M80
-			XWORD -> Op.M128
-			YWORD -> Op.M256
-			ZWORD -> Op.M512
+	private fun Reg.toOp() = when(type) {
+		RegType.R8  -> Op.R8
+		RegType.R16 -> Op.R16
+		RegType.R32 -> Op.R32
+		RegType.R64 -> Op.R64
+		RegType.MM  -> Op.MM
+		RegType.X   -> Op.X
+		RegType.Y   -> Op.Y
+		RegType.Z   -> Op.Z
+		RegType.K   -> Op.K
+		RegType.T   -> Op.T
+		RegType.ST  -> Op.ST
+		else        -> invalid()
+	}
+
+
+
+	private fun Width?.toMemOp() = when(this) {
+		null  -> Op.MEM
+		BYTE  -> Op.M8
+		WORD  -> Op.M16
+		DWORD -> Op.M32
+		QWORD -> Op.M64
+		TWORD -> Op.M80
+		XWORD -> Op.M128
+		YWORD -> Op.M256
+		ZWORD -> Op.M512
+	}
+
+
+
+	private fun OpNode.toOp(mem: Mem? = null): Op = when(type) {
+		REG -> reg.toOp()
+		MEM -> when(mem!!.vsib) {
+			0 -> width.toMemOp()
+			1 -> when(width) {
+				DWORD -> Op.VM32X
+				QWORD -> Op.VM64X
+				else  -> invalid()
+			}
+			2 -> when(width) {
+				DWORD -> Op.VM32Y
+				QWORD -> Op.VM64Y
+				else  -> invalid()
+			}
+			3 -> when(width) {
+				DWORD -> Op.VM32Z
+				QWORD -> Op.VM64Z
+				else -> invalid()
+			}
+			else -> invalid()
 		}
 		IMM -> if(width == null || width == BYTE) Op.I8 else invalid()
 	}
 
 
+
+
 	fun getEnc(node: InsNode): NasmEnc? {
 		val encs = EncGen.map[node.mnemonic] ?: error("Could not determine encoding: ${currentIns.printString}")
 		val ops = listOfNotNull(node.op1, node.op2, node.op3, node.op4).map { it.toOp() }
-		return encs.firstOrNull {
-			it.ops == ops && (node.high == 0 || it.evex)
+		outer@ for(enc in encs) {
+			if(node.high == 1 && !enc.evex) continue
+			if(enc.ops.size != ops.size) continue
+			for(i in ops.indices) {
+				val op1 = ops[i]
+				val op2 = enc.ops[i]
+				if(op1 == op2) continue
+				if(op1.type == OpType.M && op2.type == OpType.VM) continue
+				continue@outer
+			}
+			return enc
 		}
+
+		return null
 	}
 
 
@@ -1624,6 +1667,135 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 
+
+	/*private fun sse(node: InsNode) {
+		val op1 = node.op1 ?: invalid()
+		val op2 = node.op2 ?: invalid()
+		val op3 = node.op3
+		if(node.op4 != null) invalid()
+
+		when(op1.type) {
+			REG -> when(op2.type) {
+				REG -> encodeSseRR()
+			}
+		}
+
+		when(op1.type) {
+			REG -> when(op2.type) {
+				REG -> encodeSseRR(enc, op1.reg, op2.reg, op3)
+				MEM -> encodeSseRM(enc, op1.reg, op2, op3)
+				IMM -> encodeSseRI(enc, op1.reg, op2)
+			}
+			MEM -> when(op2.type) {
+				REG -> encodeSseRM(enc, op2.reg, op1, op3)
+				else -> invalid()
+			}
+			else -> invalid()
+		}
+
+	}
+
+
+
+	private fun test(node: InsNode) {
+		val op1 = node.op1
+		val op2 = node.op2
+		val op3 = node.op3
+		val op4 = node.op4
+
+		if(op1 != null) {
+			if(op1.isReg) {
+				val op1Type = op1.reg.toOp()
+
+				if(op2 != null) {
+
+				} else {
+
+				}
+			} else if(op1.isMem) {
+
+			} else {
+				invalid()
+			}
+		} else {
+			invalid()
+		}
+		when {
+			op1 == null -> invalid()
+			op2 == null -> when(op1.type) {
+				REG -> { }
+				MEM -> { }
+				IMM -> { }
+			}
+			op3 == null -> when(op1.type) {
+				REG -> when(op2.type) {
+					REG -> { }
+					MEM -> { }
+					IMM -> { }
+				}
+				MEM -> when(op2.type) {
+					REG -> { }
+					MEM -> { }
+					IMM -> { }
+				}
+				IMM -> invalid()
+			}
+			op4 == null -> when(op1.type) {
+				REG -> when(op2.type) {
+					REG -> when(op3.type) {
+						REG -> { }
+						MEM -> { }
+						IMM -> { }
+					}
+					MEM -> when(op3.type) {
+						REG -> { }
+						MEM -> { }
+						IMM -> { }
+					}
+					IMM -> invalid()
+				}
+				MEM -> when(op2.type) {
+					REG -> when(op3.type) {
+						REG -> { }
+						MEM -> { }
+						IMM -> { }
+					}
+					MEM -> when(op3.type) {
+						REG -> { }
+						MEM -> { }
+						IMM -> { }
+					}
+					IMM -> invalid()
+				}
+				IMM -> invalid()
+			}
+		}
+
+		if(op1 != null) {
+			val opType1 =
+			if(op2 != null) {
+				if(op3 != null) {
+					if(op4 != null) {
+
+					} else {
+
+					}
+				} else {
+
+				}
+			} else {
+
+			}
+
+		} else {
+			invalid()
+		}
+
+		when {
+			op1 == null -> invalid()
+
+		}
+	}*/
 
 	private fun assembleSimd(node: InsNode) {
 		val enc = getEnc(node) ?: invalid()
@@ -1710,18 +1882,16 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encodeSseRM(enc: NasmEnc, op1: Reg, op2: OpNode, op3: OpNode?) {
-		val disp = resolveMem(op2.node)
-		writeA32()
+		val mem = resolveMem(op2.node)
+		writeA32(mem)
 		if(enc.o16 == 1) byte(0x66)
 		writeSimdPrefix(enc)
-		writeRex(enc.rw, op1.rex, index.rex, base.rex)
+		writeRex(enc.rw, op1.rex, mem.rexX, mem.rexB)
 		writeSimdOpcode(enc)
-		if(op3 != null) {
-			writeMem(op2, op1.value, disp, 1)
-			writeImm(op3, BYTE)
-		} else {
-			writeMem(op2, op1.value, disp, 0)
-		}
+		if(op3 != null)
+			mem.write(op1.value, 1).imm8(op3)
+		else
+			mem.write(op1.value, 0)
 	}
 
 
@@ -1809,21 +1979,21 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun encodeAvx1M(enc: NasmEnc, op1: OpNode, immWidth: Int) {
-		val disp = resolveMem(op1.node)
-		writeVex(enc, 1, index.vexRex, base.vexRex, 0b1111)
-		writeMem(op1.node, enc.ext, disp, immWidth)
+		val mem = resolveMem(op1.node)
+		writeVex(enc, 1, mem.vexX, mem.vexB, 0b1111)
+		mem.write(enc.ext, immWidth)
 	}
 
 
 
 	private fun encodeAvx2RM(enc: NasmEnc, op1: Reg, op2: OpNode, immWidth: Int) {
-		val disp = resolveMem(op2.node)
+		val mem = resolveMem(op2.node)
 		if(enc.simdOpEnc == SimdOpEnc.MR || enc.simdOpEnc == SimdOpEnc.RM) {
-			writeVex(enc, op1.vexRex, index.vexRex, base.vexRex, 0b1111)
-			writeMem(op2.node, op1.value, disp, immWidth)
+			writeVex(enc, op1.vexRex, mem.vexX, mem.vexB, 0b1111)
+			mem.write(op1.value, immWidth)
 		} else if(enc.simdOpEnc == SimdOpEnc.VM) {
-			writeVex(enc, 1, index.vexRex, base.vexRex, op1.vvvvValue)
-			writeMem(op2.node, enc.ext, disp, immWidth)
+			writeVex(enc, 1, mem.vexX, mem.vexB, op1.vvvvValue)
+			mem.write(enc.ext, immWidth)
 		} else {
 			invalid()
 		}
@@ -1837,27 +2007,33 @@ class Assembler(private val context: CompilerContext) {
 		byte(op4.index shl 4)
 	}
 
-	// 0111_0000
-	//
 
-	private fun encodeAvx4RRRM(enc: NasmEnc, r1: Reg, r2: Reg, r3: Reg, mem: OpNode) {
+
+	private fun encodeAvx4RRRM(enc: NasmEnc, r1: Reg, r2: Reg, r3: Reg, m: OpNode) {
 		if(enc.opEnc != OpEnc.RVMS) invalid()
-		val disp = resolveMem(mem.node)
-		writeVex(enc, r1.vexRex, index.vexRex, base.vexRex, r2.vvvvValue)
-		writeMem(mem.node, r1.value, disp, 0)
+		val mem = resolveMem(m.node)
+		writeVex(enc, r1.vexRex, mem.vexX, mem.vexB, r2.vvvvValue)
+		mem.write(r1.value, 0)
 		byte(r3.index shl 4)
 	}
 
 
 
-	private fun encodeAvx3RRM(enc: NasmEnc, r1: Reg, r2: Reg, mem: OpNode, immWidth: Int) {
-		val disp = resolveMem(mem.node)
+	// 1001_0010 111_00010
+	// 00_110_100
+	// 00_001_101 00_100_101
+	private fun encodeAvx3RRM(enc: NasmEnc, r1: Reg, r2: Reg, m: OpNode, immWidth: Int) {
+		val mem = resolveMem(m.node)
+		if(enc.mnemonic == Mnemonic.VGATHERDPD) {
+			println("TESTING ${mem.index} ${mem.base} ${mem.scale} ${mem.vsib}")
+			println(m.node.printString)
+		}
 		if(enc.simdOpEnc == SimdOpEnc.MV) {
-			writeVex(enc, r2.vexRex, index.vexRex, base.vexRex, r1.vvvvValue)
-			writeMem(mem.node, r2.value, disp, immWidth)
+			writeVex(enc, r2.vexRex, mem.vexX, mem.vexB, r1.vvvvValue)
+			mem.write(r2.value, immWidth)
 		} else {
-			writeVex(enc, r1.vexRex, index.vexRex, base.vexRex, r2.vvvvValue)
-			writeMem(mem.node, r1.value, disp, immWidth)
+			writeVex(enc, r1.vexRex, mem.vexX, mem.vexB, r2.vvvvValue)
+			mem.write(r1.value, immWidth)
 		}
 	}
 
@@ -1923,11 +2099,11 @@ class Assembler(private val context: CompilerContext) {
 			}
 			MEM -> {
 				if(op1 !in OpMask(0b1110) || (op2.width != null && op2.width != WORD)) invalid()
-				val disp = resolveMem(op2.node)
-				writeA32()
-				writeRex(0, op1.rex, index.rex, base.rex)
+				val mem = resolveMem(op2.node)
+				writeA32(mem)
+				writeRex(0, op1.rex, mem.rexX, mem.rexB)
 				word(opcode)
-				writeMem(op2.node, op1.value, disp, 0)
+				mem.write(op1.value, 0)
 			}
 			else -> invalid()
 		}

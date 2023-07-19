@@ -306,6 +306,7 @@ enum class Reg(val type  : RegType, val index : Int) {
 	val vexRex   = rex xor 1
 	val vvvvValue = (value or (rex shl 3)).inv() and 0b1111
 	val isR      = type.ordinal <= RegType.R64.ordinal
+	val isV      = type.ordinal in RegType.X.ordinal..RegType.Z.ordinal
 	val isA      = isR && value == 0 && rex == 0
 	val rex8     = if(type == RegType.R8 && value in 4..7 && name.endsWith('L')) 1 else 0
 	val noRex    = if(type == RegType.R8 && value in 4..7 && name.endsWith('H')) 1 else 0
