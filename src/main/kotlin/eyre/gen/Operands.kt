@@ -181,7 +181,6 @@ enum class Op(
 	DR("reg_dreg", OpType.MISC, QWORD),
 	FS("reg_fs", OpType.MISC, null),
 	GS("reg_gs", OpType.MISC, null),
-
 	RM8  ("rm8",      R8,  M8),
 	RM16 ("rm16",     R16, M16),
 	RM32 ("rm32",     R32, M32),

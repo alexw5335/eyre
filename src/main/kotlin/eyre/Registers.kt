@@ -309,9 +309,11 @@ enum class Reg(val type  : RegType, val index : Int) {
 	val isA      = isR && value == 0 && rex == 0
 	val rex8     = if(type == RegType.R8 && value in 4..7 && name.endsWith('L')) 1 else 0
 	val noRex    = if(type == RegType.R8 && value in 4..7 && name.endsWith('H')) 1 else 0
-	val isInvalidIndex = value == 4
-	val isInvalidBase get() = this == RBP || this == EBP
-	val isValidBase get() = this != RBP && this != EBP
+
+	/** [ESP] or [RSP] */
+	val isInvalidIndex = (type == RegType.R64 || type == RegType.R32) && index == 4
+	/** [EBP] or [RBP] or [R13D] or [R13] */
+	val isImperfectBase = (type == RegType.R64 || type == RegType.R32) && value == 5
 
 	companion object {
 		fun r8(index: Int) = entries[AL.ordinal + index]
@@ -329,6 +331,7 @@ enum class Reg(val type  : RegType, val index : Int) {
 		fun k(index: Int) = entries[K0.ordinal + index]
 		fun bnd(index: Int) = entries[BND0.ordinal + index]
 		fun tmm(index: Int) = entries[TMM0.ordinal + index]
+		fun seg(index: Int) = entries[ES.ordinal + index]
 	}
 
 }

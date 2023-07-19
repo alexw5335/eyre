@@ -390,7 +390,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private class Mem {
+	private inner class Mem {
 		var node = NullNode
 		var scale = 0
 		var index = Reg.RAX
@@ -398,26 +398,49 @@ class Assembler(private val context: CompilerContext) {
 		var disp = 0
 		var aso = 0
 		var reloc = 0
+		var hasBase = false
+		var hasIndex = false
+		var regValid = true
+
+		fun resetBase() { hasBase = false; base = Reg.RAX }
+		fun resetIndex() { hasIndex = false; index = Reg.RAX }
+		fun assignBase(reg: Reg) { hasBase = true; base = reg }
+		fun assignIndex(reg: Reg) { hasIndex = true; index = reg }
+		fun swapBaseIndex() { val temp = index; index = base; base = temp }
+
+		fun checkAso(width: Width) = when(width) {
+			DWORD -> if(aso == 2) invalid() else aso = 1
+			QWORD -> if(aso == 1) invalid() else aso = 2
+			else  -> invalid()
+		}
+
 	}
 
-	private var baseReg = Reg.RAX
-	private var indexReg = Reg.RAX
+	private var base = Reg.RAX
+	private var index = Reg.RAX
 	private var hasBase = false
 	private var hasIndex = false
-	private var indexScale = 0
+	private var scale = 0
 	private var aso = 0 // 0 = none, 1 = 32, 2 = 64
 	private var memRelocCount = 0
 	private val hasMemReloc get() = memRelocCount > 0
+	private var vsib = 0 // 0 = none, 1 = xmem, 2 = ymem, 3 = zmem
 
-	private fun resetBase() { hasBase = false; baseReg = Reg.RAX }
-	private fun resetIndex() { hasIndex = false; indexReg = Reg.RAX }
-	private fun setBase(reg: Reg) { hasBase = true; baseReg = reg }
-	private fun setIndex(reg: Reg) { hasIndex = true; indexReg = reg }
+	private fun resetBase() { hasBase = false; base = Reg.RAX }
+	private fun resetIndex() { hasIndex = false; index = Reg.RAX }
+	private fun setBase(reg: Reg) { hasBase = true; base = reg }
+	private fun setIndex(reg: Reg) { hasIndex = true; index = reg }
+	private fun swapBaseIndex() { val temp = index; index = base; base = temp }
 
-	private fun checkAso(width: Width) = when(width) {
-		DWORD -> if(aso == 2) invalid() else aso = 1
-		QWORD -> if(aso == 1) invalid() else aso = 2
-		else  -> invalid()
+	private fun checkMemReg(reg: Reg) {
+		when(reg.type) {
+			RegType.R32 -> if(aso == 2) invalid() else aso = 1
+			RegType.R64 -> if(aso == 1) invalid() else aso = 2
+			RegType.X   -> vsib = 1
+			RegType.Y   -> vsib = 2
+			RegType.Z   -> vsib = 3
+			else        -> invalid()
+		}
 	}
 
 
@@ -430,20 +453,20 @@ class Assembler(private val context: CompilerContext) {
 			val intNode = node.left as? IntNode ?: node.right as? IntNode
 			if(node.op == BinaryOp.MUL && regNode != null && intNode != null) {
 				if(hasIndex && !regValid) invalid()
-				checkAso(regNode.value.width)
+				checkMemReg(regNode.value)
 				setIndex(regNode.value)
-				indexScale = intNode.value.toInt()
+				scale = intNode.value.toInt()
 				0
 			} else
 				node.calculate(::resolveMemRec, regValid)
 		}
 		is RegNode -> {
 			if(!regValid) invalid()
-			checkAso(node.value.width)
+			checkMemReg(node.value)
 			if(hasBase) {
 				if(hasIndex) invalid()
 				setIndex(node.value)
-				indexScale = 1
+				scale = 1
 			} else {
 				setBase(node.value)
 			}
@@ -470,25 +493,45 @@ class Assembler(private val context: CompilerContext) {
 	private fun resolveMem(node: AstNode): Long {
 		resetBase()
 		resetIndex()
-		indexScale  = 0
+		scale  = 0
 		aso = 0
 		memRelocCount = 0
 
 		val disp = resolveMemRec(node, true)
 
-		// RSP and ESP cannot be index registers, swap to base if possible
-		if(hasBase && hasIndex && indexReg.value == 4) {
-			if(indexScale != 1) invalid()
-			val temp = indexReg
-			indexReg = baseReg
-			baseReg = temp
+		if(vsib != 0) {
+			if(index.isR) {
+				if(scale != 1) invalid()
+				swapBaseIndex()
+			}
 		}
 
-		when(indexScale) {
+		// Index cannot be ESP/RSP, swap to base if possible
+		if(hasIndex && index.isInvalidIndex) {
+			when {
+				scale != 1 -> invalid()
+				hasBase    -> swapBaseIndex()
+				else       -> { setBase(index); resetIndex() }
+			}
+		} else if(hasIndex && base.value == 5 && scale == 1 && index.value != 5) {
+			swapBaseIndex()
+		}
+
+		// 1: [R*1] -> [R], avoid SIB
+		// 2: [R*2] -> [R+R*1], avoid index-only SIB which produces DISP32 of zero
+		// 3: [R*3] -> [R+R*2], [R+R*3] -> invalid
+		// 5: [R*5] -> [R+R*4], [R+R*5] -> invalid
+		when(scale) {
 			0 -> resetIndex()
-			2 -> if(!hasBase) { indexScale = 1; setBase(indexReg) } // Use BASE + INDEX * 1
-			1, 4, 8 -> { }
-			else -> invalid("Invalid SIB scale: $indexScale")
+			1 -> if(!hasBase) { setBase(index); resetIndex() }
+			2 -> if(!hasBase) { scale = 1; setBase(index) }
+			3 -> if(!hasBase) { scale = 2; setBase(index) } else invalid()
+			4 -> { }
+			5 -> if(!hasBase) { scale = 4; setBase(index) } else invalid()
+			6 -> invalid()
+			7 -> invalid()
+			8 -> { }
+			else -> invalid("Invalid SIB scale: $scale")
 		}
 
 		return disp
@@ -505,39 +548,41 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun writeMem(node: AstNode, reg: Int, disp: Long, immLength: Int) {
-		val base  = baseReg
-		val index = indexReg
-		val scale = indexScale.countTrailingZeroBits()
-
 		val mod = when {
-			hasMemReloc -> 2 // disp32
-			disp == 0L -> if(hasBase && base.value == 5)
-				1 // disp8, rbp as base needs an empty offset
-			else
-				0 // no disp
+			hasMemReloc -> 2 // disp32, can't be sure of size
+			disp == 0L  -> 0 // no disp
 			disp.isImm8 -> 1 // disp8
-			else -> 2 // disp32
+			else        -> 2 // disp32
 		}
 
-		if(hasIndex) { // SIB
+		if(hasIndex) { // SIB: [R*S] or [R*S+DISP] or [R+R*S] or [R+R*S+DISP]
 			if(hasBase) {
-				writeModRM(mod, reg, 0b100)
-				writeSib(scale, index.value, base.value)
-				relocAndDisp(mod, disp, node)
+				if(base.value == 5 && mod == 0) { // [RBP/R13+R*S] -> [RBP+R*S+DISP8]
+					writeModRM(0b01, reg, 0b100)
+					writeSib(scale.countTrailingZeroBits(), index.value, 0b101)
+					byte(0)
+				} else {
+					writeModRM(mod, reg, 0b100)
+					writeSib(scale.countTrailingZeroBits(), index.value, base.value)
+					relocAndDisp(mod, disp, node)
+				}
 			} else { // Index only, requires disp32
 				writeModRM(0, reg, 0b100)
-				writeSib(scale, index.value, 0b101)
-				relocAndDisp(0, disp, node)
+				writeSib(scale.countTrailingZeroBits(), index.value, 0b101)
+				relocAndDisp(0b10, disp, node)
 			}
-		} else if(hasBase) { // Indirect
-			if(base.value == 5) {
+		} else if(hasBase) { // Indirect: [R] or [R+DISP]
+			if(base.value == 4) { // [RSP/R12] -> [RSP/R12+NONE*1] (same with DISP)
 				writeModRM(mod, reg, 0b100)
-				writeSib(0, 0b100, 0b100)
+				byte(0b00_100_100)
+				relocAndDisp(mod, disp, node)
+			} else if(base.value == 5 && mod == 0) { // [RBP/R13] -> [RBP/R13+0]
+				word(0b00000000_01_000_101 or (reg shl 3))
 			} else {
 				writeModRM(mod, reg, base.value)
+				relocAndDisp(mod, disp, node)
 			}
-			relocAndDisp(mod, disp, node)
-		} else if(memRelocCount and 1 == 1) { // RIP-relative
+		} else if(memRelocCount and 1 == 1) { // RIP-relative (odd reloc count)
 			writeModRM(0b00, reg, 0b101)
 			addRelReloc(DWORD, node, immLength)
 			dword(0)
@@ -676,7 +721,7 @@ class Assembler(private val context: CompilerContext) {
 		val disp = resolveMem(op1.node)
 		writeA32()
 		writePrefix(this)
-		writeRex(rexw, indexReg.rex, 0, baseReg.rex)
+		writeRex(rexw, 0, index.rex, base.rex)
 		writeOpcode(this)
 		writeMem(op1.node, ext, disp, 0)
 	}
@@ -685,7 +730,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encode1MAny(opcode: Int, ext: Int, op1: OpNode) {
 		val disp = resolveMem(op1.node)
 		writeA32()
-		writeRex(0, 0, indexReg.rex, baseReg.rex)
+		writeRex(0, 0, index.rex, base.rex)
 		writer.varLengthInt(opcode)
 		writeMem(op1.node, ext, disp, 0)
 	}
@@ -701,7 +746,7 @@ class Assembler(private val context: CompilerContext) {
 		val disp = resolveMem(op1.node)
 		writeA32()
 		writePrefix(this)
-		writeRex(rexw, 0, indexReg.rex, baseReg.rex)
+		writeRex(rexw, 0, index.rex, base.rex)
 		writeOpcode(this)
 		writeMem(op1.node, ext, disp, 0)
 	}
@@ -713,7 +758,7 @@ class Assembler(private val context: CompilerContext) {
 		if(mask.value.countOneBits() == 1) {
 			writeA32()
 			writePrefix(this)
-			writeRex(rexw, 0, indexReg.rex, baseReg.rex)
+			writeRex(rexw, 0, index.rex, base.rex)
 			writeEscape(this)
 			writer.varLengthInt(opcode)
 			writeMem(op1.node, ext, disp, immLength)
@@ -723,7 +768,7 @@ class Assembler(private val context: CompilerContext) {
 			writeO16(mask, width)
 			writeA32()
 			writePrefix(this)
-			writeRex(rexw or rexw(mask, width), 0, indexReg.rex, baseReg.rex)
+			writeRex(rexw or rexw(mask, width), 0, index.rex, base.rex)
 			writeOpcode(this, mask, width)
 			writeMem(op1.node, ext, disp, immLength)
 		}
@@ -771,7 +816,7 @@ class Assembler(private val context: CompilerContext) {
 		val disp = resolveMem(op2.node)
 		writeA32()
 		writePrefix(this)
-		writeRex(0, op1.rex, indexReg.rex, baseReg.rex)
+		writeRex(0, op1.rex, index.rex, base.rex)
 		writeOpcode(this)
 		writeMem(op2.node, op1.value, disp, 0)
 	}
@@ -785,7 +830,7 @@ class Assembler(private val context: CompilerContext) {
 		writeO16(mask, width)
 		writeA32()
 		writePrefix(this)
-		writeRex(rexw or rexw(mask, width), op1.rex, indexReg.rex, baseReg.rex, op1.rex8, op1.noRex)
+		writeRex(rexw or rexw(mask, width), op1.rex, index.rex, base.rex, op1.rex8, op1.noRex)
 		writeOpcode(this, mask, width)
 		writeMem(op2.node, op1.value, disp, immLength)
 	}
@@ -1669,7 +1714,7 @@ class Assembler(private val context: CompilerContext) {
 		writeA32()
 		if(enc.o16 == 1) byte(0x66)
 		writeSimdPrefix(enc)
-		writeRex(enc.rw, op1.rex, indexReg.rex, baseReg.rex)
+		writeRex(enc.rw, op1.rex, index.rex, base.rex)
 		writeSimdOpcode(enc)
 		if(op3 != null) {
 			writeMem(op2, op1.value, disp, 1)
@@ -1765,7 +1810,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun encodeAvx1M(enc: NasmEnc, op1: OpNode, immWidth: Int) {
 		val disp = resolveMem(op1.node)
-		writeVex(enc, 1, indexReg.vexRex, baseReg.vexRex, 0b1111)
+		writeVex(enc, 1, index.vexRex, base.vexRex, 0b1111)
 		writeMem(op1.node, enc.ext, disp, immWidth)
 	}
 
@@ -1774,10 +1819,10 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeAvx2RM(enc: NasmEnc, op1: Reg, op2: OpNode, immWidth: Int) {
 		val disp = resolveMem(op2.node)
 		if(enc.simdOpEnc == SimdOpEnc.MR || enc.simdOpEnc == SimdOpEnc.RM) {
-			writeVex(enc, op1.vexRex, indexReg.vexRex, baseReg.vexRex, 0b1111)
+			writeVex(enc, op1.vexRex, index.vexRex, base.vexRex, 0b1111)
 			writeMem(op2.node, op1.value, disp, immWidth)
 		} else if(enc.simdOpEnc == SimdOpEnc.VM) {
-			writeVex(enc, 1, indexReg.vexRex, baseReg.vexRex, op1.vvvvValue)
+			writeVex(enc, 1, index.vexRex, base.vexRex, op1.vvvvValue)
 			writeMem(op2.node, enc.ext, disp, immWidth)
 		} else {
 			invalid()
@@ -1798,7 +1843,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeAvx4RRRM(enc: NasmEnc, r1: Reg, r2: Reg, r3: Reg, mem: OpNode) {
 		if(enc.opEnc != OpEnc.RVMS) invalid()
 		val disp = resolveMem(mem.node)
-		writeVex(enc, r1.vexRex, indexReg.vexRex, baseReg.vexRex, r2.vvvvValue)
+		writeVex(enc, r1.vexRex, index.vexRex, base.vexRex, r2.vvvvValue)
 		writeMem(mem.node, r1.value, disp, 0)
 		byte(r3.index shl 4)
 	}
@@ -1808,10 +1853,10 @@ class Assembler(private val context: CompilerContext) {
 	private fun encodeAvx3RRM(enc: NasmEnc, r1: Reg, r2: Reg, mem: OpNode, immWidth: Int) {
 		val disp = resolveMem(mem.node)
 		if(enc.simdOpEnc == SimdOpEnc.MV) {
-			writeVex(enc, r2.vexRex, indexReg.vexRex, baseReg.vexRex, r1.vvvvValue)
+			writeVex(enc, r2.vexRex, index.vexRex, base.vexRex, r1.vvvvValue)
 			writeMem(mem.node, r2.value, disp, immWidth)
 		} else {
-			writeVex(enc, r1.vexRex, indexReg.vexRex, baseReg.vexRex, r2.vvvvValue)
+			writeVex(enc, r1.vexRex, index.vexRex, base.vexRex, r2.vvvvValue)
 			writeMem(mem.node, r1.value, disp, immWidth)
 		}
 	}
@@ -1880,7 +1925,7 @@ class Assembler(private val context: CompilerContext) {
 				if(op1 !in OpMask(0b1110) || (op2.width != null && op2.width != WORD)) invalid()
 				val disp = resolveMem(op2.node)
 				writeA32()
-				writeRex(0, op1.rex, indexReg.rex, baseReg.rex)
+				writeRex(0, op1.rex, index.rex, base.rex)
 				word(opcode)
 				writeMem(op2.node, op1.value, disp, 0)
 			}

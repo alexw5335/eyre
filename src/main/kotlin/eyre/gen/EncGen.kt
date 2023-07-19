@@ -3,7 +3,6 @@ package eyre.gen
 import eyre.*
 import eyre.util.NativeReader
 import eyre.util.Util
-import eyre.util.bin233
 import eyre.util.hex8
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -29,15 +28,16 @@ object EncGen {
 
 
 	fun run() {
-		/*for(e in encs)
-			if(e.avx && !e.evex && e.ops.size == 3)
-				if(e.ops.count { it.type.isReg } == 2 && e.ops.count { it.type.isM } == 1)
-					Unique.print(e.opEnc)
-		testEncs(false)
-		val code = "inc dword [r13+rax*4]"
-		println(code)
-		val bytes = Util.nasmAssemble(code)
-		for(i in bytes.indices) println("$i:  ${bytes[i].hex8}  ${bytes[i].bin233}")*/
+		for((m, encs) in nasmParser.encsMap) {
+			var hasM = false
+			var hasVM = false
+			for(e in encs) {
+				if(e.ops.any { it.type == OpType.VM }) hasVM = true
+				if(e.ops.any { it.type == OpType.M }) hasM = true
+			}
+			if(hasVM) println(m)
+		}
+		//testEncs(false)
 	}
 
 
@@ -54,16 +54,17 @@ object EncGen {
 			RegNode(Reg.r64().let { if(it.isInvalidIndex) Reg.RAX else it }),
 			IntNode(1L shl Random.nextInt(3))
 		)
-		val base = RegNode(Reg.r64().let { if(it.isInvalidBase) Reg.RAX else it })
+		val base = RegNode(Reg.r64().let { if(it.value == 5) Reg.RAX else it })
 		val disp = IntNode(Random.nextInt(512).toLong())
 		fun add(a: AstNode, b: AstNode) = BinaryNode(BinaryOp.ADD, a, b)
-		val node = when(Random.nextInt(6)) {
+		val node = when(Random.nextInt(7)) {
 			0 -> base
 			1 -> index
-			2 -> add(base, index)
-			3 -> add(base, disp)
-			4 -> add(index, disp)
-			5 -> add(base, add(index, disp))
+			2 -> disp
+			3 -> add(base, index)
+			4 -> add(base, disp)
+			5 -> add(index, disp)
+			6 -> add(base, add(index, disp))
 			else -> error("?")
 		}
 		return OpNode.mem(width, node)
@@ -71,7 +72,7 @@ object EncGen {
 
 
 
-	private fun Op?.toNode(): OpNode? = when(this) {
+	private fun Op?.toRandomNode(): OpNode? = when(this) {
 		null     -> null
 		Op.NONE  -> null
 		Op.R8    -> OpNode.reg(Reg.r8(Random.nextInt(16).let { if(it in 4..7) it + 4 else it }))
@@ -87,10 +88,10 @@ object EncGen {
 		Op.M128  -> randomMem(Width.XWORD)
 		Op.M256  -> randomMem(Width.YWORD)
 		Op.M512  -> randomMem(Width.ZWORD)
-		Op.I8    -> OpNode.imm(Width.BYTE, IntNode(10))
-		Op.I16   -> OpNode.imm(null, IntNode(10))
-		Op.I32   -> OpNode.imm(null, IntNode(10))
-		Op.I64   -> OpNode.imm(null, IntNode(10))
+		Op.I8    -> OpNode.imm(Width.BYTE, IntNode(Random.nextLong(0xF)))
+		Op.I16   -> OpNode.imm(null, IntNode(Random.nextLong(10))) // NASM doesn't use PUSH I16 for some reason
+		Op.I32   -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFF)))
+		Op.I64   -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFFFFFF)))
 		Op.AL    -> OpNode.reg(Reg.AL)
 		Op.AX    -> OpNode.reg(Reg.AX)
 		Op.EAX   -> OpNode.reg(Reg.EAX)
@@ -99,9 +100,9 @@ object EncGen {
 		Op.ECX   -> OpNode.reg(Reg.ECX)
 		Op.RCX   -> OpNode.reg(Reg.RCX)
 		Op.DX    -> OpNode.reg(Reg.DX)
-		Op.REL8  -> OpNode.imm(null, IntNode(10))
-		Op.REL16 -> OpNode.imm(null, IntNode(10))
-		Op.REL32 -> OpNode.imm(null, IntNode(10))
+		Op.REL8  -> OpNode.imm(null, IntNode(Random.nextLong(0xF)))
+		Op.REL16 -> OpNode.imm(null, IntNode(Random.nextLong(0xFFF)))
+		Op.REL32 -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFF)))
 		Op.ST    -> OpNode.reg(Reg.st(Random.nextInt(8)))
 		Op.ST0   -> OpNode.reg(Reg.ST0)
 		Op.ONE   -> OpNode.imm(null, IntNode(1))
@@ -110,19 +111,19 @@ object EncGen {
 		Op.Y     -> OpNode.reg(Reg.y(Random.nextInt(16)))
 		Op.Z     -> OpNode.reg(Reg.z(Random.nextInt(16)))
 		Op.K     -> OpNode.reg(Reg.k(Random.nextInt(8)))
-		Op.BND   -> OpNode.reg(Reg.BND3)
-		Op.T     -> OpNode.reg(Reg.TMM3)
-		Op.SEG   -> OpNode.reg(Reg.FS)
-		Op.CR    -> OpNode.reg(Reg.CR3)
-		Op.DR    -> OpNode.reg(Reg.DR3)
+		Op.BND   -> OpNode.reg(Reg.bnd(Random.nextInt(4)))
+		Op.T     -> OpNode.reg(Reg.tmm(Random.nextInt(8)))
+		Op.SEG   -> OpNode.reg(Reg.seg(Random.nextInt(6)))
+		Op.CR    -> OpNode.reg(Reg.cr(Random.nextInt(9)))
+		Op.DR    -> OpNode.reg(Reg.dr(Random.nextInt(8)))
 		Op.FS    -> OpNode.reg(Reg.FS)
 		Op.GS    -> OpNode.reg(Reg.GS)
-		Op.VM32X -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
-		Op.VM64X -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
-		Op.VM32Y -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
-		Op.VM64Y -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
-		Op.VM32Z -> OpNode.mem(Width.DWORD, RegNode(Reg.RDX))
-		Op.VM64Z -> OpNode.mem(Width.QWORD, RegNode(Reg.RDX))
+		Op.VM32X -> OpNode.mem(Width.DWORD, RegNode(Reg.x(Random.nextInt(16))))
+		Op.VM64X -> OpNode.mem(Width.QWORD, RegNode(Reg.x(Random.nextInt(16))))
+		Op.VM32Y -> OpNode.mem(Width.DWORD, RegNode(Reg.y(Random.nextInt(16))))
+		Op.VM64Y -> OpNode.mem(Width.QWORD, RegNode(Reg.y(Random.nextInt(16))))
+		Op.VM32Z -> OpNode.mem(Width.DWORD, RegNode(Reg.z(Random.nextInt(16))))
+		Op.VM64Z -> OpNode.mem(Width.QWORD, RegNode(Reg.z(Random.nextInt(16))))
 		else     -> error("Invalid op: $this")
 	}
 
@@ -143,14 +144,14 @@ object EncGen {
 		var error = false
 
 		for(e in encs) {
-			if(e.ops.any { it.type == OpType.MOFFS || it.type == OpType.VM || it.type == OpType.REL }) continue
+			if(e.ops.any { it.type == OpType.MOFFS || it.type == OpType.REL }) continue
 			if(e.mnemonic in ignoredTestingMnemonics) continue
 			if(e.evex) continue
 
-			val op1 = e.ops.getOrNull(0).toNode()
-			val op2 = e.ops.getOrNull(1).toNode()
-			val op3 = e.ops.getOrNull(2).toNode()
-			val op4 = e.ops.getOrNull(3).toNode()
+			val op1 = e.ops.getOrNull(0).toRandomNode()
+			val op2 = e.ops.getOrNull(1).toRandomNode()
+			val op3 = e.ops.getOrNull(2).toRandomNode()
+			val op4 = e.ops.getOrNull(3).toRandomNode()
 			val high = (op1?.high ?: 0) or (op2?.high ?: 0) or (op3?.high ?: 0) or (op4?.high ?: 0)
 
 			val node = InsNode(
