@@ -28,7 +28,15 @@ object EncGen {
 
 
 	fun run() {
-		testEncs(false)
+		for((m, encs) in nasmParser.encsMap) {
+			if(!m.isAvx) continue
+			for(e1 in encs) {
+				for(e2 in encs) {
+					if(e1 == e2) continue
+					if(e1.tempOps.equalsExceptVsib(e2.tempOps) && e1.vsibValue != 0) println(m)
+				}
+			}
+		}
 	}
 
 
@@ -159,8 +167,8 @@ object EncGen {
 			nasmBuilder.appendLine(node.nasmString)
 			try {
 				val (start, length) = assembler.assembleForTesting(node)
-				val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc(node)!! else null
-				tests += EncTest(node, nasmEnc, start, length)
+				//val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc(node)!! else null
+				//tests += EncTest(node, nasmEnc, start, length)
 			} catch(e: Exception) {
 				e.printStackTrace()
 				error = true

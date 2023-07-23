@@ -50,14 +50,14 @@ data class NasmEnc(
 
 	val opsString = ops.joinToString("_")
 
-	private val vsibValue = when(vsib) {
+	val vsibValue = when(vsib) {
 		null -> 0
 		VSib.VM32X, VSib.VM64X, VSib.VSIBX -> 1
 		VSib.VM32Y, VSib.VM64Y, VSib.VSIBY -> 2
 		VSib.VSIBZ -> 3
 	}
 
-	val temp = Temp(TempOp.from(op1), TempOp.from(op2), TempOp.from(op3), TempOp.from(op4), memWidth, vsibValue)
+	val tempOps = TempOps(TempOp.from(op1), TempOp.from(op2), TempOp.from(op3), TempOp.from(op4), memWidth, vsibValue)
 
 	fun compactAvxString() = buildString {
 		if(evex) append("E.") else append("V.")

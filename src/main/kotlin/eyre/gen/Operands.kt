@@ -1,5 +1,7 @@
 package eyre.gen
 
+import eyre.Reg
+import eyre.RegType
 import eyre.Width.*
 import eyre.Width
 
@@ -65,57 +67,32 @@ sealed interface OpKind
 
 
 
-@JvmInline
-value class TempOps(val value: Int) {
-
-	constructor(
-		op1: TempOp,
-		op2: TempOp,
-		op3: TempOp,
-		op4: TempOp,
-		mem: Boolean,
-		width: Width,
-		vsib: Int
-	) : this(
-		(op1.ordinal shl OP1_POS) or
-		(op2.ordinal shl OP2_POS) or
-		(op3.ordinal shl OP3_POS) or
-		(op4.ordinal shl OP4_POS) or
-		(if(mem) 1 shl MEM_POS else 0) or
-		(width.ordinal shl WIDTH_POS) or
-		(vsib shl VSIB_POS)
-	)
-
-	val op1   get() = ((value shr OP1_POS) and 31).let(TempOp.entries::get)
-	val op2   get() = ((value shr OP2_POS) and 31).let(TempOp.entries::get)
-	val op3   get() = ((value shr OP3_POS) and 31).let(TempOp.entries::get)
-	val op4   get() = ((value shr OP4_POS) and 31).let(TempOp.entries::get)
-	val mem   get() = ((value shr MEM_POS) and 1) == 1
-	val width get() = ((value shr WIDTH_POS) and 15).let(Width.entries::get)
-	val vsib  get() = ((value shr VSIB_POS) and 3)
-
-	companion object {
-		const val OP1_POS = 0
-		const val OP2_POS = 5
-		const val OP3_POS = 10
-		const val OP4_POS = 15
-		const val MEM_POS = 20
-		const val WIDTH_POS = 21
-		const val VSIB_POS = 25
-	}
-
+data class TempOps2(val r1: Reg, val r2: Reg, val r3: Reg, val r4: Reg, val memIndex: Int, val vsib: Int) {
+	fun equalsExceptMem(other: TempOps2) = r1 == other.r1 && r2 == other.r2 && r3 == other.r3 && r4 == other.r4
 }
 
 
 
-data class Temp(
+data class TempOps(
 	val op1   : TempOp,
 	val op2   : TempOp,
 	val op3   : TempOp,
 	val op4   : TempOp,
 	val width : Width?,
 	val vsib  : Int
-)
+) {
+	fun equalsExceptMem(other: TempOps) =
+		op1 == other.op1 &&
+		op2 == other.op2 &&
+		op3 == other.op3 &&
+		op4 == other.op4 &&
+		vsib == other.vsib
+	fun equalsExceptVsib(other: TempOps) =
+		op1 == other.op1 &&
+		op2 == other.op2 &&
+		op3 == other.op3 &&
+		op4 == other.op4
+}
 
 
 
