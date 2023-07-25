@@ -1,30 +1,103 @@
-package eyre.gen
+package eyre
 
-import eyre.Reg
-import eyre.RegType
 import eyre.Width.*
-import eyre.Width
+import eyre.gen.OpEnc
 
 
 
-enum class SseOp {
-	NONE,
-	X,
-	MM,
-	R8,
-	R16,
-	R32,
-	R64,
-	I8,
-	MEM,
-	M8,
-	M16,
-	M32,
-	M64,
-	M128;
+data class SimdOps(
+	val i8    : Boolean,
+	val op1   : Op,
+	val op2   : Op,
+	val op3   : Op,
+	val op4   : Op,
+	val width : Width?,
+	val vsib  : Int
+) {
+	fun equalsExceptMem(other: SimdOps) =
+		i8 == other.i8 &&
+		op1 == other.op1 &&
+		op2 == other.op2 &&
+		op3 == other.op3 &&
+		op4 == other.op4 &&
+		vsib == other.vsib
+}
 
-	val isM get() = ordinal > MEM.ordinal
 
+/*
+@JvmInline
+value class SimdOps(val value: Int) {
+
+	constructor(r1: Int, r2: Int, r3: Int, r4: Int, size: Int) : this(
+		(r1 shl R1) or
+		(r2 shl R2) or
+		(r3 shl R3) or
+		(r4 shl R4) or
+		(size shl SIZE)
+	)
+
+	constructor(
+		r1    : Int,
+		r2    : Int,
+		r3    : Int,
+		r4    : Int,
+		size  : Int,
+		mem   : Int,
+		width : Int,
+		vsib  : Int,
+	) : this(
+		(r1 shl R1) or
+		(r2 shl R2) or
+		(r3 shl R3) or
+		(r4 shl R4) or
+		(size shl SIZE) or
+		(mem shl MEM) or
+		(width shl WIDTH) or
+		(vsib shl VSIB)
+	)
+
+	val r1    get() = ((value shr R1) and 15).let(RegType.entries::get)
+	val r2    get() = ((value shr R2) and 15).let(RegType.entries::get)
+	val r3    get() = ((value shr R3) and 15).let(RegType.entries::get)
+	val r4    get() = ((value shr R4) and 15).let(RegType.entries::get)
+	val size  get() = ((value shr SIZE) and 3)
+	val mem   get() = ((value shr MEM) and 3)
+	val width get() = ((value shr WIDTH) and 7).let { if(it == 0) null else Width.entries[it - 1] }
+	val vsib  get() = ((value shr VSIB) and 3)
+
+	companion object {
+		const val R1    = 0
+		const val R2    = 4
+		const val R3    = 8
+		const val R4    = 12
+		const val SIZE  = 16 // 2: 1, 2, 3, 4
+		const val MEM   = 18 // 2: 0, 1, 2, 3 (0 for none, can't be fourth operand)
+		const val WIDTH = 20 // 4: NONE, BYTE, WORD, DWORD, QWORD, TWORD, XWORD, YWORD, ZWORD
+		const val VSIB  = 23 // 2: NONE, X, Y, Z
+	}
+
+}*/
+
+
+
+data class AutoOps(
+	val r1    : RegType,
+	val r2    : RegType,
+	val r3    : RegType,
+	val r4    : RegType,
+	val size  : Int,
+	val mem   : Int,
+	val width : Width?,
+	val vsib  : Int,
+) {
+	fun equalExceptMemWidth(other: AutoOps) =
+		r1 == other.r1 &&
+		r2 == other.r2 &&
+		r3 == other.r3 &&
+		r4 == other.r4 &&
+		size == other.size &&
+		mem == other.mem &&
+		vsib == other.vsib
 }
 
 
@@ -64,60 +137,6 @@ enum class OpType(val isReg: Boolean = false) {
 
 
 sealed interface OpKind
-
-
-
-data class TempOps2(val r1: Reg, val r2: Reg, val r3: Reg, val r4: Reg, val memIndex: Int, val vsib: Int) {
-	fun equalsExceptMem(other: TempOps2) = r1 == other.r1 && r2 == other.r2 && r3 == other.r3 && r4 == other.r4
-}
-
-
-
-data class TempOps(
-	val op1   : TempOp,
-	val op2   : TempOp,
-	val op3   : TempOp,
-	val op4   : TempOp,
-	val width : Width?,
-	val vsib  : Int
-) {
-	fun equalsExceptMem(other: TempOps) =
-		op1 == other.op1 &&
-		op2 == other.op2 &&
-		op3 == other.op3 &&
-		op4 == other.op4 &&
-		vsib == other.vsib
-	fun equalsExceptVsib(other: TempOps) =
-		op1 == other.op1 &&
-		op2 == other.op2 &&
-		op3 == other.op3 &&
-		op4 == other.op4
-}
-
-
-
-enum class TempOp(val op: Op?) {
-	NONE(Op.NONE),
-	R8(Op.R8),
-	R16(Op.R16),
-	R32(Op.R32),
-	R64(Op.R64),
-	MEM(null),
-	I8(Op.I8),
-	K(Op.K),
-	T(Op.T),
-	X(Op.X),
-	Y(Op.Y),
-	Z(Op.Z),
-	MM(Op.MM);
-	companion object {
-		fun from(op: Op?) = when {
-			op == null -> NONE
-			op.type.isMem -> MEM
-			else -> entries.firstOrNull { it.op == op } ?: NONE
-		}
-	}
-}
 
 
 

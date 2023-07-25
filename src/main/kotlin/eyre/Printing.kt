@@ -2,6 +2,90 @@
 
 package eyre
 
+import eyre.gen.NasmEnc
+import eyre.gen.VexL
+import eyre.gen.VexW
+import eyre.util.hexc8
+
+
+
+val NasmEnc.compactAvxString get() = buildString {
+	if(evex) append("E.") else append("V.")
+	when(vexl) {
+		VexL.LIG  -> { }
+		VexL.L0   -> append("L0.")
+		VexL.LZ   -> append("LZ.")
+		VexL.L1   -> append("L1.")
+		VexL.L128 -> if(Op.X !in ops || Op.Y in ops || Op.Z in ops) append("L128.")
+		VexL.L256 -> if(Op.Y !in ops || Op.X in ops || Op.Z in ops) append("L256.")
+		VexL.L512 -> if(Op.Z !in ops || Op.X in ops || Op.Y in ops) append("L512.")
+	}
+	append("${prefix.avxString}.${escape.avxString}")
+	when(vexw) {
+		VexW.WIG -> append(" ")
+		VexW.W0  -> append(".W0 ")
+		VexW.W1  -> append(".W1 ")
+	}
+	append(opcode.hexc8)
+	if(hasExt) append("/$ext")
+	append("  $mnemonic  ")
+	append(opsString)
+	append("  ")
+	if(pseudo >= 0) append(":$pseudo  ")
+	append("$opEnc  ")
+	tuple?.let { append("$it ") }
+	if(k) if(z) append("KZ ") else append("K ")
+	if(sae) append("SAE ")
+	if(er) append("ER ")
+	when(bcst) {
+		0 -> { }
+		1 -> append("B16 ")
+		2 -> append("B32 ")
+		3 -> append("B64 ")
+	}
+	vsib?.let { append("$it ") }
+}
+
+
+
+val NasmEnc.printString get() = buildString {
+	if(avx) {
+		if(evex) append("E.") else append("V.")
+		append("${vexl.name}.${prefix.avxString}.${escape.avxString}.${vexw.name} ${opcode.hexc8}")
+		if(hasExt) append("/$ext")
+		append("  $mnemonic  ")
+		append(opsString)
+		append("  ")
+		if(pseudo >= 0) append(":$pseudo  ")
+		append("$opEnc  ")
+		tuple?.let { append("$it ") }
+		if(k) if(z) append("KZ ") else append("K ")
+		if(sae) append("SAE ")
+		if(er) append("ER ")
+		when(bcst) {
+			0 -> { }
+			1 -> append("B16 ")
+			2 -> append("B32 ")
+			3 -> append("B64 ")
+		}
+		trimEnd()
+	} else {
+		prefix.string?.let { append("$it ") }
+		escape.string?.let { append("$it ") }
+		if(opcode and 0xFF00 != 0) append("${(opcode shr 8).hexc8} ")
+		append((opcode and 0xFF).hexc8)
+		if(hasExt) append("/$ext")
+		append("  $mnemonic  ")
+		if(ops.isNotEmpty()) append(opsString) else append("NONE")
+		append("  ")
+		if(rw == 1) append("RW ")
+		if(o16 == 1) append("O16 ")
+		if(pseudo >= 0) append(":$pseudo ")
+		if(mr) append("MR ")
+		trimEnd()
+	}
+}
+
 
 
 val OpNode.nasmString get() = buildString {

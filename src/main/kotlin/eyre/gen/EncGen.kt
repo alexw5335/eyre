@@ -28,15 +28,7 @@ object EncGen {
 
 
 	fun run() {
-		for((m, encs) in nasmParser.encsMap) {
-			if(!m.isAvx) continue
-			for(e1 in encs) {
-				for(e2 in encs) {
-					if(e1 == e2) continue
-					if(e1.tempOps.equalsExceptVsib(e2.tempOps) && e1.vsibValue != 0) println(m)
-				}
-			}
-		}
+
 	}
 
 

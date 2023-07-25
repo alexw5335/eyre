@@ -1,26 +1,5 @@
 namespace main
 
 proc main {
-	/*inc dword [0]
-	inc dword [10]
-	inc dword [rax * 2]
-	inc dword [rax * 3]
-	inc dword [rax * 4]
-	inc dword [rax * 5]
-	inc dword [rax * 8]
-	inc dword [rax * 8 + 10]
-	inc dword [r13]
-	inc dword [r13 + 10]
-	inc dword [r13 + 1000]
-	inc dword [r13 + rax * 1]
-	inc dword [r13 + rax * 2]
-	inc dword [rax + r13 * 8]
-	inc dword [rsp]
-	inc dword [r12]
-	inc dword [rsp + 10]
-	inc dword [r12 + 10]
-	inc dword [r12 * 8]
-	inc dword [r12 * 2]*/
 	adc byte [rdi * 1 + 366], r9b
-
 }

@@ -2,6 +2,7 @@ package eyre.gen
 
 import eyre.Mnemonic
 import eyre.Width
+import eyre.Op
 
 object EncGenLists {
 

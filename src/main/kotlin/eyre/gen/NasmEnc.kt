@@ -1,8 +1,6 @@
 package eyre.gen
 
-import eyre.Escape
-import eyre.Mnemonic
-import eyre.Prefix
+import eyre.*
 import eyre.util.hexc8
 
 /**
@@ -32,106 +30,38 @@ data class NasmEnc(
 	val sae      : Boolean,
 	val er       : Boolean,
 	val bcst     : Int,
-	val vsib     : VSib?,
 	val k        : Boolean,
 	val z        : Boolean,
 	val avx      : Boolean,
 	val evex     : Boolean
 ) {
+	val opsString = ops.joinToString("_")
+	val op1 = ops.getOrNull(0) ?: Op.NONE
+	val op2 = ops.getOrNull(1) ?: Op.NONE
+	val op3 = ops.getOrNull(2) ?: Op.NONE
+	val op4 = ops.getOrNull(3) ?: Op.NONE
 
 	val simdOpEnc = SimdOpEnc.entries.firstOrNull { opEnc in it.encs }
 
-	val memWidth = ops.firstOrNull { it.type.isMem }?.width
+	val memIndex = ops.indexOfFirst { it.type.isMem }
+	val memOp = if(memIndex >= 0) ops[memIndex] else null
+	val memWidth = memOp?.width
+	val i8 = ops.isNotEmpty() && ops.last() == Op.I8
 
-	val op1 = ops.getOrNull(0)
-	val op2 = ops.getOrNull(1)
-	val op3 = ops.getOrNull(2)
-	val op4 = ops.getOrNull(3)
-
-	val opsString = ops.joinToString("_")
-
-	val vsibValue = when(vsib) {
-		null -> 0
-		VSib.VM32X, VSib.VM64X, VSib.VSIBX -> 1
-		VSib.VM32Y, VSib.VM64Y, VSib.VSIBY -> 2
-		VSib.VSIBZ -> 3
+	val vsibValue = when(memOp) {
+		Op.VM32X, Op.VM64X -> 1
+		Op.VM32Y, Op.VM64Y -> 2
+		Op.VM32Z, Op.VM64Z -> 3
+		else -> 0
 	}
 
-	val tempOps = TempOps(TempOp.from(op1), TempOp.from(op2), TempOp.from(op3), TempOp.from(op4), memWidth, vsibValue)
-
-	fun compactAvxString() = buildString {
-		if(evex) append("E.") else append("V.")
-		when(vexl) {
-			VexL.LIG  -> { }
-			VexL.L0   -> append("L0.")
-			VexL.LZ   -> append("LZ.")
-			VexL.L1   -> append("L1.")
-			VexL.L128 -> if(Op.X !in ops || Op.Y in ops || Op.Z in ops) append("L128.")
-			VexL.L256 -> if(Op.Y !in ops || Op.X in ops || Op.Z in ops) append("L256.")
-			VexL.L512 -> if(Op.Z !in ops || Op.X in ops || Op.Y in ops) append("L512.")
-		}
-		append("${prefix.avxString}.${escape.avxString}")
-		when(vexw) {
-			VexW.WIG -> append(" ")
-			VexW.W0  -> append(".W0 ")
-			VexW.W1  -> append(".W1 ")
-		}
-		append(opcode.hexc8)
-		if(hasExt) append("/$ext")
-		append("  $mnemonic  ")
-		append(opsString)
-		append("  ")
-		if(pseudo >= 0) append(":$pseudo  ")
-		append("$opEnc  ")
-		tuple?.let { append("$it ") }
-		if(k) if(z) append("KZ ") else append("K ")
-		if(sae) append("SAE ")
-		if(er) append("ER ")
-		when(bcst) {
-			0 -> { }
-			1 -> append("B16 ")
-			2 -> append("B32 ")
-			3 -> append("B64 ")
-		}
-		vsib?.let { append("$it ") }
+	private val Op?.simdOp get() = when {
+		this == null  -> Op.NONE
+		type.isMem    -> Op.MEM
+		this == Op.I8 -> Op.NONE
+		else          -> this
 	}
 
-	override fun toString() = buildString {
-		if(avx) {
-			if(evex) append("E.") else append("V.")
-			append("${vexl.name}.${prefix.avxString}.${escape.avxString}.${vexw.name} ${opcode.hexc8}")
-			if(hasExt) append("/$ext")
-			append("  $mnemonic  ")
-			append(opsString)
-			append("  ")
-			if(pseudo >= 0) append(":$pseudo  ")
-			append("$opEnc  ")
-			tuple?.let { append("$it ") }
-			if(k) if(z) append("KZ ") else append("K ")
-			if(sae) append("SAE ")
-			if(er) append("ER ")
-			when(bcst) {
-				0 -> { }
-				1 -> append("B16 ")
-				2 -> append("B32 ")
-				3 -> append("B64 ")
-			}
-			vsib?.let { append("$it ") }
-		} else {
-			prefix.string?.let { append("$it ") }
-			escape.string?.let { append("$it ") }
-			if(opcode and 0xFF00 != 0) append("${(opcode shr 8).hexc8} ")
-			append((opcode and 0xFF).hexc8)
-			if(ext >= 0) append("/$ext")
-			append("  $mnemonic  ")
-			if(ops.isNotEmpty()) append(opsString) else append("NONE")
-			append("  ")
-			if(rw == 1) append("RW ")
-			if(o16 == 1) append("O16 ")
-			if(pseudo >= 0) append(":$pseudo ")
-			if(mr) append("MR ")
-		}
-		trimEnd()
-	}
+	val simdOps = SimdOps(i8, op1.simdOp, op2.simdOp, op3.simdOp, op4.simdOp, memWidth, vsibValue)
 
 }

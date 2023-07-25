@@ -321,7 +321,6 @@ class NasmParser(private val inputs: List<String>) {
 		sae,
 		er,
 		when { b16 -> 1; b32 -> 2; b64 -> 3; else -> 0 },
-		vsib,
 		k,
 		z,
 		vex != null,
