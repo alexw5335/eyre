@@ -80,7 +80,6 @@ object Names : Interner<String, Name>() {
 	val keywords     = createRange(Keyword.entries, Keyword::string)
 	val widths       = createRange(Width.entries, Width::string)
 	val varWidths    = createRange(Width.entries, Width::varString)
-	val registers    = createRange(Reg.entries, Reg::string)
 	val prefixes     = createRange(InsPrefix.entries, InsPrefix::string)
 	val mnemonics    = createRange(Mnemonic.entries, Mnemonic::string)
 
@@ -89,6 +88,19 @@ object Names : Interner<String, Name>() {
 	val SIZE  = add("size")
 	val COUNT = add("count")
 	val INT   = add("int")
+
+	fun isReg(intern: Intern) { }
+	fun getReg(intern: Intern) { }
+	val regStart = count
+	val regs = IntArray(Reg.)
+	init {
+		for((type, names) in Reg.names.withIndex()) {
+			for((index, name) in names.withIndex()) {
+				add(name)
+			}
+		}
+		for((i, name) in Reg.na)
+	}
 
 }
 

@@ -43,7 +43,6 @@ val NasmEnc.compactAvxString get() = buildString {
 		2 -> append("B32 ")
 		3 -> append("B64 ")
 	}
-	vsib?.let { append("$it ") }
 }
 
 
@@ -130,6 +129,7 @@ val AstNode.printString: String get() = when(this) {
 	is FloatNode      -> "$value"
 	is RefNode        -> "${left.printString}::${right.printString}"
 	is EqualsNode     -> "${left.printString} = ${right.printString}"
+	is PrefixNode     -> "$prefix"
 
 	is OpNode -> buildString {
 		when(type) {

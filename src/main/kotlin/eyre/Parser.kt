@@ -225,27 +225,28 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseInstruction(prefix: InsPrefix?, mnemonic: Mnemonic): InsNode {
+		prefix?.let { PrefixNode(it).add() }
 		if(atNewline() || next == EndToken)
-			return InsNode(prefix, mnemonic, 0, 0, null, null, null, null)
+			return InsNode(mnemonic)
 
 		val op1 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(prefix, mnemonic, 1, op1.high, op1, null, null, null)
+			return InsNode(mnemonic, op1)
 		pos++
 
 		val op2 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(prefix, mnemonic, 2, op1.high or op2.high, op1, op2, null, null)
+			return InsNode(mnemonic, op1, op2)
 		pos++
 
 		val op3 = parseOperand()
 		if(next != SymToken.COMMA)
-			return InsNode(prefix, mnemonic, 3, op1.high or op2.high or op3.high, op1, op2, op3, null)
+			return InsNode(mnemonic, op1, op2, op3)
 		pos++
 
 		val op4 = parseOperand()
 		expectTerminator()
-		return InsNode(prefix, mnemonic, 4, op1.high or op2.high or op3.high or op4.high, op1, op2, op3, op4)
+		return InsNode(mnemonic, op1, op2, op3, op4)
 	}
 
 

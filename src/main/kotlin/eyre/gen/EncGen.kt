@@ -63,9 +63,8 @@ object EncGen {
 
 
 
-	private fun Op?.toRandomNode(): OpNode? = when(this) {
-		null     -> null
-		Op.NONE  -> null
+	private fun Op.toRandomNode(): OpNode = when(this) {
+		Op.NONE  -> OpNode.NULL
 		Op.R8    -> OpNode.reg(Reg.r8(Random.nextInt(16).let { if(it in 4..7) it + 4 else it }))
 		Op.R16   -> OpNode.reg(Reg.r16(Random.nextInt(16)))
 		Op.R32   -> OpNode.reg(Reg.r32(Random.nextInt(16)))
@@ -139,21 +138,12 @@ object EncGen {
 			if(e.mnemonic in ignoredTestingMnemonics) continue
 			if(e.evex) continue
 
-			val op1 = e.ops.getOrNull(0).toRandomNode()
-			val op2 = e.ops.getOrNull(1).toRandomNode()
-			val op3 = e.ops.getOrNull(2).toRandomNode()
-			val op4 = e.ops.getOrNull(3).toRandomNode()
-			val high = (op1?.high ?: 0) or (op2?.high ?: 0) or (op3?.high ?: 0) or (op4?.high ?: 0)
-
 			val node = InsNode(
-				null,
 				e.mnemonic,
-				e.ops.size,
-				high,
-				op1,
-				op2,
-				op3,
-				op4
+				e.op1.toRandomNode(),
+				e.op2.toRandomNode(),
+				e.op3.toRandomNode(),
+				e.op4.toRandomNode(),
 			)
 
 			nasmBuilder.appendLine(node.nasmString)

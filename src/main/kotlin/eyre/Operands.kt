@@ -5,7 +5,7 @@ import eyre.gen.OpEnc
 
 
 
-data class SimdOps(
+/*data class SimdOps(
 	val i8    : Boolean,
 	val op1   : Op,
 	val op2   : Op,
@@ -21,7 +21,7 @@ data class SimdOps(
 		op3 == other.op3 &&
 		op4 == other.op4 &&
 		vsib == other.vsib
-}
+}*/
 
 
 /*
@@ -79,26 +79,6 @@ value class SimdOps(val value: Int) {
 }*/
 
 
-
-data class AutoOps(
-	val r1    : RegType,
-	val r2    : RegType,
-	val r3    : RegType,
-	val r4    : RegType,
-	val size  : Int,
-	val mem   : Int,
-	val width : Width?,
-	val vsib  : Int,
-) {
-	fun equalExceptMemWidth(other: AutoOps) =
-		r1 == other.r1 &&
-		r2 == other.r2 &&
-		r3 == other.r3 &&
-		r4 == other.r4 &&
-		size == other.size &&
-		mem == other.mem &&
-		vsib == other.vsib
-}
 
 
 

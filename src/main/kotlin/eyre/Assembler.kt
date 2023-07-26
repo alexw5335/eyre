@@ -91,13 +91,11 @@ class Assembler(private val context: CompilerContext) {
 	private fun handleInstruction(node: InsNode) {
 		currentIns = node
 
-		node.prefix?.value?.let(::byte)
-
 		when(node.size) {
 			0 -> assemble0(node)
-			1 -> assemble1(node, node.op1!!)
-			2 -> assemble2(node, node.op1!!, node.op2!!)
-			3 -> assemble3(node, node.op1!!, node.op2!!, node.op3!!)
+			1 -> assemble1(node, node.op1)
+			2 -> assemble2(node, node.op1, node.op2)
+			3 -> assemble3(node, node.op1, node.op2, node.op3)
 			else -> invalid()
 		}
 
@@ -2079,6 +2077,46 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun assembleSIMD(node: InsNode) {
+		val size = when(node.size) {
+			0 -> 0
+			1 -> 1
+			2 -> if(node.op2.isImm) 1 else 2
+			3 -> if(node.op3.isImm) 2 else 3
+			4 -> if(node.op4.isImm) 3 else 4
+			else -> invalid()
+		}
+
+		when(size) {
+			0 -> invalid()
+			1 -> {
+
+			}
+			2 -> {
+				when {
+					node.op1.isMem -> { }
+					node.op2.isMem -> { }
+					else -> { }
+				}
+			}
+			3 -> {
+
+			}
+			4 -> {
+
+			}
+			else -> invalid()
+		}
+	}
+
+
+
+	/*
+	SIMD utils
+	 */
+
+
+
 	private fun Reg.toOp(): Op = when(type) {
 		RegType.R8  -> Op.R8
 		RegType.R16 -> Op.R16
@@ -2157,7 +2195,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun getVsib(node: InsNode): Int = when {
+	/*private fun getVsib(node: InsNode): Int = when {
 		node.mnemonic !in multiVsibMnemonics -> 0
 		node.op1 != null && node.op1.isMem -> getVsib(node.op1)
 		node.op2 != null && node.op2.isMem -> getVsib(node.op2)
@@ -2244,7 +2282,7 @@ class Assembler(private val context: CompilerContext) {
 			else
 				assembleSimd4(node, node.op1, node.op2, node.op3, node.op4)
 		}
-	}
+	}*/
 
 
 
@@ -2253,7 +2291,7 @@ class Assembler(private val context: CompilerContext) {
 	 */
 
 
-
+	/*
 	private fun writeSimdPrefix(enc: NasmEnc) { when(enc.prefix) {
 		Prefix.NONE -> { }
 		Prefix.P66  -> byte(0x66)
@@ -2440,7 +2478,7 @@ class Assembler(private val context: CompilerContext) {
 			invalid()
 		}
 	}
-
+	*/
 
 
 }

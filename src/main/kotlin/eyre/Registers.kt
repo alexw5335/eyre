@@ -1,7 +1,5 @@
 package eyre
 
-import kotlin.random.Random
-
 
 
 enum class Width(val string: String, val varString: String?, val bytes: Int) {
@@ -40,10 +38,10 @@ enum class RegType(val width: Width) {
 	R32(Width.DWORD),
 	R64(Width.QWORD),
 	ST(Width.TWORD),
+	MM(Width.QWORD),
 	X(Width.XWORD),
 	Y(Width.YWORD),
 	Z(Width.ZWORD),
-	MM(Width.QWORD),
 	K(Width.WORD),
 	T(Width.ZWORD),
 	SEG(Width.DWORD),
@@ -65,7 +63,7 @@ value class OpMask(val value: Int) {
 
 
 
-enum class Reg(val type  : RegType, val index : Int) {
+/*enum class Reg(val type  : RegType, val index : Int) {
 
 	AL  (RegType.R8, 0),
 	CL  (RegType.R8, 1),
@@ -316,7 +314,7 @@ enum class Reg(val type  : RegType, val index : Int) {
 	val vvvvValue = (value or (rex shl 3)).inv() and 0b1111
 	val isR      = type.ordinal <= RegType.R64.ordinal
 	val isV      = type.ordinal in RegType.X.ordinal..RegType.Z.ordinal
-	val isA      = isR && value == 0 && rex == 0
+	val isA      = isR && index == 0
 	val rex8     = if(type == RegType.R8 && value in 4..7 && name.endsWith('L')) 1 else 0
 	val noRex    = if(type == RegType.R8 && value in 4..7 && name.endsWith('H')) 1 else 0
 
@@ -344,14 +342,12 @@ enum class Reg(val type  : RegType, val index : Int) {
 		fun seg(index: Int) = entries[ES.ordinal + index]
 	}
 
-}
-
+}*/
 
 
 
 /**
  *     00  4  type
- *     04  3  value
  *     04  3  value
  *     07  1  rex
  *     08  1  high
@@ -359,10 +355,14 @@ enum class Reg(val type  : RegType, val index : Int) {
  *     10  1  noRex
  *     11     size
  */
-/*@JvmInline
-value class Register(private val backing: Int) {
+@JvmInline
+value class Reg(private val backing: Int) {
 
-	constructor(type: Int, value: Int) : this(type and (value shl 8))
+	constructor(type: Int, value: Int) : 
+		this(type or (value shl 8))
+	
+	constructor(type: Int, value: Int, rex8: Int, noRex: Int) :
+		this(type or (value shl 8) or (rex8 shl 12) or (rex8 shl 13))
 
 	val type    get() = (backing shr 0)  and 0xFF
 	val ordinal get() = (backing shr 8)  and 0b11111
@@ -372,52 +372,149 @@ value class Register(private val backing: Int) {
 	val rex8    get() = (backing shr 12) and 1
 	val noRex   get() = (backing shr 13) and 1
 
-	val gpWidth get() = Width.entries[type]
-
 	val isR   get() = type <= R64
 	val isR8  get() = type == R8
 	val isR16 get() = type == R16
 	val isR32 get() = type == R32
 	val isR64 get() = type == R64
-	val isMM  get() = type == MM
 	val isST  get() = type == ST
+	val isMM  get() = type == MM
 	val isX   get() = type == X
 	val isY   get() = type == Y
 	val isZ   get() = type == Z
 	val isK   get() = type == K
+	val isT   get() = type == T
 	val isSEG get() = type == SEG
+	val isBND get() = type == BND
 	val isCR  get() = type == CR
 	val isDR  get() = type == DR
-	val isBND get() = type == BND
+	
+	/** ESP/RSP*/
+	val invalidIndex get() = ordinal == 4
+	/** EBP/RBP/R13D/R13*/
+	val imperfectBase get() = value == 5
+	val isA get() = isR && ordinal == 0
+	val vexRex get() = rex xor 1
+	val vvvvValue get() = ordinal.inv() and 0b1111
+	val isV get() = type in X..Z
+
+	override fun toString() = if(rex8 == 1)
+		r8RexNames[value - 4]
+	else
+		names[type][ordinal]
 
 	companion object {
-		const val R8  = 0  // BYTE
-		const val R16 = 1  // WORD
-		const val R32 = 2  // DWORD
-		const val R64 = 3  // QWORD
-		const val ST  = 5  // TWORD
-		const val X   = 6  // XWORD
-		const val Y   = 7  // YWORD
-		const val Z   = 8  // ZWORD
-		const val MM  = 4
-		const val K   = 9
-		const val SEG = 10
-		const val CR  = 11
-		const val DR  = 12
-		const val BND = 13
-		const val TMM = 14
 
-		val AL = Register(R8, 0)
-		val CL = Register(R8, 1)
-		val DL = Register(R8, 2)
-		val BL = Register(R8, 3)
-		val AH = Register(R8, 4)
-		val CH = Register(R8, 5)
-		val DH = Register(R8, 6)
-		val BH = Register(R8, 7)
-		val SIL = Register((R8 or (1 shl 9)), 7)
-		val DIL = Register((R8 or (1 shl 10)), 8)
+		const val R8  = 0
+		const val R16 = 1
+		const val R32 = 2
+		const val R64 = 3
+		const val ST  = 4
+		const val MM  = 5
+		const val X   = 6
+		const val Y   = 7
+		const val Z   = 8
+		const val K   = 9
+		const val T   = 10
+		const val SEG = 11
+		const val BND = 12
+		const val CR  = 13
+		const val DR  = 14
+
+		fun r8(index: Int)  = Reg(R8, index)
+		fun r16(index: Int) = Reg(R16, index)
+		fun r32(index: Int) = Reg(R32, index)
+		fun r64(index: Int) = Reg(R64, index)
+		fun st(index: Int)  = Reg(ST, index)
+		fun x(index: Int)   = Reg(X, index)
+		fun y(index: Int)   = Reg(Y, index)
+		fun z(index: Int)   = Reg(Z, index)
+		fun mm(index: Int)  = Reg(MM, index)
+		fun cr(index: Int)  = Reg(CR, index)
+		fun dr(index: Int)  = Reg(DR, index)
+		fun k(index: Int)   = Reg(K, index)
+		fun bnd(index: Int) = Reg(BND, index)
+		fun tmm(index: Int) = Reg(T, index)
+		fun seg(index: Int) = Reg(SEG, index)
+		
+		val r8Names = listOf(
+			"al", "cl", "dl", "bl", "ah", "ch", "bh", "dh",
+			"r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b",
+		)
+
+		val r8RexNames = listOf("spl", "bpl", "sil", "dil")
+		
+		val r16Names = listOf(
+			"ax", "cx", "dx", "bx", "bx", "sp", "bp", "si", "di",
+			"r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w"
+		)
+
+		val r32Names = listOf(
+			"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
+			"r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"
+		)
+		
+		val r64Names = listOf(
+			"rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
+			"r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
+		)
+
+		val stNames = listOf("st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7")
+
+		val mmNames = listOf("mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7")
+
+		val xNames = listOf(
+			"xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+			"xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15",
+			"xmm16", "xmm17", "xmm18", "xmm19", "xmm20", "xmm21", "xmm22", "xmm23",
+			"xmm24", "xmm25", "xmm26", "xmm27", "xmm28", "xmm29", "xmm30", "xmm31",
+		)
+
+		val yNames = listOf(
+			"ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7",
+			"ymm8", "ymm9", "ymm10", "ymm11", "ymm12", "ymm13", "ymm14", "ymm15",
+			"ymm16", "ymm17", "ymm18", "ymm19", "ymm20", "ymm21", "ymm22", "ymm23",
+			"ymm24", "ymm25", "ymm26", "ymm27", "ymm28", "ymm29", "ymm30", "ymm31",
+		)
+
+		val zNames = listOf(
+			"zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "zmm7",
+			"zmm8", "zmm9", "zmm10", "zmm11", "zmm12", "zmm13", "zmm14", "zmm15",
+			"zmm16", "zmm17", "zmm18", "zmm19", "zmm20", "zmm21", "zmm22", "zmm23",
+			"zmm24", "zmm25", "zmm26", "zmm27", "zmm28", "zmm29", "zmm30", "zmm31",
+		)
+
+		val kNames = listOf("k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7")
+
+		val tNames = listOf("tmm0", "tmm1", "tmm2", "tmm3", "tmm4", "tmm5", "tmm6", "tmm7")
+
+		val segNames = listOf("es", "cs", "ss", "ds", "fs", "gs")
+
+		val bndNames = listOf("bnd0", "bnd1", "bnd2", "bnd3")
+
+		val crNames = listOf("cr0", "cr1", "cr2", "cr3", "cr4", "cr5", "cr6", "cr7", "cr8")
+
+		val drNames = listOf("dr0", "dr1", "dr2", "dr3", "dr4", "dr5", "dr6", "mm7")
+
+		val names = listOf<List<String>>(
+			r8Names,
+			r16Names,
+			r32Names,
+			r64Names,
+			stNames,
+			mmNames,
+			xNames,
+			yNames,
+			zNames,
+			kNames,
+			tNames,
+			segNames,
+			bndNames,
+			crNames,
+			drNames,
+			drNames,
+		)
 
 	}
 
-}*/
+}
