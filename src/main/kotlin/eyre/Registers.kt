@@ -44,26 +44,15 @@ enum class RegType(val width: Width) {
 	Z(Width.ZWORD),
 	K(Width.WORD),
 	T(Width.ZWORD),
-	SEG(Width.DWORD),
-	BND(Width.XWORD),
+	SEG(Width.WORD),
 	CR(Width.QWORD),
-	DR(Width.QWORD);
+	DR(Width.QWORD),
+	BND(Width.XWORD),
 }
 
 
 
-@JvmInline
-value class OpMask(val value: Int) {
-	operator fun contains(type: RegType) = (1 shl type.ordinal) and value != 0
-	operator fun contains(reg: Reg)      = (1 shl reg.type.ordinal) and value != 0
-	operator fun contains(width: Width)  = (1 shl width.ordinal) and value != 0
-	operator fun contains(int: Int)      = (1 shl int) and value != 0
-	operator fun plus(other: OpMask)     = OpMask(value or other.value)
-}
-
-
-
-/*enum class Reg(val type  : RegType, val index : Int) {
+enum class Reg(val type: RegType, val index : Int) {
 
 	AL  (RegType.R8, 0),
 	CL  (RegType.R8, 1),
@@ -271,6 +260,15 @@ value class OpMask(val value: Int) {
 	K6(RegType.K, 6),
 	K7(RegType.K, 7),
 
+	TMM0(RegType.T, 0),
+	TMM1(RegType.T, 1),
+	TMM2(RegType.T, 2),
+	TMM3(RegType.T, 3),
+	TMM4(RegType.T, 4),
+	TMM5(RegType.T, 5),
+	TMM6(RegType.T, 6),
+	TMM7(RegType.T, 7),
+
 	CR0(RegType.CR, 0),
 	CR1(RegType.CR, 1),
 	CR2(RegType.CR, 2),
@@ -295,14 +293,7 @@ value class OpMask(val value: Int) {
 	BND2(RegType.BND, 2),
 	BND3(RegType.BND, 3),
 
-	TMM0(RegType.T, 0),
-	TMM1(RegType.T, 1),
-	TMM2(RegType.T, 2),
-	TMM3(RegType.T, 3),
-	TMM4(RegType.T, 4),
-	TMM5(RegType.T, 5),
-	TMM6(RegType.T, 6),
-	TMM7(RegType.T, 7);
+	NONE(RegType.BND, 4);
 
 	val string = name.lowercase()
 
@@ -311,7 +302,7 @@ value class OpMask(val value: Int) {
 	val rex      = (index shr 3) and 1
 	val high     = (index shr 4) and 1
 	val vexRex   = rex xor 1
-	val vvvvValue = (value or (rex shl 3)).inv() and 0b1111
+	val vValue   = index.inv() and 0b1111
 	val isR      = type.ordinal <= RegType.R64.ordinal
 	val isV      = type.ordinal in RegType.X.ordinal..RegType.Z.ordinal
 	val isA      = isR && index == 0
@@ -328,7 +319,7 @@ value class OpMask(val value: Int) {
 		fun r8Rex(index: Int) = entries[AL.ordinal + 16 + index]
 		fun r16(index: Int) = entries[AX.ordinal + index]
 		fun r32(index: Int) = entries[EAX.ordinal + index]
-		fun r64(index: Int = Random.nextInt(16)) = entries[RAX.ordinal + index]
+		fun r64(index: Int) = entries[RAX.ordinal + index]
 		fun st(index: Int) = entries[ST0.ordinal + index]
 		fun x(index: Int) = entries[XMM0.ordinal + index]
 		fun y(index: Int) = entries[YMM0.ordinal + index]
@@ -342,10 +333,11 @@ value class OpMask(val value: Int) {
 		fun seg(index: Int) = entries[ES.ordinal + index]
 	}
 
-}*/
+}
 
 
 
+/*
 /**
  *     00  4  type
  *     04  3  value
@@ -517,4 +509,4 @@ value class Reg(private val backing: Int) {
 
 	}
 
-}
+}*/

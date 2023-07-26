@@ -73,13 +73,14 @@ object Names : Interner<String, Name>() {
 
 	private fun<T : Enum<T>> createRange(elements: EnumEntries<T>, supplier: (T) -> String?): InternRange<T> {
 		val range = IntRange(count, count + elements.size - 1)
-		for(e in elements) supplier(e)?.let(::add)
+		for(e in elements) supplier(e)?.let { if(it != "NONE") add(it) }
 		return InternRange(range, elements)
 	}
 
 	val keywords     = createRange(Keyword.entries, Keyword::string)
 	val widths       = createRange(Width.entries, Width::string)
 	val varWidths    = createRange(Width.entries, Width::varString)
+	val registers    = createRange(Reg.entries, Reg::string)
 	val prefixes     = createRange(InsPrefix.entries, InsPrefix::string)
 	val mnemonics    = createRange(Mnemonic.entries, Mnemonic::string)
 
@@ -88,19 +89,6 @@ object Names : Interner<String, Name>() {
 	val SIZE  = add("size")
 	val COUNT = add("count")
 	val INT   = add("int")
-
-	fun isReg(intern: Intern) { }
-	fun getReg(intern: Intern) { }
-	val regStart = count
-	val regs = IntArray(Reg.)
-	init {
-		for((type, names) in Reg.names.withIndex()) {
-			for((index, name) in names.withIndex()) {
-				add(name)
-			}
-		}
-		for((i, name) in Reg.na)
-	}
 
 }
 

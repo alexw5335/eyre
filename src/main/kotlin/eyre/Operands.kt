@@ -5,91 +5,70 @@ import eyre.gen.OpEnc
 
 
 
-/*data class SimdOps(
-	val i8    : Boolean,
-	val op1   : Op,
-	val op2   : Op,
-	val op3   : Op,
-	val op4   : Op,
-	val width : Width?,
-	val vsib  : Int
-) {
-	fun equalsExceptMem(other: SimdOps) =
-		i8 == other.i8 &&
-		op1 == other.op1 &&
-		op2 == other.op2 &&
-		op3 == other.op3 &&
-		op4 == other.op4 &&
-		vsib == other.vsib
-}*/
 
-
-/*
 @JvmInline
 value class SimdOps(val value: Int) {
 
-	constructor(r1: Int, r2: Int, r3: Int, r4: Int, size: Int) : this(
+	constructor(i8: Int, r1: Int, r2: Int, r3: Int, r4: Int) : this(
 		(r1 shl R1) or
 		(r2 shl R2) or
 		(r3 shl R3) or
 		(r4 shl R4) or
-		(size shl SIZE)
+		(i8 shl I8)
 	)
 
 	constructor(
+		i8    : Int,
 		r1    : Int,
 		r2    : Int,
 		r3    : Int,
 		r4    : Int,
-		size  : Int,
-		mem   : Int,
 		width : Int,
+		mem   : Int,
 		vsib  : Int,
 	) : this(
 		(r1 shl R1) or
 		(r2 shl R2) or
 		(r3 shl R3) or
 		(r4 shl R4) or
-		(size shl SIZE) or
 		(mem shl MEM) or
 		(width shl WIDTH) or
-		(vsib shl VSIB)
+		(vsib shl VSIB) or
+		(i8 shl I8)
 	)
 
 	val r1    get() = ((value shr R1) and 15).let(RegType.entries::get)
 	val r2    get() = ((value shr R2) and 15).let(RegType.entries::get)
 	val r3    get() = ((value shr R3) and 15).let(RegType.entries::get)
 	val r4    get() = ((value shr R4) and 15).let(RegType.entries::get)
-	val size  get() = ((value shr SIZE) and 3)
-	val mem   get() = ((value shr MEM) and 3)
 	val width get() = ((value shr WIDTH) and 7).let { if(it == 0) null else Width.entries[it - 1] }
+	val mem   get() = ((value shr MEM) and 3)
 	val vsib  get() = ((value shr VSIB) and 3)
+	val i8    get() = ((value shr I8) and 1)
 
 	companion object {
 		const val R1    = 0
 		const val R2    = 4
 		const val R3    = 8
 		const val R4    = 12
-		const val SIZE  = 16 // 2: 1, 2, 3, 4
-		const val MEM   = 18 // 2: 0, 1, 2, 3 (0 for none, can't be fourth operand)
-		const val WIDTH = 20 // 4: NONE, BYTE, WORD, DWORD, QWORD, TWORD, XWORD, YWORD, ZWORD
-		const val VSIB  = 23 // 2: NONE, X, Y, Z
+		const val WIDTH = 16 // 4: NONE, BYTE, WORD, DWORD, QWORD, TWORD, XWORD, YWORD, ZWORD
+		const val MEM   = 20 // 2: 0, 1, 2, 3 (0 for none, can't be fourth operand)
+		const val VSIB  = 22 // 2: NONE, X, Y, Z
+		const val I8    = 23 // 1: 0, 1
 	}
 
-}*/
+}
 
 
 
 
 
 enum class SimdOpEnc(vararg val encs: OpEnc) {
-	R(OpEnc.R, OpEnc.RI),
-	M(OpEnc.M, OpEnc.MI),
-	RM(OpEnc.RM, OpEnc.RMV, OpEnc.RMI, OpEnc.RMVI),
-	RV(OpEnc.RVM, OpEnc.RVMI, OpEnc.RVMS),
-	MR(OpEnc.MR, OpEnc.MRI, OpEnc.MRN, OpEnc.MRV),
-	MV(OpEnc.MVR),
-	VM(OpEnc.VM, OpEnc.VMI);
+	RMV(OpEnc.R, OpEnc.RI, OpEnc.RM, OpEnc.RMV, OpEnc.RMI, OpEnc.RMVI),
+	RVM(OpEnc.RVM, OpEnc.RVMI, OpEnc.RVMS),
+	MRV(OpEnc.M, OpEnc.MI, OpEnc.MR, OpEnc.MRI, OpEnc.MRN, OpEnc.MRV),
+	MVR(OpEnc.MVR),
+	VMR(OpEnc.VM, OpEnc.VMI);
 }
 
 

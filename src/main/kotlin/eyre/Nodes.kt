@@ -60,8 +60,8 @@ class OpNode private constructor(
 	companion object {
 		val NULL = reg(Reg.BND0)
 		fun reg(reg: Reg) = OpNode(OpNodeType.REG, reg.width, NullNode, reg, reg.high)
-		fun mem(width: Width?, mem: AstNode) = OpNode(OpNodeType.MEM, width, mem, Reg.BND0, 0)
-		fun imm(width: Width?, imm: AstNode) = OpNode(OpNodeType.IMM, width, imm, Reg.BND0, 0)
+		fun mem(width: Width?, mem: AstNode) = OpNode(OpNodeType.MEM, width, mem, Reg.NONE, 0)
+		fun imm(width: Width?, imm: AstNode) = OpNode(OpNodeType.IMM, width, imm, Reg.NONE, 0)
 	}
 
 }

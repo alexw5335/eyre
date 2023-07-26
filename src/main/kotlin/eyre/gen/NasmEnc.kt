@@ -41,8 +41,9 @@ data class NasmEnc(
 	val op3 = ops.getOrNull(2) ?: Op.NONE
 	val op4 = ops.getOrNull(3) ?: Op.NONE
 
-	val simdOpEnc = SimdOpEnc.entries.firstOrNull { opEnc in it.encs }
+	val simdOpEnc = SimdOpEnc.entries.firstOrNull { opEnc in it.encs } ?: SimdOpEnc.RVM
 
+	val simdOps = ops.map { if(it.type.isMem) Op.MEM else it }
 	val memIndex = ops.indexOfFirst { it.type.isMem }
 	val memOp = if(memIndex >= 0) ops[memIndex] else null
 	val memWidth = memOp?.width
@@ -55,13 +56,35 @@ data class NasmEnc(
 		else -> 0
 	}
 
-	private val Op?.simdOp get() = when {
-		this == null  -> Op.NONE
-		type.isMem    -> Op.MEM
-		this == Op.I8 -> Op.NONE
-		else          -> this
+	/*
+
+
+	private val Op?.regType: RegType get() = when {
+		this == null -> RegType.BND
+		type.isReg -> when(this) {
+			Op.R8  -> RegType.R8
+			Op.R16 -> RegType.R16
+			Op.R32 -> RegType.R32
+			Op.R64 -> RegType.R64
+			Op.MM  -> RegType.MM
+			Op.X   -> RegType.X
+			Op.Y   -> RegType.Y
+			Op.Z   -> RegType.Z
+			Op.K   -> RegType.K
+			Op.T   -> RegType.T
+			else   -> RegType.BND
+		}
+		else -> RegType.BND
 	}
 
-	val simdOps = SimdOps(i8, op1.simdOp, op2.simdOp, op3.simdOp, op4.simdOp, memWidth, vsibValue)
-
+	val simdOps = SimdOps(
+		if(i8) 1 else 0,
+		op1.regType.ordinal,
+		op2.regType.ordinal,
+		op3.regType.ordinal,
+		op4.regType.ordinal,
+		memWidth?.ordinal ?: 0,
+		memIndex,
+		vsibValue
+	)*/
 }

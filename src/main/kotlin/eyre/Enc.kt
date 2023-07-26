@@ -27,7 +27,7 @@ value class Enc(val value: Int) {
 	val escape get() = ((value shr ESCAPE_POS) and 0b111)
 	val prefix get() = ((value shr PREFIX_POS) and 0b111)
 	val ext    get() = ((value shr EXT_POS)    and 0xF)
-	val mask   get() = ((value shr MASK_POS)   and 0xF).let(::OpMask)
+	val mask   get() = ((value shr MASK_POS)   and 0xF)
 	val rexw   get() = ((value shr REXW_POS)   and 0b1)
 	val mm     get() = ((value shr MM_POS)     and 0b1)
 
