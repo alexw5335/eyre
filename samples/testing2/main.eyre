@@ -1,5 +1,9 @@
 namespace main
 
 proc main {
-	adc byte [rdi * 1 + 366], r9b
+	vaddpd zmm0 {k1} {z}, zmm1, [rax] {1to16}
+
+	vaddpd {k1 z 1to16} zmm10, zmm1, [rax]
+
+	vaddpd zmm10, zmm1, [rax] {k1 z 1to16}
 }

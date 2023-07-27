@@ -1,9 +1,7 @@
 package eyre.gen
 
 import eyre.*
-import eyre.util.NativeReader
-import eyre.util.Util
-import eyre.util.hex8
+import eyre.util.*
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.random.Random
@@ -28,8 +26,9 @@ object EncGen {
 
 
 	fun run() {
-
+		testEncs(false)
 	}
+
 
 
 
@@ -42,10 +41,10 @@ object EncGen {
 	private fun randomMem(width: Width?): OpNode {
 		val index = BinaryNode(
 			BinaryOp.MUL,
-			RegNode(Reg.r64().let { if(it.isInvalidIndex) Reg.RAX else it }),
+			RegNode(Reg.r64(Random.nextInt(16)).let { if(it.isInvalidIndex) Reg.RAX else it }),
 			IntNode(1L shl Random.nextInt(3))
 		)
-		val base = RegNode(Reg.r64().let { if(it.value == 5) Reg.RAX else it })
+		val base = RegNode(Reg.r64(Random.nextInt(16)).let { if(it.value == 5) Reg.RAX else it })
 		val disp = IntNode(Random.nextInt(512).toLong())
 		fun add(a: AstNode, b: AstNode) = BinaryNode(BinaryOp.ADD, a, b)
 		val node = when(Random.nextInt(7)) {
@@ -63,7 +62,7 @@ object EncGen {
 
 
 
-	private fun Op.toRandomNode(): OpNode = when(this) {
+	private fun Op.random(): OpNode = when(this) {
 		Op.NONE  -> OpNode.NULL
 		Op.R8    -> OpNode.reg(Reg.r8(Random.nextInt(16).let { if(it in 4..7) it + 4 else it }))
 		Op.R16   -> OpNode.reg(Reg.r16(Random.nextInt(16)))
@@ -120,7 +119,7 @@ object EncGen {
 
 
 	data class EncTest(val node: InsNode, val enc: NasmEnc?, val pos: Int, val length: Int) {
-		override fun toString() = "${node.printString}    $enc    ($pos, $length)"
+		override fun toString() = "${node.printString}    ${enc?.printString}    ($pos, $length)"
 	}
 
 
@@ -138,19 +137,20 @@ object EncGen {
 			if(e.mnemonic in ignoredTestingMnemonics) continue
 			if(e.evex) continue
 
-			val node = InsNode(
-				e.mnemonic,
-				e.op1.toRandomNode(),
-				e.op2.toRandomNode(),
-				e.op3.toRandomNode(),
-				e.op4.toRandomNode(),
-			)
+			val node = when(e.ops.size) {
+				0    -> InsNode(e.mnemonic)
+				1    -> InsNode(e.mnemonic, e.op1.random())
+				2    -> InsNode(e.mnemonic, e.op1.random(), e.op2.random())
+				3    -> InsNode(e.mnemonic, e.op1.random(), e.op2.random(), e.op3.random())
+				4    -> InsNode(e.mnemonic, e.op1.random(), e.op2.random(), e.op3.random(), e.op4.random())
+				else -> error("")
+			}
 
 			nasmBuilder.appendLine(node.nasmString)
 			try {
 				val (start, length) = assembler.assembleForTesting(node)
-				//val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc(node)!! else null
-				//tests += EncTest(node, nasmEnc, start, length)
+				val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc(node) else null
+				tests += EncTest(node, nasmEnc, start, length)
 			} catch(e: Exception) {
 				e.printStackTrace()
 				error = true
@@ -178,7 +178,7 @@ object EncGen {
 			if(eyreBytes.size < test.pos + test.length) error("?")
 			for(i in 0 ..< test.length) {
 				if(nasmBytes[test.pos + i] != eyreBytes[test.pos + i]) {
-					println("ERROR: ${test.node.printString}    ${test.enc}")
+					println("ERROR: ${test.node.printString}    ${test.enc?.printString}")
 					for(j in 0 ..< test.length)
 						println("$j ${nasmBytes[test.pos + j].hex8} ${eyreBytes[test.pos + j].hex8}")
 					return
@@ -230,6 +230,15 @@ object EncGen {
 
 
 	private val ignoredTestingMnemonics = setOf(
+		// MPX
+		Mnemonic.BNDLDX,
+		Mnemonic.BNDMOV,
+		Mnemonic.BNDCU,
+		Mnemonic.BNDCL,
+		Mnemonic.BNDSTX,
+		Mnemonic.BNDMOV,
+		Mnemonic.BNDCN,
+		Mnemonic.BNDMK,
 		// NASM width errors
 		Mnemonic.PMULUDQ,
 		Mnemonic.PSUBQ,
@@ -249,18 +258,8 @@ object EncGen {
 		Mnemonic.ENTERW,
 		Mnemonic.SYSEXITQ,
 		Mnemonic.SYSRETQ,
-		// TEMP
-		Mnemonic.BNDCL,
-		Mnemonic.BNDCN,
-		Mnemonic.BNDCU,
-		Mnemonic.BNDLDX,
-		Mnemonic.BNDMK,
-		Mnemonic.BNDMOV,
-		Mnemonic.BNDSTX,
-		// TEMP: SREG
+		// Many optimisation and odd encodings for SREG
 		Mnemonic.MOV,
-		// TEMP: NASM allows MEM as second operand
-		//Mnemonic.TEST,
 		// Explicit operands
 		Mnemonic.LOOP,
 		Mnemonic.LOOPE,

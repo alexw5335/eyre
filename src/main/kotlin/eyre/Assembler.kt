@@ -56,10 +56,11 @@ class Assembler(private val context: CompilerContext) {
 	private fun invalid(): Nothing = buildString {
 		append("Assembler error: ")
 		append(currentIns.printString)
-		//getEnc(currentIns)?.let { append("  ::  $it") }
 	}.let(::error)
 
-	private fun invalid(string: String): Nothing = error("$string (${currentIns.printString})")
+
+
+	private fun invalid(string: String): Nothing = error("$string: ${currentIns.printString}")
 
 
 
@@ -1813,7 +1814,12 @@ class Assembler(private val context: CompilerContext) {
 		writeModRM(0b11, op1.value, op2.value)
 	}
 
-
+	private fun encodeMOVMSEG(opcode: Int, op1: Reg, op2: OpNode) {
+		val mem = resolveMem(op2)
+		writeRex(if(op2.width == QWORD) 1 else 0, 0, mem.rexX, mem.rexB)
+		byte(opcode)
+		mem.write(op1.value, 0)
+	}
 
 	private fun encodeMOVRSEG(opcode: Int, op1: Reg, op2: Reg) {
 		when(op2.type) {
@@ -1858,15 +1864,15 @@ class Assembler(private val context: CompilerContext) {
 					else -> invalid()
 				}
 				MEM -> when(op1.reg.type) {
-					RegType.SEG -> Enc { 0x8C + R0010 }.encode2RM(op1.reg, op2, 0)
-					else        -> Enc { 0x8B + R1111 }.encode2RM(op1.reg, op2, 0)
+					RegType.SEG -> encodeMOVMSEG(0x8E, op1.reg, op2)
+					else        -> Enc { 0x8A+R1111 }.encode2RM(op1.reg, op2, 0)
 				}
 				IMM -> Enc { 0xB0 + R1111 }.encode1O(op1.reg).imm(op2, op1.width!!)
 			}
 			MEM -> when(op2.type) {
 				REG -> when(op2.reg.type) {
-					RegType.SEG -> Enc { 0x8E+R0010+MM }.encode2RM(op2.reg, op1, 0)
-					else        -> Enc { 0x88+R1111+MM }.encode2RM(op2.reg, op1, 0)
+					RegType.SEG -> encodeMOVMSEG(0x8C, op2.reg, op1)
+					else        -> Enc { 0x88+R1111 }.encode2RM(op2.reg, op1, 0)
 				}
 				IMM -> {
 					val width = op1.immWidth()
@@ -2079,36 +2085,51 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun NasmEnc.assembleSimd1(op1: OpNode, i8: Int) {
-
+		when {
+			!avx      -> encodeSse1R(op1.reg)
+			op1.isMem -> encodeAvx1M(op1, i8)
+			else      -> encodeAvx1R(op1.reg)
+		}
 	}
+
+
 
 	private fun NasmEnc.assembleSimd2(op1: OpNode, op2: OpNode, i8: Int) {
-
+		if(avx) when {
+			op1.isMem -> encodeAvx2RM(op2.reg, op1, i8)
+			op2.isMem -> encodeAvx2RM(op1.reg, op2, i8)
+			else      -> encodeAvx2RR(op1.reg, op2.reg)
+		} else when {
+			op1.isMem -> encodeSse2RM(op2.reg, op1, i8)
+			op2.isMem -> encodeSse2RM(op1.reg, op2, i8)
+			else      -> encodeSse2RR(op1.reg, op2.reg)
+		}
 	}
+
+
 
 	private fun NasmEnc.assembleSimd3(op1: OpNode, op2: OpNode, op3: OpNode, i8: Int) {
-
+		when {
+			op1.isMem -> encodeAvx3RRM(op2.reg, op3.reg, op1, i8)
+			op2.isMem -> encodeAvx3RRM(op1.reg, op3.reg, op2, i8)
+			op3.isMem -> encodeAvx3RRM(op1.reg, op2.reg, op3, i8)
+			else      -> encodeAvx3RRR(op1.reg, op2.reg, op3.reg)
+		}
 	}
+
+
 
 	private fun NasmEnc.assembleSimd4(op1: OpNode, op2: OpNode, op3: OpNode, op4: OpNode) {
-
+		if(op3.isMem)
+			encodeAvx4RRRM(op1.reg, op2.reg, op4.reg, op3)
+		else
+			encodeAvx4RRRR(op1.reg, op2.reg, op3.reg, op4.reg)
 	}
+
+
 
 	private fun assembleSimd(node: InsNode) {
 		val enc = getEnc(node)
-		println(enc)
-
-		val r: Reg
-		val m: Reg
-		val v: Reg
-
-		when(enc.simdOpEnc) {
-			SimdOpEnc.RMV -> { r = node.op1.reg; m = node.op2.reg; v = node.op3.reg }
-			SimdOpEnc.MRV -> { m = node.op1.reg; r = node.op2.reg; v = node.op3.reg }
-			SimdOpEnc.MVR -> { m = node.op1.reg; v = node.op2.reg; r = node.op3.reg }
-			SimdOpEnc.VMR -> { v = node.op1.reg; m = node.op2.reg; r = node.op3.reg }
-			SimdOpEnc.RVM -> { r = node.op1.reg; v = node.op2.reg; m = node.op3.reg }
-		}
 
 		when(node.size) {
 			0 -> invalid()
@@ -2127,6 +2148,8 @@ class Assembler(private val context: CompilerContext) {
 				enc.assembleSimd4(node.op1, node.op2, node.op3, node.op4)
 			else -> invalid()
 		}
+
+		if(enc.pseudo >= 0) byte(enc.pseudo)
 	}
 
 
@@ -2137,24 +2160,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun Reg.toOp(): Op = when(type) {
-		RegType.R8  -> Op.R8
-		RegType.R16 -> Op.R16
-		RegType.R32 -> Op.R32
-		RegType.R64 -> Op.R64
-		RegType.MM  -> Op.MM
-		RegType.X   -> Op.X
-		RegType.Y   -> Op.Y
-		RegType.Z   -> Op.Z
-		RegType.K   -> Op.K
-		RegType.T   -> Op.T
-		RegType.ST  -> Op.ST
-		else        -> invalid()
-	}
-
-
-
-	private fun OpNode.toOp(): Op = when(type) {
+	private fun OpNode.toOp(vsib: Int): Op = when(type) {
 		REG -> when(reg.type) {
 			RegType.R8  -> Op.R8
 			RegType.R16 -> Op.R16
@@ -2167,37 +2173,53 @@ class Assembler(private val context: CompilerContext) {
 			RegType.K   -> Op.K
 			RegType.T   -> Op.T
 			RegType.ST  -> Op.ST
-			else        -> invalid()
+			else        -> invalid("Invalid SIMD register: ${reg.type}")
 		}
-		MEM -> when(width) {
-			null  -> Op.MEM
-			BYTE  -> Op.M8
-			WORD  -> Op.M16
-			DWORD -> Op.M32
-			QWORD -> Op.M64
-			TWORD -> Op.M80
-			XWORD -> Op.M128
-			YWORD -> Op.M256
-			ZWORD -> Op.M512
+		MEM -> when(vsib) {
+			0 -> when(width) {
+				null  -> Op.MEM
+				BYTE  -> Op.M8
+				WORD  -> Op.M16
+				DWORD -> Op.M32
+				QWORD -> Op.M64
+				TWORD -> Op.M80
+				XWORD -> Op.M128
+				YWORD -> Op.M256
+				ZWORD -> Op.M512
+			}
+			1 -> when(width) {
+				DWORD -> Op.VM32X
+				QWORD -> Op.VM64X
+				null -> Op.MEM
+				else -> invalid()
+			}
+			2 -> when(width) {
+				DWORD -> Op.VM32Y
+				QWORD -> Op.VM64Y
+				null -> Op.MEM
+				else -> invalid()
+			}
+			3 -> when(width) {
+				DWORD -> Op.VM32Z
+				QWORD -> Op.VM64Z
+				null -> Op.MEM
+				else -> invalid()
+			}
+			else -> invalid()
 		}
 		IMM -> if(width == null || width == BYTE) Op.I8 else invalid()
 	}
 
 
 
+	/** Encodings: RMR, RM, MR */
 	private val multiVsibMnemonics = setOf(
-		// RMR RM
-		VPGATHERQD,
-		VGATHERQPS,
-		// MR
-		VSCATTERQPS,
-		VPSCATTERQD
+		VPGATHERQD, VGATHERQPS, VSCATTERQPS, VPSCATTERQD
 	)
 
 
 
 	private fun getVsib(node: InsNode): Int {
-		if(node.mnemonic !in multiVsibMnemonics) return 0
 		var vsib = 0
 		fun check(n: AstNode) { when(n) {
 			is BinaryNode -> { check(n.left); check(n.right) }
@@ -2219,118 +2241,23 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun getEnc(node: InsNode): NasmEnc {
-		val encs = EncGen.map[node.mnemonic] ?: invalid("No encodings found")
-		val ops = listOf(
-			node.op1.toOp(),
-			node.op2.toOp(),
-			node.op3.toOp(),
-			node.op4.toOp()
-		)
+	fun getEnc(node: InsNode) = getEncOrNull(node) ?: invalid("No valid encoding")
+
+
+
+	private fun getEncOrNull(node: InsNode): NasmEnc? {
+		val encs = EncGen.map[node.mnemonic] ?: return null
+		val ops = ArrayList<Op>()
 		val vsib = getVsib(node)
-		outer@ for(enc in encs) {
-			if(enc.ops.size != node.size) continue
-			for(i in 0 ..< node.size) {
-				if(enc.vsibValue != vsib) continue
-				if(enc.ops[i] == ops[i]) continue
-				if(enc.ops[i] == Op.MEM && ops[i] == Op.MEM) continue
-				continue@outer
-			}
-			return enc
-		}
-		invalid("No encoding found")
-	}
-
-
-
-	/*private fun getVsib(node: InsNode): Int = when {
-		node.mnemonic !in multiVsibMnemonics -> 0
-		node.op1 != null && node.op1.isMem -> getVsib(node.op1)
-		node.op2 != null && node.op2.isMem -> getVsib(node.op2)
-		node.op3 != null && node.op3.isMem -> getVsib(node.op3)
-		node.op4 != null && node.op4.isMem -> getVsib(node.op4)
-		else -> 0
-	}
-
-
-
-	private fun getEnc(
-		node  : InsNode,
-		i8    : Boolean,
-		op1   : Op,
-		op2   : Op      = Op.NONE,
-		op3   : Op      = Op.NONE,
-		op4   : Op      = Op.NONE,
-		width : Width?  = null,
-		vsib  : Int     = 0
-	) : NasmEnc {
-		val encs = EncGen.map[node.mnemonic] ?: invalid("Mnemonic has no encodings")
-		val ops = SimdOps(i8, op1, op2, op3, op4, width, vsib)
+		if(node.size >= 1) ops += node.op1.toOp(vsib)
+		if(node.size >= 2) ops += node.op2.toOp(vsib)
+		if(node.size >= 3) ops += node.op3.toOp(vsib)
+		if(node.size >= 4) ops += node.op4.toOp(vsib)
 		for(enc in encs)
-			if(enc.simdOps == ops)
+			if(enc.ops == ops && vsib == enc.vsibValue && (node.high == 0 || enc.evex))
 				return enc
-		var memEnc: NasmEnc? = null
-		if(width != null) invalid("No encodings found")
-		for(enc in encs)
-			if(enc.simdOps.equalsExceptMem(ops))
-				memEnc = if(memEnc == null) enc else invalid("Ambiguous width")
-		return memEnc ?: invalid("No encodings found")
+		return null
 	}
-
-
-
-	private fun assembleSimd1(node: InsNode, i8: Boolean) {
-		val op1 = node.op1!!
-		if(op1.isMem) {
-			val enc = getEnc(node, i8, Op.MEM, width = op1.width)
-			enc.encodeAvx1M(op1, if(i8) 1 else 0)
-		} else {
-			val enc = getEnc(node, i8, op1.reg.toOp())
-			enc.encodeAvx1M(op1, if(i8) 1 else 0)
-		}
-	}
-
-
-
-	private fun assembleSimd2(node: InsNode, op1: OpNode, op2: OpNode, i8: Boolean) {
-
-	}
-
-
-
-	private fun assembleSimd3(node: InsNode, op1: OpNode, op2: OpNode, op3: OpNode, i8: Boolean) {
-
-	}
-
-
-
-	private fun assembleSimd4(node: InsNode, op1: OpNode, op2: OpNode, op3: OpNode, op4: OpNode) {
-		if(op3.isMem)
-			encodeAvx4RRRM(node, op1.reg, op2.reg, op4.reg, op3)
-		else
-			encodeAvx4RRRR(node, op1.reg, op2.reg, op3.reg, op4.reg)
-	}
-
-
-
-	private fun assembleSimd(node: InsNode) {
-		when {
-			node.op1 == null -> invalid()
-			node.op2 == null -> assembleSimd1(node)
-			node.op3 == null -> if(node.op2.isImm)
-				assembleSimd1(enc, node.op1).imm8(node.op2)
-			else
-				assembleSimd2(enc, node.op1, node.op2)
-			node.op4 == null -> if(node.op3.isImm)
-				assembleSimd2(enc, node.op1, node.op2).imm8(node.op3)
-			else
-				assembleSimd3(enc, node.op1, node.op2, node.op3)
-			else -> if(node.op4.isImm)
-				assembleSimd3(enc, node.op1, node.op2, node.op3).imm8(node.op3)
-			else
-				assembleSimd4(node, node.op1, node.op2, node.op3, node.op4)
-		}
-	}*/
 
 
 
@@ -2351,10 +2278,10 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun NasmEnc.writeSimdOpcode() { when(escape) {
-		Escape.NONE -> byte(enc.opcode)
-		Escape.E0F  -> word(0x0F or (enc.opcode shl 8))
-		Escape.E38  -> i24(0x380F or (enc.opcode shl 16))
-		Escape.E3A  -> i24(0x3A0F or (enc.opcode shl 16))
+		Escape.NONE -> byte(opcode)
+		Escape.E0F  -> word(0x0F or (opcode shl 8))
+		Escape.E38  -> i24(0x380F or (opcode shl 16))
+		Escape.E3A  -> i24(0x3A0F or (opcode shl 16))
 	}}
 
 
@@ -2392,7 +2319,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun NasmEnc.encodeAvx4RRRR(node: InsNode, op1: Reg, op2: Reg, op3: Reg, op4: Reg) {
+	private fun NasmEnc.encodeAvx4RRRR(op1: Reg, op2: Reg, op3: Reg, op4: Reg) {
 		writeVex(op1.vexRex, 1, op2.vexRex, op2.vValue)
 		writeModRM(0b11, op1.value, op3.value)
 		byte(op4.index shl 4)
@@ -2400,7 +2327,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun NasmEnc.encodeAvx4RRRM(node: InsNode, r1: Reg, r2: Reg, r3: Reg, m: OpNode) {
+	private fun NasmEnc.encodeAvx4RRRM(r1: Reg, r2: Reg, r3: Reg, m: OpNode) {
 		val mem = resolveMem(m)
 		writeVex(r1.vexRex, mem.vexX, mem.vexB, r2.vValue)
 		mem.write(r1.value, 0)
@@ -2409,23 +2336,23 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun NasmEnc.encodeSseRR(op1: Reg, op2: Reg) {
+	private fun NasmEnc.encodeSse2RR(op1: Reg, op2: Reg) {
 		if(o16 == 1) byte(0x66)
 		writeSimdPrefix()
 		if(simdOpEnc == SimdOpEnc.RMV) {
-			writeRex(rw, op2.rex, 0, op1.rex)
-			writeSimdOpcode()
-			writeModRM(0b11, op2.value, op1.value)
-		} else {
 			writeRex(rw, op1.rex, 0, op2.rex)
 			writeSimdOpcode()
 			writeModRM(0b11, op1.value, op2.value)
+		} else {
+			writeRex(rw, op2.rex, 0, op1.rex)
+			writeSimdOpcode()
+			writeModRM(0b11, op2.value, op1.value)
 		}
 	}
 
 
 
-	private fun NasmEnc.encodeSseRM(op1: Reg, op2: OpNode, i8: Int) {
+	private fun NasmEnc.encodeSse2RM(op1: Reg, op2: OpNode, i8: Int) {
 		val mem = resolveMem(op2)
 		writeA32(mem)
 		if(o16 == 1) byte(0x66)
@@ -2437,18 +2364,18 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun NasmEnc.encodeSseRI(op1: Reg, op2: OpNode) {
+	private fun NasmEnc.encodeSse1R(op1: Reg) {
 		if(o16 == 1) byte(0x66)
 		writeSimdPrefix()
 		writeRex(rw, 0, 0, op1.rex)
 		writeSimdOpcode()
 		writeModRM(0b11, ext, op1.value)
-		writeImm(op2, BYTE)
 	}
 
 
 
-	private fun NasmEnc.encodeAvx3RRM(r1: Reg, r2: Reg, mem: Mem, i8: Int) {
+	private fun NasmEnc.encodeAvx3RRM(r1: Reg, r2: Reg, m: OpNode, i8: Int) {
+		val mem = resolveMem(m)
 		if(simdOpEnc == SimdOpEnc.MVR) {
 			writeVex(r2.vexRex, mem.vexX, mem.vexB, r1.vValue)
 			mem.write(r2.value, i8)
@@ -2460,63 +2387,74 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-
-	private fun NasmEnc.encodeAvxRRR(r: Reg, m: Reg, v: Reg) {
-		writeVex(r.vexRex, 1, m.vexRex, v.vValue)
-		writeModRM(0b11, r.value, m.value)
-	}
-
-
-
-	private fun encodeAvx2RR(enc: NasmEnc, op1: Reg, op2: Reg) {
-		when(enc.simdOpEnc) {
-			SimdOpEnc.VM -> enc.encodeAvxRRR(Reg.r8(enc.ext), op2, op1)
-			SimdOpEnc.RM -> enc.encodeAvxRRR(op1, op2, Reg.RAX)
-			SimdOpEnc.MR -> enc.encodeAvxRRR(op2, op1, Reg.RAX)
-			else         -> invalid()
+	private fun NasmEnc.encodeAvx2RR(op1: Reg, op2: Reg) {
+		when(simdOpEnc) {
+			SimdOpEnc.VMR -> {
+				writeVex(1, 1, op2.vexRex, op1.vValue)
+				writeModRM(0b11, ext, op2.value)
+			}
+			SimdOpEnc.RMV -> {
+				writeVex(op1.vexRex, 1, op2.vexRex, 0b1111)
+				writeModRM(0b11, op1.value, op2.value)
+			}
+			SimdOpEnc.MRV -> {
+				writeVex(op2.vexRex, 1, op1.vexRex, 0b1111)
+				writeModRM(0b11, op2.value, op1.value)
+			}
+			else -> invalid()
 		}
 	}
 
 
 
-	private fun encodeAvx3RRR(enc: NasmEnc, op1: Reg, op2: Reg, op3: Reg) {
-		when(enc.simdOpEnc) {
-			SimdOpEnc.RV -> enc.encodeAvxRRR(op1, op3, op2)
-			SimdOpEnc.VM -> enc.encodeAvxRRR(op3, op2, op1)
-			SimdOpEnc.MV -> enc.encodeAvxRRR(op2, op3, op1)
-			SimdOpEnc.RM -> enc.encodeAvxRRR(op1, op2, op3)
-			else         -> invalid()
+	private fun NasmEnc.encodeAvx3RRR(op1: Reg, op2: Reg, op3: Reg) {
+		when(simdOpEnc) {
+			SimdOpEnc.RVM -> {
+				writeVex(op1.vexRex, 1, op3.vexRex, op2.vValue)
+				writeModRM(0b11, op1.value, op3.value)
+			}
+			SimdOpEnc.VMR -> {
+				writeVex(op3.vexRex, 1, op2.vexRex, op1.vValue)
+				writeModRM(0b11, op3.value, op2.value)
+			}
+			SimdOpEnc.MVR -> {
+				writeVex(op3.vexRex, 1, op1.vexRex, op2.vValue)
+				writeModRM(0b11, op3.value, op1.value)
+			}
+			SimdOpEnc.RMV -> {
+				writeVex(op1.vexRex, 1, op2.vexRex, op3.vValue)
+				writeModRM(0b11, op1.value, op2.value)
+			}
+			else -> invalid()
 		}
 	}
 
 
 
 	private fun NasmEnc.encodeAvx1R(op1: Reg) {
-		if(opEnc != OpEnc.R) invalid()
 		writeVex(op1.vexRex, 1, 1, 0b1111)
 		writeModRM(0b11, op1.value, 0)
 	}
 
 
 
-	private fun encodeAvx1M(node: InsNode, op1: OpNode, immWidth: Int) {
-		val enc = getEnc(node, )
+	private fun NasmEnc.encodeAvx1M(op1: OpNode, immWidth: Int) {
 		val mem = resolveMem(op1)
-		writeVex(this, 1, mem.vexX, mem.vexB, 0b1111)
+		writeVex(1, mem.vexX, mem.vexB, 0b1111)
 		mem.write(ext, immWidth)
 	}
 
 
 
 
-	private fun encodeAvx2RM(enc: NasmEnc, op1: Reg, op2: OpNode, immWidth: Int) {
+	private fun NasmEnc.encodeAvx2RM(op1: Reg, op2: OpNode, immWidth: Int) {
 		val mem = resolveMem(op2)
-		if(enc.simdOpEnc == SimdOpEnc.MR || enc.simdOpEnc == SimdOpEnc.RM) {
-			writeVex(enc, op1.vexRex, mem.vexX, mem.vexB, 0b1111)
+		if(simdOpEnc == SimdOpEnc.MRV || simdOpEnc == SimdOpEnc.RMV) {
+			writeVex(op1.vexRex, mem.vexX, mem.vexB, 0b1111)
 			mem.write(op1.value, immWidth)
-		} else if(enc.simdOpEnc == SimdOpEnc.VM) {
-			writeVex(enc, 1, mem.vexX, mem.vexB, op1.vvvvValue)
-			mem.write(enc.ext, immWidth)
+		} else if(simdOpEnc == SimdOpEnc.VMR) {
+			writeVex(1, mem.vexX, mem.vexB, op1.vValue)
+			mem.write(ext, immWidth)
 		} else {
 			invalid()
 		}

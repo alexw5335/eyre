@@ -140,3 +140,7 @@ val Byte.hex get() = toUByte().toInt().hex
 val Byte.hex8 get() = toUByte().toInt().hex8
 
 val Byte.bin233 get() = toUByte().toInt().bin233
+
+val Byte.hexc8 get() = toUByte().toInt().hexc8
+
+val Byte.uint get() = toUByte().toInt()

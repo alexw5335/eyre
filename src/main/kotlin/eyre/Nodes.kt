@@ -137,33 +137,6 @@ class StructNode(val symbol: StructSymbol, val members: List<MemberNode>) : SymC
 
 class PrefixNode(val prefix: InsPrefix) : AstNode
 
-class InsNode(
-	val mnemonic : Mnemonic,
-	val size     : Int,
-	val high     : Int,
-	val op1      : OpNode,
-	val op2      : OpNode,
-	val op3      : OpNode,
-	val op4      : OpNode
-) : AstNode {
-
-	constructor(m: Mnemonic) :
-		this(m, 0, 0, OpNode.NULL, OpNode.NULL, OpNode.NULL, OpNode.NULL)
-
-	constructor(m: Mnemonic, op1: OpNode) :
-		this(m, 1, op1.high, op1, OpNode.NULL, OpNode.NULL, OpNode.NULL)
-
-	constructor(m: Mnemonic, op1: OpNode, op2: OpNode) :
-		this(m, 2, op1.high or op2.high, op1, OpNode.NULL, OpNode.NULL, OpNode.NULL)
-
-	constructor(m: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode) :
-		this(m, 3, op1.high or op2.high or op3.high, op1, op2, op3, OpNode.NULL)
-
-	constructor(m: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode, op4: OpNode) :
-		this(m, 4, op1.high or op2.high or op3.high or op4.high, op1, op2, op3, op4)
-
-}
-
 class VarResNode(val symbol: VarResSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
 class DbPart(val width: Width, val nodes: List<AstNode>) : AstNode
@@ -209,3 +182,38 @@ fun BinaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long
 	function(left, validity && (op == BinaryOp.ADD || op == BinaryOp.SUB)),
 	function(right, validity && (op == BinaryOp.ADD))
 )
+
+
+
+/*
+Instruction node
+ */
+
+
+
+class InsNode(
+	val mnemonic : Mnemonic,
+	val size     : Int,
+	val high     : Int,
+	val op1      : OpNode,
+	val op2      : OpNode,
+	val op3      : OpNode,
+	val op4      : OpNode
+) : AstNode {
+
+	constructor(m: Mnemonic) :
+		this(m, 0, 0, OpNode.NULL, OpNode.NULL, OpNode.NULL, OpNode.NULL)
+
+	constructor(m: Mnemonic, op1: OpNode) :
+		this(m, 1, op1.high, op1, OpNode.NULL, OpNode.NULL, OpNode.NULL)
+
+	constructor(m: Mnemonic, op1: OpNode, op2: OpNode) :
+		this(m, 2, op1.high or op2.high, op1, op2, OpNode.NULL, OpNode.NULL)
+
+	constructor(m: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode) :
+		this(m, 3, op1.high or op2.high or op3.high, op1, op2, op3, OpNode.NULL)
+
+	constructor(m: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode, op4: OpNode) :
+		this(m, 4, op1.high or op2.high or op3.high or op4.high, op1, op2, op3, op4)
+
+}

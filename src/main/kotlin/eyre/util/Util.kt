@@ -29,6 +29,17 @@ object Util {
 
 
 
+	fun nasmPrintBinary(code: String) {
+		println("$code:")
+		val bytes = nasmAssemble(code)
+		for((i, b) in bytes.withIndex()) {
+			println("$i: ${b.uint.hex8} ${b.uint.bin44}")
+		}
+		println()
+	}
+
+
+
 	fun nasmAssemble(code: String): ByteArray {
 		fun ByteArray.int32(pos: Int) =
 			this[pos].toInt() or

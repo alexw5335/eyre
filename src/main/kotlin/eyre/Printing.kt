@@ -76,7 +76,7 @@ val NasmEnc.printString get() = buildString {
 		if(hasExt) append("/$ext")
 		append("  $mnemonic  ")
 		if(ops.isNotEmpty()) append(opsString) else append("NONE")
-		append("  ")
+		append("  $opEnc  ")
 		if(rw == 1) append("RW ")
 		if(o16 == 1) append("O16 ")
 		if(pseudo >= 0) append(":$pseudo ")
@@ -99,13 +99,13 @@ val OpNode.nasmString get() = buildString {
 
 val InsNode.nasmString: String get() = buildString {
 	append(mnemonic.string)
-	if(op1 == null) return@buildString
+	if(size == 0) return@buildString
 	append(" ${op1.nasmString}")
-	if(op2 == null) return@buildString
+	if(size == 1) return@buildString
 	append(", ${op2.nasmString}")
-	if(op3 == null) return@buildString
+	if(size == 2) return@buildString
 	append(", ${op3.nasmString}")
-	if(op4 == null) return@buildString
+	if(size == 3) return@buildString
 	append(", ${op4.nasmString}")
 }
 
@@ -211,13 +211,13 @@ val AstNode.printString: String get() = when(this) {
 
 	is InsNode -> buildString {
 		append(mnemonic.string)
-		if(op1 == null) return@buildString
+		if(size == 0) return@buildString
 		append(" ${op1.printString}")
-		if(op2 == null) return@buildString
+		if(size == 1) return@buildString
 		append(", ${op2.printString}")
-		if(op3 == null) return@buildString
+		if(size == 2) return@buildString
 		append(", ${op3.printString}")
-		if(op4 == null) return@buildString
+		if(size == 3) return@buildString
 		append(", ${op4.printString}")
 	}
 
