@@ -41,10 +41,15 @@ value class SimdOps(val value: Int) {
 	val r2    get() = ((value shr R2) and 15).let(RegType.entries::get)
 	val r3    get() = ((value shr R3) and 15).let(RegType.entries::get)
 	val r4    get() = ((value shr R4) and 15).let(RegType.entries::get)
-	val width get() = ((value shr WIDTH) and 7).let { if(it == 0) null else Width.entries[it - 1] }
+	val width get()  = ((value shr WIDTH) and 7)
+	//val width get() = ((value shr WIDTH) and 7).let { if(it == 0) null else Width.entries[it - 1] }
 	val mem   get() = ((value shr MEM) and 3)
 	val vsib  get() = ((value shr VSIB) and 3)
 	val i8    get() = ((value shr I8) and 1)
+
+	fun equalsExceptWidth(other: SimdOps) =
+		(value and 0b1111_11110000_11111111_11111111) ==
+		(other.value and 0b1111_11110000_11111111_11111111)
 
 	companion object {
 		const val R1    = 0
@@ -55,6 +60,10 @@ value class SimdOps(val value: Int) {
 		const val MEM   = 20 // 2: 0, 1, 2, 3 (0 for none, can't be fourth operand)
 		const val VSIB  = 22 // 2: NONE, X, Y, Z
 		const val I8    = 23 // 1: 0, 1
+	}
+
+	override fun toString() = buildString {
+		append("($r1, $r2, $r3, $r4, width=$width, mem=$mem, vsib=$vsib, i8=$i8)")
 	}
 
 }
@@ -143,12 +152,12 @@ enum class Op(
 	X("xmmreg", OpType.S, XWORD),
 	Y("ymmreg", OpType.S, YWORD),
 	Z("zmmreg", OpType.S, ZWORD),
-	VM32X("xmem32", OpType.VM, XWORD),
-	VM64X("xmem64", OpType.VM, XWORD),
-	VM32Y("ymem32", OpType.VM, YWORD),
-	VM64Y("ymem64", OpType.VM, YWORD),
-	VM32Z("zmem32", OpType.VM, ZWORD),
-	VM64Z("zmem64", OpType.VM, ZWORD),
+	VM32X("xmem32", OpType.VM, DWORD),
+	VM64X("xmem64", OpType.VM, QWORD),
+	VM32Y("ymem32", OpType.VM, DWORD),
+	VM64Y("ymem64", OpType.VM, QWORD),
+	VM32Z("zmem32", OpType.VM, DWORD),
+	VM64Z("zmem64", OpType.VM, QWORD),
 	K("kreg", OpType.K, null),
 	BND("bndreg", OpType.MISC, null),
 	T("tmmreg", OpType.T, null),

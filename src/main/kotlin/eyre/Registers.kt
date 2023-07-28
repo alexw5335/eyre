@@ -293,7 +293,7 @@ enum class Reg(val type: RegType, val index : Int) {
 	BND2(RegType.BND, 2),
 	BND3(RegType.BND, 3),
 
-	NONE(RegType.BND, 4);
+	NONE(RegType.BND, 0);
 
 	val string = name.lowercase()
 

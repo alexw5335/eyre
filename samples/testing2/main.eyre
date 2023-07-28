@@ -1,9 +1,6 @@
 namespace main
 
 proc main {
-	vaddpd zmm0 {k1} {z}, zmm1, [rax] {1to16}
-
-	vaddpd {k1 z 1to16} zmm10, zmm1, [rax]
-
-	vaddpd zmm10, zmm1, [rax] {k1 z 1to16}
+	vaddps xmm1, xmm2, xmm3
+	vaddps ymm2, ymm3, [rax]
 }

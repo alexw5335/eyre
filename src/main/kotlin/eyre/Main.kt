@@ -2,7 +2,6 @@ package eyre
 
 import java.nio.file.Files
 import java.nio.file.Paths
-import kotlin.io.path.relativeTo
 
 
 fun main() {

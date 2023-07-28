@@ -43,21 +43,14 @@ data class NasmEnc(
 
 	val simdOpEnc = SimdOpEnc.entries.firstOrNull { opEnc in it.encs } ?: SimdOpEnc.RVM
 
-	val simdOps = ops.map { if(it.type.isMem) Op.MEM else it }
-	val memIndex = ops.indexOfFirst { it.type.isMem }
-	val memOp = if(memIndex >= 0) ops[memIndex] else null
-	val memWidth = memOp?.width
 	val i8 = ops.isNotEmpty() && ops.last() == Op.I8
 
-	val vsibValue = when(memOp) {
+	val vsibValue = when(ops.firstOrNull { it.type.isMem }) {
 		Op.VM32X, Op.VM64X -> 1
 		Op.VM32Y, Op.VM64Y -> 2
 		Op.VM32Z, Op.VM64Z -> 3
 		else -> 0
 	}
-
-	/*
-
 
 	private val Op?.regType: RegType get() = when {
 		this == null -> RegType.BND
@@ -83,8 +76,8 @@ data class NasmEnc(
 		op2.regType.ordinal,
 		op3.regType.ordinal,
 		op4.regType.ordinal,
-		memWidth?.ordinal ?: 0,
-		memIndex,
+		ops.firstOrNull { it.type.isMem }?.width?.let { it.ordinal + 1 } ?: 0,
+		ops.indexOfFirst { it.type.isMem }.let { if(it == -1) 0 else it + 1 },
 		vsibValue
-	)*/
+	)
 }
