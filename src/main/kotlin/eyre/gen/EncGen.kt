@@ -26,6 +26,8 @@ object EncGen {
 
 
 	fun run() {
+		//genMnemonics()
+		//genZeroOpOpcodes()
 		testEncs(false)
 	}
 
@@ -149,8 +151,8 @@ object EncGen {
 			nasmBuilder.appendLine(node.nasmString)
 			try {
 				val (start, length) = assembler.assembleForTesting(node)
-				//val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc() else null
-				//tests += EncTest(node, nasmEnc, start, length)
+				val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getSimdEnc(node) else null
+				tests += EncTest(node, nasmEnc, start, length)
 			} catch(e: Exception) {
 				e.printStackTrace()
 				error = true
@@ -200,8 +202,11 @@ object EncGen {
 
 		for(e in encs) {
 			when {
+				Op.ST in e.ops || Op.ST0 in e.ops ->
+					mnemonics[e.mnemonic.name] = Mnemonic.Type.FPU
 				e.ops.isEmpty() ->
-					mnemonics[e.mnemonic.name] = Mnemonic.Type.GP
+					if(mnemonics[e.mnemonic.name] == null)
+						mnemonics[e.mnemonic.name] = Mnemonic.Type.GP
 				e.avx ->
 					mnemonics[e.mnemonic.name] = Mnemonic.Type.AVX
 				Op.X in e.ops || Op.MM in e.ops ->
@@ -219,6 +224,27 @@ object EncGen {
 			println("$m(Type.GP),")
 		for((mnemonic, type) in mnemonics.entries.sortedBy { it.key })
 			println("$mnemonic(Type.$type),")
+	}
+
+
+
+	private fun genZeroOpOpcodes() {
+		print("val ZERO_OP_OPCODES = intArrayOf(\n\t")
+		var length = 0
+		for(m in Mnemonic.entries) {
+			val opcode = EncGenLists.zeroOpOpcodes[m] ?: 0
+			val opcodeString = opcode.toString()
+			print(opcodeString)
+			print(", ")
+			length += opcodeString.length + 2
+			if(m == Mnemonic.entries.last())
+				println()
+			else if(length > 40) {
+				print("\n\t")
+				length = 0
+			}
+		}
+		println(")")
 	}
 
 

@@ -1946,6 +1946,8 @@ enum class Mnemonic(val type: Type) {
 	enum class Type {
 		/** Mnemonic does not fit into any of the other types */
 		GP,
+		/** Mnemoinc has at least one encoding that contains an ST register */
+		FPU,
 		/** Mnemonic has at least one encoding that contains an MM or XMM register */
 		SSE,
 		/** Mnemonic has at least one encoding that uses VEX or EVEX */

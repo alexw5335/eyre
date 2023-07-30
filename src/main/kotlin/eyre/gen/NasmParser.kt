@@ -1,6 +1,7 @@
 package eyre.gen
 
 import eyre.*
+import eyre.util.Unique
 import eyre.util.isHex
 
 class NasmParser(private val inputs: List<String>) {
@@ -116,8 +117,7 @@ class NasmParser(private val inputs: List<String>) {
 			part == "f2i"  -> line.prefix = Prefix.PF2
 			part == "f3i"  -> line.prefix = Prefix.PF3
 			part == "wait" -> line.prefix = Prefix.P9B
-			part[0] == '/' -> if(line.mnemonic != "SETcc") line.ext = part[1].digitToInt(10)
-
+			part[0] == '/' -> if(line.mnemonic != "SETcc" && part != "/3r0") line.ext = part[1].digitToInt(10)
 			part.contains(':') -> {
 				val array = part.split(':').filter { it.isNotEmpty() }
 				line.enc = EncGenLists.opEncs[array[0]] ?: raw.error("Invalid ops: ${array[0]}")
