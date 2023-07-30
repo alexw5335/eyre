@@ -22,6 +22,8 @@ data class NasmEnc(
 	val ops      : List<Op>,
 	val rw       : Int,
 	val o16      : Int,
+	val a32      : Int,
+	val opreg    : Boolean,
 	val pseudo   : Int,
 	val mr       : Boolean,
 	val vexw     : VexW,
@@ -65,6 +67,7 @@ data class NasmEnc(
 			Op.Z   -> RegType.Z
 			Op.K   -> RegType.K
 			Op.T   -> RegType.T
+			Op.ST  -> RegType.ST
 			else   -> RegType.BND
 		}
 		else -> RegType.BND
@@ -78,6 +81,6 @@ data class NasmEnc(
 		op4.regType.ordinal,
 		ops.firstOrNull { it.type.isMem }?.width?.let { it.ordinal + 1 } ?: 0,
 		ops.indexOfFirst { it.type.isMem }.let { if(it == -1) 0 else it + 1 },
-		vsibValue
+		vsibValue,
 	)
 }

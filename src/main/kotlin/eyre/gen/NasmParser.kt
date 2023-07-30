@@ -313,6 +313,8 @@ class NasmParser(private val inputs: List<String>) {
 		ArrayList<Op>(ops),
 		rexw,
 		o16,
+		a32,
+		opreg,
 		pseudo,
 		enc in EncGenLists.mrEncs,
 		vexw,

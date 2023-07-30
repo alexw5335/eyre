@@ -151,7 +151,7 @@ object EncGen {
 			nasmBuilder.appendLine(node.nasmString)
 			try {
 				val (start, length) = assembler.assembleForTesting(node)
-				val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getSimdEnc(node) else null
+				val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc(node) else null
 				tests += EncTest(node, nasmEnc, start, length)
 			} catch(e: Exception) {
 				e.printStackTrace()

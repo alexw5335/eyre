@@ -16,7 +16,7 @@ value class SimdOps(val value: Int) {
 		r4    : Int,
 		width : Int,
 		mem   : Int,
-		vsib  : Int
+		vsib  : Int,
 	) : this(
 		(r1 shl R1) or
 		(r2 shl R2) or
@@ -50,7 +50,7 @@ value class SimdOps(val value: Int) {
 		const val MEM   = 20 // 2: 0, 1, 2, 3 (0 for none, can't be fourth operand)
 		const val VSIB  = 22 // 2: NONE, X, Y, Z
 		const val I8    = 23 // 1: 0, 1
-		const val SIZE  = 24
+		const val SIZE  = 26
 	}
 
 	override fun toString() = buildString {
