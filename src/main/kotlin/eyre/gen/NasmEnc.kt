@@ -68,6 +68,7 @@ data class NasmEnc(
 			Op.K   -> RegType.K
 			Op.T   -> RegType.T
 			Op.ST  -> RegType.ST
+			Op.AX  -> RegType.R16
 			else   -> RegType.BND
 		}
 		else -> RegType.BND
@@ -83,4 +84,16 @@ data class NasmEnc(
 		ops.indexOfFirst { it.type.isMem }.let { if(it == -1) 0 else it + 1 },
 		vsibValue,
 	)
+
+	val ax = ops.size == 1 && ops[0] == Op.AX
+
+	val fpuOps: Int = when(ops.size) {
+		1 -> if(ops[0] == Op.ST) 1 else 0
+		2 -> when {
+			ops[0] == Op.ST0 && ops[1] == Op.ST -> 1
+			ops[0] == Op.ST && ops[1] == Op.ST0 -> 2
+			else -> 0
+		}
+		else -> 0
+	}
 }
