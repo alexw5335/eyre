@@ -1,6 +1,5 @@
 namespace main
 
 proc main {
-	vaddps xmm1, xmm2, xmm3
-	vaddps ymm2, ymm3, [rax]
+	vaddps xmm0, xmm1, [rax]
 }

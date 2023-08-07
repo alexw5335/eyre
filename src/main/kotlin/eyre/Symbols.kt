@@ -243,7 +243,7 @@ class LabelSymbol(
 class DllImportSymbol(
 	override val base: SymBase,
 ) : PosSymbol {
-	override var section = Section.IDATA
+	override var section = Section.RDATA
 	override var pos = 0
 }
 

@@ -235,7 +235,7 @@ class Linker(private val context: CompilerContext) {
 			writer.i32(idtPos + 16, iatPos - offset)
 		}
 
-		writeSection(Section.IDATA, ".idata", 0x40000040, writer.pos - idtsPos, 0)
+		writeSection(Section.RDATA, ".idata", 0x40000040, writer.pos - idtsPos, 0)
 	}
 
 

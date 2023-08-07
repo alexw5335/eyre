@@ -1,7 +1,6 @@
 package eyre.gen
 
 import eyre.*
-import eyre.util.hexc8
 
 /**
  *     O16/MR/RW: GP/SSE
@@ -74,7 +73,7 @@ data class NasmEnc(
 		else -> RegType.BND
 	}
 
-	val simdOps = SimdOps(
+	val simdOps = AvxOps(
 		if(i8) 1 else 0,
 		op1.regType.ordinal,
 		op2.regType.ordinal,
@@ -85,6 +84,7 @@ data class NasmEnc(
 		vsibValue,
 	)
 
+	val rel = ops.size == 1 && ops[0].type == OpType.REL
 	val ax = ops.size == 1 && ops[0] == Op.AX
 
 	val fpuOps: Int = when(ops.size) {

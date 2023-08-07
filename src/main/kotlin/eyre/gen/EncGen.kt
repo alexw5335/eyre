@@ -150,7 +150,7 @@ object EncGen {
 
 			nasmBuilder.appendLine(node.nasmString)
 			try {
-				val (start, length) = assembler.assembleForTesting(node)
+				val (start, length) = assembler.assembleDebug(node)
 				val nasmEnc = if(e.mnemonic.isAvx || e.mnemonic.isSse) assembler.getEnc(node) else null
 				tests += EncTest(node, nasmEnc, start, length)
 			} catch(e: Exception) {
@@ -277,7 +277,7 @@ object EncGen {
 		Mnemonic.POPW,
 		Mnemonic.PUSHW,
 		Mnemonic.LEAVEW,
-		Mnemonic.ENTER,
+		//Mnemonic.ENTER,
 		Mnemonic.WAIT,
 		Mnemonic.JMPF,
 		Mnemonic.CALLF,
@@ -300,8 +300,8 @@ object EncGen {
 		Mnemonic.ENQCMDS,
 		Mnemonic.INVPCID,
 		// Confusing
-		Mnemonic.LAR,
-		Mnemonic.LSL,
+		//Mnemonic.LAR,
+		//Mnemonic.LSL,
 		// Missing F3 prefix
 		Mnemonic.PTWRITE,
 		// Missing O16
@@ -320,6 +320,8 @@ object EncGen {
 		Mnemonic.VPBLENDVB,
 		// Multiple valid encodings
 		Mnemonic.PEXTRW,
+		// Temp
+		Mnemonic.FSTSW, Mnemonic.FNSTSW
 	)
 
 

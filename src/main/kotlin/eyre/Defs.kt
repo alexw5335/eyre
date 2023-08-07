@@ -11,16 +11,16 @@ enum class Section {
 	/** Invalid */
 	NONE,
 
-	/** .text, initialised | code, execute | read */
+	/** initialised | code, execute | read */
 	TEXT,
 
-	/** .data, initialised, read | write */
+	/** initialised, read | write */
 	DATA,
 
-	/** .idata, initialised, read */
-	IDATA,
+	/** initialised, read */
+	RDATA,
 
-	/** .bss, uninitialised, read | write */
+	/** uninitialised, read | write */
 	BSS,
 
 }
@@ -154,9 +154,7 @@ class Reloc(
 
 
 enum class RelocType {
-	ABS,
-	RIP,
-	LINK
+	ABS, RIP, LINK;
 }
 
 

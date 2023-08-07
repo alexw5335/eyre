@@ -31,6 +31,29 @@ enum class Width(val string: String, val varString: String?, val bytes: Int) {
 }
 
 
+enum class Test {
+	NONE,
+	M,
+	I,
+	R8,
+	R16,
+	R32,
+	R64,
+	ST,
+	MM,
+	X,
+	Y,
+	Z,
+	K,
+	T,
+
+	SEG,
+	CR,
+	DR,
+	BND;
+}
+
+
 
 enum class RegType(val width: Width) {
 	R8(Width.BYTE),

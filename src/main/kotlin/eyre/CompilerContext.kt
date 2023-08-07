@@ -13,6 +13,8 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	var dataWriter = NativeWriter()
 
+	var rdataWriter = NativeWriter()
+
 	var bssSize = 0
 
 	val relocs = ArrayList<Reloc>()
@@ -32,6 +34,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 	val stringLiterals = ArrayList<StringLiteralSymbol>()
 
 	val stringLiteralMap = HashMap<String, StringLiteralSymbol>() // Only for short strings
+
 
 
 

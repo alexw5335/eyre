@@ -55,7 +55,6 @@ class OpNode private constructor(
 	val isReg get() = type == OpNodeType.REG
 	val isMem get() = type == OpNodeType.MEM
 	val isImm get() = type == OpNodeType.IMM
-	val isST get() = reg.type == RegType.ST
 
 	companion object {
 		val NULL = OpNode(OpNodeType.REG, Width.ZWORD, NullNode, Reg.NONE, 0)
@@ -172,13 +171,13 @@ Helper functions
 
 
 
-fun UnaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long) = op.calculate(
+inline fun UnaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long): Long = op.calculate(
 	function(node, validity && (op == UnaryOp.POS))
 )
 
 
 
-fun BinaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long) = op.calculate(
+inline fun BinaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long): Long = op.calculate(
 	function(left, validity && (op == BinaryOp.ADD || op == BinaryOp.SUB)),
 	function(right, validity && (op == BinaryOp.ADD))
 )

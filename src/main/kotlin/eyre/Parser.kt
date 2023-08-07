@@ -226,6 +226,7 @@ class Parser(private val context: CompilerContext) {
 
 	private fun parseInstruction(prefix: InsPrefix?, mnemonic: Mnemonic): InsNode {
 		prefix?.let { PrefixNode(it).add() }
+
 		if(atNewline() || next == EndToken)
 			return InsNode(mnemonic)
 

@@ -6,7 +6,49 @@ import eyre.gen.OpEnc
 
 
 @JvmInline
-value class SimdOps(val value: Int) {
+value class AutoOps(val value: Int) {
+
+	constructor(
+		r1    : Int,
+		r2    : Int,
+		width : Int,
+		mem   : Int,
+		imm   : Int,
+	) : this(
+		(r1 shl R1) or
+		(r2 shl R2) or
+		(mem shl MEM) or
+		(width shl WIDTH) or
+		(imm shl IMM)
+	)
+
+	val r1    get() = (value shr R1) and 15
+	val r2    get() = (value shr R2) and 15
+	val width get() = (value shr WIDTH) and 7
+	val mem   get() = (value shr MEM) and 3
+	val imm   get() = (value shr IMM) and 3
+
+	fun equalsExceptWidth(other: AvxOps) = value and WIDTH_MASK == other.value and WIDTH_MASK
+
+	companion object {
+		const val R1    = 0
+		const val R2    = 4
+		const val WIDTH = 8  // 4: NONE, BYTE, WORD, DWORD, QWORD, TWORD, XWORD, YWORD, ZWORD
+		const val MEM   = 12 // 2: 0, 1, 2
+		const val IMM   = 14 // 2: NONE, BYTE, WORD, DWORD
+		const val SIZE  = 25
+		const val WIDTH_MASK = -1 xor (15 shl WIDTH)
+	}
+
+	override fun toString() =
+		"(${RegType.entries[r1]}, ${RegType.entries[r2]}, width=$width, mem=$mem, imm=$imm)"
+
+}
+
+
+
+@JvmInline
+value class AvxOps(val value: Int) {
 
 	constructor(
 		i8    : Int,
@@ -28,18 +70,16 @@ value class SimdOps(val value: Int) {
 		(i8 shl I8)
 	)
 
-	val r1    get() = ((value shr R1) and 15).let(RegType.entries::get)
-	val r2    get() = ((value shr R2) and 15).let(RegType.entries::get)
-	val r3    get() = ((value shr R3) and 15).let(RegType.entries::get)
-	val r4    get() = ((value shr R4) and 15).let(RegType.entries::get)
+	val r1    get() = ((value shr R1) and 15)
+	val r2    get() = ((value shr R2) and 15)
+	val r3    get() = ((value shr R3) and 15)
+	val r4    get() = ((value shr R4) and 15)
 	val width get() = ((value shr WIDTH) and 7)
 	val mem   get() = ((value shr MEM) and 3)
 	val vsib  get() = ((value shr VSIB) and 3)
 	val i8    get() = ((value shr I8) and 1)
 
-	fun equalsExceptWidth(other: SimdOps) =
-		(value and 0b1111111_11110000_11111111_11111111) ==
-		(other.value and 0b1111111_11110000_11111111_11111111)
+	fun equalsExceptWidth(other: AvxOps) = value and WIDTH_MASK == other.value and WIDTH_MASK
 
 	companion object {
 		const val R1    = 0
@@ -49,13 +89,14 @@ value class SimdOps(val value: Int) {
 		const val WIDTH = 16 // 4: NONE, BYTE, WORD, DWORD, QWORD, TWORD, XWORD, YWORD, ZWORD
 		const val MEM   = 20 // 2: 0, 1, 2, 3 (0 for none, can't be fourth operand)
 		const val VSIB  = 22 // 2: NONE, X, Y, Z
-		const val I8    = 23 // 1: 0, 1
-		const val SIZE  = 26
+		const val I8    = 24 // 1: 0, 1
+		const val SIZE  = 25
+		const val WIDTH_MASK = -1 xor (15 shl WIDTH)
 	}
 
-	override fun toString() = buildString {
-		append("($r1, $r2, $r3, $r4, width=$width, mem=$mem, vsib=$vsib, i8=$i8)")
-	}
+	override fun toString() =
+		"(${RegType.entries[r1]}, ${RegType.entries[r2]}, ${RegType.entries[r3]}, ${RegType.entries[r4]}," +
+			" width=$width, mem=$mem, vsib=$vsib, i8=$i8)"
 
 }
 
