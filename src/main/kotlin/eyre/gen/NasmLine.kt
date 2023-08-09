@@ -11,7 +11,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var opSize: Width? = null
 	var sm = false
 	var ar = -1
-	var immType = ImmType.NONE
+	var immType = NasmImm.NONE
 
 	var prefix = Prefix.NONE
 	var escape = Escape.NONE
@@ -21,7 +21,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var rexw = 0
 	var o16 = 0
 	var a32 = 0
-	var enc = OpEnc.NONE
+	var enc = NasmOpEnc.NONE
 	var pseudo = -1
 	var cc = false
 	var opreg = false
@@ -30,9 +30,9 @@ class NasmLine(val raw: RawNasmLine) {
 
 	var vex: String? = null
 	var isEvex = false
-	var vsib: VSib? = null
+	var vsib: NasmVsib? = null
 	var is4 = false
-	var tuple: TupleType? = null
+	var tuple: NasmTuple? = null
 	var k   = false
 	var z   = false
 	var sae = false
@@ -46,19 +46,22 @@ class NasmLine(val raw: RawNasmLine) {
 	var ndd = false
 	var dds = false
 	var star = false
-	var vexl = VexL.LIG
-	var vexw = VexW.WIG // Assuming that omission of VEX.W implies WIG (not certain)
+	var vexl = NasmVexL.LIG
+	var vexw = NasmVexW.WIG // Assuming that omission of VEX.W implies WIG (not certain)
 	var map5 = false
 	var map6 = false
 
-	val ops = ArrayList<Op>()
+	val ops = ArrayList<NasmOp>()
 
 	fun addOpcode(value: Int) {
-		if(vex == null && oplen == 0) when(value) {
-			0x0F -> if(escape == Escape.NONE) { escape = Escape.E0F; return }
-			0x38 -> if(escape == Escape.E0F) { escape = Escape.E38; return }
-			0x3A -> if(escape == Escape.E0F) { escape = Escape.E3A; return }
+		if(vex == null && oplen == 0) {
+			when(value) {
+				0x0F -> if(escape == Escape.NONE) { escape = Escape.E0F; return }
+				0x38 -> if(escape == Escape.E0F) { escape = Escape.E38; return }
+				0x3A -> if(escape == Escape.E0F) { escape = Escape.E3A; return }
+			}
 		}
+
 		opcode = opcode or (value shl (oplen++ shl 3))
 	}
 

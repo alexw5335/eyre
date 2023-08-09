@@ -2,6 +2,8 @@ package eyre
 
 class Mem {
 
+	companion object { val NULL = Mem() }
+
     var node = NullNode
     var scale = 0
     var index = Reg.RAX
@@ -33,6 +35,8 @@ class Mem {
     val hasReloc get() = relocs != 0
 	val isImm8 get() = disp.isImm8
 	val isImm16 get() = disp.isImm16
+	val isImm32 get() = disp.isImm32
+	val a32 get() = aso == 1
 
     fun resetBase() {
 		hasBase = false

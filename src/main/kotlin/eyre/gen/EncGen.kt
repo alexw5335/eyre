@@ -64,57 +64,57 @@ object EncGen {
 
 
 
-	private fun Op.random(): OpNode = when(this) {
-		Op.NONE  -> OpNode.NULL
-		Op.R8    -> OpNode.reg(Reg.r8(Random.nextInt(16).let { if(it in 4..7) it + 4 else it }))
-		Op.R16   -> OpNode.reg(Reg.r16(Random.nextInt(16)))
-		Op.R32   -> OpNode.reg(Reg.r32(Random.nextInt(16)))
-		Op.R64   -> OpNode.reg(Reg.r64(Random.nextInt(16)))
-		Op.MEM   -> randomMem(null)
-		Op.M8    -> randomMem(Width.BYTE)
-		Op.M16   -> randomMem(Width.WORD)
-		Op.M32   -> randomMem(Width.DWORD)
-		Op.M64   -> randomMem(Width.QWORD)
-		Op.M80   -> randomMem(Width.TWORD)
-		Op.M128  -> randomMem(Width.XWORD)
-		Op.M256  -> randomMem(Width.YWORD)
-		Op.M512  -> randomMem(Width.ZWORD)
-		Op.I8    -> OpNode.imm(Width.BYTE, IntNode(Random.nextLong(0xF)))
-		Op.I16   -> OpNode.imm(null, IntNode(Random.nextLong(10))) // NASM doesn't use PUSH I16 for some reason
-		Op.I32   -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFF)))
-		Op.I64   -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFFFFFF)))
-		Op.AL    -> OpNode.reg(Reg.AL)
-		Op.AX    -> OpNode.reg(Reg.AX)
-		Op.EAX   -> OpNode.reg(Reg.EAX)
-		Op.RAX   -> OpNode.reg(Reg.RAX)
-		Op.CL    -> OpNode.reg(Reg.CL)
-		Op.ECX   -> OpNode.reg(Reg.ECX)
-		Op.RCX   -> OpNode.reg(Reg.RCX)
-		Op.DX    -> OpNode.reg(Reg.DX)
-		Op.REL8  -> OpNode.imm(null, IntNode(Random.nextLong(0xF)))
-		Op.REL16 -> OpNode.imm(null, IntNode(Random.nextLong(0xFFF)))
-		Op.REL32 -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFF)))
-		Op.ST    -> OpNode.reg(Reg.st(Random.nextInt(8)))
-		Op.ST0   -> OpNode.reg(Reg.ST0)
-		Op.ONE   -> OpNode.imm(null, IntNode(1))
-		Op.MM    -> OpNode.reg(Reg.mm(Random.nextInt(8)))
-		Op.X     -> OpNode.reg(Reg.x(Random.nextInt(16)))
-		Op.Y     -> OpNode.reg(Reg.y(Random.nextInt(16)))
-		Op.Z     -> OpNode.reg(Reg.z(Random.nextInt(16)))
-		Op.K     -> OpNode.reg(Reg.k(Random.nextInt(8)))
-		Op.BND   -> OpNode.reg(Reg.bnd(Random.nextInt(4)))
-		Op.T     -> OpNode.reg(Reg.tmm(Random.nextInt(8)))
-		Op.SEG   -> OpNode.reg(Reg.seg(Random.nextInt(6)))
-		Op.CR    -> OpNode.reg(Reg.cr(Random.nextInt(9)))
-		Op.DR    -> OpNode.reg(Reg.dr(Random.nextInt(8)))
-		Op.FS    -> OpNode.reg(Reg.FS)
-		Op.GS    -> OpNode.reg(Reg.GS)
-		Op.VM32X -> OpNode.mem(Width.DWORD, RegNode(Reg.x(Random.nextInt(16))))
-		Op.VM64X -> OpNode.mem(Width.QWORD, RegNode(Reg.x(Random.nextInt(16))))
-		Op.VM32Y -> OpNode.mem(Width.DWORD, RegNode(Reg.y(Random.nextInt(16))))
-		Op.VM64Y -> OpNode.mem(Width.QWORD, RegNode(Reg.y(Random.nextInt(16))))
-		Op.VM32Z -> OpNode.mem(Width.DWORD, RegNode(Reg.z(Random.nextInt(16))))
-		Op.VM64Z -> OpNode.mem(Width.QWORD, RegNode(Reg.z(Random.nextInt(16))))
+	private fun NasmOp.random(): OpNode = when(this) {
+		NasmOp.NONE  -> OpNode.NULL
+		NasmOp.R8    -> OpNode.reg(Reg.r8(Random.nextInt(16).let { if(it in 4..7) it + 4 else it }))
+		NasmOp.R16   -> OpNode.reg(Reg.r16(Random.nextInt(16)))
+		NasmOp.R32   -> OpNode.reg(Reg.r32(Random.nextInt(16)))
+		NasmOp.R64   -> OpNode.reg(Reg.r64(Random.nextInt(16)))
+		NasmOp.MEM   -> randomMem(null)
+		NasmOp.M8    -> randomMem(Width.BYTE)
+		NasmOp.M16   -> randomMem(Width.WORD)
+		NasmOp.M32   -> randomMem(Width.DWORD)
+		NasmOp.M64   -> randomMem(Width.QWORD)
+		NasmOp.M80   -> randomMem(Width.TWORD)
+		NasmOp.M128  -> randomMem(Width.XWORD)
+		NasmOp.M256  -> randomMem(Width.YWORD)
+		NasmOp.M512  -> randomMem(Width.ZWORD)
+		NasmOp.I8    -> OpNode.imm(Width.BYTE, IntNode(Random.nextLong(0xF)))
+		NasmOp.I16   -> OpNode.imm(null, IntNode(Random.nextLong(10))) // NASM doesn't use PUSH I16 for some reason
+		NasmOp.I32   -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFF)))
+		NasmOp.I64   -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFFFFFF)))
+		NasmOp.AL    -> OpNode.reg(Reg.AL)
+		NasmOp.AX    -> OpNode.reg(Reg.AX)
+		NasmOp.EAX   -> OpNode.reg(Reg.EAX)
+		NasmOp.RAX   -> OpNode.reg(Reg.RAX)
+		NasmOp.CL    -> OpNode.reg(Reg.CL)
+		NasmOp.ECX   -> OpNode.reg(Reg.ECX)
+		NasmOp.RCX   -> OpNode.reg(Reg.RCX)
+		NasmOp.DX    -> OpNode.reg(Reg.DX)
+		NasmOp.REL8  -> OpNode.imm(null, IntNode(Random.nextLong(0xF)))
+		NasmOp.REL16 -> OpNode.imm(null, IntNode(Random.nextLong(0xFFF)))
+		NasmOp.REL32 -> OpNode.imm(null, IntNode(Random.nextLong(0xFFFFFF)))
+		NasmOp.ST    -> OpNode.reg(Reg.st(Random.nextInt(8)))
+		NasmOp.ST0   -> OpNode.reg(Reg.ST0)
+		NasmOp.ONE   -> OpNode.imm(null, IntNode(1))
+		NasmOp.MM    -> OpNode.reg(Reg.mm(Random.nextInt(8)))
+		NasmOp.X     -> OpNode.reg(Reg.x(Random.nextInt(16)))
+		NasmOp.Y     -> OpNode.reg(Reg.y(Random.nextInt(16)))
+		NasmOp.Z     -> OpNode.reg(Reg.z(Random.nextInt(16)))
+		NasmOp.K     -> OpNode.reg(Reg.k(Random.nextInt(8)))
+		NasmOp.BND   -> OpNode.reg(Reg.bnd(Random.nextInt(4)))
+		NasmOp.T     -> OpNode.reg(Reg.tmm(Random.nextInt(8)))
+		NasmOp.SEG   -> OpNode.reg(Reg.seg(Random.nextInt(6)))
+		NasmOp.CR    -> OpNode.reg(Reg.cr(Random.nextInt(9)))
+		NasmOp.DR    -> OpNode.reg(Reg.dr(Random.nextInt(8)))
+		NasmOp.FS    -> OpNode.reg(Reg.FS)
+		NasmOp.GS    -> OpNode.reg(Reg.GS)
+		NasmOp.VM32X -> OpNode.mem(Width.DWORD, RegNode(Reg.x(Random.nextInt(16))))
+		NasmOp.VM64X -> OpNode.mem(Width.QWORD, RegNode(Reg.x(Random.nextInt(16))))
+		NasmOp.VM32Y -> OpNode.mem(Width.DWORD, RegNode(Reg.y(Random.nextInt(16))))
+		NasmOp.VM64Y -> OpNode.mem(Width.QWORD, RegNode(Reg.y(Random.nextInt(16))))
+		NasmOp.VM32Z -> OpNode.mem(Width.DWORD, RegNode(Reg.z(Random.nextInt(16))))
+		NasmOp.VM64Z -> OpNode.mem(Width.QWORD, RegNode(Reg.z(Random.nextInt(16))))
 		else     -> error("Invalid op: $this")
 	}
 
@@ -134,8 +134,10 @@ object EncGen {
 		val tests = ArrayList<EncTest>()
 		var error = false
 
+		val invalidOps = listOf(NasmOpType.MOFFS, NasmOpType.REL, NasmOpType.SEG)
+
 		for(e in encs) {
-			if(e.ops.any { it.type == OpType.MOFFS || it.type == OpType.REL }) continue
+			if(e.ops.any { it.type in invalidOps || it == NasmOp.I64 }) continue
 			if(e.mnemonic in ignoredTestingMnemonics) continue
 			if(e.evex) continue
 
@@ -202,14 +204,14 @@ object EncGen {
 
 		for(e in encs) {
 			when {
-				Op.ST in e.ops || Op.ST0 in e.ops ->
+				NasmOp.ST in e.ops || NasmOp.ST0 in e.ops ->
 					mnemonics[e.mnemonic.name] = Mnemonic.Type.FPU
 				e.ops.isEmpty() ->
 					if(mnemonics[e.mnemonic.name] == null)
 						mnemonics[e.mnemonic.name] = Mnemonic.Type.GP
 				e.avx ->
 					mnemonics[e.mnemonic.name] = Mnemonic.Type.AVX
-				Op.X in e.ops || Op.MM in e.ops ->
+				NasmOp.X in e.ops || NasmOp.MM in e.ops ->
 					if(mnemonics[e.mnemonic.name] != Mnemonic.Type.AVX)
 						mnemonics[e.mnemonic.name] = Mnemonic.Type.SSE
 				else ->
@@ -273,35 +275,10 @@ object EncGen {
 		Mnemonic.PSHUFHW,
 		Mnemonic.PSHUFLW,
 		Mnemonic.PALIGNR,
-		// Custom mnemonics
-		Mnemonic.POPW,
-		Mnemonic.PUSHW,
-		Mnemonic.LEAVEW,
-		//Mnemonic.ENTER,
-		Mnemonic.WAIT,
-		Mnemonic.JMPF,
-		Mnemonic.CALLF,
-		Mnemonic.ENTERW,
-		Mnemonic.SYSEXITQ,
-		Mnemonic.SYSRETQ,
-		// Many optimisation and odd encodings for SREG
-		Mnemonic.MOV,
-		// Explicit operands
-		Mnemonic.LOOP,
-		Mnemonic.LOOPE,
-		Mnemonic.LOOPNE,
-		Mnemonic.LOOPNZ,
-		Mnemonic.LOOPZ,
-		Mnemonic.HRESET,
-		// NASM gives M64, Intel gives M8
-		Mnemonic.PREFETCHW,
 		// NASM inserts REX.W for some reason?
 		Mnemonic.ENQCMD,
 		Mnemonic.ENQCMDS,
 		Mnemonic.INVPCID,
-		// Confusing
-		//Mnemonic.LAR,
-		//Mnemonic.LSL,
 		// Missing F3 prefix
 		Mnemonic.PTWRITE,
 		// Missing O16
@@ -309,19 +286,11 @@ object EncGen {
 		// NASM gives two versions, one without REX.W
 		Mnemonic.SLDT,
 		// ?
-		Mnemonic.XABORT,
-		// ?
 		Mnemonic.TILELOADD,
 		Mnemonic.TILELOADDT1,
 		Mnemonic.TILESTORED,
-		// ? Not sure what's wrong, RRMR seems to be assembled as RRRR by NASM?
-		Mnemonic.VBLENDVPD,
-		Mnemonic.VBLENDVPS,
-		Mnemonic.VPBLENDVB,
 		// Multiple valid encodings
 		Mnemonic.PEXTRW,
-		// Temp
-		Mnemonic.FSTSW, Mnemonic.FNSTSW
 	)
 
 

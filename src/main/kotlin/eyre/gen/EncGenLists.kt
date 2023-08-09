@@ -2,20 +2,20 @@ package eyre.gen
 
 import eyre.Mnemonic
 import eyre.Width
-import eyre.Op
+import eyre.NasmOp
 
 object EncGenLists {
 
 	val arches     = NasmArch.entries.associateBy { it.name.trimStart('_') }
 	val extensions = NasmExt.entries.associateBy { it.name.trimStart('_') }
-	val vsibs      = VSib.entries.associateBy { it.name.lowercase() }
-	val immTypes   = ImmType.entries.associateBy { it.name.lowercase().replace('_', ',') }
-	val tupleTypes = TupleType.entries.associateBy { it.name.lowercase() }
-	val opEncs     = OpEnc.entries.associateBy { it.string }
-	val ops        = Op.entries.associateBy { it.nasmString }
+	val vsibs      = NasmVsib.entries.associateBy { it.name.lowercase() }
+	val immTypes   = NasmImm.entries.associateBy { it.name.lowercase().replace('_', ',') }
+	val tupleTypes = NasmTuple.entries.associateBy { it.name.lowercase() }
+	val opEncs     = NasmOpEnc.entries.associateBy { it.string }
+	val ops        = NasmOp.entries.associateBy { it.nasmString }
 	val mnemonics  = Mnemonic.entries.associateBy { it.name }
 
-	val mrEncs = setOf(OpEnc.MR, OpEnc.MRN, OpEnc.MRX, OpEnc.MRI)
+	val mrEncs = setOf(NasmOpEnc.MR, NasmOpEnc.MRN, NasmOpEnc.MRX, NasmOpEnc.MRI)
 
 	val ccList = arrayOf<Pair<String, Int>>(
 		"O" to 0,

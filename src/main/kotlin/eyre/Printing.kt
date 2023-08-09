@@ -3,8 +3,8 @@
 package eyre
 
 import eyre.gen.NasmEnc
-import eyre.gen.VexL
-import eyre.gen.VexW
+import eyre.gen.NasmVexL
+import eyre.gen.NasmVexW
 import eyre.util.hexc8
 
 
@@ -12,19 +12,19 @@ import eyre.util.hexc8
 val NasmEnc.compactAvxString get() = buildString {
 	if(evex) append("E.") else append("V.")
 	when(vexl) {
-		VexL.LIG  -> { }
-		VexL.L0   -> append("L0.")
-		VexL.LZ   -> append("LZ.")
-		VexL.L1   -> append("L1.")
-		VexL.L128 -> if(Op.X !in ops || Op.Y in ops || Op.Z in ops) append("L128.")
-		VexL.L256 -> if(Op.Y !in ops || Op.X in ops || Op.Z in ops) append("L256.")
-		VexL.L512 -> if(Op.Z !in ops || Op.X in ops || Op.Y in ops) append("L512.")
+		NasmVexL.LIG  -> { }
+		NasmVexL.L0   -> append("L0.")
+		NasmVexL.LZ   -> append("LZ.")
+		NasmVexL.L1   -> append("L1.")
+		NasmVexL.L128 -> if(NasmOp.X !in ops || NasmOp.Y in ops || NasmOp.Z in ops) append("L128.")
+		NasmVexL.L256 -> if(NasmOp.Y !in ops || NasmOp.X in ops || NasmOp.Z in ops) append("L256.")
+		NasmVexL.L512 -> if(NasmOp.Z !in ops || NasmOp.X in ops || NasmOp.Y in ops) append("L512.")
 	}
 	append("${prefix.avxString}.${escape.avxString}")
 	when(vexw) {
-		VexW.WIG -> append(" ")
-		VexW.W0  -> append(".W0 ")
-		VexW.W1  -> append(".W1 ")
+		NasmVexW.WIG -> append(" ")
+		NasmVexW.W0  -> append(".W0 ")
+		NasmVexW.W1  -> append(".W1 ")
 	}
 	append(opcode.hexc8)
 	if(hasExt) append("/$ext")
@@ -89,9 +89,9 @@ val NasmEnc.printString get() = buildString {
 
 val OpNode.nasmString get() = buildString {
 	when(type) {
-		OpNodeType.MEM -> { if(width != null) append("${width.nasmString} "); append("[${node.printString}]") }
-		OpNodeType.REG -> append(reg.string)
-		OpNodeType.IMM -> append(node.printString)
+		OpType.MEM -> { if(width != null) append("${width.nasmString} "); append("[${node.printString}]") }
+		OpType.IMM -> append(node.printString)
+		else       -> append(reg.string)
 	}
 }
 
@@ -133,9 +133,9 @@ val AstNode.printString: String get() = when(this) {
 
 	is OpNode -> buildString {
 		when(type) {
-			OpNodeType.MEM -> { if(width != null) append("${width.string} "); append("[${node.printString}]") }
-			OpNodeType.REG -> append(reg.string)
-			OpNodeType.IMM -> { if(width != null) append("${width.string} "); append(node.printString) }
+			OpType.MEM -> { if(width != null) append("${width.string} "); append("[${node.printString}]") }
+			OpType.IMM -> { if(width != null) append("${width.string} "); append(node.printString) }
+			else       -> append(reg.string)
 		}
 	}
 

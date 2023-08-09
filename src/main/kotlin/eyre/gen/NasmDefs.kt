@@ -158,7 +158,7 @@ enum class NasmExt {
 
 
 
-enum class OpEnc(val string: String?) {
+enum class NasmOpEnc(val string: String?) {
 	NONE(null),
 	ij("ij"),
 	N("-"),
@@ -188,14 +188,13 @@ enum class OpEnc(val string: String?) {
 	RMX("rmx"),
 	MXR("mxr"),
 	MRX("mrx"),
-	// BND-only
 	MRV("mrv"),
 	RMVI("rmvi");
 }
 
 
 
-enum class ImmType {
+enum class NasmImm {
 	NONE,
 	IB,
 	IW,
@@ -210,7 +209,7 @@ enum class ImmType {
 
 
 
-enum class TupleType {
+enum class NasmTuple {
 	FV,
 	T1S,
 	T2,
@@ -231,7 +230,7 @@ enum class TupleType {
 
 
 
-enum class VSib {
+enum class NasmVsib {
 	VM32X,
 	VM64X,
 	VM64Y,
@@ -243,7 +242,7 @@ enum class VSib {
 
 
 
-enum class VexL(val value: Int) {
+enum class NasmVexL(val value: Int) {
 	LIG(0),
 	L0(0),
 	LZ(0),
@@ -255,7 +254,7 @@ enum class VexL(val value: Int) {
 
 
 
-enum class VexW(val value: Int) {
+enum class NasmVexW(val value: Int) {
 	WIG(0),
 	W0(0),
 	W1(1);

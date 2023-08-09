@@ -1,73 +1,16 @@
 package eyre
 
 import eyre.Width.*
-import eyre.gen.OpEnc
+import eyre.gen.NasmOpEnc
 
 
 
 @JvmInline
 value class AutoOps(val value: Int) {
 
-	constructor(
-		r1    : Int,
-		r2    : Int,
-		width : Int,
-		mem   : Int,
-		imm   : Int,
-	) : this(
-		(r1 shl R1) or
-		(r2 shl R2) or
-		(mem shl MEM) or
-		(width shl WIDTH) or
-		(imm shl IMM)
-	)
-
-	val r1    get() = (value shr R1) and 15
-	val r2    get() = (value shr R2) and 15
-	val width get() = (value shr WIDTH) and 7
-	val mem   get() = (value shr MEM) and 3
-	val imm   get() = (value shr IMM) and 3
-
-	fun equalsExceptWidth(other: AvxOps) = value and WIDTH_MASK == other.value and WIDTH_MASK
-
-	companion object {
-		const val R1    = 0
-		const val R2    = 4
-		const val WIDTH = 8  // 4: NONE, BYTE, WORD, DWORD, QWORD, TWORD, XWORD, YWORD, ZWORD
-		const val MEM   = 12 // 2: 0, 1, 2
-		const val IMM   = 14 // 2: NONE, BYTE, WORD, DWORD
-		const val SIZE  = 25
-		const val WIDTH_MASK = -1 xor (15 shl WIDTH)
-	}
-
-	override fun toString() =
-		"(${RegType.entries[r1]}, ${RegType.entries[r2]}, width=$width, mem=$mem, imm=$imm)"
-
-}
-
-
-
-@JvmInline
-value class AvxOps(val value: Int) {
-
-	constructor(
-		i8    : Int,
-		r1    : Int,
-		r2    : Int,
-		r3    : Int,
-		r4    : Int,
-		width : Int,
-		mem   : Int,
-		vsib  : Int,
-	) : this(
-		(r1 shl R1) or
-		(r2 shl R2) or
-		(r3 shl R3) or
-		(r4 shl R4) or
-		(mem shl MEM) or
-		(width shl WIDTH) or
-		(vsib shl VSIB) or
-		(i8 shl I8)
+	constructor(r1: Int, r2: Int, r3: Int, r4: Int, width: Int, vsib: Int) : this(
+		(r1 shl R1) or (r2 shl R2) or (r3 shl R3) or
+		(r4 shl R4) or (width shl WIDTH) or (vsib shl VSIB)
 	)
 
 	val r1    get() = ((value shr R1) and 15)
@@ -75,11 +18,10 @@ value class AvxOps(val value: Int) {
 	val r3    get() = ((value shr R3) and 15)
 	val r4    get() = ((value shr R4) and 15)
 	val width get() = ((value shr WIDTH) and 7)
-	val mem   get() = ((value shr MEM) and 3)
 	val vsib  get() = ((value shr VSIB) and 3)
-	val i8    get() = ((value shr I8) and 1)
 
-	fun equalsExceptWidth(other: AvxOps) = value and WIDTH_MASK == other.value and WIDTH_MASK
+	fun equalsExceptWidth(other: AutoOps) =
+		value and WIDTH_MASK == other.value and WIDTH_MASK
 
 	companion object {
 		const val R1    = 0
@@ -87,34 +29,29 @@ value class AvxOps(val value: Int) {
 		const val R3    = 8
 		const val R4    = 12
 		const val WIDTH = 16 // 4: NONE, BYTE, WORD, DWORD, QWORD, TWORD, XWORD, YWORD, ZWORD
-		const val MEM   = 20 // 2: 0, 1, 2, 3 (0 for none, can't be fourth operand)
-		const val VSIB  = 22 // 2: NONE, X, Y, Z
-		const val I8    = 24 // 1: 0, 1
-		const val SIZE  = 25
+		const val VSIB  = 20 // 2: NONE, X, Y, Z
 		const val WIDTH_MASK = -1 xor (15 shl WIDTH)
 	}
 
 	override fun toString() =
-		"(${RegType.entries[r1]}, ${RegType.entries[r2]}, ${RegType.entries[r3]}, ${RegType.entries[r4]}," +
-			" width=$width, mem=$mem, vsib=$vsib, i8=$i8)"
+		"(${OpType.entries[r1]}, ${OpType.entries[r2]}, ${OpType.entries[r3]}," +
+			" ${OpType.entries[r4]}, width=$width, vsib=$vsib)"
 
 }
 
 
 
-
-
-enum class SimdOpEnc(vararg val encs: OpEnc) {
-	RMV(OpEnc.R, OpEnc.RI, OpEnc.RM, OpEnc.RMV, OpEnc.RMI, OpEnc.RMVI),
-	RVM(OpEnc.RVM, OpEnc.RVMI, OpEnc.RVMS),
-	MRV(OpEnc.M, OpEnc.MI, OpEnc.MR, OpEnc.MRI, OpEnc.MRN, OpEnc.MRV),
-	MVR(OpEnc.MVR),
-	VMR(OpEnc.VM, OpEnc.VMI);
+enum class OpEnc(vararg val encs: NasmOpEnc) {
+	RMV(NasmOpEnc.R, NasmOpEnc.RI, NasmOpEnc.RM, NasmOpEnc.RMV, NasmOpEnc.RMI, NasmOpEnc.RMVI),
+	RVM(NasmOpEnc.RVM, NasmOpEnc.RVMI, NasmOpEnc.RVMS),
+	MRV(NasmOpEnc.M, NasmOpEnc.MI, NasmOpEnc.MR, NasmOpEnc.MRI, NasmOpEnc.MRN, NasmOpEnc.MRV),
+	MVR(NasmOpEnc.MVR),
+	VMR(NasmOpEnc.VM, NasmOpEnc.VMI);
 }
 
 
 
-enum class OpType(val isReg: Boolean = false) {
+enum class NasmOpType(val isReg: Boolean = false) {
 	R(true),
 	M,
 	I,
@@ -128,80 +65,77 @@ enum class OpType(val isReg: Boolean = false) {
 	MISC,
 	REL,
 	VM,
+	SEG,
 	MOFFS,
 	MULTI;
-
 	val isMem get() = this == M || this == VM
 }
 
 
 
-sealed interface OpKind
+enum class NasmOp(
+	val nasmString : String?,
+	val type       : NasmOpType,
+	val width      : Width?,
+	val multi1     : NasmOp? = null,
+	val multi2     : NasmOp? = null
+) {
 
+	NONE(null, NasmOpType.MISC, null),
+	R8("reg8", NasmOpType.R, BYTE),
+	R16("reg16", NasmOpType.R, WORD),
+	R32("reg32", NasmOpType.R, DWORD),
+	R64("reg64", NasmOpType.R, QWORD),
+	MEM(null, NasmOpType.M, null),
+	M8("mem8", NasmOpType.M, BYTE),
+	M16("mem16", NasmOpType.M, WORD),
+	M32("mem32", NasmOpType.M, DWORD),
+	M64("mem64", NasmOpType.M, QWORD),
+	M80("mem80", NasmOpType.M, TWORD),
+	M128("mem128", NasmOpType.M, XWORD),
+	M256("mem256", NasmOpType.M, YWORD),
+	M512("mem512", NasmOpType.M, ZWORD),
+	I8("imm8", NasmOpType.I, BYTE),
+	I16("imm16", NasmOpType.I, WORD),
+	I32("imm32", NasmOpType.I, DWORD),
+	I64("imm64", NasmOpType.I, QWORD),
+	AL("reg_al", NasmOpType.A, BYTE),
+	AX("reg_ax", NasmOpType.A, WORD),
+	EAX("reg_eax", NasmOpType.A, DWORD),
+	RAX("reg_rax", NasmOpType.A, QWORD),
+	CL("reg_cl", NasmOpType.C, BYTE),
+	ECX("reg_ecx", NasmOpType.C, DWORD),
+	RCX("reg_rcx", NasmOpType.C, QWORD),
+	DX("reg_dx", NasmOpType.MISC, WORD),
+	REL8(null, NasmOpType.REL, BYTE),
+	REL16(null, NasmOpType.REL, WORD),
+	REL32(null, NasmOpType.REL, DWORD),
+	ST("fpureg", NasmOpType.ST, TWORD),
+	ST0("fpu0", NasmOpType.ST, TWORD),
+	ONE("unity", NasmOpType.MISC, null),
+	MM("mmxreg", NasmOpType.MM, QWORD),
+	X("xmmreg", NasmOpType.S, XWORD),
+	Y("ymmreg", NasmOpType.S, YWORD),
+	Z("zmmreg", NasmOpType.S, ZWORD),
+	VM32X("xmem32", NasmOpType.VM, DWORD),
+	VM64X("xmem64", NasmOpType.VM, QWORD),
+	VM32Y("ymem32", NasmOpType.VM, DWORD),
+	VM64Y("ymem64", NasmOpType.VM, QWORD),
+	VM32Z("zmem32", NasmOpType.VM, DWORD),
+	VM64Z("zmem64", NasmOpType.VM, QWORD),
+	K("kreg", NasmOpType.K, null),
+	BND("bndreg", NasmOpType.MISC, null),
+	T("tmmreg", NasmOpType.T, null),
+	MOFFS8(null, NasmOpType.MOFFS, BYTE),
+	MOFFS16(null, NasmOpType.MOFFS, WORD),
+	MOFFS32(null, NasmOpType.MOFFS, DWORD),
+	MOFFS64(null, NasmOpType.MOFFS, QWORD),
+	SEG("reg_sreg", NasmOpType.SEG, null),
+	CR("reg_creg", NasmOpType.MISC, QWORD),
+	DR("reg_dreg", NasmOpType.MISC, QWORD),
+	FS("reg_fs", NasmOpType.MISC, null),
+	GS("reg_gs", NasmOpType.MISC, null),
 
-
-enum class Op(
-	val nasmString: String?,
-	val type: OpType,
-	val width: Width?,
-	val multi1: Op? = null,
-	val multi2: Op? = null
-) : OpKind {
-
-	NONE(null, OpType.MISC, null),
-	R8("reg8", OpType.R, BYTE),
-	R16("reg16", OpType.R, WORD),
-	R32("reg32", OpType.R, DWORD),
-	R64("reg64", OpType.R, QWORD),
-	MEM(null, OpType.M, null),
-	M8("mem8", OpType.M, BYTE),
-	M16("mem16", OpType.M, WORD),
-	M32("mem32", OpType.M, DWORD),
-	M64("mem64", OpType.M, QWORD),
-	M80("mem80", OpType.M, TWORD),
-	M128("mem128", OpType.M, XWORD),
-	M256("mem256", OpType.M, YWORD),
-	M512("mem512", OpType.M, ZWORD),
-	I8("imm8", OpType.I, BYTE),
-	I16("imm16", OpType.I, WORD),
-	I32("imm32", OpType.I, DWORD),
-	I64("imm64", OpType.I, QWORD),
-	AL("reg_al", OpType.A, BYTE),
-	AX("reg_ax", OpType.A, WORD),
-	EAX("reg_eax", OpType.A, DWORD),
-	RAX("reg_rax", OpType.A, QWORD),
-	CL("reg_cl", OpType.C, BYTE),
-	ECX("reg_ecx", OpType.C, DWORD),
-	RCX("reg_rcx", OpType.C, QWORD),
-	DX("reg_dx", OpType.MISC, WORD),
-	REL8(null, OpType.REL, BYTE),
-	REL16(null, OpType.REL, WORD),
-	REL32(null, OpType.REL, DWORD),
-	ST("fpureg", OpType.ST, TWORD),
-	ST0("fpu0", OpType.ST, TWORD),
-	ONE("unity", OpType.MISC, null),
-	MM("mmxreg", OpType.MM, QWORD),
-	X("xmmreg", OpType.S, XWORD),
-	Y("ymmreg", OpType.S, YWORD),
-	Z("zmmreg", OpType.S, ZWORD),
-	VM32X("xmem32", OpType.VM, DWORD),
-	VM64X("xmem64", OpType.VM, QWORD),
-	VM32Y("ymem32", OpType.VM, DWORD),
-	VM64Y("ymem64", OpType.VM, QWORD),
-	VM32Z("zmem32", OpType.VM, DWORD),
-	VM64Z("zmem64", OpType.VM, QWORD),
-	K("kreg", OpType.K, null),
-	BND("bndreg", OpType.MISC, null),
-	T("tmmreg", OpType.T, null),
-	MOFFS8(null, OpType.MOFFS, BYTE),
-	MOFFS16(null, OpType.MOFFS, WORD),
-	MOFFS32(null, OpType.MOFFS, DWORD),
-	MOFFS64(null, OpType.MOFFS, QWORD),
-	SEG("reg_sreg", OpType.MISC, null),
-	CR("reg_creg", OpType.MISC, QWORD),
-	DR("reg_dreg", OpType.MISC, QWORD),
-	FS("reg_fs", OpType.MISC, null),
-	GS("reg_gs", OpType.MISC, null),
 	RM8  ("rm8",      R8,  M8),
 	RM16 ("rm16",     R16, M16),
 	RM32 ("rm32",     R32, M32),
@@ -224,9 +158,9 @@ enum class Op(
 	KM32 ("krm32",    K,   M32),
 	KM64 ("krm64",    K,   M64);
 	
-	constructor(nasmName: String, op1: Op, op2: Op) : 
-		this(nasmName, OpType.MULTI, null, op1, op2)
+	constructor(nasmName: String, op1: NasmOp, op2: NasmOp) :
+		this(nasmName, NasmOpType.MULTI, null, op1, op2)
 
-	val isMulti get() = type == OpType.MULTI
+	val isMulti get() = type == NasmOpType.MULTI
 
 }

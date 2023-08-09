@@ -1,7 +1,6 @@
 package eyre.gen
 
 import eyre.*
-import eyre.util.Unique
 import eyre.util.isHex
 
 class NasmParser(private val inputs: List<String>) {
@@ -165,16 +164,16 @@ class NasmParser(private val inputs: List<String>) {
 			"dds"  -> line.dds = true
 			"vex"  -> line.isEvex = false
 			"evex" -> line.isEvex = true
-			"lz"   -> line.vexl = VexL.LZ
-			"l0"   -> line.vexl = VexL.L0
-			"l1"   -> line.vexl = VexL.L1
-			"lig"  -> line.vexl = VexL.LIG
-			"128"  -> line.vexl = VexL.L128
-			"256"  -> line.vexl = VexL.L256
-			"512"  -> line.vexl = VexL.L512
-			"wig"  -> line.vexw = VexW.WIG
-			"w0"   -> line.vexw = VexW.W0
-			"w1"   -> line.vexw = VexW.W1
+			"lz"   -> line.vexl = NasmVexL.LZ
+			"l0"   -> line.vexl = NasmVexL.L0
+			"l1"   -> line.vexl = NasmVexL.L1
+			"lig"  -> line.vexl = NasmVexL.LIG
+			"128"  -> line.vexl = NasmVexL.L128
+			"256"  -> line.vexl = NasmVexL.L256
+			"512"  -> line.vexl = NasmVexL.L512
+			"wig"  -> line.vexw = NasmVexW.WIG
+			"w0"   -> line.vexw = NasmVexW.W0
+			"w1"   -> line.vexw = NasmVexW.W1
 			"0f"   -> line.escape = Escape.E0F
 			"0f38" -> line.escape = Escape.E38
 			"0f3a" -> line.escape = Escape.E3A
@@ -195,8 +194,8 @@ class NasmParser(private val inputs: List<String>) {
 		val widths = arrayOfNulls<Width>(4)
 
 		if(line.mnemonic == "ENTER") {
-			line.ops += Op.I16
-			line.ops += Op.I8
+			line.ops += NasmOp.I16
+			line.ops += NasmOp.I8
 			return
 		}
 
@@ -224,72 +223,72 @@ class NasmParser(private val inputs: List<String>) {
 			if(string.endsWith("|rs2"))  { line.rs2  = true; string = string.dropLast(4) }
 			if(string.endsWith("|rs4"))  { line.rs4  = true; string = string.dropLast(4) }
 
-			val operand: Op = when(string) {
+			val operand: NasmOp = when(string) {
 				"void" -> continue
 
 				"imm64" -> when(line.mnemonic) {
-					"XBEGIN" -> Op.REL32
-					"JMP"    -> Op.REL32
-					"CALL"   -> Op.REL32
-					else     -> Op.I64
+					"XBEGIN" -> NasmOp.REL32
+					"JMP"    -> NasmOp.REL32
+					"CALL"   -> NasmOp.REL32
+					else     -> NasmOp.I64
 				}
 
 				in EncGenLists.ops -> EncGenLists.ops[string]!!
 
 				"xmmrm" -> when(widths[i]) {
-					Width.DWORD -> Op.XM32
-					Width.QWORD -> Op.XM64
-					Width.XWORD -> Op.XM128
-					null        -> Op.XM128
+					Width.DWORD -> NasmOp.XM32
+					Width.QWORD -> NasmOp.XM64
+					Width.XWORD -> NasmOp.XM128
+					null        -> NasmOp.XM128
 					else        -> line.raw.error("Invalid width: ${widths[i]}")
 				}
 				
 				"mmxrm" -> when(widths[i]) {
-					Width.QWORD -> Op.MMM64
+					Width.QWORD -> NasmOp.MMM64
 					Width.XWORD -> when(line.mnemonic) {
-						"PMULUDQ", "PSUBQ" -> Op.MMM64
+						"PMULUDQ", "PSUBQ" -> NasmOp.MMM64
 						else -> line.raw.error("Invalid width: ${widths[i]}")
 					}
 					else -> line.raw.error("Invalid width: ${widths[i]}")
 				}
 				
 				"mem" -> when(widths[i]) {
-					null        -> Op.MEM
-					Width.BYTE  -> Op.M8
-					Width.WORD  -> Op.M16
-					Width.DWORD -> Op.M32
-					Width.QWORD -> Op.M64
-					Width.TWORD -> Op.M80
-					Width.XWORD -> Op.M128
-					Width.YWORD -> Op.M256
-					Width.ZWORD -> Op.M512
+					null        -> NasmOp.MEM
+					Width.BYTE  -> NasmOp.M8
+					Width.WORD  -> NasmOp.M16
+					Width.DWORD -> NasmOp.M32
+					Width.QWORD -> NasmOp.M64
+					Width.TWORD -> NasmOp.M80
+					Width.XWORD -> NasmOp.M128
+					Width.YWORD -> NasmOp.M256
+					Width.ZWORD -> NasmOp.M512
 				}
 
 				"mem_offs" -> when(widths[i]) {
-					Width.BYTE  -> Op.MOFFS8
-					Width.WORD  -> Op.MOFFS16
-					Width.DWORD -> Op.MOFFS32
-					Width.QWORD -> Op.MOFFS64
+					Width.BYTE  -> NasmOp.MOFFS8
+					Width.WORD  -> NasmOp.MOFFS16
+					Width.DWORD -> NasmOp.MOFFS32
+					Width.QWORD -> NasmOp.MOFFS64
 					else        -> line.raw.error("Invalid operand")
 				}
 
 				"imm", "imm|near", "imm|short" -> when(line.immType) {
-					ImmType.IB   -> Op.I8
-					ImmType.IB_S -> Op.I8
-					ImmType.IB_U -> Op.I8
-					ImmType.IW   -> Op.I16
-					ImmType.ID   -> Op.I32
-					ImmType.ID_S -> Op.I32
-					ImmType.IQ   -> Op.I64
-					ImmType.REL8 -> Op.REL8
-					ImmType.REL  -> if(line.odf)
-						Op.REL32
+					NasmImm.IB   -> NasmOp.I8
+					NasmImm.IB_S -> NasmOp.I8
+					NasmImm.IB_U -> NasmOp.I8
+					NasmImm.IW   -> NasmOp.I16
+					NasmImm.ID   -> NasmOp.I32
+					NasmImm.ID_S -> NasmOp.I32
+					NasmImm.IQ   -> NasmOp.I64
+					NasmImm.REL8 -> NasmOp.REL8
+					NasmImm.REL  -> if(line.odf)
+						NasmOp.REL32
 					else
-						Op.REL16
+						NasmOp.REL16
 					else -> line.raw.error("Invalid width: ${line.immType}")
 				}
 
-				"reg32na" -> Op.R32
+				"reg32na" -> NasmOp.R32
 
 				else -> line.raw.error("Unrecognised operand: $string")
 			}
@@ -310,7 +309,7 @@ class NasmParser(private val inputs: List<String>) {
 		ext >= 0,
 		extensions,
 		enc,
-		ArrayList<Op>(ops),
+		ArrayList<NasmOp>(ops),
 		rexw,
 		o16,
 		a32,

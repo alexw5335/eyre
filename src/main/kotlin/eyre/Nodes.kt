@@ -36,31 +36,21 @@ sealed interface SymNode : AstNode {
 
 
 
-enum class OpNodeType {
-	REG,
-	MEM,
-	IMM;
-}
-
-
-
 class OpNode private constructor(
-	val type  : OpNodeType,
+	val type  : OpType,
 	val width : Width?,
 	val node  : AstNode,
 	val reg   : Reg,
-	val high  : Int,
 ) : AstNode {
 
-	val isReg get() = type == OpNodeType.REG
-	val isMem get() = type == OpNodeType.MEM
-	val isImm get() = type == OpNodeType.IMM
+	val isMem get() = type == OpType.MEM
+	val isImm get() = type == OpType.IMM
 
 	companion object {
-		val NULL = OpNode(OpNodeType.REG, Width.ZWORD, NullNode, Reg.NONE, 0)
-		fun reg(reg: Reg) = OpNode(OpNodeType.REG, reg.width, NullNode, reg, reg.high)
-		fun mem(width: Width?, mem: AstNode) = OpNode(OpNodeType.MEM, width, mem, Reg.NONE, 0)
-		fun imm(width: Width?, imm: AstNode) = OpNode(OpNodeType.IMM, width, imm, Reg.NONE, 0)
+		val NULL = OpNode(OpType.NONE, null, NullNode, Reg.NONE)
+		fun reg(reg: Reg) = OpNode(reg.type, reg.type.gpWidth, NullNode, reg)
+		fun mem(width: Width?, mem: AstNode) = OpNode(OpType.MEM, width, mem, Reg.NONE)
+		fun imm(width: Width?, imm: AstNode) = OpNode(OpType.IMM, width, imm, Reg.NONE)
 	}
 
 }
@@ -193,26 +183,32 @@ Instruction node
 class InsNode(
 	val mnemonic : Mnemonic,
 	val size     : Int,
-	val high     : Int,
 	val op1      : OpNode,
 	val op2      : OpNode,
 	val op3      : OpNode,
 	val op4      : OpNode
 ) : AstNode {
 
+	val r1 get() = op1.reg
+	val r2 get() = op2.reg
+	val r3 get() = op3.reg
+	val r4 get() = op4.reg
+
+	fun high() = op1.reg.high or op2.reg.high or op3.reg.high or op4.reg.high
+
 	constructor(m: Mnemonic) :
-		this(m, 0, 0, OpNode.NULL, OpNode.NULL, OpNode.NULL, OpNode.NULL)
+		this(m, 0, OpNode.NULL, OpNode.NULL, OpNode.NULL, OpNode.NULL)
 
 	constructor(m: Mnemonic, op1: OpNode) :
-		this(m, 1, op1.high, op1, OpNode.NULL, OpNode.NULL, OpNode.NULL)
+		this(m, 1, op1, OpNode.NULL, OpNode.NULL, OpNode.NULL)
 
 	constructor(m: Mnemonic, op1: OpNode, op2: OpNode) :
-		this(m, 2, op1.high or op2.high, op1, op2, OpNode.NULL, OpNode.NULL)
+		this(m, 2, op1, op2, OpNode.NULL, OpNode.NULL)
 
 	constructor(m: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode) :
-		this(m, 3, op1.high or op2.high or op3.high, op1, op2, op3, OpNode.NULL)
+		this(m, 3, op1, op2, op3, OpNode.NULL)
 
 	constructor(m: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode, op4: OpNode) :
-		this(m, 4, op1.high or op2.high or op3.high or op4.high, op1, op2, op3, op4)
+		this(m, 4, op1, op2, op3, op4)
 
 }
