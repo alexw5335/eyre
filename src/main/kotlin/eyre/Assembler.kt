@@ -195,9 +195,9 @@ class Assembler(private val context: CompilerContext) {
 				writer.i8(0x50 + r.value)
 
 		if(toAlloc.isImm8) {
-			epilogueWriter.i32(0xEC_83_48 or (toAlloc.toInt() shl 24))
+			epilogueWriter.i32(0xC4_83_48 or (toAlloc.toInt() shl 24))
 		} else if(toAlloc.isImm32) {
-			epilogueWriter.i24(0xEC_81_48)
+			epilogueWriter.i24(0xC4_81_48)
 			epilogueWriter.i32(toAlloc.toInt())
 		} else {
 			invalid()

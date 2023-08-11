@@ -1,7 +1,5 @@
 namespace main
 
 proc main {
-	lea rcx, ["TESTING"]
-	dllcall printf
 	dllcall ExitProcess
 }
