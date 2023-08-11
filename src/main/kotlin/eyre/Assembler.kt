@@ -3,6 +3,7 @@ package eyre
 import eyre.Width.*
 import eyre.gen.EncGen
 import eyre.gen.NasmEnc
+import eyre.util.NativeWriter
 
 class Assembler(private val context: CompilerContext) {
 
@@ -14,6 +15,8 @@ class Assembler(private val context: CompilerContext) {
 	private var currentIns: InsNode? = null
 
 	private val assemblers = Array<(InsNode) -> Unit>(Mnemonic.entries.size) { ::assembleAuto }
+
+	private val epilogueWriter = NativeWriter()
 
 
 
@@ -29,8 +32,11 @@ class Assembler(private val context: CompilerContext) {
 				when(node) {
 					is InsNode       -> assemble(node)
 					is LabelNode     -> handleLabel(node.symbol)
-					is ProcNode      -> handleLabel(node.symbol)
+					is ProcNode      -> handleProc(node)
 					is ScopeEndNode  -> handleScopeEnd(node)
+					is VarResNode    -> handleVarRes(node)
+					is VarDbNode     -> handleVarDb(node)
+					is VarInitNode   -> handleVarInit(node)
 					else             -> { }
 				}
 			}
@@ -51,6 +57,92 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private inline fun sectioned(writer: NativeWriter, section: Section, block: () -> Unit) {
+		val prevWriter = this.writer
+		val prevSection = this.section
+		this.writer = writer
+		this.section = section
+		block()
+		this.writer = prevWriter
+		this.section = prevSection
+	}
+
+
+
+	private fun handleVarRes(node: VarResNode) {
+		val size = node.symbol.type.size
+		context.bssSize = (context.bssSize + 7) and -8
+		node.symbol.pos = context.bssSize
+		context.bssSize += size
+	}
+
+
+
+	private fun handleVarDb(node: VarDbNode) {
+		val prevWriter = writer
+		writer = context.dataWriter
+		writer.align8()
+
+		node.symbol.pos = writer.pos
+
+		for(part in node.parts) {
+			for(value in part.nodes) {
+				if(value is StringNode) {
+					for(char in value.value)
+						writer.writeWidth(part.width, char.code)
+				} else {
+					val imm = resolveImm(value)
+					if(imm.relocs == 1) {
+						if(part.width != QWORD)
+							error("Absolute relocations must occupy 64 bits")
+						writer.i64(0)
+					} else {
+						writer.writeWidth(part.width, imm.disp)
+					}
+				}
+			}
+		}
+		writer = prevWriter
+	}
+
+
+
+	@Suppress("CascadeIf")
+	private fun writeInitialiser(node: AstNode, type: Type) {
+		val start = writer.pos
+
+		if(node is InitNode) {
+			for(entry in node.entries) {
+				writer.seek(start + entry.offset)
+				writeInitialiser(entry.node, entry.type)
+			}
+			writer.seek(start + type.size)
+		} else if(node is EqualsNode) {
+			writeInitialiser(node.right, type)
+		} else {
+			val width = when(type.size) {
+				1    -> BYTE
+				2    -> WORD
+				4    -> DWORD
+				8    -> QWORD
+				else -> error("Invalid initialiser: ${type.name}, of size: ${type.size}")
+			}
+			imm(resolveImm(node), width)
+		}
+	}
+
+
+
+	private fun handleVarInit(node: VarInitNode) {
+		sectioned(context.dataWriter, Section.DATA) {
+			writer.align8()
+			node.symbol.pos = writer.pos
+			writeInitialiser(node.initialiser, node.symbol.type)
+		}
+	}
+
+
+
 	private fun handleLabel(symbol: PosSymbol) {
 		symbol.pos = writer.pos
 		if(symbol.name == Names.MAIN) {
@@ -63,8 +155,63 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun handleScopeEnd(node: ScopeEndNode) {
-		if(node.symbol is ProcSymbol)
-			node.symbol.size = writer.pos - node.symbol.pos
+		if(node.symbol !is ProcSymbol)
+			return
+
+		if(epilogueWriter.isNotEmpty) {
+			writer.bytes(epilogueWriter)
+			epilogueWriter.reset()
+		}
+
+		node.symbol.size = writer.pos - node.symbol.pos
+	}
+
+
+
+	private fun handleProc(node: ProcNode) {
+		handleLabel(node.symbol)
+		val regs = ArrayList<Reg>()
+		var toAlloc = 40L
+
+		for(n in node.stackNodes)
+			if(n is RegNode)
+				regs += n.value
+			else
+				toAlloc += resolveImmSimple(n)
+
+		if(toAlloc.isImm8) {
+			writer.i32(0xEC_83_48 or (toAlloc.toInt() shl 24))
+		} else if(toAlloc.isImm32) {
+			writer.i24(0xEC_81_48)
+			writer.i32(toAlloc.toInt())
+		} else {
+			invalid()
+		}
+
+		for(r in regs)
+			if(r.rex == 1)
+				writer.i16(0x50_41 + (r.value shl 8))
+			else
+				writer.i8(0x50 + r.value)
+
+		if(toAlloc.isImm8) {
+			epilogueWriter.i32(0xEC_83_48 or (toAlloc.toInt() shl 24))
+		} else if(toAlloc.isImm32) {
+			epilogueWriter.i24(0xEC_81_48)
+			epilogueWriter.i32(toAlloc.toInt())
+		} else {
+			invalid()
+		}
+
+		for(i in regs.size - 1 downTo 0) {
+			val r = regs[i]
+			if(r.rex == 1)
+				epilogueWriter.i16(0x58_41 + (r.value shl 8))
+			else
+				epilogueWriter.i8(0x58 + r.value)
+		}
+
+		epilogueWriter.i8(0xC3)
 	}
 
 
@@ -201,9 +348,11 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun resolve(mem: Mem, node: AstNode, isImm: Boolean): Mem {
 		if(node is OpNode) {
+			mem.node = node.node
 			mem.width = node.width
 			mem.disp = resolveRec(node.node, mem, true)
 		} else {
+			mem.node = node
 			mem.width = null
 			mem.disp = resolveRec(node, mem, true)
 		}
@@ -261,6 +410,15 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun Any.imm(op: OpNode, width: Width) =
 		imm(resolveMem(op), width)
+
+
+
+	private fun resolveImmSimple(n: AstNode): Long = when(n) {
+		is IntNode    -> n.value
+		is UnaryNode  -> n.op.calculate(resolveImmSimple(n))
+		is BinaryNode -> n.op.calculate(resolveImmSimple(n.left), resolveImmSimple(n.right))
+		else          -> invalid()
+	}
 
 
 
@@ -536,7 +694,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun assemble0(node: InsNode) {
 		when(node.mnemonic) {
 			Mnemonic.TILERELEASE -> writer.i40(0xC04978E2C4)
-			Mnemonic.RETURN -> byte(0xC3)
+			Mnemonic.RETURN -> encodeRETURN()
 			else -> {
 				val opcode = Encs.ZERO_OP_OPCODES[node.mnemonic.ordinal]
 				if(opcode == 0) invalid()
@@ -552,88 +710,89 @@ class Assembler(private val context: CompilerContext) {
 	private fun populateAssemblers() {
 		operator fun Mnemonic.plusAssign(assembler: (InsNode) -> Unit) = assemblers.set(ordinal, assembler)
 
-		Mnemonic.PUSH   += ::encodePUSH
-		Mnemonic.POP    += ::encodePOP
-		Mnemonic.IN     += ::encodeIN
-		Mnemonic.OUT    += ::encodeOUT
-		Mnemonic.MOV    += ::encodeMOV
-		Mnemonic.BSWAP  += ::encodeBSWAP
-		Mnemonic.XCHG   += ::encodeXCHG
-		Mnemonic.TEST   += ::encodeTEST
-		Mnemonic.IMUL   += ::encodeIMUL
-		Mnemonic.PUSHW  += ::encodePUSHW
-		Mnemonic.POPW   += ::encodePOPW
-		Mnemonic.CALL   += ::encodeCALL
-		Mnemonic.JMP    += ::encodeJMP
-		Mnemonic.LEA    += ::encodeLEA
-		Mnemonic.ENTER  += ::encodeENTER
-		Mnemonic.FSTSW  += ::encodeFSTSW
-		Mnemonic.FNSTSW += ::encodeFSTSW
-		Mnemonic.HRESET += ::encodeHRESET
-		Mnemonic.JO     += { encodeJCC(0x70, 0x800F, it) }
-		Mnemonic.JNO    += { encodeJCC(0x71, 0x810F, it) }
-		Mnemonic.JB     += { encodeJCC(0x72, 0x820F, it) }
-		Mnemonic.JNAE   += { encodeJCC(0x72, 0x820F, it) }
-		Mnemonic.JC     += { encodeJCC(0x72, 0x820F, it) }
-		Mnemonic.JNB    += { encodeJCC(0x73, 0x830F, it) }
-		Mnemonic.JAE    += { encodeJCC(0x73, 0x830F, it) }
-		Mnemonic.JNC    += { encodeJCC(0x73, 0x830F, it) }
-		Mnemonic.JZ     += { encodeJCC(0x74, 0x840F, it) }
-		Mnemonic.JE     += { encodeJCC(0x74, 0x840F, it) }
-		Mnemonic.JNZ    += { encodeJCC(0x75, 0x850F, it) }
-		Mnemonic.JNE    += { encodeJCC(0x75, 0x850F, it) }
-		Mnemonic.JBE    += { encodeJCC(0x76, 0x860F, it) }
-		Mnemonic.JNA    += { encodeJCC(0x76, 0x860F, it) }
-		Mnemonic.JNBE   += { encodeJCC(0x77, 0x870F, it) }
-		Mnemonic.JA     += { encodeJCC(0x77, 0x870F, it) }
-		Mnemonic.JS     += { encodeJCC(0x78, 0x880F, it) }
-		Mnemonic.JNS    += { encodeJCC(0x79, 0x890F, it) }
-		Mnemonic.JP     += { encodeJCC(0x7A, 0x8A0F, it) }
-		Mnemonic.JPE    += { encodeJCC(0x7A, 0x8A0F, it) }
-		Mnemonic.JNP    += { encodeJCC(0x7B, 0x8B0F, it) }
-		Mnemonic.JPO    += { encodeJCC(0x7B, 0x8B0F, it) }
-		Mnemonic.JL     += { encodeJCC(0x7C, 0x8C0F, it) }
-		Mnemonic.JNGE   += { encodeJCC(0x7C, 0x8C0F, it) }
-		Mnemonic.JNL    += { encodeJCC(0x7D, 0x8D0F, it) }
-		Mnemonic.JGE    += { encodeJCC(0x7D, 0x8D0F, it) }
-		Mnemonic.JLE    += { encodeJCC(0x7E, 0x8E0F, it) }
-		Mnemonic.JNG    += { encodeJCC(0x7E, 0x8E0F, it) }
-		Mnemonic.JNLE   += { encodeJCC(0x7F, 0x8F0F, it) }
-		Mnemonic.JG     += { encodeJCC(0x7F, 0x8F0F, it) }
-		Mnemonic.RET    += { encode1I(0xC2, WORD, it) }
-		Mnemonic.RETF   += { encode1I(0xCA, WORD, it) }
-		Mnemonic.RETW   += { encode1I(0xC266, WORD, it) }
-		Mnemonic.RETFQ  += { encode1I(0xCA48, WORD, it) }
-		Mnemonic.INT    += { encode1I(0xCD, BYTE, it) }
-		Mnemonic.LOOP   += { encode1REL(0xE2, BYTE, it) }
-		Mnemonic.LOOPE  += { encode1REL(0xE1, BYTE, it) }
-		Mnemonic.LOOPZ  += { encode1REL(0xE1, BYTE, it) }
-		Mnemonic.LOOPNE += { encode1REL(0xE0, BYTE, it) }
-		Mnemonic.LOOPNZ += { encode1REL(0xE0, BYTE, it) }
-		Mnemonic.JECXZ  += { encode1REL(0xE367, BYTE, it) }
-		Mnemonic.JRCXZ  += { encode1REL(0xE3, BYTE, it) }
-		Mnemonic.XBEGIN += { encode1REL(0xF8C7, DWORD, it) }
-		Mnemonic.XABORT += { encode1I(0xF8C6, BYTE, it) }
-		Mnemonic.JMPF   += { encode1M(0xFF, 0b1110, 5, it.single, 0) }
-		Mnemonic.CALLF  += { encode1M(0xFF, 0b1110, 3, it.single, 0) }
-		Mnemonic.SHLD   += { encodeSHLD(0xA40F, it) }
-		Mnemonic.SHRD   += { encodeSHLD(0xAC0F, it) }
-		Mnemonic.ADD    += { encodeADD(0x00, 0, it) }
-		Mnemonic.OR     += { encodeADD(0x08, 1, it) }
-		Mnemonic.ADC    += { encodeADD(0x10, 2, it) }
-		Mnemonic.SBB    += { encodeADD(0x18, 3, it) }
-		Mnemonic.AND    += { encodeADD(0x20, 4, it) }
-		Mnemonic.SUB    += { encodeADD(0x28, 5, it) }
-		Mnemonic.XOR    += { encodeADD(0x30, 6, it) }
-		Mnemonic.CMP    += { encodeADD(0x38, 7, it) }
-		Mnemonic.ROL    += { encodeROL(0, it) }
-		Mnemonic.ROR    += { encodeROL(1, it) }
-		Mnemonic.RCL    += { encodeROL(2, it) }
-		Mnemonic.RCR    += { encodeROL(3, it) }
-		Mnemonic.SAL    += { encodeROL(4, it) }
-		Mnemonic.SHL    += { encodeROL(4, it) }
-		Mnemonic.SHR    += { encodeROL(5, it) }
-		Mnemonic.SAR    += { encodeROL(7, it) }
+		Mnemonic.DLLCALL += ::encodeDLLCALL
+		Mnemonic.PUSH    += ::encodePUSH
+		Mnemonic.POP     += ::encodePOP
+		Mnemonic.IN      += ::encodeIN
+		Mnemonic.OUT     += ::encodeOUT
+		Mnemonic.MOV     += ::encodeMOV
+		Mnemonic.BSWAP   += ::encodeBSWAP
+		Mnemonic.XCHG    += ::encodeXCHG
+		Mnemonic.TEST    += ::encodeTEST
+		Mnemonic.IMUL    += ::encodeIMUL
+		Mnemonic.PUSHW   += ::encodePUSHW
+		Mnemonic.POPW    += ::encodePOPW
+		Mnemonic.CALL    += ::encodeCALL
+		Mnemonic.JMP     += ::encodeJMP
+		Mnemonic.LEA     += ::encodeLEA
+		Mnemonic.ENTER   += ::encodeENTER
+		Mnemonic.FSTSW   += ::encodeFSTSW
+		Mnemonic.FNSTSW  += ::encodeFSTSW
+		Mnemonic.HRESET  += ::encodeHRESET
+		Mnemonic.JO      += { encodeJCC(0x70, 0x800F, it) }
+		Mnemonic.JNO     += { encodeJCC(0x71, 0x810F, it) }
+		Mnemonic.JB      += { encodeJCC(0x72, 0x820F, it) }
+		Mnemonic.JNAE    += { encodeJCC(0x72, 0x820F, it) }
+		Mnemonic.JC      += { encodeJCC(0x72, 0x820F, it) }
+		Mnemonic.JNB     += { encodeJCC(0x73, 0x830F, it) }
+		Mnemonic.JAE     += { encodeJCC(0x73, 0x830F, it) }
+		Mnemonic.JNC     += { encodeJCC(0x73, 0x830F, it) }
+		Mnemonic.JZ      += { encodeJCC(0x74, 0x840F, it) }
+		Mnemonic.JE      += { encodeJCC(0x74, 0x840F, it) }
+		Mnemonic.JNZ     += { encodeJCC(0x75, 0x850F, it) }
+		Mnemonic.JNE     += { encodeJCC(0x75, 0x850F, it) }
+		Mnemonic.JBE     += { encodeJCC(0x76, 0x860F, it) }
+		Mnemonic.JNA     += { encodeJCC(0x76, 0x860F, it) }
+		Mnemonic.JNBE    += { encodeJCC(0x77, 0x870F, it) }
+		Mnemonic.JA      += { encodeJCC(0x77, 0x870F, it) }
+		Mnemonic.JS      += { encodeJCC(0x78, 0x880F, it) }
+		Mnemonic.JNS     += { encodeJCC(0x79, 0x890F, it) }
+		Mnemonic.JP      += { encodeJCC(0x7A, 0x8A0F, it) }
+		Mnemonic.JPE     += { encodeJCC(0x7A, 0x8A0F, it) }
+		Mnemonic.JNP     += { encodeJCC(0x7B, 0x8B0F, it) }
+		Mnemonic.JPO     += { encodeJCC(0x7B, 0x8B0F, it) }
+		Mnemonic.JL      += { encodeJCC(0x7C, 0x8C0F, it) }
+		Mnemonic.JNGE    += { encodeJCC(0x7C, 0x8C0F, it) }
+		Mnemonic.JNL     += { encodeJCC(0x7D, 0x8D0F, it) }
+		Mnemonic.JGE     += { encodeJCC(0x7D, 0x8D0F, it) }
+		Mnemonic.JLE     += { encodeJCC(0x7E, 0x8E0F, it) }
+		Mnemonic.JNG     += { encodeJCC(0x7E, 0x8E0F, it) }
+		Mnemonic.JNLE    += { encodeJCC(0x7F, 0x8F0F, it) }
+		Mnemonic.JG      += { encodeJCC(0x7F, 0x8F0F, it) }
+		Mnemonic.RET     += { encode1I(0xC2, WORD, it) }
+		Mnemonic.RETF    += { encode1I(0xCA, WORD, it) }
+		Mnemonic.RETW    += { encode1I(0xC266, WORD, it) }
+		Mnemonic.RETFQ   += { encode1I(0xCA48, WORD, it) }
+		Mnemonic.INT     += { encode1I(0xCD, BYTE, it) }
+		Mnemonic.LOOP    += { encode1REL(0xE2, BYTE, it) }
+		Mnemonic.LOOPE   += { encode1REL(0xE1, BYTE, it) }
+		Mnemonic.LOOPZ   += { encode1REL(0xE1, BYTE, it) }
+		Mnemonic.LOOPNE  += { encode1REL(0xE0, BYTE, it) }
+		Mnemonic.LOOPNZ  += { encode1REL(0xE0, BYTE, it) }
+		Mnemonic.JECXZ   += { encode1REL(0xE367, BYTE, it) }
+		Mnemonic.JRCXZ   += { encode1REL(0xE3, BYTE, it) }
+		Mnemonic.XBEGIN  += { encode1REL(0xF8C7, DWORD, it) }
+		Mnemonic.XABORT  += { encode1I(0xF8C6, BYTE, it) }
+		Mnemonic.JMPF    += { encode1M(0xFF, 0b1110, 5, it.single, 0) }
+		Mnemonic.CALLF   += { encode1M(0xFF, 0b1110, 3, it.single, 0) }
+		Mnemonic.SHLD    += { encodeSHLD(0xA40F, it) }
+		Mnemonic.SHRD    += { encodeSHLD(0xAC0F, it) }
+		Mnemonic.ADD     += { encodeADD(0x00, 0, it) }
+		Mnemonic.OR      += { encodeADD(0x08, 1, it) }
+		Mnemonic.ADC     += { encodeADD(0x10, 2, it) }
+		Mnemonic.SBB     += { encodeADD(0x18, 3, it) }
+		Mnemonic.AND     += { encodeADD(0x20, 4, it) }
+		Mnemonic.SUB     += { encodeADD(0x28, 5, it) }
+		Mnemonic.XOR     += { encodeADD(0x30, 6, it) }
+		Mnemonic.CMP     += { encodeADD(0x38, 7, it) }
+		Mnemonic.ROL     += { encodeROL(0, it) }
+		Mnemonic.ROR     += { encodeROL(1, it) }
+		Mnemonic.RCL     += { encodeROL(2, it) }
+		Mnemonic.RCR     += { encodeROL(3, it) }
+		Mnemonic.SAL     += { encodeROL(4, it) }
+		Mnemonic.SHL     += { encodeROL(4, it) }
+		Mnemonic.SHR     += { encodeROL(5, it) }
+		Mnemonic.SAR     += { encodeROL(7, it) }
 	}
 
 
@@ -979,6 +1138,19 @@ class Assembler(private val context: CompilerContext) {
 			Reg.GS -> writer.i32(0xA10F66)
 			else   -> invalid()
 		}
+	}
+
+	private fun encodeDLLCALL(node: InsNode) {
+		val op1 = node.single
+		val nameNode = op1.node as? NameNode ?: invalid()
+		nameNode.symbol = context.getDllImport(nameNode.name)
+		if(nameNode.symbol == null) invalid("Unrecognised dll import: ${nameNode.name}")
+		encode1M(0xFF, 0b1000, 2, OpNode.mem(QWORD, nameNode), 0)
+	}
+
+	private fun encodeRETURN() {
+		if(epilogueWriter.isEmpty) invalid("Return invalid here")
+		writer.bytes(epilogueWriter)
 	}
 
 

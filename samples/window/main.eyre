@@ -26,8 +26,7 @@ proc createCursor(40) {
 
 
 proc fatal(40) {
-	var string db "Fatal error\0"
-	lea rcx, [string]
+	lea rcx, ["Fatal error"]
 	dllcall printf
 	dllcall ExitProcess
 }
@@ -35,8 +34,7 @@ proc fatal(40) {
 
 
 proc exit(40) {
-	var string db "Finished\0"
-	lea rcx, [string]
+	lea rcx, ["Finished"]
 	dllcall printf
 	dllcall ExitProcess
 }

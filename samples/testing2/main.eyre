@@ -1,5 +1,7 @@
 namespace main
 
 proc main {
-	vaddps xmm0, xmm1, [rax]
+	lea rcx, ["TESTING"]
+	dllcall printf
+	dllcall ExitProcess
 }

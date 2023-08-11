@@ -129,7 +129,7 @@ class Linker(private val context: CompilerContext) {
 		for((rva, offsets) in pages) {
 			writer.i32(rva)
 			writer.i32(8 + offsets.size * 2)
-			for(i in 0 until offsets.size)
+			for(i in 0 ..< offsets.size)
 				writer.i16(offsets[i] or (10 shl 12))
 		}
 
@@ -145,10 +145,9 @@ class Linker(private val context: CompilerContext) {
 		writeHeaders()
 		writeSections()
 		writeImports()
-		//writeSymbolTable()
+		writeSymbolTable()
 		writeRelocs()
 		val finalSize = nextSectionPos
-
 
 		if(context.entryPoint != null) {
 			writer.seek(entryPointPos)
