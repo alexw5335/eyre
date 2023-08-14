@@ -86,9 +86,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleVarDb(node: VarDbNode) {
-		val prevWriter = writer
-		writer = context.dataWriter
+	private fun handleVarDb(node: VarDbNode) = sectioned(context.dataWriter, Section.DATA) {
 		writer.align(8)
 
 		node.symbol.pos = writer.pos
@@ -99,18 +97,10 @@ class Assembler(private val context: CompilerContext) {
 					for(char in value.value)
 						writer.writeWidth(part.width, char.code)
 				} else {
-					val imm = resolveImm(value)
-					if(imm.relocs == 1) {
-						if(part.width != QWORD)
-							error("Absolute relocations must occupy 64 bits")
-						writer.i64(0)
-					} else {
-						writer.writeWidth(part.width, imm.disp)
-					}
+					imm(resolveImm(value), part.width)
 				}
 			}
 		}
-		writer = prevWriter
 	}
 
 

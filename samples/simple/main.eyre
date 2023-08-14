@@ -1,18 +1,22 @@
 namespace main
 
 var myVar db "TESTING\n"
-var myVar2: i64 = myVar
+var myVar2 dq myVar
 
 proc main {
 	lea rcx, ["myVar: %p\n"]
 	mov rdx, myVar
 	dllcall printf
+
 	lea rcx, ["myVar2: %p\n"]
 	mov rdx, [myVar2]
 	dllcall printf
+
 	mov rcx, myVar
 	dllcall printf
+
 	mov rcx, [myVar2]
 	dllcall printf
+
 	dllcall ExitProcess
 }
