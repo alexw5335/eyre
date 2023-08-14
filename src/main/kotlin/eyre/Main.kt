@@ -5,7 +5,7 @@ import java.nio.file.Paths
 
 
 fun main() {
-	Compiler("samples/testing2").compile()
+	Compiler("samples/simple").compile()
 }
 
 

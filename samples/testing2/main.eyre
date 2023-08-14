@@ -1,5 +1,0 @@
-namespace main
-
-proc main {
-	dllcall ExitProcess
-}

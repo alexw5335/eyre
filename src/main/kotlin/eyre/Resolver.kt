@@ -126,10 +126,10 @@ class Resolver(private val context: CompilerContext) {
 		is InsNode -> {
 			if(node.mnemonic == Mnemonic.DLLCALL || node.mnemonic == Mnemonic.RETURN)
 				return
-			resolveNode(node.op1 ?: return)
-			resolveNode(node.op2 ?: return)
-			resolveNode(node.op3 ?: return)
-			resolveNode(node.op4 ?: return)
+			resolveNode(node.op1)
+			resolveNode(node.op2)
+			resolveNode(node.op3)
+			resolveNode(node.op4)
 		}
 		is ConstNode -> resolveNode(node.value)
 		is StructNode ->
@@ -144,7 +144,12 @@ class Resolver(private val context: CompilerContext) {
 		is TypedefNode -> node.symbol.type = resolveTypeNode(node.value)
 		is UnaryNode  -> resolveNode(node.node)
 		is BinaryNode -> { resolveNode(node.left); resolveNode(node.right) }
-		is OpNode     -> resolveNode(node.node)
+		is OpNode     -> {
+			if(node.node is StringNode)
+				node.node.symbol = context.addStringLiteral(node.node.value)
+			else
+				resolveNode(node.node)
+		}
 		is NameNode   -> resolveNameNode(node)
 		is DotNode    -> resolveDotNode(node)
 		is RefNode -> {
@@ -185,8 +190,6 @@ class Resolver(private val context: CompilerContext) {
 		}
 
 		is IndexNode -> resolveNode(node.index)
-
-		is StringNode -> node.symbol = context.addStringLiteral(node.value)
 
 		else -> return
 	}}

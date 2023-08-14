@@ -85,21 +85,13 @@ class NativeWriter(bytes: ByteArray) {
 
 
 
-	fun alignEven() {
-		if(pos and 1 != 0) i8(0)
-	}
-
-
-
-	fun align8() {
-		zero(pos.mod(8))
-	}
-
-
+	fun align2() = if(pos and 1 != 0) i8(0) else Unit
 
 	fun align(alignment: Int) {
-		zero(pos.mod(alignment))
+		pos = (pos + alignment - 1) and -alignment
+		ensureCapacity()
 	}
+
 
 
 

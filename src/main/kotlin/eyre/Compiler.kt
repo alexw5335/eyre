@@ -85,7 +85,7 @@ class Compiler(private val context: CompilerContext) {
 
 
 	private fun disassemble() {
-		val sectionPos = context.sections[Section.TEXT]!!.pos
+		val sectionPos = context.sections[Section.TEXT.ordinal].pos
 
 		printHeader("DISASSEMBLY")
 

@@ -1,6 +1,8 @@
 package eyre
 
 import eyre.util.NativeWriter
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
 class CompilerContext(val srcFiles: List<SrcFile>) {
 
@@ -17,19 +19,19 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	var bssSize = 0
 
-	val relocs = ArrayList<Reloc>()
+	val linkRelocs = ArrayList<Reloc>()
+
+	val absRelocs = ArrayList<Reloc>()
 
 	val linkWriter = NativeWriter()
 
-	val sections = HashMap<Section, SectionData>()
+	val sections = Array<SectionData>(Section.entries.size) { SectionData(0, 0, 0) }
 
 	val parentMap = HashMap<Scope, Symbol>()
 
 	fun addParent(parent: ScopedSymbol) = parentMap.put(parent.thisScope, parent)
 
 	val unorderedNodes = ArrayList<AstNode>()
-
-	var absRelocCount = 0
 
 	val stringLiterals = ArrayList<StringLiteralSymbol>()
 

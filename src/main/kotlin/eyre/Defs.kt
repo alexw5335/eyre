@@ -8,9 +8,6 @@ import java.nio.file.Path
 
 enum class Section {
 
-	/** Invalid */
-	NONE,
-
 	/** initialised | code, execute | read */
 	TEXT,
 
@@ -118,7 +115,7 @@ enum class Keyword {
 
 
 
-class SectionData(val size: Int, val rva: Int, val pos: Int)
+class SectionData(var size: Int, var rva: Int, var pos: Int)
 
 
 
@@ -143,19 +140,13 @@ class SrcPos(val file: SrcFile, val line: Int)
 
 
 class Reloc(
-	val pos     : Int,
-	val section : Section,
-	val width   : Width,
-	val node    : AstNode,
-	val offset  : Int,
-	val type    : RelocType
+	val pos    : Int,
+	val sec    : Section,
+	val node   : AstNode,
+	val width  : Width,
+	val offset : Int,
+	val rel    : Boolean
 )
-
-
-
-enum class RelocType {
-	ABS, RIP, LINK;
-}
 
 
 
@@ -170,8 +161,7 @@ enum class Prefix(val avxValue: Int, val value: Int, val string: String?, val av
 	P66(1, 0x66, "66", "66"),
 	PF2(3, 0xF2, "F2", "F2"),
 	PF3(2, 0xF3, "F3", "F3"),
-	P9B(0, 0x9B, "9B", "9B"),
-	P67(0, 0x67, "67", "67");
+	P9B(0, 0x9B, "9B", "9B");
 }
 
 
@@ -181,14 +171,4 @@ enum class Escape(val avxValue: Int, val string: String?, val avxString: String)
 	E0F(1, "0F", "0F"),
 	E38(2, "0F 38", "38"),
 	E3A(3, "0F 3A", "3A");
-}
-
-
-
-enum class Sae {
-	NONE,
-	RD,
-	RN,
-	RU,
-	RZ
 }

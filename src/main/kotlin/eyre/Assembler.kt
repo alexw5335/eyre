@@ -41,6 +41,14 @@ class Assembler(private val context: CompilerContext) {
 				}
 			}
 		}
+
+		for(s in context.stringLiterals) {
+			context.dataWriter.align(8)
+			s.section = Section.DATA
+			s.pos = context.dataWriter.pos
+			for(c in s.string) context.dataWriter.i8(c.code)
+			writer.i8(0)
+		}
 	}
 
 
@@ -81,7 +89,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun handleVarDb(node: VarDbNode) {
 		val prevWriter = writer
 		writer = context.dataWriter
-		writer.align8()
+		writer.align(8)
 
 		node.symbol.pos = writer.pos
 
@@ -135,7 +143,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun handleVarInit(node: VarInitNode) {
 		sectioned(context.dataWriter, Section.DATA) {
-			writer.align8()
+			writer.align(8)
 			node.symbol.pos = writer.pos
 			writeInitialiser(node.initialiser, node.symbol.type)
 		}
@@ -222,16 +230,11 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun addLinkReloc(width: Width, node: AstNode) =
-		context.relocs.add(Reloc(writer.pos, section, width, node, 0, RelocType.LINK))
+	private fun addLinkReloc(width: Width, node: AstNode, offset: Int, rel: Boolean) =
+		context.linkRelocs.add(Reloc(writer.pos, section, node, width, offset, rel))
 
-	private fun addRelReloc(width: Width, node: AstNode, offset: Int) =
-		context.relocs.add(Reloc(writer.pos, section, width, node, offset, RelocType.RIP))
-
-	private fun addAbsReloc(node: AstNode) {
-		context.relocs.add(Reloc(writer.pos, section, QWORD, node, 0, RelocType.ABS))
-		context.absRelocCount++
-	}
+	private fun addAbsReloc(node: AstNode) =
+		context.absRelocs.add(Reloc(writer.pos, section, node, QWORD, 0, false))
 
 
 
@@ -381,7 +384,7 @@ class Assembler(private val context: CompilerContext) {
 
 	private fun Any.rel(mem: Mem, width: Width) {
 		if(mem.width != null && mem.width != width) invalid()
-		if(mem.relocs != 0) addRelReloc(width, mem.node, 0)
+		if(mem.relocs != 0) addLinkReloc(width, mem.node, 0, true)
 		writer.writeWidth(width, mem.disp)
 	}
 
@@ -394,7 +397,7 @@ class Assembler(private val context: CompilerContext) {
 			addAbsReloc(mem.node)
 			writer.advance(8)
 		} else if(mem.relocs > 1) {
-			addLinkReloc(width, mem.node)
+			addLinkReloc(width, mem.node, 0, false)
 			writer.advance(width.bytes)
 		} else if(!writer.writeWidth(width, mem.disp)) {
 			invalid()
@@ -477,7 +480,7 @@ class Assembler(private val context: CompilerContext) {
 	private fun Mem.write(reg: Int, immLength: Int) {
 		fun reloc(mod: Int) {
 			when {
-				hasReloc -> { addLinkReloc(DWORD, node); writer.i32(0) }
+				hasReloc -> { addLinkReloc(DWORD, node, 0, false); writer.i32(0) }
 				mod == 1 -> writer.i8(disp.toInt())
 				mod == 2 -> writer.i32(disp.toInt())
 			}
@@ -518,7 +521,7 @@ class Assembler(private val context: CompilerContext) {
 			}
 		} else if(relocs and 1 == 1) { // RIP-relative (odd reloc count)
 			byte((reg shl 3) or 0b101)
-			addRelReloc(DWORD, node, immLength)
+			addLinkReloc(DWORD, node, immLength, true)
 			dword(0)
 		} else { // Absolute 32-bit or empty memory operand
 			word(0b00_100_101_00_000_100 or (reg shl 3))
