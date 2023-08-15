@@ -102,6 +102,8 @@ class StringNode(val value: String) : AstNode, SymNode {
 	override var symbol: StringLiteralSymbol? = null
 }
 
+class DirectiveNode(val name: Name, val value: AstNode?) : AstNode
+
 class LabelNode(val symbol: LabelSymbol) : SymContainerNode(symbol)
 
 class ProcNode(val symbol: ProcSymbol, val stackNodes: List<AstNode>) : SymContainerNode(symbol)

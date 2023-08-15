@@ -282,6 +282,14 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun parseDirective() {
+		val name = id()
+		val value = if(atTerminator()) null else parseExpression()
+		DirectiveNode(name, value).add()
+	}
+
+
+
 	private fun parseLabel(id: Name) {
 		pos++
 		val symbol = LabelSymbol(SymBase(id)).add()
@@ -297,12 +305,6 @@ class Parser(private val context: CompilerContext) {
 		expectTerminator()
 		val symbol = ConstSymbol(SymBase(name)).add()
 		ConstNode(symbol, value).add2()
-	}
-
-
-
-	private fun parseHash() {
-		TODO()
 	}
 
 
@@ -629,7 +631,7 @@ class Parser(private val context: CompilerContext) {
 			when(val token = next()) {
 				is Name          -> parseId(token)
 				SymToken.RBRACE  -> { pos--; break }
-				SymToken.HASH    -> parseHash()
+				SymToken.HASH    -> parseDirective()
 				EndToken         -> break
 				is SymToken      -> if(token != SymToken.SEMICOLON) error(1, "Invalid symbol: ${token.string}")
 				else             -> error(1, "Invalid token: $token")

@@ -172,3 +172,11 @@ enum class Escape(val avxValue: Int, val string: String?, val avxString: String)
 	E38(2, "0F 38", "38"),
 	E3A(3, "0F 3A", "3A");
 }
+
+
+
+class DebugDirective(
+	val name : String,
+	val pos  : Int,
+	val sec  : Section
+)

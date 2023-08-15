@@ -37,6 +37,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val stringLiteralMap = HashMap<String, StringLiteralSymbol>() // Only for short strings
 
+	val debugDirectives = ArrayList<DebugDirective>()
 
 
 

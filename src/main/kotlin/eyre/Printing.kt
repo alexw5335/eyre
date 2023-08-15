@@ -151,6 +151,14 @@ val AstNode.printString: String get() = when(this) {
 		}
 	}
 
+	is DirectiveNode -> buildString {
+		append('#')
+		append(name.string)
+		if(value == null) return@buildString
+		append(' ')
+		append(value.printString)
+	}
+
 	is StructNode -> buildString {
 		append("struct ")
 		append(symbol.name)

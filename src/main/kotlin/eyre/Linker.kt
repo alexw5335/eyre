@@ -45,7 +45,9 @@ class Linker(private val context: CompilerContext) {
 			writeSection(Section.RDATA, ".rdata", 0x40_00_00_40, context.rdataWriter.pos, 0)
 		}
 
-		val finalSize = nextSectionPos
+		writeSymbolTable()
+
+		val finalSize = writer.pos
 
 		for(reloc in context.linkRelocs)
 			reloc.writeRelocation()
@@ -92,40 +94,77 @@ class Linker(private val context: CompilerContext) {
 		}
 
 		val size = writer.pos - startPos
-		this.writer.i32(relocDirPos, startRva)
-		this.writer.i32(relocDirPos + 4, size)
+		writeDataDir(5, startRva, size)
 	}
 
 
 
-/*	private fun writeStringTable() {
-
+	/**
+	 * - 00: Export
+	 * - 01: Import
+	 * - 02: Resource
+	 * - 03: Exception
+	 * - 04: Certificate
+	 * - 05: Base relocation
+	 * - 06: Debug
+	 * - 07: Architecture
+	 * - 08: Global pointer
+	 * - 09: Thread storage
+	 * - 10: Load config
+	 * - 11: Bound import
+	 * - 12: Import address table
+	 * - 13: Delay import
+	 * - 14: COM descriptor
+	 * - 15: Reserved
+	 */
+	private fun writeDataDir(index: Int, pos: Int, size: Int) {
+		writer.i32(dataDirsPos + index * 8, pos)
+		writer.i32(dataDirsPos + index * 8 + 4, size)
 	}
 
 
 
 	private fun writeSymbolTable() {
-		if(context.debugLabels.isEmpty()) return
-		val pos = nextSectionPos
+		if(context.debugDirectives.isEmpty()) return
+
+		val symTableStart = nextSectionPos
 		writer.seek(nextSectionPos)
 
-		for(label in context.debugLabels) {
-			val name = label.name.string
-			if(name.length > 8) error("Debug names longer than 8 bytes not yet supported")
-			if(name[0].isDigit()) error("Debug names cannot start with digits")
-			writer.ascii64(name)
-			writer.i32(label.pos)
+		val names = ArrayList<Pair<Int, String>>()
+
+		for(directive in context.debugDirectives) {
+			val name = directive.name
+			if(name.length > 8) {
+				names += (writer.pos + 4) to name
+				writer.i64(0)
+			} else
+				writer.ascii64(name)
+			writer.i32(directive.pos)
 			writer.i16(1)
 			writer.i16(0)
 			writer.i8(2)
 			writer.i8(0)
 		}
 
-		writer.align(fileAlignment)
-		writer.i32(symbolTablePosPos, pos)
-		writer.i32(numSymbolsPos, context.debugLabels.size)
-	}*/
+		if(names.isNotEmpty()) {
+			val stringTableStart = writer.pos
+			writer.i32(0)
 
+			for((pos, name) in names) {
+				val stringPos = writer.pos - stringTableStart
+				writer.i32(pos, stringPos)
+				writer.ascii(name)
+				writer.i8(0)
+			}
+
+			val size = writer.pos - stringTableStart
+			writer.i32(stringTableStart, size)
+		}
+
+		writer.align(fileAlignment)
+		writer.i32(symbolTablePosPos, symTableStart)
+		writer.i32(numSymbolsPos, context.debugDirectives.size)
+	}
 
 
 
@@ -140,8 +179,6 @@ class Linker(private val context: CompilerContext) {
 		val idtsSize = dlls.size * 20 + 20
 		val offset   = idtsPos - idtsRva
 
-		this.writer.i32(idataDirPos, idtsRva)
-		this.writer.i32(idataDirPos + 4, dlls.size * 20 + 20)
 		writer.zero(idtsSize)
 
 		for((dllIndex, dll) in dlls.withIndex()) {
@@ -174,6 +211,8 @@ class Linker(private val context: CompilerContext) {
 			writer.i32(idtPos + 12, dllNamePos - offset)
 			writer.i32(idtPos + 16, iatPos - offset)
 		}
+
+		writeDataDir(1, idtsRva, dlls.size * 20 + 20)
 
 		writer.align(16)
 	}
@@ -338,6 +377,8 @@ private const val entryPointPos = 104
 private const val imageSizePos = 144
 
 private const val idataDirPos = 208
+
+private const val dataDirsPos = 200
 
 private const val relocDirPos = 240
 

@@ -28,10 +28,11 @@ class Assembler(private val context: CompilerContext) {
 
 	fun assemble() {
 		for(srcFile in context.srcFiles) {
-			for(node in srcFile.nodes) {
+			for((index, node) in srcFile.nodes.withIndex()) {
 				when(node) {
 					is InsNode       -> assemble(node)
 					is LabelNode     -> handleLabel(node.symbol)
+					is DirectiveNode -> handleDirective(node, index, srcFile.nodes)
 					is ProcNode      -> handleProc(node)
 					is ScopeEndNode  -> handleScopeEnd(node)
 					is VarResNode    -> handleVarRes(node)
@@ -162,6 +163,23 @@ class Assembler(private val context: CompilerContext) {
 		}
 
 		node.symbol.size = writer.pos - node.symbol.pos
+	}
+
+
+
+	private fun handleDirective(node: DirectiveNode, index: Int, nodes: List<AstNode>) {
+		if(index >= nodes.size) invalid()
+		val next = nodes[index + 1]
+		if(node.name == Names.DEBUG) {
+			val name = node.value?.let { if(it is StringNode) it.value else invalid() }
+			context.debugDirectives += when(next) {
+				is ProcNode -> DebugDirective(name ?: next.symbol.name.string, writer.pos, Section.TEXT)
+				is InsNode  -> DebugDirective(name ?: invalid(), writer.pos, Section.TEXT)
+				else        -> invalid()
+			}
+		} else {
+			invalid()
+		}
 	}
 
 
