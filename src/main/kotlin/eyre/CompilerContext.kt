@@ -17,15 +17,11 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	var rdataWriter = NativeWriter()
 
-	var bssSize = 0
-
 	val linkRelocs = ArrayList<Reloc>()
 
 	val absRelocs = ArrayList<Reloc>()
 
 	val linkWriter = NativeWriter()
-
-	val sections = Array<SectionData>(Section.entries.size) { SectionData(0, 0, 0) }
 
 	val parentMap = HashMap<Scope, Symbol>()
 
@@ -38,6 +34,26 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 	val stringLiteralMap = HashMap<String, StringLiteralSymbol>() // Only for short strings
 
 	val debugDirectives = ArrayList<DebugDirective>()
+
+	var bssSize = 0
+
+	// Virtual addresses of each section relative to image start
+	val secAddresses = IntArray(Section.entries.size)
+	fun getAddr(sec: Section) = secAddresses[sec.ordinal]
+	fun setAddr(sec: Section, value: Int) { secAddresses[sec.ordinal] = value }
+
+	// File positions of each section relative to image file start
+	val secPositions = IntArray(Section.entries.size)
+	fun getPos(sec: Section) = secPositions[sec.ordinal]
+	fun setPos(sec: Section, value: Int) { secPositions[sec.ordinal] = value }
+
+	fun writer(sec: Section) = when(sec) {
+		Section.TEXT  -> textWriter
+		Section.DATA  -> dataWriter
+		Section.RDATA -> rdataWriter
+		else          -> error("Invalid section: $sec")
+	}
+
 
 
 

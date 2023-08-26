@@ -1,90 +1,74 @@
 package eyre
 
 import eyre.util.IntList
+import eyre.util.NativeWriter
 
 class Linker(private val context: CompilerContext) {
 
 
 	private val writer = context.linkWriter
 
-	private val sections = context.sections
-
 	private var numSections = 0
 
-	private var nextSectionRva = 0
+	private var currentSecRva = 0
 
-	private var nextSectionPos = 0
-
-	private val Section.data get() = sections[ordinal].also { if(it.rva == 0) error("Section not found: $this") }
+	private var currentSecPos = 0
 
 
 
 	fun link() {
 		writeHeaders()
 
-		if(context.bssSize > 0) {
-			writeSection(Section.BSS, ".bss", 0xC0000080L.toInt(), 0, context.bssSize)
+		section(Section.BSS, context.bssSize) { }
+
+		section(Section.TEXT, 0) {
+			if(context.textWriter.isNotEmpty)
+				writer.bytes(context.textWriter)
 		}
 
-		writer.bytes(context.textWriter)
-		writeSection(Section.TEXT, ".text", 0x60000020, context.textWriter.pos, 0)
-
-		if(context.dataWriter.isNotEmpty) {
-			writer.bytes(context.dataWriter)
-			writeSection(Section.DATA, ".data", 0xC0000040L.toInt(), context.dataWriter.pos, 0)
+		section(Section.DATA, 0) {
+			if(context.dataWriter.isNotEmpty)
+				writer.bytes(context.dataWriter)
 		}
 
-		sections[Section.RDATA.ordinal].rva = nextSectionRva
+		section(Section.RDATA, 0) {
+			if(context.rdataWriter.isNotEmpty)
+				writer.bytes(context.rdataWriter)
 
-		writeImports()
+			if(context.dllImports.isNotEmpty())
+				writeImports(currentSecRva + writer.pos - currentSecPos, writer)
 
-		writeAbsRelocs()
-
-		if(context.rdataWriter.isNotEmpty) {
-			writer.bytes(context.rdataWriter)
-			writeSection(Section.RDATA, ".rdata", 0x40_00_00_40, context.rdataWriter.pos, 0)
+			if(context.absRelocs.isNotEmpty())
+				writeAbsRelocs(currentSecRva + writer.pos - currentSecPos, writer)
 		}
 
-		writeSymbolTable()
-
-		val finalSize = writer.pos
+		if(context.debugDirectives.isNotEmpty())
+			writeSymbolTable()
 
 		for(reloc in context.linkRelocs)
 			reloc.writeRelocation()
 
-		if(context.entryPoint != null) {
-			writer.seek(entryPointPos)
-			writer.i32(context.entryPoint!!.address)
-		}
+		if(context.entryPoint != null)
+			writer.i32(entryPointPos, context.entryPoint!!.address)
 
-		writer.seek(imageSizePos)
-		writer.i32(nextSectionRva)
-
-		writer.seek(numSectionsPos)
-		writer.i32(numSections)
-
-		writer.seek(finalSize)
+		writer.i32(imageSizePos, currentSecRva)
+		writer.i32(numSectionsPos, numSections)
 	}
 
 
 
-	private fun writeAbsRelocs() {
+	private fun writeAbsRelocs(startRva: Int, writer: NativeWriter) {
+		val pages = HashMap<Int, IntList>()
+
 		for(reloc in context.absRelocs) {
 			val value = resolveImm(reloc.node)
-			val rva = reloc.sec.data.rva + reloc.pos
+			val rva = context.getAddr(reloc.sec) + reloc.pos
 			val pageRva = (rva shr 12) shl 12
 			pages.getOrPut(pageRva) { IntList() }.add(rva - pageRva)
-			writer.i64(reloc.sec.data.pos + reloc.pos, value + imageBase)
+			writer.i64(context.getPos(reloc.sec) + reloc.pos, value + imageBase)
 		}
 
-		if(pages.isEmpty()) return
-
-		val writer = context.rdataWriter
-
 		val startPos = writer.pos
-		val startRva = writer.pos + Section.RDATA.data.rva
-
-		writer.pos = startPos
 
 		for((rva, offsets) in pages) {
 			writer.i32(rva)
@@ -99,24 +83,6 @@ class Linker(private val context: CompilerContext) {
 
 
 
-	/**
-	 * - 00: Export
-	 * - 01: Import
-	 * - 02: Resource
-	 * - 03: Exception
-	 * - 04: Certificate
-	 * - 05: Base relocation
-	 * - 06: Debug
-	 * - 07: Architecture
-	 * - 08: Global pointer
-	 * - 09: Thread storage
-	 * - 10: Load config
-	 * - 11: Bound import
-	 * - 12: Import address table
-	 * - 13: Delay import
-	 * - 14: COM descriptor
-	 * - 15: Reserved
-	 */
 	private fun writeDataDir(index: Int, pos: Int, size: Int) {
 		writer.i32(dataDirsPos + index * 8, pos)
 		writer.i32(dataDirsPos + index * 8 + 4, size)
@@ -125,10 +91,8 @@ class Linker(private val context: CompilerContext) {
 
 
 	private fun writeSymbolTable() {
-		if(context.debugDirectives.isEmpty()) return
-
-		val symTableStart = nextSectionPos
-		writer.seek(nextSectionPos)
+		val symTableStart = currentSecPos
+		writer.seek(currentSecPos)
 
 		val names = ArrayList<Pair<Int, String>>()
 
@@ -168,13 +132,10 @@ class Linker(private val context: CompilerContext) {
 
 
 
-	private fun writeImports() {
+	private fun writeImports(startRva: Int, writer: NativeWriter) {
 		val dlls = context.dllImports.values
-		if(dlls.isEmpty()) return
 
-		val writer = context.rdataWriter
-
-		val idtsRva  = Section.RDATA.data.rva + context.rdataWriter.pos
+		val idtsRva  = startRva
 		val idtsPos  = writer.pos
 		val idtsSize = dlls.size * 20 + 20
 		val offset   = idtsPos - idtsRva
@@ -191,11 +152,8 @@ class Linker(private val context: CompilerContext) {
 			writer.align(8)
 
 			val iltPos = writer.pos
-
 			writer.zero(dll.imports.size * 8 + 8)
-
 			val iatPos = writer.pos
-
 			writer.zero(dll.imports.size * 8 + 8)
 
 			for((importIndex, import) in dll.imports.values.withIndex()) {
@@ -212,9 +170,9 @@ class Linker(private val context: CompilerContext) {
 			writer.i32(idtPos + 16, iatPos - offset)
 		}
 
-		writeDataDir(1, idtsRva, dlls.size * 20 + 20)
-
 		writer.align(16)
+
+		writeDataDir(1, idtsRva, dlls.size * 20 + 20)
 	}
 
 
@@ -228,8 +186,8 @@ class Linker(private val context: CompilerContext) {
 		writer.i16(0x8664)     // machine
 		writer.i16(1)          // numSections    (fill in later)
 		writer.i32(0)          // timeDateStamp
-		writer.i32(0)          // pSymbolTable
-		writer.i32(0)          // numSymbols
+		writer.i32(0)          // pSymbolTable   (fill in later if present)
+		writer.i32(0)          // numSymbols     (fill in later if present)
 		writer.i16(0xF0)       // optionalHeaderSize
 		writer.i16(0x0022)     // characteristics, DYNAMIC_BASE | LARGE_ADDRESS_AWARE | EXECUTABLE
 
@@ -260,54 +218,45 @@ class Linker(private val context: CompilerContext) {
 		writer.i64(0x1000)     // heapCommit
 		writer.i32(0)          // loaderFlags
 		writer.i32(16)         // numDataDirectories
-		writer.advance(16 * 8) // dataDirectories (fill in later)
-		writer.seek(0x400)     // section headers (fill in later)
 
-		nextSectionPos = writer.pos.roundToFile
-		nextSectionRva = sectionAlignment
+		// Make sure that the file alignment allows for 16 data directories and at least 4 section headers
+		if(fileAlignment - writer.pos < 16 * 8 + 4 * 40)
+			error("Invalid file alignment")
+
+		writer.pos = fileAlignment
+		currentSecPos = fileAlignment
+		currentSecRva = sectionAlignment
 	}
 
 
 
-	private fun writeSectionData(
-		name           : String,
-		virtualSize    : Int,
-		virtualAddress : Int,
-		rawDataSize    : Int,
-		rawDataPos     : Int,
-		flags          : Int,
-	) {
-		writer.seek(sectionHeadersPos + numSections++ * 40)
-		writer.ascii64(name)
-		writer.i32(virtualSize)
-		writer.i32(virtualAddress)
-		writer.i32(rawDataSize)
-		writer.i32(rawDataPos)
-		writer.zero(12)
-		writer.i32(flags)
-		writer.seek(nextSectionPos)
-	}
+	private inline fun section(sec: Section, uninitSize: Int, block: () -> Unit) {
+		context.setAddr(sec, currentSecRva)
+		context.setPos(sec, currentSecPos)
 
+		block()
 
+		val size = writer.pos - currentSecPos
+		val rawSize = size.roundToFile
+		val virtualSize = size + uninitSize
 
-	private fun writeSection(
-		section   : Section,
-		name      : String,
-		flags     : Int,
-		size      : Int,
-		extraSize : Int,
-	) {
-		val rawDataSize    = size.roundToFile  // Must be aligned to fileAlignment
-		val virtualSize    = size + extraSize  // No alignment requirement
-		val rawDataPos     = if(size != 0) nextSectionPos else 0 // Must be aligned to fileAlignment
-		val virtualAddress = nextSectionRva // Must be aligned to sectionAlignment
+		if(virtualSize == 0) return
+		if(numSections == 4) error("Max of 4 sections allowed")
 
-		nextSectionPos += rawDataSize
-		nextSectionRva += virtualSize.roundToSection
+		writer.at(sectionHeadersPos + numSections++ * 40) {
+			writer.ascii64(sec.name)
+			writer.i32(virtualSize)
+			writer.i32(currentSecRva)
+			writer.i32(rawSize)
+			writer.i32(currentSecPos)
+			writer.zero(12)
+			writer.i32(sec.flags)
+		}
 
-		writeSectionData(name, virtualSize, virtualAddress, rawDataSize, rawDataPos, flags)
+		currentSecPos += rawSize
+		currentSecRva += virtualSize.roundToSection
 
-		sections[section.ordinal] = SectionData(virtualSize, virtualAddress, rawDataPos)
+		writer.seek(currentSecPos)
 	}
 
 
@@ -316,7 +265,7 @@ class Linker(private val context: CompilerContext) {
 
 
 
-	private val PosSymbol.address get() = section.data.rva + pos
+	private val PosSymbol.address get() = context.getAddr(section) + pos
 
 
 
@@ -344,20 +293,16 @@ class Linker(private val context: CompilerContext) {
 
 
 
-	private val pages = HashMap<Int, IntList>()
-
-
-
 	private fun Reloc.writeRelocation() {
 		val value = if(rel)
-			resolveImm(node) - (sec.data.rva + pos + width.bytes + offset)
+			resolveImm(node) - (context.getAddr(sec) + pos + width.bytes + offset)
 		else
 			resolveImm(node)
 
-		writer.seek(sec.data.pos + pos)
-		writer.writeWidth(width, value)
+		writer.at(context.getPos(sec) + pos) {
+			writer.writeWidth(width, value)
+		}
 	}
-
 
 
 }
@@ -376,13 +321,9 @@ private const val entryPointPos = 104
 
 private const val imageSizePos = 144
 
-private const val idataDirPos = 208
+private const val dataDirsPos = 0xC8
 
-private const val dataDirsPos = 200
-
-private const val relocDirPos = 240
-
-private const val sectionHeadersPos = 328
+private const val sectionHeadersPos = 0x148
 
 private const val symbolTablePosPos = 76
 

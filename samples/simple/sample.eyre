@@ -1,0 +1,22 @@
+namespace eyre
+
+struct Vec2 {
+	i32 x
+	i32 y
+}
+
+enum WindowType {
+}
+
+var message db "Hello World variable\n\0"
+
+#debug "eyre.main"
+proc main {
+	lea rcx, ["Hello world inline\n"]
+	dllcall printf
+
+	lea rcx, [message]
+	dllcall printf
+
+	dllcall ExitProcess
+}

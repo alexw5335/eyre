@@ -6,19 +6,19 @@ import java.nio.file.Path
 
 
 
-enum class Section {
+enum class Section(val string: String, val flags: Int) {
 
 	/** initialised | code, execute | read */
-	TEXT,
+	TEXT(".text", 0x60000020),
 
 	/** initialised, read | write */
-	DATA,
+	DATA(".data", 0xC0000040L.toInt()),
 
 	/** initialised, read */
-	RDATA,
+	RDATA(".rdata", 0x40000040) ,
 
 	/** uninitialised, read | write */
-	BSS,
+	BSS(".bss", 0xC0000080L.toInt()),
 
 }
 
@@ -100,6 +100,7 @@ enum class Keyword {
 
 	CONST,
 	VAR,
+	VAL,
 	IMPORT,
 	ENUM,
 	NAMESPACE,
@@ -112,10 +113,6 @@ enum class Keyword {
 	val string = name.lowercase()
 
 }
-
-
-
-class SectionData(var size: Int, var rva: Int, var pos: Int)
 
 
 

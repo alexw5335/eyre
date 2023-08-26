@@ -318,7 +318,8 @@ class Parser(private val context: CompilerContext) {
 		if(id in Names.keywords) {
 			when(Names.keywords[id]) {
 				Keyword.NAMESPACE -> parseNamespace()
-				Keyword.VAR       -> parseVar()
+				Keyword.VAR       -> parseVar(false)
+				Keyword.VAL       -> parseVar(true)
 				Keyword.CONST     -> parseConst()
 				Keyword.ENUM      -> parseEnum(false)
 				Keyword.BITMASK   -> parseEnum(true)
@@ -348,7 +349,7 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseVar() {
+	private fun parseVar(isVal: Boolean) {
 		val name = id()
 
 		val type = if(next == SymToken.COLON) {
@@ -388,6 +389,7 @@ class Parser(private val context: CompilerContext) {
 
 			if(parts.isEmpty()) error("Empty initialiser")
 			val symbol = VarDbSymbol(SymBase(name), size).add()
+			symbol.section = if(isVal) Section.RDATA else Section.DATA
 			VarDbNode(symbol, type, parts).add()
 			expectTerminator()
 			return
@@ -402,10 +404,12 @@ class Parser(private val context: CompilerContext) {
 			pos++
 			val value = parseExpression()
 			val symbol = VarInitSymbol(SymBase(name)).add()
+			symbol.section = if(isVal) Section.RDATA else Section.DATA
 			VarInitNode(symbol, type ?: error("Expecting type"), value).add()
 			expectTerminator()
 		} else if(atTerminator()) {
 			val symbol = VarResSymbol(SymBase(name)).add()
+			symbol.section = if(isVal) Section.RDATA else Section.DATA
 			VarResNode(symbol, type ?: error("Expecting type")).add()
 			return
 		} else {

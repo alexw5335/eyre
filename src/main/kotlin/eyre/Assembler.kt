@@ -66,10 +66,10 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private inline fun sectioned(writer: NativeWriter, section: Section, block: () -> Unit) {
+	private inline fun sectioned(section: Section, block: () -> Unit) {
 		val prevWriter = this.writer
 		val prevSection = this.section
-		this.writer = writer
+		this.writer = context.writer(section)
 		this.section = section
 		block()
 		this.writer = prevWriter
@@ -87,7 +87,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleVarDb(node: VarDbNode) = sectioned(context.dataWriter, Section.DATA) {
+	private fun handleVarDb(node: VarDbNode) = sectioned(node.symbol.section) {
 		writer.align(8)
 
 		node.symbol.pos = writer.pos
@@ -133,7 +133,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 	private fun handleVarInit(node: VarInitNode) {
-		sectioned(context.dataWriter, Section.DATA) {
+		sectioned(node.symbol.section) {
 			writer.align(8)
 			node.symbol.pos = writer.pos
 			writeInitialiser(node.initialiser, node.symbol.type)

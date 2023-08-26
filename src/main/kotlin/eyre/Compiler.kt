@@ -85,19 +85,16 @@ class Compiler(private val context: CompilerContext) {
 
 
 	private fun disassemble() {
-		val sectionPos = context.sections[Section.TEXT.ordinal].pos
-
 		printHeader("DISASSEMBLY")
 
 		for(symbol in context.symbols) {
-			if(symbol !is ProcSymbol) continue
+			if(symbol !is ProcSymbol || symbol.section != Section.TEXT) continue
 
-			val pos = sectionPos + symbol.pos
-			val size = symbol.size
+			val pos = context.getPos(symbol.section) + symbol.pos
 
 			println()
-			printHeader("${symbol.qualifiedName} ($pos, $size)")
-			Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, size))
+			printHeader("${symbol.qualifiedName} ($pos, ${symbol.size})")
+			Files.write(Paths.get("test.bin"), context.linkWriter.getTrimmedBytes(pos, symbol.size))
 			Util.run("ndisasm", "-b64", "test.bin")
 		}
 

@@ -62,7 +62,7 @@ class NativeWriter(bytes: ByteArray) {
 
 
 
-	inline fun retainPos(newPos: Int, block: () -> Unit) {
+	inline fun at(newPos: Int, block: () -> Unit) {
 		val pos = pos
 		this.pos = newPos
 		block()

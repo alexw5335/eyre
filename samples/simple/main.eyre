@@ -1,28 +1,7 @@
-namespace eyre
+var message db "Message\n"
 
-var myVar db "TESTING\n"
-var myVar2 dq myVar
-
-#debug "eyre.main"
 proc main {
-	// dllcall printf("myVar: %p\n", myVar)
-	// dllcall printf("myVar: %p\n", myVar2)
-	// dllcall printf(myVar)
-	// dllcall printf([myVar2])
-
-	lea rcx, ["myVar: %p\n"]
-	mov rdx, myVar
+	mov rcx, message
 	dllcall printf
-
-	lea rcx, ["myVar2: %p\n"]
-	mov rdx, [myVar2]
-	dllcall printf
-
-	mov rcx, myVar
-	dllcall printf
-
-	mov rcx, [myVar2]
-	dllcall printf
-
 	dllcall ExitProcess
 }
