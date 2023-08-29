@@ -69,6 +69,15 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 
 
+	fun loadDefaultDllDefs() {
+		loadDllDef("kernel32", DefaultDllDefs.kernel32)
+		loadDllDef("user32", DefaultDllDefs.user32)
+		loadDllDef("gdi32", DefaultDllDefs.gdi32)
+		loadDllDef("msvcrt", DefaultDllDefs.msvcrt)
+	}
+
+
+
 	fun loadDllDef(dllName: String, names: Array<String>) {
 		val def = DllDef(Names.add(dllName), names.map(Names::add).toSet())
 		dllDefs[def.name] = def

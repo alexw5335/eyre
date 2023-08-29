@@ -71,16 +71,29 @@ Nodes
 
 
 
-class TypeNode(
-	val name: Name?,
-	val names: Array<Name>?,
-	val arraySizes: Array<AstNode>?,
-	var isInferred: Boolean = false
-) : SymNode {
-	override var symbol: Symbol? = null
+class IntNode(val value: Long) : AstNode
+
+class FloatNode(val value: Double) : AstNode
+
+class StringNode(val value: String) : AstNode, SymNode {
+	override var symbol: StringLiteralSymbol? = null
 }
 
 class ImportNode(val names: Array<Name>) : AstNode
+
+class PrefixNode(val prefix: InsPrefix) : AstNode
+
+class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode
+
+class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode
+
+class TypeNode(
+	val name: Name?,
+	val names: Array<Name>?,
+	val arraySizes: Array<AstNode>?
+) : SymNode {
+	override var symbol: Symbol? = null
+}
 
 class ArrayNode(val receiver: SymNode, val index: AstNode) : SymNode {
 	override var symbol: Symbol? = null
@@ -89,18 +102,6 @@ class ArrayNode(val receiver: SymNode, val index: AstNode) : SymNode {
 class ScopeEndNode(val symbol: ScopedSymbol): SymContainerNode(symbol)
 
 class NamespaceNode(val symbol: Namespace) : SymContainerNode(symbol)
-
-class IntNode(val value: Long) : AstNode
-
-class FloatNode(val value: Double) : AstNode
-
-class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode
-
-class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode
-
-class StringNode(val value: String) : AstNode, SymNode {
-	override var symbol: StringLiteralSymbol? = null
-}
 
 class DirectiveNode(val name: Name, val value: AstNode?) : AstNode
 
@@ -125,8 +126,6 @@ class RefNode(val left: SymNode, val right: NameNode) : SymNode by right
 class MemberNode(val symbol: MemberSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
 class StructNode(val symbol: StructSymbol, val members: List<MemberNode>) : SymContainerNode(symbol)
-
-class PrefixNode(val prefix: InsPrefix) : AstNode
 
 class VarResNode(val symbol: VarResSymbol, val type: TypeNode) : SymContainerNode(symbol)
 

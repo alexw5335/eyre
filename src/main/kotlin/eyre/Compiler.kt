@@ -5,6 +5,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.extension
 import kotlin.io.path.relativeTo
 import kotlin.random.Random
 
@@ -17,8 +18,19 @@ class Compiler(private val context: CompilerContext) {
 	companion object {
 
 		fun create(directory: String): Compiler {
-			val files = Files.list(Paths.get(directory)).toList().map { it.fileName.toString() }
-			return create(directory, files)
+			val root = Paths.get(directory)
+
+			val srcFiles = Files.walk(Paths.get(directory))
+				.toList()
+				.filter { it.extension == "eyre" }
+				.map { SrcFile(it, it.relativeTo(root)) }
+
+			if(srcFiles.isEmpty())
+				error("No source files found")
+
+			val context = CompilerContext(srcFiles)
+			context.loadDefaultDllDefs()
+			return Compiler(context)
 		}
 
 		fun create(directory: String, files: List<String>): Compiler {
@@ -30,11 +42,7 @@ class Compiler(private val context: CompilerContext) {
 			}
 
 			val context = CompilerContext(srcFiles)
-			context.loadDllDef("kernel32", DefaultDllDefs.kernel32)
-			context.loadDllDef("user32", DefaultDllDefs.user32)
-			context.loadDllDef("gdi32", DefaultDllDefs.gdi32)
-			context.loadDllDef("msvcrt", DefaultDllDefs.msvcrt)
-
+			context.loadDefaultDllDefs()
 			return Compiler(context)
 		}
 
@@ -66,16 +74,12 @@ class Compiler(private val context: CompilerContext) {
 		for(srcFile in context.srcFiles) {
 			lexer.lex(srcFile)
 			parser.parse(srcFile)
-			printNodes(srcFile)
+			//printNodes(srcFile)
 		}
 
-		for(srcFile in context.srcFiles) {
-			Files.newBufferedWriter(Paths.get("tokens.txt")).use {
-				DebugOutput.printTokens(it, srcFile)
-			}
-		}
+		DebugOutput.printTokens(context)
 
-		printSymbols()
+		//printSymbols()
 		Resolver(context).resolve()
 		//printResolution()
 
