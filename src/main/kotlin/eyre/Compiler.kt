@@ -6,13 +6,21 @@ import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.relativeTo
+import kotlin.random.Random
 
 /**
  * Token and node lines aren't working properly
  */
 class Compiler(private val context: CompilerContext) {
 
+
 	companion object {
+
+		fun create(directory: String): Compiler {
+			val files = Files.list(Paths.get(directory)).toList().map { it.fileName.toString() }
+			return create(directory, files)
+		}
+
 		fun create(directory: String, files: List<String>): Compiler {
 			val srcFiles = files.map {
 				val root = Paths.get(directory)
@@ -22,14 +30,16 @@ class Compiler(private val context: CompilerContext) {
 			}
 
 			val context = CompilerContext(srcFiles)
-			context.loadDllDefFromResources("kernel32")
-			context.loadDllDefFromResources("user32")
-			context.loadDllDefFromResources("gdi32")
-			context.loadDllDefFromResources("msvcrt")
+			context.loadDllDef("kernel32", DefaultDllDefs.kernel32)
+			context.loadDllDef("user32", DefaultDllDefs.user32)
+			context.loadDllDef("gdi32", DefaultDllDefs.gdi32)
+			context.loadDllDef("msvcrt", DefaultDllDefs.msvcrt)
 
 			return Compiler(context)
 		}
+
 	}
+
 
 
 	private fun SymbolTable.addDefaultSymbols() {
@@ -57,6 +67,12 @@ class Compiler(private val context: CompilerContext) {
 			lexer.lex(srcFile)
 			parser.parse(srcFile)
 			printNodes(srcFile)
+		}
+
+		for(srcFile in context.srcFiles) {
+			Files.newBufferedWriter(Paths.get("tokens.txt")).use {
+				DebugOutput.printTokens(it, srcFile)
+			}
 		}
 
 		printSymbols()

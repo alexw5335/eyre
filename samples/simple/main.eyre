@@ -1,7 +1,5 @@
-var message db "Message\n"
-
 proc main {
-	mov rcx, message
+	mov rcx, ["Message\n"]
 	dllcall printf
 	dllcall ExitProcess
 }

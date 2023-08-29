@@ -69,6 +69,13 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 
 
+	fun loadDllDef(dllName: String, names: Array<String>) {
+		val def = DllDef(Names.add(dllName), names.map(Names::add).toSet())
+		dllDefs[def.name] = def
+	}
+
+
+
 	fun loadDllDefFromResources(name: String) {
 		val path = "/defs/$name.txt"
 		val stream = this::class.java.getResourceAsStream(path)
@@ -118,5 +125,6 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 			return symbol
 		}
 	}
+
 
 }
