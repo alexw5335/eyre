@@ -8,6 +8,7 @@ import java.nio.file.Paths
 import kotlin.io.path.extension
 import kotlin.io.path.relativeTo
 import kotlin.random.Random
+import kotlin.system.exitProcess
 
 /**
  * Token and node lines aren't working properly
@@ -68,21 +69,23 @@ class Compiler(private val context: CompilerContext) {
 
 	fun compile() {
 		context.symbols.addDefaultSymbols()
-		val lexer = Lexer()
+		val lexer = Lexer(context)
 		val parser = Parser(context)
 
-		for(srcFile in context.srcFiles) {
-			lexer.lex(srcFile)
-			parser.parse(srcFile)
-			//printNodes(srcFile)
-		}
+		context.srcFiles.forEach(lexer::lex)
 
 		DebugOutput.printTokens(context)
 
-		//printSymbols()
-		Resolver(context).resolve()
-		//printResolution()
+		if(context.lexerErrors.isNotEmpty()) {
+			for(e in context.lexerErrors)
+				System.err.println("${e.srcFile.path}:${e.line}: ${e.message}")
+			System.err.println("Compiler encountered errors")
+			exitProcess(1)
+		}
 
+		context.srcFiles.forEach(parser::parse)
+
+		Resolver(context).resolve()
 		Assembler(context).assemble()
 		Linker(context).link()
 		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())

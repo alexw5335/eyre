@@ -1,3 +1,0 @@
-proc testing {
-	dllcall printf
-}

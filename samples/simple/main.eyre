@@ -1,5 +1,3 @@
-proc main {
-	mov rcx, ["Message\n"]
-	dllcall printf
+main:
+	sub rsp, 10
 	dllcall ExitProcess
-}

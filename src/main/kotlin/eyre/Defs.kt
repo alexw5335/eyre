@@ -118,15 +118,11 @@ enum class Keyword {
 
 class SrcFile(val path: Path, val relPath: Path) {
 
-	// Valid after the lexer has been called
-	// Invalid after the lexer has been used to lex another file
-	lateinit var tokens      : List<Token>
-	lateinit var tokenLines  : IntList
-	lateinit var newlines    : BitList
-	lateinit var terminators : BitList
-
-	// Valid after the parser has been called
-	lateinit var nodes: List<AstNode>
+	val tokens = ArrayList<Token>()
+	val tokenLines = IntList()
+	val newlines = BitList()
+	val terminators = BitList()
+	val nodes = ArrayList<AstNode>()
 
 }
 

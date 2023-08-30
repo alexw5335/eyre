@@ -1,6 +1,8 @@
 package eyre
 
 import eyre.util.NativeWriter
+import java.io.BufferedWriter
+import java.io.OutputStream
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
@@ -53,6 +55,8 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 		Section.RDATA -> rdataWriter
 		else          -> error("Invalid section: $sec")
 	}
+
+	val lexerErrors = ArrayList<EyreError>()
 
 
 

@@ -518,7 +518,7 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun calculateDotNode(node: DotNode): Symbol {
 		if(node.symbol != null)
-			return node.symbol
+			return node.symbol!!
 
 		val receiver = node.left.symbol as? TypedSymbol ?: error("Invalid receiver")
 		val receiverType = receiver.type as? ScopedSymbol ?: error("Invalid receiver")

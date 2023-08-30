@@ -1,6 +1,0 @@
-enum InstanceCreateFlags {
-	A
-	B
-	C
-	D
-}

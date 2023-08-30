@@ -11,7 +11,9 @@ Interfaces
 /**
  * Marker interface for AST nodes
  */
-sealed interface AstNode
+sealed class AstNode {
+	var id = 0
+}
 
 
 
@@ -19,7 +21,7 @@ sealed interface AstNode
  * Convenience interface for any node that needs to be set as the parent of a symbol.
  */
 @Suppress("LeakingThis")
-sealed class SymContainerNode(symbol: Symbol) : AstNode {
+sealed class SymContainerNode(symbol: Symbol) : AstNode() {
 	init {
 		symbol.node = this
 	}
@@ -30,8 +32,8 @@ sealed class SymContainerNode(symbol: Symbol) : AstNode {
 /**
  *  A node that returns a symbol when used in an expression.
  */
-sealed interface SymNode : AstNode {
-	val symbol: Symbol?
+sealed class SymNode : AstNode() {
+	abstract val symbol: Symbol?
 }
 
 
@@ -41,7 +43,7 @@ class OpNode private constructor(
 	val width : Width?,
 	val node  : AstNode,
 	val reg   : Reg,
-) : AstNode {
+) : AstNode() {
 
 	val isMem get() = type == OpType.MEM
 	val isImm get() = type == OpType.IMM
@@ -57,11 +59,11 @@ class OpNode private constructor(
 
 
 
-class RegNode(val value: Reg) : AstNode
+class RegNode(val value: Reg) : AstNode()
 
 
 
-data object NullNode : AstNode
+data object NullNode : AstNode()
 
 
 
@@ -71,31 +73,31 @@ Nodes
 
 
 
-class IntNode(val value: Long) : AstNode
+class IntNode(val value: Long) : AstNode()
 
-class FloatNode(val value: Double) : AstNode
+class FloatNode(val value: Double) : AstNode()
 
-class StringNode(val value: String) : AstNode, SymNode {
+class StringNode(val value: String) : SymNode() {
 	override var symbol: StringLiteralSymbol? = null
 }
 
-class ImportNode(val names: Array<Name>) : AstNode
+class ImportNode(val names: Array<Name>) : AstNode()
 
-class PrefixNode(val prefix: InsPrefix) : AstNode
+class PrefixNode(val prefix: InsPrefix) : AstNode()
 
-class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode
+class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode()
 
-class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode
+class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode()
 
 class TypeNode(
 	val name: Name?,
 	val names: Array<Name>?,
 	val arraySizes: Array<AstNode>?
-) : SymNode {
+) : SymNode() {
 	override var symbol: Symbol? = null
 }
 
-class ArrayNode(val receiver: SymNode, val index: AstNode) : SymNode {
+class ArrayNode(val receiver: SymNode, val index: AstNode) : SymNode() {
 	override var symbol: Symbol? = null
 }
 
@@ -103,7 +105,7 @@ class ScopeEndNode(val symbol: ScopedSymbol): SymContainerNode(symbol)
 
 class NamespaceNode(val symbol: Namespace) : SymContainerNode(symbol)
 
-class DirectiveNode(val name: Name, val value: AstNode?) : AstNode
+class DirectiveNode(val name: Name, val value: AstNode?) : AstNode()
 
 class LabelNode(val symbol: LabelSymbol) : SymContainerNode(symbol)
 
@@ -117,11 +119,15 @@ class EnumEntryNode(val symbol: EnumEntrySymbol, val value: AstNode?) : SymConta
 
 class EnumNode(val symbol: EnumSymbol, val entries: ArrayList<EnumEntryNode>) : SymContainerNode(symbol)
 
-class NameNode(val name: Name, override var symbol: Symbol? = null) : SymNode
+class NameNode(val name: Name, override var symbol: Symbol? = null) : SymNode()
 
-class DotNode(val left: SymNode, val right: SymNode) : SymNode by right
+class DotNode(val left: SymNode, val right: SymNode) : SymNode() {
+	override val symbol get() = right.symbol
+}
 
-class RefNode(val left: SymNode, val right: NameNode) : SymNode by right
+class RefNode(val left: SymNode, val right: NameNode) : SymNode() {
+	override val symbol get() = right.symbol
+}
 
 class MemberNode(val symbol: MemberSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
@@ -129,7 +135,7 @@ class StructNode(val symbol: StructSymbol, val members: List<MemberNode>) : SymC
 
 class VarResNode(val symbol: VarResSymbol, val type: TypeNode) : SymContainerNode(symbol)
 
-class DbPart(val width: Width, val nodes: List<AstNode>) : AstNode
+class DbPart(val width: Width, val nodes: List<AstNode>) : AstNode()
 
 class VarDbNode(val symbol: VarDbSymbol, val type: TypeNode?, val parts: List<DbPart>) : SymContainerNode(symbol)
 
@@ -141,16 +147,16 @@ class VarInitNode(
 	val initialiser : AstNode
 ) : SymContainerNode(symbol)
 
-class EqualsNode(val left: AstNode, val right: AstNode) : AstNode {
+class EqualsNode(val left: AstNode, val right: AstNode) : AstNode() {
 	var offset: Int = 0
 }
 
-class InitNode(val entries: List<Entry>) : AstNode {
+class InitNode(val entries: List<Entry>) : AstNode() {
 	class Entry(val node: AstNode, var type: Type = VoidType, var offset: Int = 0)
 	var type: Type? = null
 }
 
-class IndexNode(val index: AstNode) : AstNode, SymNode {
+class IndexNode(val index: AstNode) : SymNode() {
 	override var symbol: Symbol? = null
 }
 
@@ -188,7 +194,7 @@ class InsNode(
 	val op2      : OpNode,
 	val op3      : OpNode,
 	val op4      : OpNode
-) : AstNode {
+) : AstNode() {
 
 	val r1 get() = op1.reg
 	val r2 get() = op2.reg

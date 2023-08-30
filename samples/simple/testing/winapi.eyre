@@ -1,6 +1,0 @@
-enum Cursor {
-	ARROW
-	HAND
-	ARROW_NS
-	ARROW_EW
-}

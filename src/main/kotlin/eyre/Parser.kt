@@ -1,5 +1,7 @@
 package eyre
 
+import eyre.util.IntList
+
 class Parser(private val context: CompilerContext) {
 
 
@@ -7,11 +9,11 @@ class Parser(private val context: CompilerContext) {
 
 	private lateinit var tokens: List<Token>
 
+	private lateinit var nodes: MutableList<AstNode>
+
 	private var pos = 0
 
 	private var currentScope = Scopes.EMPTY
-
-	private val nodes = ArrayList<AstNode>()
 
 	private var currentNamespace: Namespace? = null // Only single-line namespaces
 
@@ -40,6 +42,18 @@ class Parser(private val context: CompilerContext) {
 	private fun id() = tokens[pos++] as? Name ?: error("Expecting identifier, found: $prev")
 
 	private fun SrcPos(offset: Int = 0) = SrcPos(srcFile, srcFile.tokenLines[pos - offset])
+
+	private var nextNodeId = 1
+
+	private val nodeLines = IntList()
+
+	private fun AstNode.create() {
+		this.id = nextNodeId++
+		//nodeLines[this.id] =
+
+	}
+
+	private fun AstNode.id() { this.id = nextNodeId++ }
 
 
 
@@ -541,16 +555,15 @@ class Parser(private val context: CompilerContext) {
 	fun parse(srcFile: SrcFile) {
 		this.srcFile = srcFile
 		this.tokens = srcFile.tokens
+		this.nodes = srcFile.nodes
+
 		pos = 0
 		currentNamespace = null
-		nodes.clear()
 
 		parseScopeInternal()
 
 		if(currentNamespace != null)
 			ScopeEndNode(currentNamespace!!).add()
-
-		srcFile.nodes = ArrayList(nodes)
 	}
 
 

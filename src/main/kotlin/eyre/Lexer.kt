@@ -1,11 +1,9 @@
 package eyre
 
-import eyre.util.BitList
-import eyre.util.IntList
 import java.nio.file.Files
 import java.util.*
 
-class Lexer {
+class Lexer(val context: CompilerContext) {
 
 
 	private lateinit var srcFile: SrcFile
@@ -20,24 +18,15 @@ class Lexer {
 
 	private var stringBuilder = StringBuilder()
 
-	private var tokens = ArrayList<Token>()
-
-	private var tokenLines = IntList(512)
-
-	private var terminators = BitList(512)
-
-	private var newlines = BitList(512)
-
 	private val Char.isIdentifierPart get() = isLetterOrDigit() || this == '_'
+
+	private var hasError = false
 
 
 
 	fun lex(srcFile: SrcFile) {
 		pos = 0
 		lineCount = 1
-		terminators.array.clear()
-		newlines.array.clear()
-		tokens.clear()
 
 		this.srcFile = srcFile
 		size = Files.size(srcFile.path).toInt() + 1
@@ -53,35 +42,30 @@ class Lexer {
 
 		chars[size] = Char(0)
 
-		while(true) {
+		while(!hasError) {
 			val char = chars[pos++]
 			if(char.code == 0) break
 			charMap[char.code]!!()
 		}
 
-		terminators.set(tokens.size)
+		srcFile.terminators.set(srcFile.tokens.size)
 		add(EndToken)
-		newlines.ensureCapacity(tokens.size)
-		terminators.ensureCapacity(tokens.size)
-
-		srcFile.tokens      = tokens
-		srcFile.tokenLines  = tokenLines
-		srcFile.newlines    = newlines
-		srcFile.terminators = terminators
+		srcFile.newlines.ensureCapacity(srcFile.tokens.size)
+		srcFile.terminators.ensureCapacity(srcFile.tokens.size)
 	}
 
 
 
 	private fun add(token: Token) {
-		tokens.add(token)
-		tokenLines.add(lineCount)
-		tokenLines[tokens.size] = lineCount
+		srcFile.tokens.add(token)
+		srcFile.tokenLines.add(lineCount)
+		srcFile.tokenLines[srcFile.tokens.size] = lineCount
 	}
 
 
 
 	private fun addTerm(token: Token) {
-		terminators.set(tokens.size)
+		srcFile.terminators.set(srcFile.tokens.size)
 		add(token)
 	}
 
@@ -94,19 +78,16 @@ class Lexer {
 
 
 
-	private fun lexerError(string: String): Nothing {
-		System.err.println("Lexer error at ${srcFile.path}:$lineCount")
-		System.err.print('\t')
-		System.err.println(string)
-		System.err.println()
-		error("Lexer error")
+	private fun lexerError(string: String, fatal: Boolean = false) {
+		context.lexerErrors.add(EyreError(srcFile, lineCount, string))
+		if(fatal) hasError = true
 	}
 
 
 
 	private fun onNewline() {
-		terminators.set(tokens.size)
-		newlines.set(tokens.size)
+		srcFile.terminators.set(srcFile.tokens.size)
+		srcFile.newlines.set(srcFile.tokens.size)
 		lineCount++
 	}
 
@@ -121,7 +102,10 @@ class Lexer {
 		'"'  -> '"'
 		'\'' -> '\''
 		'0'  -> Char(0)
-		else -> lexerError("Invalid escape char: $this")
+		else -> {
+			lexerError("Invalid escape char: $this")
+			Char(0)
+		}
 	}
 
 
@@ -129,10 +113,10 @@ class Lexer {
 	private fun resolveDoubleApostrophe() {
 		stringBuilder.clear()
 
-		while(true) {
+		while(!hasError) {
 			when(val char = chars[pos++]) {
-				Char(0) -> lexerError("Unterminated string literal")
-				'\n'    -> lexerError("Newline not allowed in string literal")
+				Char(0) -> lexerError("Unterminated string literal", fatal = true)
+				'\n'    -> lexerError("Newline not allowed in string literal", fatal = true)
 				'"'     -> break
 				'\\'    -> stringBuilder.append(chars[pos++].escape)
 				else    -> stringBuilder.append(char)
@@ -212,12 +196,13 @@ class Lexer {
 
 		if(string.last() == 'f' || string.last() == 'F' && radix != 16) {
 			if(radix != 10) lexerError("Malformed number")
-			add(FloatToken(string.toFloatOrNull()?.toDouble() ?: lexerError("Malformed float")))
+
+			add(FloatToken(string.toFloatOrNull()?.toDouble() ?: 0.0.also { lexerError("Malformed float") }))
 		} else if(hasDotOrExponent) {
 			if(radix != 10) lexerError("Malformed number")
-			add(FloatToken(string.toDoubleOrNull() ?: lexerError("Malformed double")))
+			add(FloatToken(string.toDoubleOrNull() ?: 0.0.also { lexerError("Malformed double") }))
 		} else {
-			add(IntToken(string.toLongOrNull(radix) ?: lexerError("Malformed integer")))
+			add(IntToken(string.toLongOrNull(radix) ?: 0L.also { lexerError("Malformed integer") }))
 		}
 	}
 
