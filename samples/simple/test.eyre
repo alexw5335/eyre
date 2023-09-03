@@ -1,2 +1,0 @@
-sub rsp, '\t'
-lea rax, [10]

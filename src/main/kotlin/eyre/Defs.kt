@@ -118,17 +118,21 @@ enum class Keyword {
 
 class SrcFile(val path: Path, val relPath: Path) {
 
-	val tokens = ArrayList<Token>()
-	val tokenLines = IntList()
-	val newlines = BitList()
+	val tokens      = ArrayList<Token>()
+	val tokenLines  = IntList()
+	val newlines    = BitList()
 	val terminators = BitList()
-	val nodes = ArrayList<AstNode>()
+	val nodes       = ArrayList<AstNode>()
+	val nodeLines   = IntList()
+	var invalid     = false // Set by lexer and parser
 
 }
 
 
 
-class SrcPos(val file: SrcFile, val line: Int)
+class SrcPos(val file: SrcFile, val line: Int) {
+	override fun toString() = "${file.path}:$line"
+}
 
 
 
@@ -173,3 +177,7 @@ class DebugDirective(
 	val pos  : Int,
 	val sec  : Section
 )
+
+
+
+class EyreError(val srcPos: SrcPos, val message : String)

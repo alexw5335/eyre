@@ -79,8 +79,9 @@ class Lexer(val context: CompilerContext) {
 
 
 	private fun lexerError(string: String, fatal: Boolean = false) {
-		context.lexerErrors.add(EyreError(srcFile, lineCount, string))
+		context.errors.add(EyreError(SrcPos(srcFile, lineCount), string))
 		if(fatal) hasError = true
+		srcFile.invalid = true
 	}
 
 

@@ -272,7 +272,7 @@ class Assembler(private val context: CompilerContext) {
 			if(node.op == BinaryOp.MUL && regNode != null && intNode != null) {
 				if(mem.hasIndex && !regValid) invalid()
 				mem.checkReg(regNode.value)
-				mem.assignIndex(regNode.value)
+				mem.index = regNode.value
 				mem.scale = intNode.value.toInt()
 				return 0
 			}
@@ -284,10 +284,10 @@ class Assembler(private val context: CompilerContext) {
 			mem.checkReg(node.value)
 			if(mem.hasBase) {
 				if(mem.hasIndex) invalid()
-				mem.assignIndex(node.value)
+				mem.index = node.value
 				mem.scale = 1
 			} else {
-				mem.assignBase(node.value)
+				mem.base = node.value
 			}
 			return 0
 		}
@@ -318,8 +318,8 @@ class Assembler(private val context: CompilerContext) {
 					if(scale != 1) invalid()
 					swapBaseIndex()
 				} else {
-					assignIndex(base)
-					resetBase()
+					index = base
+					base = Reg.NONE
 				}
 			}
 			if(scale.countOneBits() > 1 || scale > 8) invalid()
@@ -331,7 +331,7 @@ class Assembler(private val context: CompilerContext) {
 			when {
 				scale != 1 -> invalid()
 				hasBase    -> swapBaseIndex()
-				else       -> { assignBase(index); resetIndex() }
+				else       -> { base = index; index = Reg.NONE }
 			}
 		} else if(hasIndex && base.value == 5 && scale == 1 && index.value != 5) {
 			swapBaseIndex()
@@ -342,12 +342,12 @@ class Assembler(private val context: CompilerContext) {
 		// 3: [R*3] -> [R+R*2], [R+R*3] -> invalid
 		// 5: [R*5] -> [R+R*4], [R+R*5] -> invalid
 		when(scale) {
-			0 -> resetIndex()
-			1 -> if(!hasBase) { assignBase(index); resetIndex() }
-			2 -> if(!hasBase) { scale = 1; assignBase(index) }
-			3 -> if(!hasBase) { scale = 2; assignBase(index) } else invalid()
+			0 -> index = Reg.NONE
+			1 -> if(!hasBase) { base = index; index = Reg.NONE }
+			2 -> if(!hasBase) { scale = 1; base = index }
+			3 -> if(!hasBase) { scale = 2; base = index } else invalid()
 			4 -> { }
-			5 -> if(!hasBase) { scale = 4; assignBase(index) } else invalid()
+			5 -> if(!hasBase) { scale = 4; base = index } else invalid()
 			6 -> invalid()
 			7 -> invalid()
 			8 -> { }

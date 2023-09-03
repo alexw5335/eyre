@@ -1,3 +1,2 @@
 main:
-	sub rsp, 10
-	dllcall ExitProcess
+main:

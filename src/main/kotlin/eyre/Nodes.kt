@@ -9,16 +9,16 @@ Interfaces
 
 
 /**
- * Marker interface for AST nodes
+ * Super class for AST nodes
  */
 sealed class AstNode {
-	var id = 0
+	var srcPos: SrcPos? = null
 }
 
 
 
 /**
- * Convenience interface for any node that needs to be set as the parent of a symbol.
+ * Convenience super class for any node that needs to be set as the parent of a symbol.
  */
 @Suppress("LeakingThis")
 sealed class SymContainerNode(symbol: Symbol) : AstNode() {

@@ -1,8 +1,6 @@
 package eyre
 
 import eyre.util.NativeWriter
-import java.io.BufferedWriter
-import java.io.OutputStream
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
@@ -56,8 +54,9 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 		else          -> error("Invalid section: $sec")
 	}
 
-	val lexerErrors = ArrayList<EyreError>()
+	val errors = ArrayList<EyreError>()
 
+	fun internalError(): Nothing = error("Internal compiler error")
 
 
 

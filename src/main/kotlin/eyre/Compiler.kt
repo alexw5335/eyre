@@ -1,13 +1,10 @@
 package eyre
 
 import eyre.util.Util
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.extension
 import kotlin.io.path.relativeTo
-import kotlin.random.Random
 import kotlin.system.exitProcess
 
 /**
@@ -72,24 +69,28 @@ class Compiler(private val context: CompilerContext) {
 		val lexer = Lexer(context)
 		val parser = Parser(context)
 
-		context.srcFiles.forEach(lexer::lex)
+		for(s in context.srcFiles)
+			if(!s.invalid)
+				lexer.lex(s)
 
 		DebugOutput.printTokens(context)
 
-		if(context.lexerErrors.isNotEmpty()) {
-			for(e in context.lexerErrors)
-				System.err.println("${e.srcFile.path}:${e.line}: ${e.message}")
-			System.err.println("Compiler encountered errors")
+		for(s in context.srcFiles)
+			if(!s.invalid)
+				parser.parse(s)
+
+		if(context.errors.isNotEmpty()) {
+			for(e in context.errors)
+				System.err.println("${e.srcPos} -- ${e.message}")
+			System.err.println("\nCompiler encountered errors (${context.errors.size})")
 			exitProcess(1)
 		}
 
-		context.srcFiles.forEach(parser::parse)
-
-		Resolver(context).resolve()
-		Assembler(context).assemble()
-		Linker(context).link()
-		Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
-		disassemble()
+		// Resolver(context).resolve()
+		// Assembler(context).assemble()
+		// Linker(context).link()
+		// Files.write(Paths.get("test.exe"), context.linkWriter.getTrimmedBytes())
+		// disassemble()
 	}
 
 
