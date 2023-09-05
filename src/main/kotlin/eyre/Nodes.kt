@@ -24,11 +24,28 @@ interface ScopedSymbol : Symbol {
 
 
 
+interface PosSymbol : Symbol {
+	var pos: Int
+	var section: Section
+}
+
+
+
 data object NullNode : AstNode {
 	override val srcPos = null
 }
 
 
+
+class Proc(
+	override val srcPos    : SrcPos,
+	override val scope     : Scope,
+	override val name      : Name,
+	override val thisScope : Scope
+): AstNode, ScopedSymbol, PosSymbol {
+	override var pos = 0
+	override var section = Section.TEXT
+}
 
 class Namespace(
 	override val srcPos    : SrcPos,

@@ -5,11 +5,22 @@ import java.lang.RuntimeException
 class Parser(private val context: CompilerContext) {
 
 
+	private class ParserException : RuntimeException()
+
+	private enum class State {
+		NONE, PROC;
+	}
+
+
+
+
 	private lateinit var srcFile: SrcFile
 
 	private lateinit var nodes: MutableList<AstNode>
 
 	private lateinit var tokens: List<Token>
+
+	private var state = State.NONE
 
 	private var pos = 0
 
@@ -27,7 +38,7 @@ class Parser(private val context: CompilerContext) {
 
 	private fun parserError(srcPos: SrcPos, message: String): Nothing {
 		context.errors.add(EyreError(srcPos, message))
-		error(message)
+		throw ParserException()
 	}
 
 
@@ -45,9 +56,6 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private class ParserException : RuntimeException()
-
-
 
 	/*
 	Parsing
@@ -62,17 +70,7 @@ class Parser(private val context: CompilerContext) {
 		pos = 0
 
 		try {
-			while(true) {
-				when(val token = tokens[pos]) {
-					is Name            -> parseName(token)
-					SymToken.RBRACE    -> break
-					SymToken.HASH      -> { }
-					EndToken           -> break
-					SymToken.SEMICOLON -> pos++
-					is SymToken        -> parserError(1, "Invalid symbol: ${token.string}")
-					else               -> parserError(1, "Invalid token: $token")
-				}
-			}
+			parseScope()
 		} catch(_: ParserException) {
 			srcFile.invalid = true
 		}
@@ -80,9 +78,39 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun parseScope() {
+		while(true) {
+			when(val token = tokens[pos]) {
+				is Name            -> parseName(token)
+				SymToken.RBRACE    -> break
+				SymToken.HASH      -> { }
+				EndToken           -> break
+				SymToken.SEMICOLON -> pos++
+				is SymToken        -> parserError(1, "Invalid symbol: ${token.string}")
+				else               -> parserError(1, "Invalid token: $token")
+			}
+		}
+	}
+
+
+
+
 	/*
 	Symbol parsing. Pos is always at the start of the name
 	 */
+
+
+
+	private fun parseScopeName(): Scope {
+		var scope = Scopes.add(currentScope, id())
+
+		while(tokens[pos] == SymToken.PERIOD) {
+			pos++
+			scope = Scopes.add(scope, id())
+		}
+
+		return scope
+	}
 
 
 
@@ -96,10 +124,22 @@ class Parser(private val context: CompilerContext) {
 
 	private fun parseNamespace() {
 		val srcPos = srcPos()
-		val name = id()
-		Namespace(srcPos, currentScope, name, currentScope).add()
+		val thisScope = parseScopeName()
+		Namespace(srcPos, currentScope, thisScope.last, thisScope).add()
+		currentScope = thisScope
 	}
 
+
+
+	private fun parseProc() {
+		val srcPos = srcPos()
+		val name = id()
+		val thisScope = Scopes.add(currentScope, name)
+		val node = Proc(srcPos, currentScope, name, thisScope).add()
+		if(tokens[pos++] != SymToken.LBRACE) parserError(1, "Expecting opening brace (${node.qualifiedName})")
+		parseScope()
+		if(tokens[pos++] != SymToken.RBRACE) parserError(1, "No closing brace (${node.qualifiedName})")
+	}
 
 
 
@@ -116,6 +156,7 @@ class Parser(private val context: CompilerContext) {
 			pos++
 			when(Names.keywords[name]) {
 				Keyword.NAMESPACE -> parseNamespace()
+				Keyword.PROC      -> parseProc()
 				else              -> context.internalError()
 			}
 		} else if(name in Names.mnemonics) {

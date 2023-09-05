@@ -93,7 +93,9 @@ object DebugOutput {
 
 			when(node) {
 				is Label     -> writer.append("LABEL ${node.qualifiedName}")
-				is Namespace -> writer.append("NAMESPACE ${node.qualifiedName}")
+				is Namespace -> writer.append("NAMESPACE ${node.thisScope}")
+				is Proc      -> writer.append("PROC ${node.qualifiedName}")
+				else         -> writer.append("$node (TODO: implement debug string)")
 			}
 
 			if(i != srcFile.nodes.lastIndex)
