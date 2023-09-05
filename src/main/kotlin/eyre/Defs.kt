@@ -147,12 +147,6 @@ class Reloc(
 
 
 
-class DllImports(val name: Name, val imports: HashMap<Name, DllImportSymbol>)
-
-class DllDef(val name: Name, val exports: Set<Name>)
-
-
-
 enum class Prefix(val avxValue: Int, val value: Int, val string: String?, val avxString: String) {
 	NONE(0, 0, null, "NP"),
 	P66(1, 0x66, "66", "66"),

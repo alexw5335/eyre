@@ -109,7 +109,7 @@ object Scopes : Interner<IntArray, Scope>() {
 
 	fun add(base: Scope, addition: IntArray, size: Int): Scope {
 		val array = base.array.copyOf(base.array.size + size)
-		for(i in 0 until size) array[base.array.size + i] = addition[i]
+		for(i in 0 ..< size) array[base.array.size + i] = addition[i]
 		return add(array)
 	}
 

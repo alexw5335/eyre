@@ -1,5 +1,7 @@
 package eyre
 
+import java.lang.RuntimeException
+
 class Parser(private val context: CompilerContext) {
 
 
@@ -11,8 +13,6 @@ class Parser(private val context: CompilerContext) {
 
 	private var pos = 0
 
-	private var finished = false
-
 	private val atNewline get() = srcFile.newlines[pos]
 
 	private val atTerminator get() = srcFile.terminators[pos]
@@ -21,39 +21,31 @@ class Parser(private val context: CompilerContext) {
 
 	private var currentScope = Scopes.EMPTY
 
-	private fun SymBase(name: Name) = SymBase(currentScope, name)
+	private fun id() = tokens[pos++] as? Name ?: parserError(1, "Expecting identifier")
 
 
 
-	private fun parserError(srcPos: SrcPos, message: String) {
+	private fun parserError(srcPos: SrcPos, message: String): Nothing {
 		context.errors.add(EyreError(srcPos, message))
-		finished = true
-		srcFile.invalid = true
+		error(message)
 	}
 
 
 
-	private fun parserError(offset: Int, message: String) {
+	private fun parserError(offset: Int, message: String): Nothing =
 		parserError(SrcPos(srcFile, srcFile.tokenLines[pos - offset]), message)
-	}
 
 
 
 
-	private fun<T : AstNode> T.add(srcPos: SrcPos): T{
+	private fun<T : AstNode> T.add(): T {
 		nodes.add(this)
-		this.srcPos = srcPos
 		return this
 	}
 
 
 
-	private fun<T : Symbol> T.add(): T {
-		val existing = context.symbols.add(this)
-		if(existing != null)
-			parserError(node?.srcPos ?: context.internalError(), "Symbol redeclaration: ${existing.node?.srcPos}")
-		return this
-	}
+	private class ParserException : RuntimeException()
 
 
 
@@ -69,18 +61,46 @@ class Parser(private val context: CompilerContext) {
 		this.tokens = srcFile.tokens
 		pos = 0
 
-		while(!finished) {
-			when(val token = tokens[pos]) {
-				is Name            -> parseName(token)
-				SymToken.RBRACE    -> break
-				SymToken.HASH      -> { }
-				EndToken           -> finished = true
-				SymToken.SEMICOLON -> pos++
-				is SymToken        -> parserError(1, "Invalid symbol: ${token.string}")
-				else               -> parserError(1, "Invalid token: $token")
+		try {
+			while(true) {
+				when(val token = tokens[pos]) {
+					is Name            -> parseName(token)
+					SymToken.RBRACE    -> break
+					SymToken.HASH      -> { }
+					EndToken           -> break
+					SymToken.SEMICOLON -> pos++
+					is SymToken        -> parserError(1, "Invalid symbol: ${token.string}")
+					else               -> parserError(1, "Invalid token: $token")
+				}
 			}
+		} catch(_: ParserException) {
+			srcFile.invalid = true
 		}
 	}
+
+
+
+	/*
+	Symbol parsing. Pos is always at the start of the name
+	 */
+
+
+
+	private fun parseLabel(name: Name) {
+		val srcPos = srcPos()
+		pos += 2
+		Label(srcPos, currentScope, name).add()
+	}
+
+
+
+	private fun parseNamespace() {
+		val srcPos = srcPos()
+		val name = id()
+		Namespace(srcPos, currentScope, name, currentScope).add()
+	}
+
+
 
 
 	/**
@@ -88,46 +108,21 @@ class Parser(private val context: CompilerContext) {
 	 */
 	private fun parseName(name: Name) {
 		if(tokens[pos+1] == SymToken.COLON) {
-			val srcPos = srcPos()
-			pos += 2
-			val symbol = LabelSymbol(SymBase(name))
-			LabelNode(symbol).add(srcPos)
-			symbol.add()
+			parseLabel(name)
 			return
 		}
 
 		if(name in Names.keywords) {
+			pos++
 			when(Names.keywords[name]) {
-				//Keyword.NAMESPACE -> parseNamespace()
-				//Keyword.VAR       -> parseVar(false)
-				//Keyword.VAL       -> parseVar(true)
-				//Keyword.CONST     -> parseConst()
-				//Keyword.ENUM      -> parseEnum(false)
-				//Keyword.BITMASK   -> parseEnum(true)
-				//Keyword.TYPEDEF   -> parseTypedef()
-				//Keyword.PROC      -> parseProc()
-				//Keyword.IMPORT    -> parseImport()
-				//Keyword.STRUCT    -> parseStruct()
-				else -> context.internalError()
+				Keyword.NAMESPACE -> parseNamespace()
+				else              -> context.internalError()
 			}
-			return
-		}
+		} else if(name in Names.mnemonics) {
 
-		/*
-				if(id in Names.prefixes) {
-			val next = id()
-			if(next !in Names.mnemonics) error("Invalid prefix: $next")
-			parseInstruction(Names.prefixes[id], Names.mnemonics[next]).add()
-			return
+		} else {
+			parserError(0, "Invalid identifier: $name")
 		}
-
-		if(id in Names.mnemonics) {
-			parseInstruction(null, Names.mnemonics[id]).add()
-			return
-		}
-		 */
-
-		parserError(0, "Invalid identifier: $name")
 	}
 
 

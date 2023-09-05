@@ -1,7 +1,5 @@
 package eyre.util
 
-import eyre.ProcSymbol
-import eyre.Section
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.file.Files

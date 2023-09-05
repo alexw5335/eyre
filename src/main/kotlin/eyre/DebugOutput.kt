@@ -1,13 +1,7 @@
 package eyre
 
 import java.io.BufferedWriter
-import java.io.File
-import java.io.IOException
 import java.nio.file.*
-import java.nio.file.attribute.BasicFileAttributes
-import kotlin.io.path.createDirectory
-import kotlin.io.path.exists
-import kotlin.io.path.nameWithoutExtension
 
 object DebugOutput {
 
@@ -25,6 +19,26 @@ object DebugOutput {
 				} else {
 					it.append(":\n")
 					printTokens(it, srcFile)
+					it.append("\n\n\n")
+				}
+			}
+		}
+	}
+
+
+
+	fun printNodes(context: CompilerContext) {
+		val dir = Paths.get("build").also(Files::createDirectories)
+
+		Files.newBufferedWriter(dir.resolve("nodes.txt")).use {
+			for(srcFile in context.srcFiles) {
+				it.append(srcFile.relPath.toString())
+
+				if(srcFile.tokens.isEmpty()) {
+					it.append(" (empty)")
+				} else {
+					it.append(":\n")
+					printNodes(it, srcFile)
 					it.append("\n\n\n")
 				}
 			}
@@ -64,6 +78,26 @@ object DebugOutput {
 				break
 
 			writer.appendLine()
+		}
+	}
+
+
+
+	fun printNodes(writer: BufferedWriter, srcFile: SrcFile) {
+		for(i in srcFile.nodes.indices) {
+			val node = srcFile.nodes[i]
+			val lineNumber = node.srcPos?.line ?: error("Missing src position")
+
+			writer.append(lineNumber.toString())
+			writer.append(": ")
+
+			when(node) {
+				is Label     -> writer.append("LABEL ${node.qualifiedName}")
+				is Namespace -> writer.append("NAMESPACE ${node.qualifiedName}")
+			}
+
+			if(i != srcFile.nodes.lastIndex)
+				writer.appendLine()
 		}
 	}
 
