@@ -1,9 +1,27 @@
 package eyre
 
-import java.io.BufferedWriter
-import java.nio.file.*
+import eyre.util.Util
+import java.nio.file.Files
+import java.nio.file.Paths
+import kotlin.io.path.createDirectories
 
 object DebugOutput {
+
+
+	/*
+	Util
+	 */
+
+
+
+	private fun lineCharCount(srcFile: SrcFile) =
+		srcFile.tokenLines[srcFile.tokenLines.size - 1] / 10 + 1
+
+
+
+	/*
+	Tokens
+	 */
 
 
 
@@ -27,27 +45,7 @@ object DebugOutput {
 
 
 
-	fun printNodes(context: CompilerContext) {
-		val dir = Paths.get("build").also(Files::createDirectories)
-
-		Files.newBufferedWriter(dir.resolve("nodes.txt")).use {
-			for(srcFile in context.srcFiles) {
-				it.append(srcFile.relPath.toString())
-
-				if(srcFile.tokens.isEmpty()) {
-					it.append(" (empty)")
-				} else {
-					it.append(":\n")
-					printNodes(it, srcFile)
-					it.append("\n\n\n")
-				}
-			}
-		}
-	}
-
-
-
-	fun printTokens(writer: BufferedWriter, srcFile: SrcFile) {
+	private fun printTokens(writer: Appendable, srcFile: SrcFile) {
 		for(i in srcFile.tokens.indices) {
 			val lineNumber = srcFile.tokenLines[i]
 			val token = srcFile.tokens[i]
@@ -83,23 +81,198 @@ object DebugOutput {
 
 
 
-	fun printNodes(writer: BufferedWriter, srcFile: SrcFile) {
-		for(i in srcFile.nodes.indices) {
-			val node = srcFile.nodes[i]
-			val lineNumber = node.srcPos?.line ?: error("Missing src position")
+	/*
+	Nodes
+	 */
 
-			writer.append(lineNumber.toString())
-			writer.append(": ")
 
-			when(node) {
-				is Label     -> writer.append("LABEL ${node.qualifiedName}")
-				is Namespace -> writer.append("NAMESPACE ${node.thisScope}")
-				is Proc      -> writer.append("PROC ${node.qualifiedName}")
-				else         -> writer.append("$node (TODO: implement debug string)")
+
+	fun printNodes(context: CompilerContext) {
+		val root = Paths.get("build/nodes").also(Files::createDirectories)
+
+		for(srcFile in context.srcFiles) {
+			val path = root.resolve(srcFile.relPath.toString().substringBeforeLast('.') + ".txt")
+			Files.newBufferedWriter(path).use {
+				printNodes(it, srcFile)
+			}
+		}
+
+	}
+
+
+
+	private fun printNodes(writer: Appendable, srcFile: SrcFile) {
+		var indent = 0
+		val lineCharCount = lineCharCount(srcFile)
+
+		fun printNode(node: AstNode) {
+			if(node is ScopeEnd) {
+				indent--
+				writer.appendLine()
+				return
 			}
 
-			if(i != srcFile.nodes.lastIndex)
+			val lineNumber = node.srcPos?.line ?: error("Missing src position")
+
+			val lineNumberString = lineNumber.toString()
+			for(j in 0..< lineCharCount - lineNumberString.length)
+				writer.append(' ')
+			writer.append(lineNumberString)
+			writer.append("    ")
+
+			for(j in 0 ..< indent)
+				writer.append("    ")
+
+			writer.appendNode(node)
+			writer.appendLine()
+
+			if(node is Proc)
+				indent++
+			else if(node is Namespace)
 				writer.appendLine()
+			else if(node is Enum) {
+				indent++
+				for(entry in node.entries)
+					printNode(entry)
+				indent--
+				writer.appendLine()
+			}
+		}
+
+		for(n in srcFile.nodes)
+			printNode(n)
+	}
+
+
+
+	/**
+	 * Appends a single-line string representation of a node
+	 */
+	private fun Appendable.appendNode(node: AstNode) { when(node) {
+		is IntNode    -> append(node.value.toString())
+		is FloatNode  -> append(node.value.toString())
+		is StringNode -> append(node.value)
+		is NameNode   -> append(node.value.string)
+		is RegNode    -> append(node.value.string)
+
+		is Label -> {
+			append("LABEL ")
+			append(node.qualifiedName)
+		}
+
+		is Namespace -> {
+			append("NAMESPACE ")
+			append(node.thisScope.toString())
+		}
+
+		is Proc -> {
+			append("PROC ")
+			append(node.qualifiedName)
+		}
+
+		is UnaryNode  -> {
+			append('(')
+			append(node.op.symbol)
+			appendNode(node.node)
+			append(')')
+		}
+
+		is BinaryNode -> {
+			append('(')
+			appendNode(node.left)
+			append(' ')
+			append(node.op.symbol)
+			append(' ')
+			appendNode(node.right)
+			append(')')
+		}
+
+		is OpNode -> {
+			if(node.isMem) {
+				if(node.width != null) {
+					append(node.width.string)
+					append(' ')
+				}
+				append('[')
+				appendNode(node.node)
+				append(']')
+			} else if(node.isImm) {
+				if(node.width != null) {
+					append(node.width.string)
+					append(' ')
+				}
+				appendNode(node.node)
+			} else {
+				append(node.reg.string)
+			}
+		}
+
+		is InsNode -> {
+			append(node.mnemonic.string)
+			if(node.size == 0) return
+			append(' ')
+			appendNode(node.op1)
+			if(node.size == 1) return
+			append(", ")
+			appendNode(node.op2)
+			if(node.size == 2) return
+			append(", ")
+			appendNode(node.op3)
+			if(node.size == 3) return
+			append(", ")
+			appendNode(node.op4)
+		}
+
+		is EnumEntry -> {
+			append(node.qualifiedName)
+			if(node.valueNode != null) {
+				append(" = ")
+				appendNode(node.valueNode)
+			}
+		}
+
+		is Enum -> {
+			append("ENUM ")
+			append(node.qualifiedName)
+		}
+
+		else -> {
+			append(node.toString())
+			append(" (TODO: Implement debug string)")
+		}
+	} }
+
+
+
+	/*
+	Disassembly
+	 */
+
+
+
+	private fun printHeader(string: String) {
+		print("\u001B[32m")
+		print(string)
+		println("\u001B[0m")
+	}
+
+
+
+	fun disassemble(context: CompilerContext) {
+		printHeader("DISASSEMBLY")
+
+		val buildDir = Paths.get("build")
+		buildDir.createDirectories()
+
+		for(symbol in context.symbols) {
+			if(symbol !is Proc || symbol.section != Section.TEXT) continue
+
+			val pos = context.getPos(symbol.section) + symbol.pos
+
+			println()
+			printHeader("${symbol.qualifiedName} ($pos, ${symbol.size})")
+			Files.write(buildDir.resolve("code.bin"), context.linkWriter.getTrimmedBytes(pos, symbol.size))
+			Util.run("ndisasm", "-b64", "build/code.bin")
 		}
 	}
 

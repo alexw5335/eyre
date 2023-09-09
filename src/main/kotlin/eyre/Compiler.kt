@@ -1,7 +1,9 @@
 package eyre
 
+import eyre.util.Util
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.createDirectories
 import kotlin.io.path.extension
 import kotlin.io.path.relativeTo
 import kotlin.system.exitProcess
@@ -26,6 +28,7 @@ class Compiler(private val context: CompilerContext) {
 				error("No source files found")
 
 			val context = CompilerContext(srcFiles)
+			context.loadDefaultDllDefs()
 			return Compiler(context)
 		}
 
@@ -38,6 +41,7 @@ class Compiler(private val context: CompilerContext) {
 			}
 
 			val context = CompilerContext(srcFiles)
+			context.loadDefaultDllDefs()
 			return Compiler(context)
 		}
 
@@ -45,28 +49,50 @@ class Compiler(private val context: CompilerContext) {
 
 
 
-	fun compile() {
-		val lexer = Lexer(context)
-		val parser = Parser(context)
+	private fun checkErrors() {
+		if(context.errors.isNotEmpty()) {
+			for(e in context.errors) {
+				System.err.println("${e.srcPos} -- ${e.message}")
+				System.err.println()
+			}
+			System.err.println("Compiler encountered ${context.errors.size} error(s)")
+			exitProcess(1)
+		}
+	}
 
+
+
+	fun compile() {
+		// Lexing
+		val lexer = Lexer(context)
 		for(s in context.srcFiles)
 			if(!s.invalid)
 				lexer.lex(s)
-
 		DebugOutput.printTokens(context)
 
+		// Parsing
+		val parser = Parser(context)
 		for(s in context.srcFiles)
 			if(!s.invalid)
 				parser.parse(s)
-
 		DebugOutput.printNodes(context)
+		checkErrors()
 
-		if(context.errors.isNotEmpty()) {
-			for(e in context.errors)
-				System.err.println("${e.srcPos} -- ${e.message}")
-			System.err.println("\nCompiler encountered errors (${context.errors.size})")
-			exitProcess(1)
-		}
+		// Resolving
+		Resolver(context).resolve()
+		checkErrors()
+
+		// Assembling
+		Assembler(context).assemble()
+		checkErrors()
+
+		// Linking
+		Linker(context).link()
+		checkErrors()
+		val buildDir = Paths.get("build")
+		buildDir.createDirectories()
+		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())
+		DebugOutput.disassemble(context)
 	}
 
 

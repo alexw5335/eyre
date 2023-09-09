@@ -1,5 +1,9 @@
 namespace eyre
 
 proc main {
-
+	sub rsp, 40
+	lea rcx, [main]
+	dllcall printf
+	dllcall ExitProcess
+	ret
 }

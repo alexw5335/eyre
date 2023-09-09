@@ -1,5 +1,6 @@
 package eyre
 
+import kotlin.Enum
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.enums.EnumEntries

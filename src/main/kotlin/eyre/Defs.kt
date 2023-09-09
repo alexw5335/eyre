@@ -166,12 +166,11 @@ enum class Escape(val avxValue: Int, val string: String?, val avxString: String)
 
 
 
-class DebugDirective(
-	val name : String,
-	val pos  : Int,
-	val sec  : Section
-)
-
-
+class DebugDirective(val name: String, val pos: Int, val sec: Section)
 
 class EyreError(val srcPos: SrcPos, val message : String)
+
+class DllImports(val name: Name, val imports: HashMap<Name, DllImportSymbol>)
+
+class DllDef(val name: Name, val exports: Set<Name>)
+
