@@ -2,7 +2,7 @@ namespace eyre
 
 proc main {
 	sub rsp, 40
-	lea rcx, [main]
+	lea rcx, [eyre.main]
 	dllcall printf
 	dllcall ExitProcess
 	ret

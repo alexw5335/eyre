@@ -1,7 +1,11 @@
 package eyre
 
+import java.lang.RuntimeException
+
 class Resolver(private val context: CompilerContext) {
 
+
+	private class ResolverException : RuntimeException()
 
     private var scopeStack = Array(64) { Scopes.EMPTY }
 
@@ -18,25 +22,30 @@ class Resolver(private val context: CompilerContext) {
         scopeStackSize--
     }
 
-    private fun addImport(import: Array<Name>) {
-        importStack[scopeStackSize - 1].add(resolveNames(import))
-    }
+    //private fun addImport(import: Array<Name>) {
+    //    importStack[scopeStackSize - 1].add(resolveNames(import))
+    //}
+
+	private fun resolverError(srcPos: SrcPos, message: String): Nothing {
+		context.errors.add(EyreError(srcPos, message))
+		throw ResolverException()
+	}
 
 
 
     fun resolve() {
         pushScope(Scopes.EMPTY)
 
-        for(srcFile in context.srcFiles) {
-            val prev = scopeStackSize
-            scopeStackSize = 1
-            for(node in srcFile.nodes)
-                resolveNode(node)
-            scopeStackSize = prev
-        }
+		scopeStackSize = 1
 
-        //for(node in context.unorderedNodes)
-        //    calculateNode(node)
+        for(srcFile in context.srcFiles) {
+			try {
+				for(node in srcFile.nodes)
+					resolveNode(node)
+			} catch(_: ResolverException) {
+				srcFile.invalid = true
+			}
+        }
     }
 
 
@@ -50,7 +59,7 @@ class Resolver(private val context: CompilerContext) {
     /**
      * Resolves a [name] within the current scope context.
      */
-    private fun resolveName(name: Name): Symbol {
+    private fun resolveName(name: Name): Symbol? {
         for(i in scopeStackSize - 1 downTo 0) {
             val scope = scopeStack[i]
             context.symbols.get(scope, name)?.let { return it }
@@ -64,22 +73,22 @@ class Resolver(private val context: CompilerContext) {
             }
         }
 
-        error("Unresolved symbol: $name")
+		return null
     }
 
 
 
-    /**
-     * Resolves a series of [names] within the current scope context.
-     */
-    private fun resolveNames(names: Array<Name>): Symbol {
+   // /**
+    // * Resolves a series of [names] within the current scope context.
+    // */
+/*    private fun resolveNames(names: Array<Name>): Symbol {
         var symbol = resolveName(names[0])
         for(i in 1 ..< names.size) {
             if(symbol !is ScopedSymbol) error("Invalid receiver: $symbol")
             symbol = context.symbols.get(symbol.thisScope, names[i]) ?: error("Unresolved symbol: ${names[i]}")
         }
         return symbol
-    }
+    }*/
 
 
 
@@ -94,9 +103,21 @@ class Resolver(private val context: CompilerContext) {
         is Proc       -> pushScope(node.thisScope)
         is ScopeEnd   -> popScope()
         is UnaryNode  -> resolveNode(node.node)
-        is BinaryNode -> { resolveNode(node.left); resolveNode(node.right) }
         is OpNode     -> resolveNode(node.node)
         is NameNode   -> resolveNameNode(node)
+
+		is BinaryNode -> {
+			resolveNode(node.left)
+
+			if(node.op == BinaryOp.DOT) {
+				//
+			} else if(node.op == BinaryOp.REF) {
+				//
+			} else {
+				resolveNode(node.right)
+			}
+		}
+
 
         is InsNode -> {
             if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
@@ -120,9 +141,33 @@ class Resolver(private val context: CompilerContext) {
 
     private fun resolveNameNode(node: NameNode): Symbol {
         val symbol = resolveName(node.value)
+			?: resolverError(node.srcPos ?: context.internalError(), "Unresolved reference: ${node.value}")
         node.symbol = symbol
         return symbol
     }
+
+
+
+/*	private fun resolveDotNode(node: DotNode): Symbol {
+		val receiver: Symbol = when(val left = node.left) {
+			is NameNode  -> resolveNameNode(left)
+			is DotNode   -> resolveDotNode(left)
+			else         -> error("Invalid receiver: $left")
+		}
+
+		if(node.right !is NameNode)
+			error("Invalid node: ${node.right}")
+
+		if(receiver !is ScopedSymbol)
+			resolverError(node.srcPos ?: context.internalError(), "Invalid receiver: ${receiver.qualifiedName}")
+
+		val symbol = context.symbols.get(receiver.thisScope, node.right.value)
+			?: resolverError(node.srcPos ?: context.internalError(), "Unresolved reference: ${node.right.value}")
+
+		node.right.symbol = symbol
+
+		return symbol
+	}*/
 
 
 }

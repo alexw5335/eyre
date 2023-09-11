@@ -116,7 +116,13 @@ class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstN
 
 class NameNode(val value: Name, override var symbol: Symbol? = null) : AstNode(), SymNode
 
-class PrefixNode(val prefix: InsPrefix) : AstNode()
+/*class DotNode(val left: SymNode, val right: SymNode) : AstNode(), SymNode {
+	override val symbol get() = right.symbol
+}
+
+class RefNode(val left: SymNode, val right: NameNode) : AstNode(), SymNode {
+	override val symbol get() = right.symbol
+}*/
 
 
 

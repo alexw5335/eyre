@@ -13,6 +13,8 @@ class Parser(private val context: CompilerContext) {
 
 	private lateinit var tokens: List<Token>
 
+	private var currentNamespace: Namespace? = null
+
 	private var pos = 0
 
 	private val atNewline get() = srcFile.newlines[pos]
@@ -70,6 +72,9 @@ class Parser(private val context: CompilerContext) {
 		} catch(_: ParserException) {
 			srcFile.invalid = true
 		}
+
+		if(currentNamespace != null)
+			ScopeEnd(currentNamespace).addNode()
 	}
 
 
@@ -121,6 +126,9 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseNamespace() {
+		if(currentNamespace != null)
+			parserError(0, "Only one single-line namespace allowed per file")
+
 		val srcPos = srcPos()
 		val thisScope = parseScopeName()
 		val namespace = Namespace(currentScope, thisScope.last, thisScope)
@@ -128,6 +136,7 @@ class Parser(private val context: CompilerContext) {
 		namespace.addNode()
 		namespace.addSym()
 		currentScope = thisScope
+		currentNamespace = namespace
 	}
 
 
@@ -214,7 +223,7 @@ class Parser(private val context: CompilerContext) {
 
 
 	private fun parseExpression(precedence: Int = 0): AstNode {
-		var atom = parseAtom()
+		var left = parseAtom()
 
 		while(true) {
 			val token = tokens[pos]
@@ -222,12 +231,20 @@ class Parser(private val context: CompilerContext) {
 			if(op.precedence < precedence) break
 			pos++
 			val expression = parseExpression(op.precedence + 1)
-			val srcPos = atom.srcPos
-			atom = BinaryNode(op, atom, expression)
-			atom.srcPos = srcPos
+			val srcPos = left.srcPos
+
+			left = when(op) {
+				//BinaryOp.SET -> EqualsNode(atom, expression)
+				//BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom.asSymNode, expression) }
+				//BinaryOp.DOT -> DotNode(left, expression)
+				//BinaryOp.REF -> RefNode(left, expression)
+				else         -> BinaryNode(op, left, expression)
+			}
+
+			left.srcPos = srcPos
 		}
 
-		return atom
+		return left
 	}
 
 

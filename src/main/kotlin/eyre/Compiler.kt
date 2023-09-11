@@ -4,6 +4,7 @@ import eyre.util.Util
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteRecursively
 import kotlin.io.path.extension
 import kotlin.io.path.relativeTo
 import kotlin.system.exitProcess
@@ -55,7 +56,7 @@ class Compiler(private val context: CompilerContext) {
 				System.err.println("${e.srcPos} -- ${e.message}")
 				System.err.println()
 			}
-			System.err.println("Compiler encountered ${context.errors.size} error(s)")
+			System.err.println("Compiler encountered errors")
 			exitProcess(1)
 		}
 	}
@@ -95,5 +96,11 @@ class Compiler(private val context: CompilerContext) {
 		DebugOutput.disassemble(context)
 	}
 
+
+	// TODO: Proper error handling for resolver, assembler, and linker
+	// TODO: Assembly debug output
+	// TODO: Symbols debug output
+	// TODO: Refactor Parser
+	// TODO: Delete build contents before compiling
 
 }
