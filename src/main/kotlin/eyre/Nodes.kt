@@ -10,12 +10,6 @@ sealed class AstNode {
 }
 
 
-/** A node that references a symbol */
-sealed interface SymNode {
-	val symbol: Symbol?
-}
-
-
 
 interface Symbol {
 	val scope: Scope
@@ -25,8 +19,70 @@ interface Symbol {
 
 
 
+interface Type : Symbol {
+	val size: Int
+	val alignment get() = size
+}
+
+
+
+interface TypedSymbol : Symbol {
+	val type: Type
+}
+
+
+
+class ArrayType(val type: Type) : Type {
+	override val scope = Scopes.EMPTY
+	override val name = Names.EMPTY
+	var count = 0
+	override val size get() = type.size * count
+	override val alignment = type.alignment
+}
+
+
+
+abstract class IntType(name: String, override val size: Int) : Type {
+	override val scope = Scopes.EMPTY
+	override val name = Names[name]
+}
+
+
+
+object ByteType : IntType("byte", 1)
+
+object WordType : IntType("word", 2)
+
+object DwordType : IntType("dword", 4)
+
+object QwordType : IntType("qword", 8)
+
+object VoidType : Type {
+	override val scope = Scopes.EMPTY
+	override val name = Names.EMPTY
+	override val size = 0
+}
+
+
+
 interface IntSymbol : Symbol {
 	val intValue: Long
+}
+
+
+
+class AnonPosSymbol(override var section: Section, override var pos: Int) : PosSymbol {
+	override val name = Names.EMPTY
+	override val scope = Scopes.EMPTY
+}
+
+
+
+class StringLitSymbol(val string: String) : PosSymbol {
+	override val name = Names.EMPTY
+	override val scope = Scopes.EMPTY
+	override var section = Section.DATA
+	override var pos = 0
 }
 
 
@@ -69,6 +125,24 @@ class EnumEntry(
 
 
 
+class Typedef(
+	override val scope: Scope,
+	override val name: Name,
+	val typeNode: TypeNode,
+) : AstNode(), Symbol
+
+
+
+class TypeNode(
+	val name: Name?,
+	val names: Array<Name>?,
+	val arraySizes: Array<AstNode>?
+) : AstNode() {
+	var type: Type = VoidType
+}
+
+
+
 class Enum(
 	override val scope: Scope,
 	override val name: Name,
@@ -78,10 +152,23 @@ class Enum(
 
 
 
+class DbPart(val width: Width, val nodes: List<AstNode>) : AstNode()
+
+class VarDbNode(
+	override val scope: Scope,
+	override val name : Name,
+	val parts         : List<DbPart>,
+) : AstNode(), PosSymbol {
+	override var pos = 0
+	override var section = Section.TEXT
+}
+
+
 class Proc(
 	override val scope     : Scope,
 	override val name      : Name,
 	override val thisScope : Scope,
+	val parts              : List<AstNode>
 ): AstNode(), ScopedSymbol, PosSymbol {
 	override var pos = 0
 	override var section = Section.TEXT
@@ -104,7 +191,8 @@ class Label(
 
 class RegNode(val value: Reg) : AstNode()
 
-class StringNode(val value: String) : AstNode()
+/** [symbol] is only for string literals in OpNodes */
+class StringNode(val value: String, var symbol: Symbol? = null) : AstNode()
 
 class FloatNode(val value: Double) : AstNode()
 
@@ -114,17 +202,7 @@ class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode()
 
 class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode()
 
-class NameNode(val value: Name, override var symbol: Symbol? = null) : AstNode(), SymNode
-
-/*class DotNode(val left: SymNode, val right: SymNode) : AstNode(), SymNode {
-	override val symbol get() = right.symbol
-}
-
-class RefNode(val left: SymNode, val right: NameNode) : AstNode(), SymNode {
-	override val symbol get() = right.symbol
-}*/
-
-
+class NameNode(val value: Name, var symbol: Symbol? = null) : AstNode()
 
 class OpNode(val type: OpType, val width: Width?, val node: AstNode, val reg: Reg) : AstNode() {
 	val isMem get() = type == OpType.MEM

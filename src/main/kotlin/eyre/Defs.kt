@@ -39,43 +39,44 @@ enum class UnaryOp(
 
 
 enum class BinaryOp(
-	val symbol     : String?,
-	val precedence : Int,
-	val calculate  : (Long, Long) -> Long = { _, _ -> 0L }
+	val string      : String?,
+	val infixString : String?,
+	val precedence  : Int,
+	val calculate   : (Long, Long) -> Long = { _, _ -> 0L },
+	val hasSymbol   : Boolean = false
 ) {
 
-	ARR (null,  10),
-	DOT (null,  10),
+	ARR (null, null, 10),
+	DOT (null, ".", 10, hasSymbol = true),
 
-	REF (null,  9),
+	REF (null, "::", 9, hasSymbol = true),
 
-	MUL ("*",   8, { a, b -> a * b }),
-	DIV ("/",   8, { a, b -> a / b }),
+	MUL ("*", " * ", 8, { a, b -> a * b }),
+	DIV ("/", " / ", 8, { a, b -> a / b }),
 
-	ADD ("+",   7, { a, b -> a + b }),
-	SUB ("-",   7, { a, b -> a - b }),
+	ADD ("+", " + ", 7, { a, b -> a + b }),
+	SUB ("-", " - ", 7, { a, b -> a - b }),
 
-	SHL ("<<",  6, { a, b -> a shl b.toInt() }),
-	SHR (">>",  6, { a, b -> a shr b.toInt() }),
-	SAR (">>>", 6, { a, b -> a ushr b.toInt() }),
+	SHL ("<<", " << ",  6, { a, b -> a shl b.toInt() }),
+	SHR (">>", " >> ", 6, { a, b -> a shr b.toInt() }),
+	SAR (">>>", " >>> ", 6, { a, b -> a ushr b.toInt() }),
 
-	GT  (">",   5, { a, b -> if(a > b) 1 else 0 }),
-	LT  ("<",   5, { a, b -> if(a < b) 1 else 0 }),
-	GTE (">=",  5, { a, b -> if(a >= b) 1 else 0 }),
-	LTE ("<=",  5, { a, b -> if(a <= b) 1 else 0 }),
+	GT  (">", " > ", 5, { a, b -> if(a > b) 1 else 0 }),
+	LT  ("<", " < ", 5, { a, b -> if(a < b) 1 else 0 }),
+	GTE (">=", " >= ", 5, { a, b -> if(a >= b) 1 else 0 }),
+	LTE ("<=", " <= ", 5, { a, b -> if(a <= b) 1 else 0 }),
 
-	EQ  ("==",  4, { a, b -> if(a == b) 1 else 0 }),
-	INEQ("!=",  4, { a, b -> if(a != b) 1 else 0 }),
+	EQ  ("==", " == ", 4, { a, b -> if(a == b) 1 else 0 }),
+	INEQ("!=", " != ", 4, { a, b -> if(a != b) 1 else 0 }),
 
-	AND ("&",   3, { a, b -> a and b }),
-	XOR ("^",   3, { a, b -> a xor b }),
-	OR  ("|",   3, { a, b -> a or b }),
+	AND ("&", " & ", 3, { a, b -> a and b }),
+	XOR ("^", " ^ ", 3, { a, b -> a xor b }),
+	OR  ("|", " | ", 3, { a, b -> a or b }),
 
-	LAND("&&",  2, { a, b -> if(a != 0L && b != 0L) 1 else 0 }),
-	LOR ("||",  2, { a, b -> if(a != 0L || b != 0L) 1 else 0 }),
+	LAND("&&", " && ", 2, { a, b -> if(a != 0L && b != 0L) 1 else 0 }),
+	LOR ("||", " || ", 2, { a, b -> if(a != 0L || b != 0L) 1 else 0 }),
 
-	SET("=", 1)
-
+	SET("=", " = ", 1)
 
 }
 
@@ -168,9 +169,8 @@ enum class Escape(val avxValue: Int, val string: String?, val avxString: String)
 
 class DebugDirective(val name: String, val pos: Int, val sec: Section)
 
-class EyreError(val srcPos: SrcPos, val message : String)
+class EyreException(val srcPos: SrcPos?, message: String) : Exception(message)
 
 class DllImports(val name: Name, val imports: HashMap<Name, DllImportSymbol>)
 
 class DllDef(val name: Name, val exports: Set<Name>)
-

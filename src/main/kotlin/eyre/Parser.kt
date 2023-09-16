@@ -1,11 +1,7 @@
 package eyre
 
-import java.lang.RuntimeException
-
 class Parser(private val context: CompilerContext) {
 
-
-	private class ParserException : RuntimeException()
 
 	private lateinit var srcFile: SrcFile
 
@@ -25,33 +21,44 @@ class Parser(private val context: CompilerContext) {
 
 	private var currentScope = Scopes.EMPTY
 
-	private fun id() = tokens[pos++] as? Name ?: parserError(1, "Expecting identifier")
+	private fun id() = tokens[pos++] as? Name ?: err(1, "Expecting identifier")
 
-	private fun parserError(srcPos: SrcPos, message: String): Nothing {
-		context.errors.add(EyreError(srcPos, message))
-		throw ParserException()
-	}
+	private fun err(srcPos: SrcPos, message: String): Nothing =
+		context.err(srcPos, message)
 
-	private fun parserError(offset: Int, message: String): Nothing =
-		parserError(SrcPos(srcFile, srcFile.tokenLines[pos - offset]), message)
+	private fun err(offset: Int, message: String): Nothing =
+		err(SrcPos(srcFile, srcFile.tokenLines[pos - offset]), message)
 
 	private fun AstNode.addNode() = nodes.add(this)
 
 	private fun<T> T.addSym() where T : AstNode, T : Symbol {
 		context.symbols.add(this)?.let {
-			parserError(srcPos ?: context.internalError(), "Symbol redeclaration: $qualifiedName")
+			err(srcPos ?: context.internalError(), "Symbol redeclaration: $qualifiedName")
 		}
+	}
+
+	private fun<T> T.addNodeSym(srcPos: SrcPos): T where T : AstNode, T : Symbol {
+		this.srcPos = srcPos
+		nodes.add(this)
+		context.symbols.add(this)?.let {
+			err(srcPos, "Symbol redeclaration: $qualifiedName")
+		}
+		return this
 	}
 
 	private fun expect(symbol: SymToken) {
 		if(tokens[pos++] != symbol)
-			parserError(1, "Expecting '${symbol.string}'")
+			err(1, "Expecting '${symbol.string}'")
 	}
 
 	private fun expectTerminator() {
 		if(!atTerminator)
-			parserError(0, "Expecting terminator")
+			err(0, "Expecting terminator")
 	}
+
+	private val nameBuilder = ArrayList<Name>()
+
+	private val arraySizes = ArrayList<AstNode>()
 
 
 
@@ -69,7 +76,7 @@ class Parser(private val context: CompilerContext) {
 
 		try {
 			parseScope()
-		} catch(_: ParserException) {
+		} catch(_: EyreException) {
 			srcFile.invalid = true
 		}
 
@@ -87,8 +94,8 @@ class Parser(private val context: CompilerContext) {
 				SymToken.HASH      -> { }
 				EndToken           -> break
 				SymToken.SEMICOLON -> pos++
-				is SymToken        -> parserError(1, "Invalid symbol: ${token.string}")
-				else               -> parserError(1, "Invalid token: $token")
+				is SymToken        -> err(1, "Invalid symbol: ${token.string}")
+				else               -> err(1, "Invalid token: $token")
 			}
 		}
 	}
@@ -117,24 +124,63 @@ class Parser(private val context: CompilerContext) {
 	private fun parseLabel(name: Name) {
 		val srcPos = srcPos()
 		pos += 2
-		val label = Label(currentScope, name)
-		label.srcPos = srcPos
-		label.addNode()
-		label.addSym()
+		Label(currentScope, name).addNodeSym(srcPos)
+	}
+
+
+
+	private fun parseTypedef() {
+		val srcPos = srcPos()
+		val name = id()
+		expect(SymToken.EQUALS)
+		val typeNode = parseType()
+		expectTerminator()
+		Typedef(currentScope, name, typeNode).addNodeSym(srcPos)
+	}
+
+
+
+	private fun parseType(): TypeNode {
+		val srcPos = srcPos()
+		var name: Name? = null
+		var names: Array<Name>? = null
+
+		if(tokens[pos + 1] != SymToken.PERIOD) {
+			name = id()
+		} else {
+			nameBuilder.clear()
+			do { nameBuilder += id() } while(tokens[pos++] == SymToken.PERIOD)
+			pos--
+			names = nameBuilder.toTypedArray()
+		}
+
+		while(tokens[pos] == SymToken.LBRACKET) {
+			pos++
+			arraySizes.add(parseExpression())
+			expect(SymToken.RBRACKET)
+		}
+
+		val node = if(arraySizes.isNotEmpty()) {
+			val sizes = arraySizes.toTypedArray()
+			arraySizes.clear()
+			TypeNode(name, names, sizes)
+		} else {
+			TypeNode(name, names, null)
+		}
+
+		node.srcPos = srcPos
+
+		return node
 	}
 
 
 
 	private fun parseNamespace() {
 		if(currentNamespace != null)
-			parserError(0, "Only one single-line namespace allowed per file")
-
+			err(0, "Only one single-line namespace allowed per file")
 		val srcPos = srcPos()
 		val thisScope = parseScopeName()
-		val namespace = Namespace(currentScope, thisScope.last, thisScope)
-		namespace.srcPos = srcPos
-		namespace.addNode()
-		namespace.addSym()
+		val namespace = Namespace(currentScope, thisScope.last, thisScope).addNodeSym(srcPos)
 		currentScope = thisScope
 		currentNamespace = namespace
 	}
@@ -145,14 +191,72 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = srcPos()
 		val name = id()
 		val thisScope = Scopes.add(currentScope, name)
-		val proc = Proc(currentScope, name, thisScope)
-		proc.srcPos = srcPos
-		proc.addNode()
-		proc.addSym()
+
+		val parts = ArrayList<AstNode>()
+
+		if(tokens[pos] == SymToken.LPAREN) {
+			pos++
+
+			while(true) {
+				if(tokens[pos] == SymToken.RPAREN) break
+				parts.add(parseExpression())
+				if(tokens[pos] != SymToken.COMMA) break
+				pos++
+			}
+
+			expect(SymToken.RPAREN)
+		}
+
+		val proc = Proc(currentScope, name, thisScope, parts).addNodeSym(srcPos)
+
 		expect(SymToken.LBRACE)
 		parseScope()
 		expect(SymToken.RBRACE)
 		ScopeEnd(proc).addNode()
+	}
+
+
+
+	private fun parseVar(isVal: Boolean) {
+		val srcPos = srcPos()
+		val name = id()
+
+		val first = tokens[pos]
+
+		if(first is Name && first in Names.varWidths) {
+			val parts = ArrayList<DbPart>()
+			var size = 0
+
+			while(true) {
+				val width = Names.varWidths[id()]
+				val nodes = ArrayList<AstNode>()
+
+				while(true) {
+					val component = parseExpression()
+					nodes.add(component)
+
+					size += when(component) {
+						is StringNode -> width.bytes * component.value.length
+						else -> width.bytes
+					}
+
+					if(tokens[pos] != SymToken.COMMA) break
+					pos++
+				}
+
+				parts.add(DbPart(width, nodes))
+				if(tokens[pos] !is Name || tokens[pos] as Name !in Names.varWidths)
+					break
+			}
+
+			if(parts.isEmpty()) err(srcPos, "Empty initialiser")
+			val node = VarDbNode(currentScope, name, parts).addNodeSym(srcPos)
+			node.section = if(isVal) Section.RDATA else Section.DATA
+			expectTerminator()
+			return
+		} else {
+			err(srcPos, "Expecting variable value")
+		}
 	}
 
 
@@ -162,10 +266,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		val thisScope = Scopes.add(currentScope, name)
 		val entries = ArrayList<EnumEntry>()
-		val enum = Enum(currentScope, name, thisScope, entries)
-		enum.srcPos = srcPos
-		enum.addNode()
-		enum.addSym()
+		Enum(currentScope, name, thisScope, entries).addNodeSym(srcPos)
 
 		expect(SymToken.LBRACE)
 
@@ -199,7 +300,7 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = srcPos()
 		val token = tokens[pos++]
 
-		fun invalidToken(): Nothing = parserError(1, "unexpected token: $token")
+		fun invalidToken(): Nothing = err(1, "unexpected token: $token")
 
 		val node = when(token) {
 			is SymToken -> if(token == SymToken.LPAREN)
@@ -232,15 +333,7 @@ class Parser(private val context: CompilerContext) {
 			pos++
 			val expression = parseExpression(op.precedence + 1)
 			val srcPos = left.srcPos
-
-			left = when(op) {
-				//BinaryOp.SET -> EqualsNode(atom, expression)
-				//BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom.asSymNode, expression) }
-				//BinaryOp.DOT -> DotNode(left, expression)
-				//BinaryOp.REF -> RefNode(left, expression)
-				else         -> BinaryNode(op, left, expression)
-			}
-
+			left = BinaryNode(op, left, expression)
 			left.srcPos = srcPos
 		}
 
@@ -327,15 +420,18 @@ class Parser(private val context: CompilerContext) {
 		if(name in Names.keywords) {
 			pos++
 			when(Names.keywords[name]) {
+				Keyword.VAR       -> parseVar(false)
+				Keyword.VAL       -> parseVar(true)
 				Keyword.ENUM      -> parseEnum()
 				Keyword.NAMESPACE -> parseNamespace()
 				Keyword.PROC      -> parseProc()
+				Keyword.TYPEDEF   -> parseTypedef()
 				else              -> context.internalError()
 			}
 		} else if(name in Names.mnemonics) {
 			parseInstruction(Names.mnemonics[name])
 		} else {
-			parserError(0, "Invalid identifier: $name")
+			err(0, "Invalid identifier: $name")
 		}
 	}
 

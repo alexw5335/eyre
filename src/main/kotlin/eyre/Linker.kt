@@ -14,6 +14,9 @@ class Linker(private val context: CompilerContext) {
 
 	private var currentSecPos = 0
 
+	private fun err(srcPos: SrcPos?, message: String): Nothing =
+		context.err(srcPos, message)
+
 
 
 	fun link() {
@@ -221,7 +224,7 @@ class Linker(private val context: CompilerContext) {
 
 		// Make sure that the file alignment allows for 16 data directories and at least 4 section headers
 		if(fileAlignment - writer.pos < 16 * 8 + 4 * 40)
-			error("Invalid file alignment")
+			context.err(null, "Invalid file alignment")
 
 		writer.pos = fileAlignment
 		currentSecPos = fileAlignment
@@ -240,8 +243,11 @@ class Linker(private val context: CompilerContext) {
 		val rawSize = size.roundToFile
 		val virtualSize = size + uninitSize
 
-		if(virtualSize == 0) return
-		if(numSections == 4) error("Max of 4 sections allowed")
+		if(virtualSize == 0)
+			return
+
+		if(numSections == 4)
+			context.err(null, "Maximum of four sections allowed")
 
 		writer.at(sectionHeadersPos + numSections++ * 40) {
 			writer.ascii64(sec.name)
@@ -270,19 +276,41 @@ class Linker(private val context: CompilerContext) {
 
 
 	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long {
-		if(node is IntNode) return node.value
-		if(node is UnaryNode) return node.calculate(regValid, ::resolveImmRec)
-		if(node is BinaryNode) return node.calculate(regValid, ::resolveImmRec)
+		fun sym(symbol: Symbol?): Long {
+			if(symbol == null)
+				context.err(node.srcPos, "Unresolved symbol (this should never happen here)")
 
-		if(node is SymNode) {
-			return when(val symbol = node.symbol ?: error("Unresolved symbol")) {
-				is PosSymbol       -> symbol.address.toLong()
-				is IntSymbol       -> symbol.intValue
-				else               -> error("Invalid symbol: $symbol")
+			if(symbol is PosSymbol)
+				return symbol.address.toLong()
+
+			if(symbol is IntSymbol)
+				return symbol.intValue
+
+			context.err(node.srcPos, "Invalid symbol: $symbol")
+		}
+
+		if(node is IntNode)
+			return node.value
+
+		if(node is UnaryNode)
+			return node.calculate(regValid, ::resolveImmRec)
+
+		if(node is BinaryNode) {
+			return if(node.op.hasSymbol) {
+				val right = node.right as? NameNode ?: context.internalError()
+				sym(right.symbol)
+			} else {
+				node.calculate(regValid, ::resolveImmRec)
 			}
 		}
 
-		error("Invalid imm node: $node")
+		if(node is NameNode)
+			return sym(node.symbol)
+
+		if(node is StringNode)
+			return sym(node.symbol)
+
+		context.err(node.srcPos, "Invalid immediate node (this should never happen here")
 	}
 
 

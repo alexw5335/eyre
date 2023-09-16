@@ -1,9 +1,32 @@
 namespace eyre
 
+var instanceVersion dd 0
+
 proc main {
-	sub rsp, 40
-	lea rcx, [eyre.main]
+	sub rsp, 120
+	lea rcx, ["vulkan-1.dll"]
+	dllcall LoadLibraryA
+	mov rsi, rax
+
+	lea rcx, ["vulkan dll handle: %p\n"]
+	mov rdx, rax
 	dllcall printf
+
+	mov rcx, rsi
+	lea rdx, ["vkEnumerateInstanceVersion"]
+	dllcall GetProcAddress
+	mov rdi, rax
+
+	lea rcx, ["vkEnumerateInstanceVersion pointer: %p\n"]
+	mov rdx, rax
+	dllcall printf
+
+	lea rcx, [instanceVersion]
+	call rdi
+
+	lea rcx, ["Instance version: %d\n"]
+	mov edx, [instanceVersion]
+	dllcall printf
+
 	dllcall ExitProcess
-	ret
 }

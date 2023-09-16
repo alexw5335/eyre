@@ -12,7 +12,7 @@ class SymbolTable : Iterable<Symbol> {
 
 
 
-	private val nodes = Array(1024) { Node(null, null) }
+	private val nodes = Array(8192) { Node(null, null) }
 
 
 
@@ -88,7 +88,7 @@ class SymbolTable : Iterable<Symbol> {
 				return value
 			}
 
-			for(i in index until nodes.size) {
+			for(i in index ..< nodes.size) {
 				if(nodes[i].value != null) {
 					index = i + 1
 					next = nodes[i]

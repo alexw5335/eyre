@@ -23,10 +23,6 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val symbols = SymbolTable()
 
-	val errors = ArrayList<EyreError>()
-
-	fun internalError(): Nothing = error("Internal compiler error")
-
 	fun writer(sec: Section) = when(sec) {
 		Section.TEXT  -> textWriter
 		Section.DATA  -> dataWriter
@@ -46,17 +42,52 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 	fun getPos(sec: Section) = secPositions[sec.ordinal]
 	fun setPos(sec: Section, value: Int) { secPositions[sec.ordinal] = value }
 
+	val errors = ArrayList<EyreException>()
+
+	val dllImports = HashMap<Name, DllImports>()
+
+	val dllDefs = HashMap<Name, DllDef>()
+
+	val stringLiterals = ArrayList<StringLitSymbol>()
+
+	val stringLiteralMap = HashMap<String, StringLitSymbol>() // Only for short strings
+
+
+
+	init {
+		loadDefaultDllDefs()
+		symbols.add(ByteType)
+		symbols.add(WordType)
+		symbols.add(DwordType)
+		symbols.add(QwordType)
+	}
+
+
+
+	/*
+	Errors
+	 */
+
+
+
+	fun internalError(message: String? = null): Nothing {
+		if(message != null)
+			error("Internal compiler error: $message")
+		else
+			error("Internal compiler error")
+	}
+
+	fun err(srcPos: SrcPos?, message: String): Nothing {
+		val error = EyreException(srcPos, message)
+		errors.add(error)
+		throw error
+	}
+
 
 
 	/*
     Dlls
      */
-
-
-
-	val dllImports = HashMap<Name, DllImports>()
-
-	private val dllDefs = HashMap<Name, DllDef>()
 
 
 
@@ -105,7 +136,25 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 	}
 
 
+	/*
+	String literals
+	 */
 
+
+
+	fun addStringLiteral(string: String): StringLitSymbol {
+		if(string.length <= 32) {
+			stringLiteralMap[string]?.let { return it }
+			val symbol = StringLitSymbol(string)
+			stringLiterals.add(symbol)
+			stringLiteralMap[string] = symbol
+			return symbol
+		} else {
+			val symbol = StringLitSymbol(string)
+			stringLiterals.add(symbol)
+			return symbol
+		}
+	}
 
 
 }

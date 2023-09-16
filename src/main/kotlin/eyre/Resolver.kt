@@ -2,6 +2,16 @@ package eyre
 
 import java.lang.RuntimeException
 
+/**
+ * The resolver runs in three stages:
+ *
+ * 1. References to most symbols are resolved
+ * 2. References to members of types are resolved
+ * 3. Constants values are calculated (array sizes, constants, enum values, etc.)
+ *
+ * The first stage is ordered (recursive descent). The second and third stages are
+ * unordered.
+ */
 class Resolver(private val context: CompilerContext) {
 
 
@@ -22,12 +32,8 @@ class Resolver(private val context: CompilerContext) {
         scopeStackSize--
     }
 
-    //private fun addImport(import: Array<Name>) {
-    //    importStack[scopeStackSize - 1].add(resolveNames(import))
-    //}
-
-	private fun resolverError(srcPos: SrcPos, message: String): Nothing {
-		context.errors.add(EyreError(srcPos, message))
+	private fun err(srcPos: SrcPos?, message: String): Nothing {
+		context.errors.add(EyreException(srcPos, message))
 		throw ResolverException()
 	}
 
@@ -59,7 +65,7 @@ class Resolver(private val context: CompilerContext) {
     /**
      * Resolves a [name] within the current scope context.
      */
-    private fun resolveName(name: Name): Symbol? {
+    private fun resolveName(srcPos: SrcPos?, name: Name): Symbol {
         for(i in scopeStackSize - 1 downTo 0) {
             val scope = scopeStack[i]
             context.symbols.get(scope, name)?.let { return it }
@@ -73,22 +79,26 @@ class Resolver(private val context: CompilerContext) {
             }
         }
 
-		return null
+		err(srcPos, "Unresoled symbol: $name")
     }
 
 
 
-   // /**
-    // * Resolves a series of [names] within the current scope context.
-    // */
-/*    private fun resolveNames(names: Array<Name>): Symbol {
-        var symbol = resolveName(names[0])
-        for(i in 1 ..< names.size) {
-            if(symbol !is ScopedSymbol) error("Invalid receiver: $symbol")
-            symbol = context.symbols.get(symbol.thisScope, names[i]) ?: error("Unresolved symbol: ${names[i]}")
-        }
-        return symbol
-    }*/
+	/**
+	 * Resolves a series of [names] within the current scope context.
+	 */
+	private fun resolveNames(srcPos: SrcPos?, names: Array<Name>): Symbol {
+		var symbol = resolveName(srcPos, names[0])
+
+		for(i in 1 ..< names.size) {
+			if(symbol !is ScopedSymbol)
+				err(srcPos, "Invalid receiver: ${symbol.name}")
+
+			symbol = context.symbols.get(symbol.thisScope, names[i]) ?: error("Unresolved symbol: ${names[i]}")
+		}
+
+		return symbol
+	}
 
 
 
@@ -103,21 +113,16 @@ class Resolver(private val context: CompilerContext) {
         is Proc       -> pushScope(node.thisScope)
         is ScopeEnd   -> popScope()
         is UnaryNode  -> resolveNode(node.node)
-        is OpNode     -> resolveNode(node.node)
-        is NameNode   -> resolveNameNode(node)
+		is NameNode   -> node.symbol = resolveName(node.srcPos, node.value)
 
-		is BinaryNode -> {
-			resolveNode(node.left)
+		// String literals in OpNodes are resolved in the Assembler for convenience
+        is OpNode -> resolveNode(node.node)
 
-			if(node.op == BinaryOp.DOT) {
-				//
-			} else if(node.op == BinaryOp.REF) {
-				//
-			} else {
-				resolveNode(node.right)
-			}
+		is BinaryNode -> when(node.op) {
+			BinaryOp.DOT -> resolveDotNode(node)
+			BinaryOp.REF -> err(node.srcPos, "REF not yet supported")
+			else         -> { resolveNode(node.left); resolveNode(node.right) }
 		}
-
 
         is InsNode -> {
             if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
@@ -134,40 +139,62 @@ class Resolver(private val context: CompilerContext) {
             popScope()
         }
 
-        else -> return
-    }}
+		is TypeNode  -> resolveTypeNode(node)
+		is EnumEntry -> node.valueNode?.let(::resolveNode)
+		is VarDbNode -> for(part in node.parts) part.nodes.forEach(::resolveNode)
+		is Typedef   -> resolveTypeNode(node.typeNode)
+
+		// is StringNode -> node.symbol = context.addStringLiteral(node.value)
+		is StringNode,
+		is DbPart,
+		is FloatNode,
+		is IntNode,
+		is Label,
+		NullNode,
+		is RegNode -> { }
+	}}
 
 
 
-    private fun resolveNameNode(node: NameNode): Symbol {
-        val symbol = resolveName(node.value)
-			?: resolverError(node.srcPos ?: context.internalError(), "Unresolved reference: ${node.value}")
-        node.symbol = symbol
-        return symbol
-    }
+	private fun resolveDotNode(node: BinaryNode) {
+		resolveNode(node.left)
 
+		val left = node.left
+		val right = node.right
 
+		if(left !is NameNode)
+			err(node.left.srcPos, "Invalid receiver: $left")
 
-/*	private fun resolveDotNode(node: DotNode): Symbol {
-		val receiver: Symbol = when(val left = node.left) {
-			is NameNode  -> resolveNameNode(left)
-			is DotNode   -> resolveDotNode(left)
-			else         -> error("Invalid receiver: $left")
-		}
-
-		if(node.right !is NameNode)
-			error("Invalid node: ${node.right}")
+		val receiver = left.symbol
 
 		if(receiver !is ScopedSymbol)
-			resolverError(node.srcPos ?: context.internalError(), "Invalid receiver: ${receiver.qualifiedName}")
+			err(node.left.srcPos, "Invalid receiver: $receiver")
 
-		val symbol = context.symbols.get(receiver.thisScope, node.right.value)
-			?: resolverError(node.srcPos ?: context.internalError(), "Unresolved reference: ${node.right.value}")
+		if(right !is NameNode)
+			err(node.right.srcPos, "Invalid operand: ${right::class.simpleName}")
 
-		node.right.symbol = symbol
+		right.symbol = context.symbols.get(receiver.thisScope, right.value)
+			?: err(node.srcPos, "Unresolved reference: ${right.value}")
+	}
 
-		return symbol
-	}*/
+
+
+	private fun resolveTypeNode(node: TypeNode): Type {
+		val symbol = when {
+			node.name != null  -> resolveName(node.srcPos, node.name)
+			node.names != null -> resolveNames(node.srcPos, node.names)
+			else               -> error("Invalid type node")
+		}
+
+		var type = symbol as? Type ?: err(node.srcPos, "Expecting type, found: ${symbol.qualifiedName}")
+
+		if(node.arraySizes != null)
+			for(n in node.arraySizes)
+				type = ArrayType(type)
+
+		node.type = type
+		return type
+	}
 
 
 }

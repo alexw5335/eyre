@@ -78,10 +78,9 @@ class Lexer(val context: CompilerContext) {
 
 
 
-	private fun lexerError(string: String, fatal: Boolean = false) {
-		context.errors.add(EyreError(SrcPos(srcFile, lineCount), string))
-		if(fatal) hasError = true
+	private fun err(message: String): Nothing {
 		srcFile.invalid = true
+		context.err(SrcPos(srcFile, lineCount), message)
 	}
 
 
@@ -103,10 +102,7 @@ class Lexer(val context: CompilerContext) {
 		'"'  -> '"'
 		'\'' -> '\''
 		'0'  -> Char(0)
-		else -> {
-			lexerError("Invalid escape char: $this")
-			Char(0)
-		}
+		else -> err("Invalid escape char: $this")
 	}
 
 
@@ -116,8 +112,8 @@ class Lexer(val context: CompilerContext) {
 
 		while(!hasError) {
 			when(val char = chars[pos++]) {
-				Char(0) -> lexerError("Unterminated string literal", fatal = true)
-				'\n'    -> lexerError("Newline not allowed in string literal", fatal = true)
+				Char(0) -> err("Unterminated string literal")
+				'\n'    -> err("Newline not allowed in string literal")
 				'"'     -> break
 				'\\'    -> stringBuilder.append(chars[pos++].escape)
 				else    -> stringBuilder.append(char)
@@ -138,7 +134,7 @@ class Lexer(val context: CompilerContext) {
 		add(CharToken(char))
 
 		if(chars[pos++] != '\'')
-			lexerError("Unterminated char literal")
+			err("Unterminated character literal")
 	}
 
 
@@ -158,7 +154,7 @@ class Lexer(val context: CompilerContext) {
 
 		while(count > 0) {
 			if(pos >= chars.size)
-				lexerError("Unterminated multiline comment")
+				err("Unterminated multiline comment")
 
 			val char = chars[pos++]
 
@@ -196,14 +192,16 @@ class Lexer(val context: CompilerContext) {
 		val string = String(chars, start, pos - start)
 
 		if(string.last() == 'f' || string.last() == 'F' && radix != 16) {
-			if(radix != 10) lexerError("Malformed number")
+			if(radix != 10)
+				err("Malformed float")
 
-			add(FloatToken(string.toFloatOrNull()?.toDouble() ?: 0.0.also { lexerError("Malformed float") }))
+			add(FloatToken(string.toFloatOrNull()?.toDouble() ?: 0.0.also { err("Malformed float") }))
 		} else if(hasDotOrExponent) {
-			if(radix != 10) lexerError("Malformed number")
-			add(FloatToken(string.toDoubleOrNull() ?: 0.0.also { lexerError("Malformed double") }))
+			if(radix != 10)
+				err("Malformed float")
+			add(FloatToken(string.toDoubleOrNull() ?: 0.0.also { err("Malformed float") }))
 		} else {
-			add(IntToken(string.toLongOrNull(radix) ?: 0L.also { lexerError("Malformed integer") }))
+			add(IntToken(string.toLongOrNull(radix) ?: 0L.also { err("Malformed integer") }))
 		}
 	}
 
@@ -219,7 +217,7 @@ class Lexer(val context: CompilerContext) {
 			'.'         -> { pos -= 2; number(10) }
 			in '0'..'9' -> number(10)
 			in 'a'..'z',
-			in 'A'..'Z' -> lexerError("Invalid number character: $next")
+			in 'A'..'Z' -> err("Invalid number character: $next")
 			else        -> { pos -= 2; number(10) }
 		}
 	}
@@ -338,7 +336,7 @@ class Lexer(val context: CompilerContext) {
 			// Invalid chars
 			for(i in charMap.indices)
 				if(charMap[i] == null)
-					charMap[i] = { lexerError("Invalid char code: $i") }
+					charMap[i] = { err("Invalid char code: $i") }
 		}
 	}
 

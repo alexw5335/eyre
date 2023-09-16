@@ -1944,7 +1944,7 @@ enum class Mnemonic(val type: Type) {
 	XTEST(Type.GP);
 
 	enum class Type {
-		/** Mnemonic does not fit into any of the other types */
+		/** Mnemonic is not any of the other types */
 		GP,
 		/** Mnemoinc has at least one encoding that contains an ST register */
 		FPU,
@@ -1952,7 +1952,7 @@ enum class Mnemonic(val type: Type) {
 		SSE,
 		/** Mnemonic has at least one encoding that uses VEX or EVEX */
 		AVX,
-		/** Mnemonic is specific to the Eyre assembly language */
+		/** Custom mnemonic */
 		PSEUDO
 	}
 

@@ -28,9 +28,7 @@ class Compiler(private val context: CompilerContext) {
 			if(srcFiles.isEmpty())
 				error("No source files found")
 
-			val context = CompilerContext(srcFiles)
-			context.loadDefaultDllDefs()
-			return Compiler(context)
+			return Compiler(CompilerContext(srcFiles))
 		}
 
 		fun create(directory: String, files: List<String>): Compiler {
@@ -41,9 +39,7 @@ class Compiler(private val context: CompilerContext) {
 				SrcFile(path, relPath)
 			}
 
-			val context = CompilerContext(srcFiles)
-			context.loadDefaultDllDefs()
-			return Compiler(context)
+			return Compiler(CompilerContext(srcFiles))
 		}
 
 	}

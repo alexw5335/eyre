@@ -1,6 +1,9 @@
 package eyre
 
+import eyre.DebugOutput.appendNode
 import eyre.util.Util
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.createDirectories
@@ -14,8 +17,15 @@ object DebugOutput {
 
 
 
-	private fun lineCharCount(srcFile: SrcFile) =
-		srcFile.tokenLines[srcFile.tokenLines.size - 1] / 10 + 1
+	private fun lineCharCount(srcFile: SrcFile) : Int {
+		var max = srcFile.tokenLines[srcFile.tokenLines.size - 1]
+		var count = 0
+		while(max > 0) {
+			max /= 10
+			count++
+		}
+		return count
+	}
 
 
 
@@ -96,7 +106,6 @@ object DebugOutput {
 				printNodes(it, srcFile)
 			}
 		}
-
 	}
 
 
@@ -112,7 +121,7 @@ object DebugOutput {
 				return
 			}
 
-			val lineNumber = node.srcPos?.line ?: error("Missing src position")
+			val lineNumber = node.srcPos?.line ?: error("Missing src position: $node")
 
 			val lineNumberString = lineNumber.toString()
 			for(j in 0..< lineCharCount - lineNumberString.length)
@@ -145,15 +154,24 @@ object DebugOutput {
 
 
 
+	fun printString(node: AstNode) = buildString { appendNode(node) }
+
+
+
 	/**
 	 * Appends a single-line string representation of a node
 	 */
 	private fun Appendable.appendNode(node: AstNode) { when(node) {
 		is IntNode    -> append(node.value.toString())
 		is FloatNode  -> append(node.value.toString())
-		is StringNode -> append(node.value)
 		is NameNode   -> append(node.value.string)
 		is RegNode    -> append(node.value.string)
+
+		is StringNode -> {
+			append('\"')
+			append(node.value.replace("\n", "\\n"))
+			append("\"")
+		}
 
 		is Label -> {
 			append("LABEL ")
@@ -168,6 +186,15 @@ object DebugOutput {
 		is Proc -> {
 			append("PROC ")
 			append(node.qualifiedName)
+			if(node.parts.isNotEmpty()) {
+				append('(')
+				for((index, part) in node.parts.withIndex()) {
+					appendNode(part)
+					if(index != node.parts.lastIndex)
+						append(", ")
+				}
+				append(')')
+			}
 		}
 
 		is UnaryNode  -> {
@@ -180,9 +207,7 @@ object DebugOutput {
 		is BinaryNode -> {
 			append('(')
 			appendNode(node.left)
-			append(' ')
-			append(node.op.symbol)
-			append(' ')
+			append(node.op.infixString)
 			appendNode(node.right)
 			append(')')
 		}

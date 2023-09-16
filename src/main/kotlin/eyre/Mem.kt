@@ -13,8 +13,8 @@ class Mem {
     var base = Reg.NONE
     var aso = 0
     var relocs = 0
-    var hasBase = false
-    var hasIndex = false
+	val hasBase get() = base != Reg.NONE
+	val hasIndex get() = index != Reg.NONE
     var vsib = 0
     var disp = 0L
     var width: Width? = null
@@ -40,11 +40,5 @@ class Mem {
 	val isImm16  get() = disp.isImm16
 	val isImm32  get() = disp.isImm32
 	val a32      get() = aso == 1
-
-    fun swapBaseIndex() {
-		val temp = index
-		index = base
-		base = temp
-	}
 
 }
