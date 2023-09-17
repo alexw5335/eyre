@@ -1,9 +1,6 @@
 package eyre
 
-import eyre.DebugOutput.appendNode
 import eyre.util.Util
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.createDirectories
@@ -261,9 +258,31 @@ object DebugOutput {
 			append(node.qualifiedName)
 		}
 
+		is VarDb -> {
+			append("VAR ")
+			append(node.qualifiedName)
+			append(' ')
+			for(part in node.parts) {
+				append(part.width.varString)
+				append(' ')
+				for((index, node2) in part.nodes.withIndex()) {
+					appendNode(node2)
+					if(index != part.nodes.lastIndex) append(',')
+					append(' ')
+				}
+			}
+		}
+
+		is Const -> {
+			append("CONST ")
+			append(node.qualifiedName)
+			append(" = ")
+			appendNode(node.valueNode)
+		}
+
 		else -> {
 			append(node.toString())
-			append(" (TODO: Implement debug string)")
+			append(" TODO: Implement debug string")
 		}
 	} }
 

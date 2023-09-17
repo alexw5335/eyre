@@ -37,7 +37,7 @@ class Assembler(private val context: CompilerContext) {
 						is Label     -> handleLabel(node)
 						is Proc      -> handleProc(node)
 						is ScopeEnd  -> handleScopeEnd(node)
-						is VarDbNode -> handleVarDb(node)
+						is VarDb     -> handleVarDb(node)
 						else         -> Unit
 					}
 				} catch(_: EyreException) {
@@ -45,15 +45,6 @@ class Assembler(private val context: CompilerContext) {
 				}
             }
         }
-
-		for(s in context.stringLiterals) {
-			context.dataWriter.align(8)
-			s.section = Section.DATA
-			s.pos = context.dataWriter.pos
-			for(c in s.string)
-				context.dataWriter.i8(c.code)
-			context.dataWriter.i32(0)
-		}
     }
 
 
@@ -194,21 +185,18 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleVarDb(node: VarDbNode) = sectioned(node.section) {
+	private fun handleVarDb(node: VarDb) = sectioned(node.section) {
 		writer.align(8)
 
 		node.pos = writer.pos
 
-		for(part in node.parts) {
-			for(value in part.nodes) {
-				if(value is StringNode) {
+		for(part in node.parts)
+			for(value in part.nodes)
+				if(value is StringNode)
 					for(char in value.value)
 						writer.writeWidth(part.width, char.code)
-				} else {
+				else
 					imm(resolveImm(value), part.width)
-				}
-			}
-		}
 	}
 
 
@@ -272,6 +260,9 @@ class Assembler(private val context: CompilerContext) {
             return node.calculate(regValid) { n, v -> resolveRec(n, mem, v) }
 
         if(node is BinaryNode) {
+			if(node.symbol != null)
+				return sym(node.symbol)
+
 			if(node.op == BinaryOp.MUL) {
 				val regNode = node.left as? RegNode ?: node.right as? RegNode
 				val scaleNode = node.left as? IntNode ?: node.right as? IntNode
@@ -284,9 +275,6 @@ class Assembler(private val context: CompilerContext) {
 					mem.scale = scaleNode.value.toInt()
 					return 0
 				}
-			} else if(node.op.hasSymbol) {
-				val right = node.right as? NameNode ?: context.internalError()
-				return sym(right.symbol)
 			}
 
 			return node.calculate(regValid) { n, v -> resolveRec(n, mem, v) }
@@ -311,11 +299,10 @@ class Assembler(private val context: CompilerContext) {
 			return sym(node.symbol)
 
 		if(node is StringNode) {
-			val symbol = context.addStringLiteral(node.value)
+			val symbol = stringLiteral(node.value)
 			node.symbol = symbol
-			sym(symbol)
+			return sym(symbol)
 		}
-			return sym(node.symbol)
 
         error("Invalid immediate: ${DebugOutput.printString(node)}")
     }

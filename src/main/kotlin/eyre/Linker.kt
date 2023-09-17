@@ -295,14 +295,11 @@ class Linker(private val context: CompilerContext) {
 		if(node is UnaryNode)
 			return node.calculate(regValid, ::resolveImmRec)
 
-		if(node is BinaryNode) {
-			return if(node.op.hasSymbol) {
-				val right = node.right as? NameNode ?: context.internalError()
-				sym(right.symbol)
-			} else {
+		if(node is BinaryNode)
+			return if(node.symbol != null)
+				sym(node.symbol)
+			else
 				node.calculate(regValid, ::resolveImmRec)
-			}
-		}
 
 		if(node is NameNode)
 			return sym(node.symbol)

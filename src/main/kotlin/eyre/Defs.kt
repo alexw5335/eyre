@@ -171,6 +171,6 @@ class DebugDirective(val name: String, val pos: Int, val sec: Section)
 
 class EyreException(val srcPos: SrcPos?, message: String) : Exception(message)
 
-class DllImports(val name: Name, val imports: HashMap<Name, DllImportSymbol>)
+class DllImports(val name: Name, val imports: HashMap<Name, DllImport>)
 
 class DllDef(val name: Name, val exports: Set<Name>)

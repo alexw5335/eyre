@@ -48,9 +48,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val dllDefs = HashMap<Name, DllDef>()
 
-	val stringLiterals = ArrayList<StringLitSymbol>()
-
-	val stringLiteralMap = HashMap<String, StringLitSymbol>() // Only for short strings
+	val unorderedNodes = ArrayList<AstNode>()
 
 
 
@@ -118,7 +116,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 
 
-	fun getDllImport(name: Name): DllImportSymbol? {
+	fun getDllImport(name: Name): DllImport? {
 		for(dll in dllImports.values)
 			dll.imports[name]?.let { return it }
 
@@ -128,32 +126,11 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 			return dllImports.getOrPut(def.name) {
 				DllImports(def.name, HashMap())
 			}.imports.getOrPut(name) {
-				DllImportSymbol(Scopes.EMPTY, name)
+				DllImport(Scopes.EMPTY, name)
 			}
 		}
 
 		return null
-	}
-
-
-	/*
-	String literals
-	 */
-
-
-
-	fun addStringLiteral(string: String): StringLitSymbol {
-		if(string.length <= 32) {
-			stringLiteralMap[string]?.let { return it }
-			val symbol = StringLitSymbol(string)
-			stringLiterals.add(symbol)
-			stringLiteralMap[string] = symbol
-			return symbol
-		} else {
-			val symbol = StringLitSymbol(string)
-			stringLiterals.add(symbol)
-			return symbol
-		}
 	}
 
 

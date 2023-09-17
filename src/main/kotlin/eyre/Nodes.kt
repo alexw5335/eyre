@@ -11,6 +11,12 @@ sealed class AstNode {
 
 
 
+interface SymHolder {
+	var symbol: Symbol?
+}
+
+
+
 interface Symbol {
 	val scope: Scope
 	val name: Name
@@ -78,15 +84,6 @@ class AnonPosSymbol(override var section: Section, override var pos: Int) : PosS
 
 
 
-class StringLitSymbol(val string: String) : PosSymbol {
-	override val name = Names.EMPTY
-	override val scope = Scopes.EMPTY
-	override var section = Section.DATA
-	override var pos = 0
-}
-
-
-
 interface ScopedSymbol : Symbol {
 	val thisScope: Scope
 }
@@ -100,13 +97,22 @@ interface PosSymbol : Symbol {
 
 
 
+/**
+ * A symbol that defines an offset into some base symbol, typically another [OffsetSymbol] or a [PosSymbol].
+ */
+interface OffsetSymbol : Symbol {
+	val offset: Int
+}
+
+
+
 data object NullNode : AstNode()
 
 class ScopeEnd(val symbol: Symbol?): AstNode()
 
 
 
-class DllImportSymbol(
+class DllImport(
 	override val scope: Scope,
 	override val name: Name
 ) : PosSymbol {
@@ -115,12 +121,62 @@ class DllImportSymbol(
 }
 
 
+
+class Member(
+	override val scope: Scope,
+	override val name: Name,
+	val parent: Struct,
+	val typeNode: TypeNode,
+) : IntSymbol, TypedSymbol, OffsetSymbol {
+	var size = 0
+	override var type: Type = VoidType
+	override var offset = 0
+	override var intValue = offset.toLong()
+}
+
+
+
+class Struct(
+	override val scope: Scope,
+	override val name: Name,
+	override val thisScope: Scope,
+	val members: List<Member>
+) : AstNode(), ScopedSymbol {
+	var size = 0
+	var alignment = 0
+}
+
+
+
+class VarRes(
+	override val scope: Scope,
+	override val name: Name,
+	val typeNode: TypeNode?
+) : AstNode(), TypedSymbol, PosSymbol {
+	override var pos = 0
+	override var section = Section.BSS
+	override var type: Type = VoidType
+}
+
+
+
 class EnumEntry(
 	override val scope: Scope,
 	override val name: Name,
+	val parent: Enum,
 	val valueNode: AstNode?
 ) : AstNode(), Symbol {
 	var value = 0
+}
+
+
+
+class Const(
+	override val scope: Scope,
+	override val name: Name,
+	val valueNode: AstNode
+) : AstNode(), IntSymbol {
+	override var intValue = 0L
 }
 
 
@@ -152,16 +208,18 @@ class Enum(
 
 
 
-class DbPart(val width: Width, val nodes: List<AstNode>) : AstNode()
-
-class VarDbNode(
+class VarDb(
 	override val scope: Scope,
 	override val name : Name,
-	val parts         : List<DbPart>,
-) : AstNode(), PosSymbol {
+	val typeNode      : TypeNode?,
+	val parts         : List<Part>
+) : AstNode(), PosSymbol, TypedSymbol {
+	class Part(val width: Width, val nodes: List<AstNode>)
 	override var pos = 0
 	override var section = Section.TEXT
+	override var type: Type = VoidType
 }
+
 
 
 class Proc(
@@ -200,7 +258,12 @@ class IntNode(val value: Long) : AstNode()
 
 class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode()
 
-class BinaryNode(val op: BinaryOp, val left: AstNode, val right: AstNode) : AstNode()
+class BinaryNode(
+	val op     : BinaryOp,
+	val left   : AstNode,
+	val right  : AstNode,
+	var symbol : Symbol? = null
+) : AstNode()
 
 class NameNode(val value: Name, var symbol: Symbol? = null) : AstNode()
 

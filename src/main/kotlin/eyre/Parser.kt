@@ -221,10 +221,17 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = srcPos()
 		val name = id()
 
+		val typeNode = if(tokens[pos] == SymToken.COLON) {
+			pos++
+			parseType()
+		} else {
+			null
+		}
+
 		val first = tokens[pos]
 
 		if(first is Name && first in Names.varWidths) {
-			val parts = ArrayList<DbPart>()
+			val parts = ArrayList<VarDb.Part>()
 			var size = 0
 
 			while(true) {
@@ -244,19 +251,55 @@ class Parser(private val context: CompilerContext) {
 					pos++
 				}
 
-				parts.add(DbPart(width, nodes))
+				parts.add(VarDb.Part(width, nodes))
 				if(tokens[pos] !is Name || tokens[pos] as Name !in Names.varWidths)
 					break
 			}
 
 			if(parts.isEmpty()) err(srcPos, "Empty initialiser")
-			val node = VarDbNode(currentScope, name, parts).addNodeSym(srcPos)
+			val node = VarDb(currentScope, name, typeNode, parts).addNodeSym(srcPos)
 			node.section = if(isVal) Section.RDATA else Section.DATA
 			expectTerminator()
 			return
+		} else if(atTerminator) {
+			val node = VarRes(currentScope, name, typeNode).addNodeSym(srcPos)
+			node.section = Section.BSS
 		} else {
 			err(srcPos, "Expecting variable value")
 		}
+	}
+
+
+
+	private fun parseConst() {
+		val srcPos = srcPos()
+		val name = id()
+		expect(SymToken.EQUALS)
+		val value = parseExpression()
+		val const = Const(currentScope, name, value).addNodeSym(srcPos)
+		context.unorderedNodes.add(const)
+		expectTerminator()
+	}
+
+
+
+	private fun parseStruct() {
+		val srcPos = srcPos()
+		val structName = id()
+		val thisScope = Scopes.add(currentScope, structName)
+		val members = ArrayList<Member>()
+		val struct = Struct(currentScope, structName, thisScope, members).addNodeSym(srcPos)
+
+		expect(SymToken.LBRACE)
+
+		while(tokens[pos] != SymToken.RBRACE) {
+			val type = parseType()
+			val name = id()
+			members.add(Member(thisScope, name, struct, type))
+			expectTerminator()
+		}
+
+		pos++
 	}
 
 
@@ -266,7 +309,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		val thisScope = Scopes.add(currentScope, name)
 		val entries = ArrayList<EnumEntry>()
-		Enum(currentScope, name, thisScope, entries).addNodeSym(srcPos)
+		val enum = Enum(currentScope, name, thisScope, entries).addNodeSym(srcPos)
 
 		expect(SymToken.LBRACE)
 
@@ -280,7 +323,7 @@ class Parser(private val context: CompilerContext) {
 				else -> null
 			}
 
-			val enumEntry = EnumEntry(thisScope, entryName, entryValueNode)
+			val enumEntry = EnumEntry(thisScope, entryName, enum, entryValueNode)
 			enumEntry.srcPos = entrySrcPos
 			entries.add(enumEntry)
 			enumEntry.addSym()
@@ -420,6 +463,8 @@ class Parser(private val context: CompilerContext) {
 		if(name in Names.keywords) {
 			pos++
 			when(Names.keywords[name]) {
+				Keyword.STRUCT    -> parseStruct()
+				Keyword.CONST     -> parseConst()
 				Keyword.VAR       -> parseVar(false)
 				Keyword.VAL       -> parseVar(true)
 				Keyword.ENUM      -> parseEnum()

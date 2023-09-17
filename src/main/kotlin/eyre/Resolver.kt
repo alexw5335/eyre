@@ -1,6 +1,7 @@
 package eyre
 
 import java.lang.RuntimeException
+import kotlin.math.max
 
 /**
  * The resolver runs in three stages:
@@ -39,19 +40,29 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private inline fun visit(visitor: (AstNode) -> Unit) {
+		for(srcFile in context.srcFiles) {
+			try {
+				for(node in srcFile.nodes)
+					visitor(node)
+			} catch(_: ResolverException) {
+				srcFile.invalid = true
+			}
+		}
+	}
+
+
+
     fun resolve() {
         pushScope(Scopes.EMPTY)
 
 		scopeStackSize = 1
 
-        for(srcFile in context.srcFiles) {
-			try {
-				for(node in srcFile.nodes)
-					resolveNode(node)
-			} catch(_: ResolverException) {
-				srcFile.invalid = true
-			}
-        }
+		visit(::resolveTypes)
+		visit(::resolveNode)
+
+		for(node in context.unorderedNodes)
+			calculateNode(node)
     }
 
 
@@ -79,7 +90,7 @@ class Resolver(private val context: CompilerContext) {
             }
         }
 
-		err(srcPos, "Unresoled symbol: $name")
+		err(srcPos, "Unresolved symbol: $name")
     }
 
 
@@ -102,79 +113,113 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	/*
+	Stage 1: Type resolution
+	 */
+
+
+
+	private fun resolveTypes(node: AstNode) { when(node) {
+		is Namespace -> pushScope(node.thisScope)
+		is Proc      -> pushScope(node.thisScope)
+		is ScopeEnd  -> popScope()
+		is VarDb     -> if(node.typeNode != null) node.type = resolveTypeNode(node.typeNode)
+		is VarRes    -> if(node.typeNode != null) node.type = resolveTypeNode(node.typeNode)
+		is Struct    -> for(member in node.members) member.type = resolveTypeNode(member.typeNode)
+		else         -> { }
+	}}
+
+
+
     /*
     Stage 1: Symbol resolution
      */
 
 
 
-    private fun resolveNode(node: AstNode) { when(node) {
-        is Namespace  -> pushScope(node.thisScope)
-        is Proc       -> pushScope(node.thisScope)
-        is ScopeEnd   -> popScope()
-        is UnaryNode  -> resolveNode(node.node)
-		is NameNode   -> node.symbol = resolveName(node.srcPos, node.value)
+	private fun resolveExpr(node: AstNode) { when(node) {
+		is UnaryNode -> resolveExpr(node.node)
+		is NameNode  -> node.symbol = resolveName(node.srcPos, node.value)
 
-		// String literals in OpNodes are resolved in the Assembler for convenience
-        is OpNode -> resolveNode(node.node)
+		is BinaryNode -> {
+			resolveExpr(node.left)
 
-		is BinaryNode -> when(node.op) {
-			BinaryOp.DOT -> resolveDotNode(node)
-			BinaryOp.REF -> err(node.srcPos, "REF not yet supported")
-			else         -> { resolveNode(node.left); resolveNode(node.right) }
+			when(node.op) {
+				BinaryOp.DOT -> resolveDotNode(node)
+				BinaryOp.REF -> err(node.srcPos, "Ref nodes unsupported")
+				else         -> resolveExpr(node.right)
+			}
 		}
+
+		is IntNode,
+		is FloatNode,
+		is StringNode -> Unit
+
+		else -> err(node.srcPos, "Invalid expression node: $node")
+	}}
+
+
+
+    private fun resolveNode(node: AstNode) { when(node) {
+		is Namespace -> pushScope(node.thisScope)
+		is Proc      -> pushScope(node.thisScope)
+		is ScopeEnd  -> popScope()
+
+		is Const     -> resolveExpr(node.valueNode)
+		is NameNode  -> node.symbol = resolveName(node.srcPos, node.value)
+		is TypeNode  -> resolveTypeNode(node)
+		is VarDb     -> for(part in node.parts) part.nodes.forEach(::resolveExpr)
+		is Typedef   -> resolveTypeNode(node.typeNode)
 
         is InsNode -> {
             if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
-            resolveNode(node.op1)
-            resolveNode(node.op2)
-            resolveNode(node.op3)
-            resolveNode(node.op4)
+			if(node.op1.node != NullNode) resolveExpr(node.op1.node)
+			if(node.op2.node != NullNode) resolveExpr(node.op2.node)
+			if(node.op3.node != NullNode) resolveExpr(node.op3.node)
+			if(node.op4.node != NullNode) resolveExpr(node.op4.node)
         }
 
         is Enum -> {
             pushScope(node.thisScope)
             for(entry in node.entries)
-                entry.valueNode?.let(::resolveNode)
+                entry.valueNode?.let(::resolveExpr)
             popScope()
         }
 
-		is TypeNode  -> resolveTypeNode(node)
-		is EnumEntry -> node.valueNode?.let(::resolveNode)
-		is VarDbNode -> for(part in node.parts) part.nodes.forEach(::resolveNode)
-		is Typedef   -> resolveTypeNode(node.typeNode)
-
-		// is StringNode -> node.symbol = context.addStringLiteral(node.value)
+		NullNode,
+		is VarRes,
 		is StringNode,
-		is DbPart,
 		is FloatNode,
 		is IntNode,
 		is Label,
-		NullNode,
-		is RegNode -> { }
+		is RegNode,
+		is EnumEntry,
+		is UnaryNode,
+		is BinaryNode,
+		is Struct,
+		is OpNode -> context.internalError("Invalid node: $node")
 	}}
 
 
 
-	private fun resolveDotNode(node: BinaryNode) {
-		resolveNode(node.left)
+	private fun resolveDotNode(node: BinaryNode): Symbol {
+		val receiver = (node.left as? SymHolder)?.symbol
+			?: err(node.left.srcPos, "Invalid '.' operand")
 
-		val left = node.left
 		val right = node.right
-
-		if(left !is NameNode)
-			err(node.left.srcPos, "Invalid receiver: $left")
-
-		val receiver = left.symbol
 
 		if(receiver !is ScopedSymbol)
 			err(node.left.srcPos, "Invalid receiver: $receiver")
 
 		if(right !is NameNode)
-			err(node.right.srcPos, "Invalid operand: ${right::class.simpleName}")
+			err(right.srcPos, "Invalid operand: ${right::class.simpleName}")
 
-		right.symbol = context.symbols.get(receiver.thisScope, right.value)
+		val symbol = context.symbols.get(receiver.thisScope, right.value)
 			?: err(node.srcPos, "Unresolved reference: ${right.value}")
+
+		right.symbol = symbol
+		node.symbol = symbol
+		return symbol
 	}
 
 
@@ -194,6 +239,90 @@ class Resolver(private val context: CompilerContext) {
 
 		node.type = type
 		return type
+	}
+
+
+
+	/*
+	Stage 2: Constant calculation
+	 */
+
+
+
+	private fun calculateInt(node: AstNode): Long = when(node) {
+		is IntNode    -> node.value
+		is UnaryNode  -> node.op.calculate(calculateInt(node.node))
+		is BinaryNode -> node.op.calculate(calculateInt(node.left), calculateInt(node.right))
+		is NameNode   -> calculateIntSymbol(node.symbol ?: error("Invalid symbol"))
+		else          -> error("Invalid node: $node")
+	}
+
+
+
+	private fun calculateIntSymbol(symbol: Symbol): Long {
+		if(symbol !is AstNode || symbol !is IntSymbol) error("Invalid symbol")
+		calculateNode(symbol)
+		return symbol.intValue
+	}
+
+
+
+	private fun calculateNode(node: AstNode) {
+		if(node !is Symbol) return
+
+		if(node.begin()) return
+
+		when(node) {
+			is Const -> node.intValue = calculateInt(node.valueNode)
+
+			is Struct -> {
+
+			}
+
+			else -> err(node.srcPos, "Invalid node?")
+		}
+
+		node.end()
+	}
+
+
+	private fun calculateStruct(struct: Struct) {
+		if(struct.begin()) return
+		var offset = 0
+		var maxAlignment = 0
+
+		for(member in struct.members) {
+			val type = member.type
+			calculateNode(type as AstNode)
+			val size = type.size
+			member.size = size
+			val alignment = type.alignment.coerceAtMost(8)
+			maxAlignment = max(alignment, maxAlignment)
+			offset = (offset + alignment - 1) and -alignment
+			member.offset = offset
+			offset += size
+			member.intValue = symbol.offset.toLong()
+			member.resolved = true
+		}
+
+		structSymbol.size = (offset + maxAlignment - 1) and -maxAlignment
+		structSymbol.alignment = maxAlignment
+		structSymbol.end()
+	}
+
+
+	private fun<T> T.begin(): Boolean where T : AstNode, T : Symbol {
+		if(resolved) return true
+		if(resolving) error("Circular dependency: ${this.qualifiedName}")
+		resolving = true
+		return false
+	}
+
+
+
+	private fun<T> T.end() where T : AstNode, T : Symbol{
+		resolving = false
+		resolved = true
 	}
 
 
