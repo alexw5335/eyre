@@ -1,49 +1,10 @@
 namespace eyre
 
-const CONST3 = CONST1 + 1
-const CONST2 = 12
-const CONST1 = CONST2 - 10
-
-var instanceVersion: dword dd 0
+var message db "TESTING\n"
 
 proc main {
-	// Load Vulkan DLL into RDX
-	sub rsp, 120
-	lea rcx, ["vulkan-1.dll"]
-	dllcall LoadLibraryA
-	mov rsi, rax
-	lea rcx, ["vulkan dll handle: %p\n"]
-	mov rdx, rax
+	sub rsp, 40
+	lea rcx, [message]
 	dllcall printf
-
-	// Load vkGetInstanceProcAddr into R12
-	mov rcx, rsi
-	lea rdx, ["vkGetInstanceProcAddr"]
-	dllcall GetProcAddress
-	mov r12, rax
-	lea rcx, ["vkGetInstanceProcAddr: %p\n"]
-	mov rdx, rax
-	dllcall printf
-
-	// Load vkEnumerateInstanceVersion into RDI
-	mov rcx, rsi
-	lea rdx, ["vkEnumerateInstanceVersion"]
-	dllcall GetProcAddress
-	mov rdi, rax
-	lea rcx, ["vkEnumerateInstanceVersion: %p\n"]
-	mov rdx, rax
-	dllcall printf
-
-	// Get vulkan version
-	lea rcx, [instanceVersion]
-	call rdi
-	lea rcx, ["Instance version: %d\n"]
-	mov edx, [instanceVersion]
-	dllcall printf
-
-	lea rcx, ["TESTING: %d"]
-	mov rdx, CONST3
-	dllcall printf
-
 	dllcall ExitProcess
 }

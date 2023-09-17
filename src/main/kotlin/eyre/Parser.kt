@@ -124,7 +124,7 @@ class Parser(private val context: CompilerContext) {
 	private fun parseLabel(name: Name) {
 		val srcPos = srcPos()
 		pos += 2
-		Label(currentScope, name).addNodeSym(srcPos)
+		Label(currentScope.base(name)).addNodeSym(srcPos)
 	}
 
 
@@ -135,7 +135,7 @@ class Parser(private val context: CompilerContext) {
 		expect(SymToken.EQUALS)
 		val typeNode = parseType()
 		expectTerminator()
-		Typedef(currentScope, name, typeNode).addNodeSym(srcPos)
+		Typedef(currentScope.base(name), typeNode).addNodeSym(srcPos)
 	}
 
 
@@ -180,7 +180,7 @@ class Parser(private val context: CompilerContext) {
 			err(0, "Only one single-line namespace allowed per file")
 		val srcPos = srcPos()
 		val thisScope = parseScopeName()
-		val namespace = Namespace(currentScope, thisScope.last, thisScope).addNodeSym(srcPos)
+		val namespace = Namespace(currentScope.base(thisScope, thisScope.last)).addNodeSym(srcPos)
 		currentScope = thisScope
 		currentNamespace = namespace
 	}
@@ -207,7 +207,7 @@ class Parser(private val context: CompilerContext) {
 			expect(SymToken.RPAREN)
 		}
 
-		val proc = Proc(currentScope, name, thisScope, parts).addNodeSym(srcPos)
+		val proc = Proc(currentScope.base(thisScope, name), parts).addNodeSym(srcPos)
 
 		expect(SymToken.LBRACE)
 		parseScope()
@@ -257,12 +257,12 @@ class Parser(private val context: CompilerContext) {
 			}
 
 			if(parts.isEmpty()) err(srcPos, "Empty initialiser")
-			val node = VarDb(currentScope, name, typeNode, parts).addNodeSym(srcPos)
+			val node = VarDb(currentScope.base(name), typeNode, parts).addNodeSym(srcPos)
 			node.section = if(isVal) Section.RDATA else Section.DATA
 			expectTerminator()
 			return
 		} else if(atTerminator) {
-			val node = VarRes(currentScope, name, typeNode).addNodeSym(srcPos)
+			val node = VarRes(currentScope.base(name), typeNode).addNodeSym(srcPos)
 			node.section = Section.BSS
 		} else {
 			err(srcPos, "Expecting variable value")
@@ -276,9 +276,24 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		expect(SymToken.EQUALS)
 		val value = parseExpression()
-		val const = Const(currentScope, name, value).addNodeSym(srcPos)
+		val const = Const(currentScope.base(name), value).addNodeSym(srcPos)
 		context.unorderedNodes.add(const)
 		expectTerminator()
+	}
+
+
+
+	private fun Scope.base(name: Name) = Base().also {
+		it.scope = this
+		it.name = name
+	}
+
+
+
+	private fun Scope.base(thisScope: Scope, name: Name) = Base().also {
+		it.scope = this
+		it.thisScope = thisScope
+		it.name = name
 	}
 
 
@@ -288,14 +303,17 @@ class Parser(private val context: CompilerContext) {
 		val structName = id()
 		val thisScope = Scopes.add(currentScope, structName)
 		val members = ArrayList<Member>()
-		val struct = Struct(currentScope, structName, thisScope, members).addNodeSym(srcPos)
+		val struct = Struct(currentScope.base(thisScope, structName), members).addNodeSym(srcPos)
 
 		expect(SymToken.LBRACE)
 
 		while(tokens[pos] != SymToken.RBRACE) {
-			val type = parseType()
+			val typeNode = parseType()
 			val name = id()
-			members.add(Member(thisScope, name, struct, type))
+			val member = Member(thisScope.base(name), typeNode)
+			member.parent = struct
+			members.add(member)
+			member.addSym()
 			expectTerminator()
 		}
 
@@ -309,7 +327,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		val thisScope = Scopes.add(currentScope, name)
 		val entries = ArrayList<EnumEntry>()
-		val enum = Enum(currentScope, name, thisScope, entries).addNodeSym(srcPos)
+		val enum = Enum(currentScope.base(thisScope, name), entries).addNodeSym(srcPos)
 
 		expect(SymToken.LBRACE)
 
@@ -323,7 +341,8 @@ class Parser(private val context: CompilerContext) {
 				else -> null
 			}
 
-			val enumEntry = EnumEntry(thisScope, entryName, enum, entryValueNode)
+			val enumEntry = EnumEntry(thisScope.base(entryName), entryValueNode)
+			enumEntry.parent = enum
 			enumEntry.srcPos = entrySrcPos
 			entries.add(enumEntry)
 			enumEntry.addSym()

@@ -1,7 +1,6 @@
 package eyre
 
 import java.lang.RuntimeException
-import kotlin.math.max
 
 /**
  * The resolver runs in three stages:
@@ -62,7 +61,7 @@ class Resolver(private val context: CompilerContext) {
 		visit(::resolveNode)
 
 		for(node in context.unorderedNodes)
-			calculateNode(node)
+			calculate(node as? Symbol ?: context.internalError())
     }
 
 
@@ -203,7 +202,7 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveDotNode(node: BinaryNode): Symbol {
-		val receiver = (node.left as? SymHolder)?.symbol
+		val receiver = (node.left as? SymNode)?.symbol
 			?: err(node.left.srcPos, "Invalid '.' operand")
 
 		val right = node.right
@@ -249,6 +248,27 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun calculate(symbol: Symbol) {
+		if(symbol.begin()) return
+
+		when(symbol) {
+			is Const -> symbol.intValue = calculateInt(symbol.valueNode)
+
+			is EnumEntry -> {
+
+			}
+
+			else -> if(symbol is AstNode)
+				err(symbol.srcPos, "Invalid node?")
+			else
+				context.internalError()
+		}
+
+		symbol.end()
+	}
+
+
+
 	private fun calculateInt(node: AstNode): Long = when(node) {
 		is IntNode    -> node.value
 		is UnaryNode  -> node.op.calculate(calculateInt(node.node))
@@ -260,58 +280,14 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun calculateIntSymbol(symbol: Symbol): Long {
-		if(symbol !is AstNode || symbol !is IntSymbol) error("Invalid symbol")
-		calculateNode(symbol)
+		if(symbol !is IntSymbol) error("Invalid symbol")
+		calculate(symbol)
 		return symbol.intValue
 	}
 
 
 
-	private fun calculateNode(node: AstNode) {
-		if(node !is Symbol) return
-
-		if(node.begin()) return
-
-		when(node) {
-			is Const -> node.intValue = calculateInt(node.valueNode)
-
-			is Struct -> {
-
-			}
-
-			else -> err(node.srcPos, "Invalid node?")
-		}
-
-		node.end()
-	}
-
-
-	private fun calculateStruct(struct: Struct) {
-		if(struct.begin()) return
-		var offset = 0
-		var maxAlignment = 0
-
-		for(member in struct.members) {
-			val type = member.type
-			calculateNode(type as AstNode)
-			val size = type.size
-			member.size = size
-			val alignment = type.alignment.coerceAtMost(8)
-			maxAlignment = max(alignment, maxAlignment)
-			offset = (offset + alignment - 1) and -alignment
-			member.offset = offset
-			offset += size
-			member.intValue = symbol.offset.toLong()
-			member.resolved = true
-		}
-
-		structSymbol.size = (offset + maxAlignment - 1) and -maxAlignment
-		structSymbol.alignment = maxAlignment
-		structSymbol.end()
-	}
-
-
-	private fun<T> T.begin(): Boolean where T : AstNode, T : Symbol {
+	private fun Symbol.begin(): Boolean {
 		if(resolved) return true
 		if(resolving) error("Circular dependency: ${this.qualifiedName}")
 		resolving = true
@@ -320,7 +296,7 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun<T> T.end() where T : AstNode, T : Symbol{
+	private fun Symbol.end() {
 		resolving = false
 		resolved = true
 	}

@@ -126,7 +126,7 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 			return dllImports.getOrPut(def.name) {
 				DllImports(def.name, HashMap())
 			}.imports.getOrPut(name) {
-				DllImport(Scopes.EMPTY, name)
+				DllImport(name)
 			}
 		}
 

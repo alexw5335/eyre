@@ -1,6 +1,5 @@
 package eyre
 
-import eyre.util.Util
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.createDirectories
@@ -90,13 +89,8 @@ class Compiler(private val context: CompilerContext) {
 		buildDir.createDirectories()
 		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())
 		DebugOutput.disassemble(context)
+		DebugOutput.printSymbols(context)
 	}
 
-
-	// TODO: Proper error handling for resolver, assembler, and linker
-	// TODO: Assembly debug output
-	// TODO: Symbols debug output
-	// TODO: Refactor Parser
-	// TODO: Delete build contents before compiling
 
 }

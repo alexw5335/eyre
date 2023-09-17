@@ -3,6 +3,7 @@ package eyre
 import eyre.util.Util
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.bufferedWriter
 import kotlin.io.path.createDirectories
 
 object DebugOutput {
@@ -22,6 +23,28 @@ object DebugOutput {
 			count++
 		}
 		return count
+	}
+
+
+
+	/*
+	Symbols
+	 */
+
+
+
+	fun printSymbols(context: CompilerContext) {
+		val dir = Paths.get("build")
+		dir.createDirectories()
+
+		dir.resolve("symbols.txt").bufferedWriter().use {
+			for(symbol in context.symbols) {
+				if(symbol is PosSymbol)
+					it.append("${symbol::class.simpleName} -- ${symbol.qualifiedName} ${symbol.base.pos} ${symbol.base.section}\n")
+				else
+					it.append("${symbol::class.simpleName} -- ${symbol.qualifiedName}\n")
+			}
+		}
 	}
 
 
