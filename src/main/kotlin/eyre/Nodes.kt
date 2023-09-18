@@ -6,45 +6,35 @@ package eyre
 
 class Base {
 	var srcPos: SrcPos? = null
-	var scope = Scopes.EMPTY
-	var name = Names.EMPTY
+	var scope     = Scopes.EMPTY
+	var name      = Names.EMPTY
 	var thisScope = Scopes.EMPTY
-	var resolved = false
+	var resolved  = false
 	var resolving = false
-	var pos = 0
-	var section = Section.TEXT
-
+	var pos       = 0
+	var section   = Section.TEXT
 
 	companion object {
 		val EMPTY = Base().also { it.resolved = true }
+		fun create(name: Name, resolved: Boolean) = Base().also { it.name = name; it.resolved = resolved }
 	}
 }
 
-interface NodeOrSym {
+sealed interface NodeOrSym {
 	val base: Base
 }
 
-interface AstNode : NodeOrSym {
+sealed interface AstNode : NodeOrSym {
 	var srcPos get() = base.srcPos; set(value) { base.srcPos = value }
 }
 
-abstract class SimpleNode : AstNode {
-	override val base = Base()
-}
-
-interface Symbol : NodeOrSym {
+sealed interface Symbol : NodeOrSym {
 	val scope get() = base.scope
 	val name get() = base.name
 	var resolved get() = base.resolved; set(v) { base.resolved = v }
 	var resolving get() = base.resolving; set(v) { base.resolving = v }
 
 	val qualifiedName get() = if(scope.isEmpty) "$name" else "$scope.$name"
-}
-
-interface NodeAndSym : AstNode, Symbol
-
-interface SymNode : AstNode {
-	var symbol: Symbol?
 }
 
 interface Type : Symbol {
@@ -85,17 +75,31 @@ class ArrayType(val type: Type) : Type {
 	override val alignment = type.alignment
 }
 
-abstract class IntType(name: String, override val size: Int) : Type {
-	override val base = Base().also { it.name = Names[name] }
+
+
+interface IntType : Type
+
+
+
+object ByteType : IntType {
+	override val base = Base.create(Names["byte"], true)
+	override val size = 1
 }
 
-object ByteType : IntType("byte", 1)
+object WordType : IntType {
+	override val base = Base.create(Names["byte"], true)
+	override val size = 1
+}
 
-object WordType : IntType("word", 2)
+object DwordType : IntType {
+	override val base = Base.create(Names["byte"], true)
+	override val size = 1
+}
 
-object DwordType : IntType("dword", 4)
-
-object QwordType : IntType("qword", 8)
+object QwordType : IntType {
+	override val base = Base.create(Names["byte"], true)
+	override val size = 1
+}
 
 object VoidType : Type {
 	override val base = Base.EMPTY
@@ -105,7 +109,6 @@ object VoidType : Type {
 class AnonPosSymbol(override var section: Section, override var pos: Int) : PosSymbol {
 	override val base = Base.EMPTY
 }
-
 
 data object NullNode : AstNode {
 	override val base = Base.EMPTY
@@ -130,7 +133,7 @@ class Member(override val base: Base, val typeNode: TypeNode) : AstNode, IntSymb
 	var size = 0
 	override var type: Type = VoidType
 	override var offset = 0
-	override var intValue = offset.toLong()
+	override val intValue get() = offset.toLong()
 	lateinit var parent: Struct
 }
 
@@ -169,7 +172,7 @@ class Typedef(override val base: Base, val typeNode: TypeNode) : AstNode, Symbol
 class TypeNode(
 	val name: Name?,
 	val names: Array<Name>?,
-	val arraySizes: Array<AstNode>?
+	val arraySizes: Array<AstNode>?,
 ) : AstNode {
 	override val base = Base()
 	var type: Type = VoidType
@@ -202,16 +205,26 @@ class Namespace(override val base: Base) : AstNode, ScopedSymbol
 
 class Label(override val base: Base) : AstNode, PosSymbol
 
-class RegNode(val value: Reg) : SimpleNode()
+class RegNode(val value: Reg) : AstNode {
+	override val base = Base()
+}
 
 /** [symbol] is only for string literals in OpNodes */
-class StringNode(val value: String, var symbol: Symbol? = null) : SimpleNode()
+class StringNode(val value: String, var symbol: Symbol? = null) : AstNode {
+	override val base = Base()
+}
 
-class FloatNode(val value: Double) : SimpleNode()
+class FloatNode(val value: Double) : AstNode {
+	override val base = Base()
+}
 
-class IntNode(val value: Long) : SimpleNode()
+class IntNode(val value: Long) : AstNode {
+	override val base = Base()
+}
 
-class UnaryNode(val op: UnaryOp, val node: AstNode) : SimpleNode()
+class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode {
+	override val base = Base()
+}
 
 /** [symbol] is only for `.` and `::` operations */
 class BinaryNode(
@@ -219,11 +232,17 @@ class BinaryNode(
 	val left   : AstNode,
 	val right  : AstNode,
 	var symbol : Symbol? = null
-) : SimpleNode()
+) : AstNode {
+	override val base = Base()
+}
 
-class NameNode(val value: Name, var symbol: Symbol? = null) : SimpleNode()
+class NameNode(val value: Name, var symbol: Symbol? = null) : AstNode {
+	override val base = Base()
+}
 
-class OpNode(val type: OpType, val width: Width?, val node: AstNode, val reg: Reg) : SimpleNode() {
+class OpNode(val type: OpType, val width: Width?, val node: AstNode, val reg: Reg) : AstNode {
+	override val base = Base()
+
 	val isMem get() = type == OpType.MEM
 	val isImm get() = type == OpType.IMM
 
@@ -243,7 +262,9 @@ class InsNode(
 	val op2      : OpNode,
 	val op3      : OpNode,
 	val op4      : OpNode
-) : SimpleNode() {
+) : AstNode {
+
+	override val base = Base()
 
 	val size = when {
 		op1 == OpNode.NULL -> 0

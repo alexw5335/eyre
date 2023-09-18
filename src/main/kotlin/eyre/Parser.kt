@@ -304,7 +304,7 @@ class Parser(private val context: CompilerContext) {
 		val thisScope = Scopes.add(currentScope, structName)
 		val members = ArrayList<Member>()
 		val struct = Struct(currentScope.base(thisScope, structName), members).addNodeSym(srcPos)
-
+		context.unorderedNodes.add(struct)
 		expect(SymToken.LBRACE)
 
 		while(tokens[pos] != SymToken.RBRACE) {

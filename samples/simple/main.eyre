@@ -1,10 +1,14 @@
 namespace eyre
 
-var message db "TESTING\n"
+struct Point {
+	dword x
+	dword y
+}
 
 proc main {
 	sub rsp, 40
-	lea rcx, [message]
+	lea rcx, ["value: %d\n"]
+	mov edx, Point.x
 	dllcall printf
 	dllcall ExitProcess
 }

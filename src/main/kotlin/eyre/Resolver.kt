@@ -125,6 +125,7 @@ class Resolver(private val context: CompilerContext) {
 		is VarDb     -> if(node.typeNode != null) node.type = resolveTypeNode(node.typeNode)
 		is VarRes    -> if(node.typeNode != null) node.type = resolveTypeNode(node.typeNode)
 		is Struct    -> for(member in node.members) member.type = resolveTypeNode(member.typeNode)
+		is Typedef   -> resolveTypeNode(node.typeNode)
 		else         -> { }
 	}}
 
@@ -166,9 +167,8 @@ class Resolver(private val context: CompilerContext) {
 
 		is Const     -> resolveExpr(node.valueNode)
 		is NameNode  -> node.symbol = resolveName(node.srcPos, node.value)
-		is TypeNode  -> resolveTypeNode(node)
 		is VarDb     -> for(part in node.parts) part.nodes.forEach(::resolveExpr)
-		is Typedef   -> resolveTypeNode(node.typeNode)
+		//is Typedef   -> node.
 
         is InsNode -> {
             if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
@@ -185,8 +185,12 @@ class Resolver(private val context: CompilerContext) {
             popScope()
         }
 
+		is Struct -> for(member in node.members) member.typeNode.arraySizes?.forEach(::resolveNode)
+		is VarRes -> node.typeNode?.arraySizes?.forEach(::resolveNode)
+
+		is TypeNode,
 		NullNode,
-		is VarRes,
+		is Member,
 		is StringNode,
 		is FloatNode,
 		is IntNode,
@@ -195,20 +199,22 @@ class Resolver(private val context: CompilerContext) {
 		is EnumEntry,
 		is UnaryNode,
 		is BinaryNode,
-		is Struct,
 		is OpNode -> context.internalError("Invalid node: $node")
 	}}
 
 
 
 	private fun resolveDotNode(node: BinaryNode): Symbol {
-		val receiver = (node.left as? SymNode)?.symbol
-			?: err(node.left.srcPos, "Invalid '.' operand")
+		val receiver = when(node.left) {
+			is NameNode   -> node.left.symbol
+			is BinaryNode -> node.left.symbol
+			else          -> err(node.left.srcPos, "Invalid receiver")
+		}
 
 		val right = node.right
 
 		if(receiver !is ScopedSymbol)
-			err(node.left.srcPos, "Invalid receiver: $receiver")
+			err(node.left.srcPos, "Invalid receiver (not scoped): $receiver")
 
 		if(right !is NameNode)
 			err(right.srcPos, "Invalid operand: ${right::class.simpleName}")
@@ -249,22 +255,52 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun calculate(symbol: Symbol) {
-		if(symbol.begin()) return
-
 		when(symbol) {
-			is Const -> symbol.intValue = calculateInt(symbol.valueNode)
-
-			is EnumEntry -> {
-
+			is Type -> {
+				if(symbol.begin()) return
+				symbol.end()
 			}
 
+			is Const -> {
+				if(symbol.begin()) return
+				symbol.intValue = calculateInt(symbol.valueNode)
+				symbol.end()
+			}
+
+			is Member -> {
+				if(symbol.begin()) return
+				calculateStruct(symbol.parent)
+				symbol.end()
+			}
+			is Struct -> calculateStruct(symbol)
+
 			else -> if(symbol is AstNode)
-				err(symbol.srcPos, "Invalid node?")
+				err(symbol.srcPos, "Invalid node: $symbol")
 			else
-				context.internalError()
+				context.internalError("Invalid symbol: $symbol")
+		}
+	}
+
+
+
+	private fun calculateStruct(struct: Struct) {
+		if(struct.begin()) return
+		var offset = 0
+		var maxAlignment = 0
+
+		for(member in struct.members) {
+			calculate(member.type)
+			member.size = member.type.size
+			val alignment = member.type.alignment.coerceAtMost(8)
+			maxAlignment = maxAlignment.coerceAtLeast(alignment)
+			member.offset = (offset + alignment - 1) and -alignment
+			offset += member.type.size
+			member.resolved = true
 		}
 
-		symbol.end()
+		struct.size = (offset + maxAlignment - 1) and -maxAlignment
+		struct.alignment = maxAlignment
+		struct.end()
 	}
 
 

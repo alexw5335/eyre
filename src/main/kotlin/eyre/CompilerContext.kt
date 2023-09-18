@@ -50,6 +50,8 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val unorderedNodes = ArrayList<AstNode>()
 
+	val typeNodes = HashMap<Type, TypeNode>()
+
 
 
 	init {
