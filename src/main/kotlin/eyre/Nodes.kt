@@ -143,9 +143,9 @@ class Member(
 
 
 
-class Struct(override val base: Base, val members: List<Member>) : AstNode, ScopedSymbol {
-	var size = 0
-	var alignment = 0
+class Struct(override val base: Base, val members: List<Member>) : AstNode, ScopedSymbol, Type {
+	override var size = 0
+	override var alignment = 0
 }
 
 
@@ -156,8 +156,9 @@ class VarRes(override val base: Base, val typeNode: TypeNode?) : AstNode, TypedS
 
 
 
-class EnumEntry(override val base: Base, val valueNode: AstNode?) : AstNode, Symbol {
-	var value = 0
+class EnumEntry(override val base: Base, val valueNode: AstNode?) : AstNode, Symbol, IntSymbol {
+	var value = 0L
+	override val intValue get() = value
 	lateinit var parent: Enum
 }
 
@@ -186,11 +187,18 @@ class TypeNode(
 	val arraySizes: Array<AstNode>?,
 ) : AstNode {
 	override val base = Base()
+	var type: Type? = null
 }
 
 
 
-class Enum(override val base: Base, val entries: ArrayList<EnumEntry>) : AstNode, ScopedSymbol
+class Enum(
+	override val base: Base,
+	val entries: ArrayList<EnumEntry>,
+	val isBitmask: Boolean
+) : AstNode, ScopedSymbol, Type {
+	override var size = 0
+}
 
 
 
@@ -305,9 +313,13 @@ inline fun UnaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -
 	function(node, validity && (op == UnaryOp.POS))
 )
 
-
+inline fun UnaryNode.calculate(function: (AstNode) -> Long): Long =
+	op.calculate(function(node))
 
 inline fun BinaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long): Long = op.calculate(
 	function(left, validity && (op == BinaryOp.ADD || op == BinaryOp.SUB)),
 	function(right, validity && (op == BinaryOp.ADD))
 )
+
+inline fun BinaryNode.calculate(function: (AstNode) -> Long): Long =
+	op.calculate(function(left), function(right))

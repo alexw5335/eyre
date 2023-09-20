@@ -1,27 +1,15 @@
 package eyre
 
-import java.lang.RuntimeException
-
-/**
- * The resolver runs in three stages:
- *
- * 1. References to most symbols are resolved
- * 2. References to members of types are resolved
- * 3. Constants values are calculated (array sizes, constants, enum values, etc.)
- *
- * The first stage is ordered (recursive descent). The second and third stages are
- * unordered.
- */
 class Resolver(private val context: CompilerContext) {
 
-
-	private class ResolverException : RuntimeException()
 
     private var scopeStack = Array(64) { Scopes.EMPTY }
 
     private var scopeStackSize = 0
 
     private var importStack = Array(64) { ArrayList<Symbol>() }
+
+
 
     private fun pushScope(scope: Scope) {
         scopeStack[scopeStackSize++] = scope
@@ -33,64 +21,74 @@ class Resolver(private val context: CompilerContext) {
     }
 
 	private fun err(srcPos: SrcPos?, message: String): Nothing {
-		context.errors.add(EyreException(srcPos, message))
-		throw ResolverException()
-	}
-
-
-
-	private inline fun visit(visitor: (AstNode) -> Unit) {
-		for(srcFile in context.srcFiles) {
-			try {
-				for(node in srcFile.nodes)
-					visitor(node)
-			} catch(_: ResolverException) {
-				srcFile.invalid = true
-			}
-		}
+		context.err(srcPos, message)
 	}
 
 
 
     fun resolve() {
         pushScope(Scopes.EMPTY)
-
 		scopeStackSize = 1
 
-		visit(::resolveTypes)
-		visit(::resolveNode)
+		for(srcFile in context.srcFiles) {
+			try {
+				resolveFile(srcFile)
+			} catch(_: EyreException) {
+				srcFile.invalid = true
+			}
+		}
 
-		for(node in context.unorderedNodes)
-			calculate(node as? Symbol ?: context.internalError())
+		popScope()
     }
 
 
 
-    /*
-	Stage 1: Name resolution
+	private fun resolveFile(srcFile: SrcFile) {
+		if(srcFile.resolved)
+			return
+
+		if(srcFile.resolving)
+			err(null, "Cyclic compile-time file dependency")
+
+		srcFile.resolving = true
+
+		for(node in srcFile.nodes)
+			determineTypes(node)
+
+		for(node in srcFile.nodes)
+			resolveNode(node)
+
+		srcFile.resolving = false
+		srcFile.resolved = true
+	}
+
+
+
+	/*
+	Name resolution
 	 */
 
 
 
-    /**
-     * Resolves a [name] within the current scope context.
-     */
-    private fun resolveName(srcPos: SrcPos?, name: Name): Symbol {
-        for(i in scopeStackSize - 1 downTo 0) {
-            val scope = scopeStack[i]
-            context.symbols.get(scope, name)?.let { return it }
-        }
+	/**
+	 * Resolves a [name] within the current scope context.
+	 */
+	private fun resolveName(srcPos: SrcPos?, name: Name): Symbol {
+		for(i in scopeStackSize - 1 downTo 0) {
+			val scope = scopeStack[i]
+			context.symbols.get(scope, name)?.let { return it }
+		}
 
-        for(i in scopeStackSize - 1 downTo 0) {
-            for(import in importStack[i]) {
-                if(import is ScopedSymbol) {
-                    context.symbols.get(import.thisScope, name)?.let { return it }
-                }
-            }
-        }
+		for(i in scopeStackSize - 1 downTo 0) {
+			for(import in importStack[i]) {
+				if(import is ScopedSymbol) {
+					context.symbols.get(import.thisScope, name)?.let { return it }
+				}
+			}
+		}
 
 		err(srcPos, "Unresolved symbol: $name")
-    }
+	}
 
 
 
@@ -113,108 +111,172 @@ class Resolver(private val context: CompilerContext) {
 
 
 	/*
-	Stage 1: Type resolution
+	Stage 1: Type resolution - partial visit
 	 */
 
 
 
-	private fun resolveTypes(node: AstNode) { when(node) {
+	private fun determineTypes(node: AstNode) { when(node) {
 		is Namespace -> pushScope(node.thisScope)
 		is Proc      -> pushScope(node.thisScope)
 		is ScopeEnd  -> popScope()
-		is VarDb     -> if(node.typeNode != null) node.type = resolveTypeNode(node.typeNode)
-		is VarRes    -> if(node.typeNode != null) node.type = resolveTypeNode(node.typeNode)
-		is Struct    -> for(member in node.members) member.type = resolveTypeNode(member.typeNode)
-		is Typedef   -> resolveTypeNode(node.typeNode)
+		is VarDb     -> if(node.typeNode != null) node.type = determineTypeNode(node.typeNode)
+		is VarRes    -> if(node.typeNode != null) node.type = determineTypeNode(node.typeNode)
+		is Struct    -> for(member in node.members) member.type = determineTypeNode(member.typeNode)
+		is Typedef   -> determineTypeNode(node.typeNode)
 		else         -> { }
 	}}
 
 
 
-    /*
-    Stage 1: Symbol resolution
-     */
-
-
-
-	private fun resolveExpr(node: AstNode) { when(node) {
-		is UnaryNode -> resolveExpr(node.node)
-		is NameNode  -> node.symbol = resolveName(node.srcPos, node.value)
-
-		is BinaryNode -> {
-			resolveExpr(node.left)
-
-			when(node.op) {
-				BinaryOp.DOT -> resolveDotNode(node)
-				BinaryOp.REF -> err(node.srcPos, "Ref nodes unsupported")
-				else         -> resolveExpr(node.right)
-			}
+	private fun determineTypeNode(node: TypeNode): Type {
+		val symbol = when {
+			node.name != null  -> resolveName(node.srcPos, node.name)
+			node.names != null -> resolveNames(node.srcPos, node.names)
+			else               -> error("Invalid type node")
 		}
 
-		is IntNode,
-		is FloatNode,
-		is StringNode -> Unit
+		var type = symbol as? Type ?: err(node.srcPos, "Expecting type, found: ${symbol.qualifiedName}")
 
-		else -> err(node.srcPos, "Invalid expression node: $node")
-	}}
+		if(node.arraySizes != null)
+			for(n in node.arraySizes)
+				type = ArrayType(type)
+
+		node.type = type
+
+		return type
+	}
 
 
 
-    private fun resolveNode(node: AstNode) { when(node) {
+	/*
+	Stage 2: Symbol resolution and constant calculation - full visit
+	 */
+
+
+
+	private fun resolveInt(node: AstNode): Long {
+		fun sym(symbol: Symbol): Long {
+			if(!symbol.resolved)
+				Resolver(context).resolveFile(node.srcPos!!.file)
+
+			if(symbol.resolving)
+				err(node.srcPos, "Cyclic compile-time constant dependency")
+
+			if(symbol is IntSymbol)
+				return symbol.intValue
+
+			err(node.srcPos, "Invalid integer constant: ${symbol.qualifiedName}")
+		}
+
+		return when(node) {
+			is IntNode -> node.value
+			is UnaryNode -> node.calculate(::resolveInt)
+			is NameNode -> {
+				val symbol = resolveName(node.srcPos, node.value)
+				node.symbol = symbol
+				sym(symbol)
+			}
+			is BinaryNode -> {
+				when(node.op) {
+					BinaryOp.DOT -> {
+						resolveNode(node.left)
+						resolveDotNode(node)
+						sym(node.symbol!!)
+					}
+					BinaryOp.REF -> 0L
+					else -> node.calculate(::resolveInt)
+				}
+			}
+			else -> err(node.srcPos, "Invalid integer constant node: $node")
+		}
+	}
+
+
+
+	private fun resolveNode(node: AstNode) { when(node) {
 		is Namespace -> pushScope(node.thisScope)
 		is Proc      -> pushScope(node.thisScope)
 		is ScopeEnd  -> popScope()
 
-		is Const     -> resolveExpr(node.valueNode)
-		is NameNode  -> node.symbol = resolveName(node.srcPos, node.value)
-
-        is InsNode -> {
-            if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
-			if(node.op1.node != NullNode) resolveExpr(node.op1.node)
-			if(node.op2.node != NullNode) resolveExpr(node.op2.node)
-			if(node.op3.node != NullNode) resolveExpr(node.op3.node)
-			if(node.op4.node != NullNode) resolveExpr(node.op4.node)
-        }
-
-        is Enum -> {
-            pushScope(node.thisScope)
-            for(entry in node.entries)
-                entry.valueNode?.let(::resolveExpr)
-            popScope()
-        }
-
-		is Struct -> {
-			for(member in node.members)
-				member.typeNode.arraySizes?.forEach(::resolveExpr)
+		is NameNode -> {
+			node.symbol = resolveName(node.srcPos, node.value)
 		}
 
+		is Const -> node.resolve {
+			intValue = resolveInt(valueNode)
+		}
+
+		is InsNode -> {
+			if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
+			if(node.op1.node != NullNode) resolveNode(node.op1.node)
+			if(node.op2.node != NullNode) resolveNode(node.op2.node)
+			if(node.op3.node != NullNode) resolveNode(node.op3.node)
+			if(node.op4.node != NullNode) resolveNode(node.op4.node)
+		}
+
+		is Enum -> node.resolve(::resolveEnum)
+
+		is Struct -> node.resolve(::resolveStruct)
+
 		is VarRes -> {
-			node.typeNode?.arraySizes?.forEach(::resolveExpr)
+			node.typeNode?.let(::resolveTypeNode)
 		}
 
 		is VarDb -> {
-			node.typeNode?.arraySizes?.forEach(::resolveExpr)
+			node.typeNode?.let(::resolveTypeNode)
 			for(part in node.parts)
-				part.nodes.forEach(::resolveExpr)
+				part.nodes.forEach(::resolveNode)
 		}
 
 		is Typedef -> {
-			node.typeNode.arraySizes?.forEach(::resolveExpr)
+			node.typeNode.let(::resolveTypeNode)
 		}
+
+		is UnaryNode -> {
+			resolveNode(node.node)
+		}
+
+		is BinaryNode -> {
+			resolveNode(node.left)
+
+			when(node.op) {
+				BinaryOp.DOT -> resolveDotNode(node)
+				BinaryOp.REF -> { }
+				else         -> resolveNode(node.right)
+			}
+		}
+
+		is RegNode,
+		is StringNode,
+		is IntNode,
+		is Label,
+		is FloatNode -> Unit
 
 		is TypeNode,
 		NullNode,
 		is Member,
-		is StringNode,
-		is FloatNode,
-		is IntNode,
-		is Label,
-		is RegNode,
 		is EnumEntry,
-		is UnaryNode,
-		is BinaryNode,
 		is OpNode -> context.internalError("Invalid node: $node")
 	}}
+
+
+
+	private fun resolveTypeNode(node: TypeNode): Type {
+		val type = node.type!!
+		val arraySizes = node.arraySizes ?: return type
+		var array = type as ArrayType
+
+		for(n in arraySizes) {
+			val count = resolveInt(n)
+			if(count < 0 || count >= Int.MAX_VALUE)
+				err(node.srcPos, "Invalid array size: $count")
+			array.count = count.toInt()
+			array = array.type as? ArrayType ?: break
+		}
+
+		return type
+	}
 
 
 
@@ -243,111 +305,64 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun resolveTypeNode(node: TypeNode): Type {
-		val symbol = when {
-			node.name != null  -> resolveName(node.srcPos, node.name)
-			node.names != null -> resolveNames(node.srcPos, node.names)
-			else               -> error("Invalid type node")
-		}
-
-		var type = symbol as? Type ?: err(node.srcPos, "Expecting type, found: ${symbol.qualifiedName}")
-
-		if(node.arraySizes != null)
-			for(n in node.arraySizes)
-				type = ArrayType(type)
-
-		return type
+	private inline fun<T> T.resolve(block: T.() -> Unit) where T : Symbol, T : AstNode {
+		resolving = true
+		block()
+		resolved = true
+		resolving = false
 	}
 
 
 
-	/*
-	Stage 2: Constant calculation
-	 */
-
-
-
-	private fun calculate(symbol: Symbol) {
-		when(symbol) {
-			is Const -> {
-				if(symbol.begin()) return
-				symbol.intValue = calculateInt(symbol.valueNode)
-				symbol.end()
-			}
-
-			is Member -> {
-				if(symbol.begin()) return
-				calculateStruct(symbol.parent)
-				symbol.end()
-			}
-			is Struct -> calculateStruct(symbol)
-
-			else -> if(symbol is AstNode)
-				err(symbol.srcPos, "Invalid node: $symbol")
-			else
-				context.internalError("Invalid symbol: $symbol")
-		}
-	}
-
-
-
-	private fun calculateType(node: TypeNode) {
-
-	}
-
-
-
-	private fun calculateStruct(struct: Struct) {
-		if(struct.begin()) return
+	private fun resolveStruct(struct: Struct) {
 		var offset = 0
 		var maxAlignment = 0
 
 		for(member in struct.members) {
-			member.size = member.type.size
-			val alignment = member.type.alignment.coerceAtMost(8)
-			maxAlignment = maxAlignment.coerceAtLeast(alignment)
-			member.offset = (offset + alignment - 1) and -alignment
-			offset += member.type.size
-			member.resolved = true
+			member.resolve {
+				member.type = resolveTypeNode(member.typeNode)
+				val alignment = member.type.alignment.coerceAtMost(8)
+				maxAlignment = maxAlignment.coerceAtLeast(alignment)
+				member.offset = (offset + alignment - 1) and -alignment
+				offset += member.type.size
+			}
 		}
 
 		struct.size = (offset + maxAlignment - 1) and -maxAlignment
 		struct.alignment = maxAlignment
-		struct.end()
 	}
 
 
 
-	private fun calculateInt(node: AstNode): Long = when(node) {
-		is IntNode    -> node.value
-		is UnaryNode  -> node.op.calculate(calculateInt(node.node))
-		is BinaryNode -> node.op.calculate(calculateInt(node.left), calculateInt(node.right))
-		is NameNode   -> calculateIntSymbol(node.symbol ?: error("Invalid symbol"))
-		else          -> error("Invalid node: $node")
-	}
+	private fun resolveEnum(enum: Enum) {
+		pushScope(enum.thisScope)
+		var current = if(enum.isBitmask) 1L else 0L
+		var max = 0L
 
+		for(entry in enum.entries) {
+			entry.resolve {
+				if(entry.valueNode == null) {
+					entry.value = current
+					current += if(enum.isBitmask) current else 1
+				} else {
+					entry.value = resolveInt(entry.valueNode)
+					current = entry.value
+					if(enum.isBitmask && current.countOneBits() != 1)
+						err(entry.srcPos, "Bitmask entry must be power of two")
+				}
 
+				max = max.coerceAtLeast(entry.value)
+			}
+		}
 
-	private fun calculateIntSymbol(symbol: Symbol): Long {
-		if(symbol !is IntSymbol) error("Invalid symbol")
-		calculate(symbol)
-		return symbol.intValue
-	}
+		enum.size = when {
+			max.isImm8  -> 1
+			max.isImm16 -> 2
+			max.isImm32 -> 4
+			else        -> 8
+		}
 
-
-
-	private fun Symbol.begin(): Boolean {
-		if(resolved) return true
-		if(resolving) error("Circular dependency: ${this.qualifiedName}")
-		resolving = true
-		return false
-	}
-
-
-
-	private fun Symbol.end() {
-		resolving = false
-		resolved = true
+		popScope()
 	}
 
 

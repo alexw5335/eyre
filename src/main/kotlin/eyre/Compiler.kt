@@ -48,7 +48,8 @@ class Compiler(private val context: CompilerContext) {
 	private fun checkErrors() {
 		if(context.errors.isNotEmpty()) {
 			for(e in context.errors) {
-				System.err.println("${e.srcPos} -- ${e.message}")
+				//System.err.println("${e.srcPos} -- ${e.message}")
+				e.printStackTrace()
 				System.err.println()
 			}
 			System.err.println("Compiler encountered errors")

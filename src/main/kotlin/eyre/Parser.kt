@@ -322,12 +322,12 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseEnum() {
+	private fun parseEnum(isBitmask: Boolean) {
 		val srcPos = srcPos()
 		val name = id()
 		val thisScope = Scopes.add(currentScope, name)
 		val entries = ArrayList<EnumEntry>()
-		val enum = Enum(currentScope.base(thisScope, name), entries).addNodeSym(srcPos)
+		val enum = Enum(currentScope.base(thisScope, name), entries, isBitmask).addNodeSym(srcPos)
 
 		expect(SymToken.LBRACE)
 
@@ -486,7 +486,8 @@ class Parser(private val context: CompilerContext) {
 				Keyword.CONST     -> parseConst()
 				Keyword.VAR       -> parseVar(false)
 				Keyword.VAL       -> parseVar(true)
-				Keyword.ENUM      -> parseEnum()
+				Keyword.ENUM      -> parseEnum(false)
+				Keyword.BITMASK   -> parseEnum(true)
 				Keyword.NAMESPACE -> parseNamespace()
 				Keyword.PROC      -> parseProc()
 				Keyword.TYPEDEF   -> parseTypedef()

@@ -38,6 +38,7 @@ class Assembler(private val context: CompilerContext) {
 						is Proc      -> handleProc(node)
 						is ScopeEnd  -> handleScopeEnd(node)
 						is VarDb     -> handleVarDb(node)
+						is VarRes    -> handleVarRes(node)
 						else         -> Unit
 					}
 				} catch(_: EyreException) {
@@ -185,6 +186,15 @@ class Assembler(private val context: CompilerContext) {
 
 
 
+	private fun handleVarRes(node: VarRes) {
+		val size = node.type.size
+		context.bssSize = (context.bssSize + 7) and -8
+		node.pos = context.bssSize
+		context.bssSize += size
+	}
+
+
+
 	private fun handleVarDb(node: VarDb) = sectioned(node.section) {
 		writer.align(8)
 
@@ -239,7 +249,7 @@ class Assembler(private val context: CompilerContext) {
     private fun resolveRec(node: AstNode, mem: Mem, regValid: Boolean): Long {
 		fun sym(symbol: Symbol?): Long {
 			if(symbol == null)
-				err(node, "Unresolved symbol (symbol node = ${DebugOutput.printString(node)}")
+				err(node, "Unresolved symbol ${DebugOutput.printString(node)}")
 
 			if(symbol is PosSymbol)
 				if(mem.relocs++ == 0 && !regValid)

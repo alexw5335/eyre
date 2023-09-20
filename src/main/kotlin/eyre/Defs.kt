@@ -170,7 +170,7 @@ enum class Escape(val avxValue: Int, val string: String?, val avxString: String)
 
 class DebugDirective(val name: String, val pos: Int, val sec: Section)
 
-class EyreException(val srcPos: SrcPos?, message: String) : Exception(message)
+class EyreException(val srcPos: SrcPos?, message: String) : Exception("$srcPos -- $message")
 
 class DllImports(val name: Name, val imports: HashMap<Name, DllImport>)
 
