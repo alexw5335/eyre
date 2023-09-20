@@ -87,18 +87,18 @@ object ByteType : IntType {
 }
 
 object WordType : IntType {
-	override val base = Base.create(Names["byte"], true)
-	override val size = 1
+	override val base = Base.create(Names["word"], true)
+	override val size = 2
 }
 
 object DwordType : IntType {
-	override val base = Base.create(Names["byte"], true)
-	override val size = 1
+	override val base = Base.create(Names["dword"], true)
+	override val size = 4
 }
 
 object QwordType : IntType {
-	override val base = Base.create(Names["byte"], true)
-	override val size = 1
+	override val base = Base.create(Names["qword"], true)
+	override val size = 8
 }
 
 object VoidType : Type {
@@ -129,7 +129,11 @@ class DllImport(name: Name) : PosSymbol {
 
 
 
-class Member(override val base: Base, val typeNode: TypeNode) : AstNode, IntSymbol, TypedSymbol, OffsetSymbol {
+class Member(
+	override val base: Base,
+
+	val typeNode: TypeNode
+) : AstNode, IntSymbol, TypedSymbol, OffsetSymbol {
 	var size = 0
 	override var type: Type = VoidType
 	override var offset = 0
@@ -165,7 +169,14 @@ class Const(override val base: Base, val valueNode: AstNode) : AstNode, IntSymbo
 
 
 
-class Typedef(override val base: Base, val typeNode: TypeNode) : AstNode, Symbol
+class Typedef(
+	override val base: Base,
+	val typeNode: TypeNode,
+	var type: Type = VoidType
+) : AstNode, Type {
+	override val size get() = type.size
+	override val alignment get() = type.alignment
+}
 
 
 
@@ -175,7 +186,6 @@ class TypeNode(
 	val arraySizes: Array<AstNode>?,
 ) : AstNode {
 	override val base = Base()
-	var type: Type = VoidType
 }
 
 

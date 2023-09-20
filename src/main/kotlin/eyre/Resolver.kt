@@ -167,8 +167,6 @@ class Resolver(private val context: CompilerContext) {
 
 		is Const     -> resolveExpr(node.valueNode)
 		is NameNode  -> node.symbol = resolveName(node.srcPos, node.value)
-		is VarDb     -> for(part in node.parts) part.nodes.forEach(::resolveExpr)
-		//is Typedef   -> node.
 
         is InsNode -> {
             if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
@@ -185,8 +183,24 @@ class Resolver(private val context: CompilerContext) {
             popScope()
         }
 
-		is Struct -> for(member in node.members) member.typeNode.arraySizes?.forEach(::resolveNode)
-		is VarRes -> node.typeNode?.arraySizes?.forEach(::resolveNode)
+		is Struct -> {
+			for(member in node.members)
+				member.typeNode.arraySizes?.forEach(::resolveExpr)
+		}
+
+		is VarRes -> {
+			node.typeNode?.arraySizes?.forEach(::resolveExpr)
+		}
+
+		is VarDb -> {
+			node.typeNode?.arraySizes?.forEach(::resolveExpr)
+			for(part in node.parts)
+				part.nodes.forEach(::resolveExpr)
+		}
+
+		is Typedef -> {
+			node.typeNode.arraySizes?.forEach(::resolveExpr)
+		}
 
 		is TypeNode,
 		NullNode,
@@ -242,7 +256,6 @@ class Resolver(private val context: CompilerContext) {
 			for(n in node.arraySizes)
 				type = ArrayType(type)
 
-		node.type = type
 		return type
 	}
 
@@ -256,11 +269,6 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun calculate(symbol: Symbol) {
 		when(symbol) {
-			is Type -> {
-				if(symbol.begin()) return
-				symbol.end()
-			}
-
 			is Const -> {
 				if(symbol.begin()) return
 				symbol.intValue = calculateInt(symbol.valueNode)
@@ -283,13 +291,18 @@ class Resolver(private val context: CompilerContext) {
 
 
 
+	private fun calculateType(node: TypeNode) {
+
+	}
+
+
+
 	private fun calculateStruct(struct: Struct) {
 		if(struct.begin()) return
 		var offset = 0
 		var maxAlignment = 0
 
 		for(member in struct.members) {
-			calculate(member.type)
 			member.size = member.type.size
 			val alignment = member.type.alignment.coerceAtMost(8)
 			maxAlignment = maxAlignment.coerceAtLeast(alignment)

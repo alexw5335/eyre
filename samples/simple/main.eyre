@@ -8,7 +8,7 @@ struct Point {
 proc main {
 	sub rsp, 40
 	lea rcx, ["value: %d\n"]
-	mov edx, Point.x
+	mov edx, Point.y
 	dllcall printf
 	dllcall ExitProcess
 }

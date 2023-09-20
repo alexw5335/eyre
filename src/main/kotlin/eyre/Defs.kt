@@ -124,8 +124,9 @@ class SrcFile(val path: Path, val relPath: Path) {
 	val newlines    = BitList()
 	val terminators = BitList()
 	val nodes       = ArrayList<AstNode>()
-	val nodeLines   = IntList()
 	var invalid     = false // Set by lexer and parser
+	var resolved    = false
+	var resolving   = false
 
 }
 
