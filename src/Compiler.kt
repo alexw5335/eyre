@@ -2,10 +2,7 @@ package eyre
 
 import java.nio.file.Files
 import java.nio.file.Paths
-import kotlin.io.path.createDirectories
-import kotlin.io.path.deleteRecursively
-import kotlin.io.path.extension
-import kotlin.io.path.relativeTo
+import kotlin.io.path.*
 import kotlin.system.exitProcess
 
 /**
@@ -60,6 +57,14 @@ class Compiler(private val context: CompilerContext) {
 
 
 	fun compile() {
+		val buildDir = Paths.get("build").also(Files::createDirectories)
+
+		Files
+			.list(buildDir)
+			.toList()
+			.filter { it.isDirectory() }
+			.forEach { it.deleteIfExists() }
+
 		// Lexing
 		val lexer = Lexer(context)
 		for(s in context.srcFiles)
@@ -86,10 +91,8 @@ class Compiler(private val context: CompilerContext) {
 		// Linking
 		Linker(context).link()
 		checkErrors()
-		val buildDir = Paths.get("build")
 		buildDir.createDirectories()
 		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())
-		DebugOutput.disassemble(context)
 		DebugOutput.printSymbols(context)
 	}
 

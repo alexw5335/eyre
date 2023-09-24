@@ -118,12 +118,19 @@ object DebugOutput {
 
 
 	fun printNodes(context: CompilerContext) {
-		val root = Paths.get("build/nodes").also(Files::createDirectories)
+		val dir = Paths.get("build").also(Files::createDirectories)
 
-		for(srcFile in context.srcFiles) {
-			val path = root.resolve(srcFile.relPath.toString().substringBeforeLast('.') + ".txt")
-			Files.newBufferedWriter(path).use {
-				printNodes(it, srcFile)
+		Files.newBufferedWriter(dir.resolve("nodes.txt")).use {
+			for(srcFile in context.srcFiles) {
+				it.append(srcFile.relPath.toString())
+
+				if(srcFile.nodes.isEmpty()) {
+					it.append(" (empty)")
+				} else {
+					it.append(":\n")
+					printNodes(it, srcFile)
+					it.append("\n\n\n")
+				}
 			}
 		}
 	}
