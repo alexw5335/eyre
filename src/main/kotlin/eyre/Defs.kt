@@ -43,13 +43,12 @@ enum class BinaryOp(
 	val infixString : String?,
 	val precedence  : Int,
 	val calculate   : (Long, Long) -> Long = { _, _ -> 0L },
-	val hasSymbol   : Boolean = false
 ) {
 
 	ARR (null, null, 10),
-	DOT (null, ".", 10, hasSymbol = true),
+	DOT (null, ".", 10),
 
-	REF (null, "::", 9, hasSymbol = true),
+	REF (null, "::", 9),
 
 	MUL ("*", " * ", 8, { a, b -> a * b }),
 	DIV ("/", " / ", 8, { a, b -> a / b }),

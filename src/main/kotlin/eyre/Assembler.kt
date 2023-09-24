@@ -247,15 +247,35 @@ class Assembler(private val context: CompilerContext) {
 
 
     private fun resolveRec(node: AstNode, mem: Mem, regValid: Boolean): Long {
-		fun sym(symbol: Symbol?): Long {
-			if(symbol == null)
+		fun addReloc() {
+			if(mem.relocs++ == 0 && !regValid)
+				err(node, "First relocation (absolute or relative) must be positive and absolute")
+		}
+
+        if(node is IntNode)
+			return node.value
+
+        if(node is UnaryNode)
+			return node.calculate(regValid) { n, v -> resolveRec(n, mem, v) }
+
+		if(node is StringNode) {
+			val symbol = stringLiteral(node.value)
+			node.symbol = symbol
+			addReloc()
+			return 0L
+		}
+
+		if(node is RefNode)
+			return (node.intSupplier ?: err(node.srcPos, "Ref node is not of type int")).invoke()
+
+		if(node is SymNode) {
+			val symbol = node.symbol ?:
 				err(node, "Unresolved symbol ${DebugOutput.printString(node)}")
 
-			if(symbol is PosSymbol)
-				if(mem.relocs++ == 0 && !regValid)
-					err(node, "First relocation (absolute or relative) must be positive and absolute")
-				else
-					return 0L
+			if(symbol is PosSymbol) {
+				addReloc()
+				return 0L
+			}
 
 			if(symbol is IntSymbol)
 				return symbol.intValue
@@ -263,16 +283,7 @@ class Assembler(private val context: CompilerContext) {
 			err(node, "Invalid symbol: $symbol")
 		}
 
-        if(node is IntNode)
-            return node.value
-
-        if(node is UnaryNode)
-            return node.calculate(regValid) { n, v -> resolveRec(n, mem, v) }
-
         if(node is BinaryNode) {
-			if(node.symbol != null)
-				return sym(node.symbol)
-
 			if(node.op == BinaryOp.MUL) {
 				val regNode = node.left as? RegNode ?: node.right as? RegNode
 				val scaleNode = node.left as? IntNode ?: node.right as? IntNode
@@ -304,15 +315,6 @@ class Assembler(private val context: CompilerContext) {
             }
             return 0
         }
-
-		if(node is NameNode)
-			return sym(node.symbol)
-
-		if(node is StringNode) {
-			val symbol = stringLiteral(node.value)
-			node.symbol = symbol
-			return sym(symbol)
-		}
 
         error("Invalid immediate: ${DebugOutput.printString(node)}")
     }

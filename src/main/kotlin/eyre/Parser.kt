@@ -23,7 +23,7 @@ class Parser(private val context: CompilerContext) {
 
 	private fun id() = tokens[pos++] as? Name ?: err(1, "Expecting identifier")
 
-	private fun err(srcPos: SrcPos, message: String): Nothing =
+	private fun err(srcPos: SrcPos?, message: String): Nothing =
 		context.err(srcPos, message)
 
 	private fun err(offset: Int, message: String): Nothing =
@@ -262,6 +262,7 @@ class Parser(private val context: CompilerContext) {
 			expectTerminator()
 			return
 		} else if(atTerminator) {
+			if(typeNode == null) err(srcPos, "Expecting type")
 			val node = VarRes(currentScope.base(name), typeNode).addNodeSym(srcPos)
 			node.section = Section.BSS
 		} else {
@@ -394,9 +395,16 @@ class Parser(private val context: CompilerContext) {
 			if(op.precedence < precedence) break
 			pos++
 			val expression = parseExpression(op.precedence + 1)
-			val srcPos = left.srcPos
-			left = BinaryNode(op, left, expression)
-			left.srcPos = srcPos
+
+			left = when(op) {
+				//BinaryOp.SET -> EqualsNode(atom, expression)
+				//BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom.asSymNode, expression) }
+				BinaryOp.DOT -> DotNode(left, (expression as? NameNode)?.value ?: err(expression.srcPos, "Expecting name"))
+				BinaryOp.REF -> RefNode(left, (expression as? NameNode)?.value ?: err(expression.srcPos, "Expecting name"))
+				else         -> BinaryNode(op, left, expression)
+			}
+
+			left.srcPos = expression.srcPos
 		}
 
 		return left

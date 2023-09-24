@@ -276,8 +276,8 @@ class Linker(private val context: CompilerContext) {
 
 
 	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long {
-		fun sym(symbol: Symbol?): Long {
-			if(symbol == null)
+		if(node is SymNode) {
+			val symbol = node.symbol ?:
 				context.err(node.srcPos, "Unresolved symbol (this should never happen here)")
 
 			if(symbol is PosSymbol)
@@ -289,6 +289,9 @@ class Linker(private val context: CompilerContext) {
 			context.err(node.srcPos, "Invalid symbol: $symbol")
 		}
 
+		if(node is RefNode)
+			return (node.intSupplier ?: err(node.srcPos, "Ref node is not of type int")).invoke()
+
 		if(node is IntNode)
 			return node.value
 
@@ -296,16 +299,7 @@ class Linker(private val context: CompilerContext) {
 			return node.calculate(regValid, ::resolveImmRec)
 
 		if(node is BinaryNode)
-			return if(node.symbol != null)
-				sym(node.symbol)
-			else
-				node.calculate(regValid, ::resolveImmRec)
-
-		if(node is NameNode)
-			return sym(node.symbol)
-
-		if(node is StringNode)
-			return sym(node.symbol)
+			return node.calculate(regValid, ::resolveImmRec)
 
 		context.err(node.srcPos, "Invalid immediate node (this should never happen here")
 	}

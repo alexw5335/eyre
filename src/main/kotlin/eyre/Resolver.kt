@@ -1,5 +1,7 @@
 package eyre
 
+import java.util.function.LongSupplier
+
 class Resolver(private val context: CompilerContext) {
 
 
@@ -157,7 +159,7 @@ class Resolver(private val context: CompilerContext) {
 
 	private fun resolveInt(node: AstNode): Long {
 		fun sym(symbol: Symbol): Long {
-			if(!symbol.resolved)
+			if(symbol.notResolved)
 				Resolver(context).resolveFile(node.srcPos!!.file)
 
 			if(symbol.resolving)
@@ -170,23 +172,16 @@ class Resolver(private val context: CompilerContext) {
 		}
 
 		return when(node) {
-			is IntNode -> node.value
-			is UnaryNode -> node.calculate(::resolveInt)
-			is NameNode -> {
-				val symbol = resolveName(node.srcPos, node.value)
-				node.symbol = symbol
-				sym(symbol)
-			}
-			is BinaryNode -> {
-				when(node.op) {
-					BinaryOp.DOT -> {
-						resolveNode(node.left)
-						resolveDotNode(node)
-						sym(node.symbol!!)
-					}
-					BinaryOp.REF -> 0L
-					else -> node.calculate(::resolveInt)
-				}
+			is IntNode    -> node.value
+			is UnaryNode  -> node.calculate(::resolveInt)
+			is NameNode   -> sym(resolveNameNode(node))
+			is DotNode    -> sym(resolveDotNode(node))
+			is BinaryNode -> node.calculate(::resolveInt)
+			is RefNode    -> {
+				resolveRefNode(node)
+				if((node.left as SymNode).symbol!!.notResolved)
+					Resolver(context).resolveFile(node.srcPos!!.file)
+				node.intSupplier!!.invoke()
 			}
 			else -> err(node.srcPos, "Invalid integer constant node: $node")
 		}
@@ -199,14 +194,6 @@ class Resolver(private val context: CompilerContext) {
 		is Proc      -> pushScope(node.thisScope)
 		is ScopeEnd  -> popScope()
 
-		is NameNode -> {
-			node.symbol = resolveName(node.srcPos, node.value)
-		}
-
-		is Const -> node.resolve {
-			intValue = resolveInt(valueNode)
-		}
-
 		is InsNode -> {
 			if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
 			if(node.op1.node != NullNode) resolveNode(node.op1.node)
@@ -215,36 +202,22 @@ class Resolver(private val context: CompilerContext) {
 			if(node.op4.node != NullNode) resolveNode(node.op4.node)
 		}
 
-		is Enum -> node.resolve(::resolveEnum)
+		is NameNode   -> resolveNameNode(node)
+		is Const      -> node.resolve { intValue = resolveInt(valueNode) }
+		is Enum       -> node.resolve(::resolveEnum)
+		is Struct     -> node.resolve(::resolveStruct)
+		is Typedef    -> node.resolve { resolveTypeNode(node.typeNode) }
+		is VarRes     -> node.resolve { resolveTypeNode(node.typeNode) }
 
-		is Struct -> node.resolve(::resolveStruct)
-
-		is VarRes -> {
-			node.typeNode?.let(::resolveTypeNode)
-		}
+		is UnaryNode  -> resolveNode(node.node)
+		is BinaryNode -> { resolveNode(node.left); resolveNode(node.right) }
+		is DotNode    -> resolveDotNode(node)
+		is RefNode    -> resolveRefNode(node)
 
 		is VarDb -> {
 			node.typeNode?.let(::resolveTypeNode)
 			for(part in node.parts)
 				part.nodes.forEach(::resolveNode)
-		}
-
-		is Typedef -> {
-			node.typeNode.let(::resolveTypeNode)
-		}
-
-		is UnaryNode -> {
-			resolveNode(node.node)
-		}
-
-		is BinaryNode -> {
-			resolveNode(node.left)
-
-			when(node.op) {
-				BinaryOp.DOT -> resolveDotNode(node)
-				BinaryOp.REF -> { }
-				else         -> resolveNode(node.right)
-			}
 		}
 
 		is RegNode,
@@ -253,12 +226,40 @@ class Resolver(private val context: CompilerContext) {
 		is Label,
 		is FloatNode -> Unit
 
+		is SymNode,
 		is TypeNode,
 		NullNode,
 		is Member,
 		is EnumEntry,
 		is OpNode -> context.internalError("Invalid node: $node")
 	}}
+
+
+
+	private fun resolveRefNode(node: RefNode) {
+		val receiver = resolveReceiver(node.left)
+
+		fun err(): Nothing = err(node.srcPos, "Invalid ref node")
+
+		when(node.right) {
+			Names.SIZE -> {
+				when(receiver) {
+					is TypedSymbol -> node.intSupplier = { receiver.type.size.toLong() }
+					is Type        -> node.intSupplier = { receiver.size.toLong() }
+					else           -> err()
+				}
+			}
+
+			Names.COUNT -> {
+				when(receiver) {
+					is CountedSymbol -> node.intSupplier = { receiver.count.toLong() }
+					else -> err()
+				}
+			}
+
+			else -> err()
+		}
+	}
 
 
 
@@ -280,25 +281,33 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun resolveDotNode(node: BinaryNode): Symbol {
-		val receiver = when(node.left) {
-			is NameNode   -> node.left.symbol
-			is BinaryNode -> node.left.symbol
-			else          -> err(node.left.srcPos, "Invalid receiver")
+	private fun resolveReceiver(node: AstNode): Symbol {
+		return when(node) {
+			is NameNode -> resolveNameNode(node)
+			is DotNode  -> resolveDotNode(node)
+			else        -> err(node.srcPos, "Invalid receiver: $node")
 		}
+	}
 
-		val right = node.right
+
+
+	private fun resolveNameNode(node: NameNode): Symbol {
+		val symbol = resolveName(node.srcPos, node.value)
+		node.symbol = symbol
+		return symbol
+	}
+
+
+
+	private fun resolveDotNode(node: DotNode): Symbol {
+		val receiver = resolveReceiver(node.left)
 
 		if(receiver !is ScopedSymbol)
 			err(node.left.srcPos, "Invalid receiver (not scoped): $receiver")
 
-		if(right !is NameNode)
-			err(right.srcPos, "Invalid operand: ${right::class.simpleName}")
+		val symbol = context.symbols.get(receiver.thisScope, node.right)
+			?: err(node.srcPos, "Unresolved reference: ${node.right}")
 
-		val symbol = context.symbols.get(receiver.thisScope, right.value)
-			?: err(node.srcPos, "Unresolved reference: ${right.value}")
-
-		right.symbol = symbol
 		node.symbol = symbol
 		return symbol
 	}

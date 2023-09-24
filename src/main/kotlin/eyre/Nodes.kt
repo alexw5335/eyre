@@ -1,5 +1,8 @@
 package eyre
 
+import java.util.function.IntSupplier
+import java.util.function.LongSupplier
+
 
 // Type system is a mess
 
@@ -31,8 +34,10 @@ sealed interface AstNode : NodeOrSym {
 sealed interface Symbol : NodeOrSym {
 	val scope get() = base.scope
 	val name get() = base.name
+	// If all compile-time constants that can be accessed by referencing this symbol have been calculated.
 	var resolved get() = base.resolved; set(v) { base.resolved = v }
 	var resolving get() = base.resolving; set(v) { base.resolving = v }
+	val notResolved get() = !resolved
 
 	val qualifiedName get() = if(scope.isEmpty) "$name" else "$scope.$name"
 }
@@ -44,6 +49,10 @@ interface Type : Symbol {
 
 interface TypedSymbol : Symbol {
 	val type: Type
+}
+
+interface CountedSymbol : Symbol {
+	val count: Int
 }
 
 interface IntSymbol : Symbol {
@@ -131,7 +140,6 @@ class DllImport(name: Name) : PosSymbol {
 
 class Member(
 	override val base: Base,
-
 	val typeNode: TypeNode
 ) : AstNode, IntSymbol, TypedSymbol, OffsetSymbol {
 	var size = 0
@@ -150,7 +158,7 @@ class Struct(override val base: Base, val members: List<Member>) : AstNode, Scop
 
 
 
-class VarRes(override val base: Base, val typeNode: TypeNode?) : AstNode, TypedSymbol, PosSymbol {
+class VarRes(override val base: Base, val typeNode: TypeNode) : AstNode, TypedSymbol, PosSymbol {
 	override var type: Type = VoidType
 }
 
@@ -196,8 +204,9 @@ class Enum(
 	override val base: Base,
 	val entries: ArrayList<EnumEntry>,
 	val isBitmask: Boolean
-) : AstNode, ScopedSymbol, Type {
+) : AstNode, ScopedSymbol, Type, CountedSymbol {
 	override var size = 0
+	override val count get() = entries.size
 }
 
 
@@ -228,7 +237,7 @@ class RegNode(val value: Reg) : AstNode {
 }
 
 /** [symbol] is only for string literals in OpNodes */
-class StringNode(val value: String, var symbol: Symbol? = null) : AstNode {
+class StringNode(val value: String, override var symbol: Symbol? = null) : AstNode, SymNode {
 	override val base = Base()
 }
 
@@ -244,17 +253,35 @@ class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode {
 	override val base = Base()
 }
 
-/** [symbol] is only for `.` and `::` operations */
+interface SymNode : AstNode {
+	var symbol: Symbol?
+}
+
+class DotNode(
+	val left: AstNode,
+	val right: Name,
+	override var symbol: Symbol? = null
+) : SymNode {
+	override val base = Base()
+}
+
+class RefNode(
+	val left: AstNode,
+	val right: Name
+) : AstNode {
+	override val base = Base()
+	var intSupplier: (() -> Long)? = null
+}
+
 class BinaryNode(
 	val op     : BinaryOp,
 	val left   : AstNode,
 	val right  : AstNode,
-	var symbol : Symbol? = null
 ) : AstNode {
 	override val base = Base()
 }
 
-class NameNode(val value: Name, var symbol: Symbol? = null) : AstNode {
+class NameNode(val value: Name, override var symbol: Symbol? = null) : SymNode {
 	override val base = Base()
 }
 

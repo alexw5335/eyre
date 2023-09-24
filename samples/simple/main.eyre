@@ -1,20 +1,11 @@
 namespace eyre
 
-struct Vec3 {
-	dword x
-	dword y
-	dword z
-}
-
-var myVar: Vec3
-
-const testing = Vec3::size
+var testing: dword[10]
 
 proc main {
 	sub rsp, 40
 	lea rcx, ["value: %d\n"]
-	mov dword [myVar], testing
-	mov edx, [myVar]
+	mov edx, testing::size
 	dllcall printf
 	dllcall ExitProcess
 }
