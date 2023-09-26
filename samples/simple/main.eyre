@@ -1,11 +1,8 @@
 namespace eyre
 
-var testing: dword[10]
-
+# debug
 proc main {
 	sub rsp, 40
-	lea rcx, ["value: %d\n"]
-	mov edx, testing::size
 	dllcall printf
 	dllcall ExitProcess
 }

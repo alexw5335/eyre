@@ -38,11 +38,15 @@ class Linker(private val context: CompilerContext) {
 			if(context.rdataWriter.isNotEmpty)
 				writer.bytes(context.rdataWriter)
 
-			if(context.dllImports.isNotEmpty())
-				writeImports(currentSecRva + writer.pos - currentSecPos, writer)
+			if(context.dllImports.isNotEmpty()) {
+				writer.align(16)
+				writeImports(currentSecRva + writer.pos - currentSecPos, writer.pos - currentSecPos, writer)
+			}
 
-			if(context.absRelocs.isNotEmpty())
+			if(context.absRelocs.isNotEmpty()) {
+				writer.align(16)
 				writeAbsRelocs(currentSecRva + writer.pos - currentSecPos, writer)
+			}
 		}
 
 		if(context.debugDirectives.isNotEmpty())
@@ -135,7 +139,11 @@ class Linker(private val context: CompilerContext) {
 
 
 
-	private fun writeImports(startRva: Int, writer: NativeWriter) {
+	/**
+	 * - [startRva]: The RVA of the start of the import data directory, relative to the image start
+	 * - [startPos]: The pos of the start of the import data directory, relative to the section start
+	 */
+	private fun writeImports(startRva: Int, startPos: Int, writer: NativeWriter) {
 		val dlls = context.dllImports.values
 
 		val idtsRva  = startRva
@@ -165,7 +173,7 @@ class Linker(private val context: CompilerContext) {
 				writer.i16(0)
 				writer.asciiNT(import.name.string)
 				writer.align2()
-				import.pos = iatPos + importIndex * 8 - idtsPos
+				import.pos = iatPos + importIndex * 8 - idtsPos + startPos
 			}
 
 			writer.i32(idtPos, iltPos - offset)
@@ -289,7 +297,7 @@ class Linker(private val context: CompilerContext) {
 			context.err(node.srcPos, "Invalid symbol: $symbol")
 		}
 
-		if(node is RefNode)
+		if(node is ReflectNode)
 			return (node.intSupplier ?: err(node.srcPos, "Ref node is not of type int")).invoke()
 
 		if(node is IntNode)

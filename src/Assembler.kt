@@ -12,9 +12,9 @@ class Assembler(private val context: CompilerContext) {
 
     private var section = Section.TEXT
 
-    private var currentIns: InsNode? = null
+    private var currentIns: Ins? = null
 
-    private val assemblers = Array<(InsNode) -> Unit>(Mnemonic.entries.size) { ::assembleAuto }
+    private val assemblers = Array<(Ins) -> Unit>(Mnemonic.entries.size) { ::assembleAuto }
 
     private val epilogueWriter = NativeWriter()
 
@@ -28,17 +28,17 @@ class Assembler(private val context: CompilerContext) {
 
     fun assemble() {
         for(srcFile in context.srcFiles) {
-            for(node in srcFile.nodes) {
+            for((index, node) in srcFile.nodes.withIndex()) {
 				val start = writer.pos
 
 				try {
 					when(node) {
-						is InsNode   -> assemble(node)
+						is Ins       -> assemble(node)
 						is Label     -> handleLabel(node)
 						is Proc      -> handleProc(node)
-						is ScopeEnd  -> handleScopeEnd(node)
-						is VarDb     -> handleVarDb(node)
-						is VarRes    -> handleVarRes(node)
+						is Directive -> handleDirective(node, index, srcFile.nodes)
+						is ScopeEnd  -> handleScopeEnd(node, index, srcFile.nodes)
+						is Var       -> handleVar(node)
 						else         -> Unit
 					}
 				} catch(_: EyreException) {
@@ -74,7 +74,7 @@ class Assembler(private val context: CompilerContext) {
 	}
 
 	private fun err(node: AstNode, message: String): Nothing {
-		val finalMessage = if(node is InsNode)
+		val finalMessage = if(node is Ins)
 			message + " -- ${DebugOutput.printString(node)}"
 		else
 			message
@@ -122,14 +122,21 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-    private fun handleScopeEnd(node: ScopeEnd) {
+    private fun handleScopeEnd(node: ScopeEnd, index: Int, nodes: List<AstNode>) {
         if(node.symbol !is Proc)
             return
 
         if(epilogueWriter.isNotEmpty) {
             writer.bytes(epilogueWriter)
             epilogueWriter.reset()
-        }
+        } else if(node.symbol.name != Names.MAIN) {
+			if(index == 0) context.internalError()
+			val prev = nodes[index - 1]
+			if(prev !is Ins || prev.size != 0 || prev.mnemonic != Mnemonic.RET) {
+				// TODO: Make this a warning, not an error
+				err(node.srcPos, "Warning: procedure doesn't end with a RET instruction")
+			}
+		}
 
         node.symbol.size = writer.pos - node.symbol.pos
     }
@@ -140,7 +147,6 @@ class Assembler(private val context: CompilerContext) {
 		handleLabel(node)
 
 		if(node.parts.isEmpty()) return
-
 
 		val regs = ArrayList<Reg>()
 		var toAlloc = 0L
@@ -186,27 +192,126 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-	private fun handleVarRes(node: VarRes) {
-		val size = node.type.size
-		context.bssSize = (context.bssSize + 7) and -8
-		node.pos = context.bssSize
-		context.bssSize += size
+	private fun handleDirective(node: Directive, index: Int, nodes: List<AstNode>) {
+		var mutTarget: AstNode? = null
+
+		for(i in index + 1 ..< nodes.size) {
+			if(nodes[i] is Directive) continue
+			mutTarget = nodes[i]
+			break
+		}
+
+		val target = mutTarget ?: err(node.srcPos, "Invalid directive (no target)")
+
+		when(node.name) {
+			Names.DEBUG -> {
+				fun argErr(): Nothing =
+					err(node.srcPos, "#debug directive requires no args or a single string arg with a named target")
+
+				val name: String = when(node.values.size) {
+					0    -> (target as? Symbol)?.qualifiedName ?: argErr()
+					1    -> (node.values[0] as? StringNode)?.value ?: argErr()
+					else -> argErr()
+				}
+
+				if(target !is PosSymbol)
+					err(node.srcPos, "#debug directive requires a positional symbol target")
+
+				context.debugDirectives += DebugDirective(name, writer.pos, target.section)
+			}
+			else -> err(node.srcPos, "Invalid directive")
+		}
 	}
 
 
 
-	private fun handleVarDb(node: VarDb) = sectioned(node.section) {
-		writer.align(8)
+	private fun handleVar(node: Var) {
+		if(node.valueNode == null) {
+			if(node.isVal)
+				err(node.srcPos, "Cannot have uninitialised read-only variable")
+			val size = node.type.size
+			context.bssSize = (context.bssSize + 7) and -8
+			node.pos = context.bssSize
+			node.section = Section.BSS
+			context.bssSize += size
+			return
+		}
 
-		node.pos = writer.pos
+		val section = if(node.isVal) Section.RDATA else Section.DATA
 
-		for(part in node.parts)
-			for(value in part.nodes)
-				if(value is StringNode)
-					for(char in value.value)
-						writer.writeWidth(part.width, char.code)
-				else
-					imm(resolveImm(value), part.width)
+		// note: cannot return from here, otherwise the section is not restored
+		sectioned(section) {
+			writer.align(8)
+			node.pos = writer.pos
+			node.section = section
+
+			if(node.valueNode is StringNode) {
+				for(char in node.valueNode.value)
+					if(!char.code.isImm8)
+						err(node.srcPos, "Non-ascii character (code = ${char.code}) in ascii string")
+					else
+						byte(char.code)
+			} else {
+				if(node.type is IntType) {
+					val imm = resolveImm(node.valueNode)
+
+					val width: Width = when(node.type.size) {
+						1    -> BYTE
+						2    -> WORD
+						4    -> DWORD
+						8    -> QWORD
+						else -> err(node.srcPos, "Invalid integer type size: ${node.type.size}")
+					}
+
+					imm(imm, width)
+				} else {
+					writeInitialiser(node.valueNode, node.type)
+				}
+			}
+		}
+	}
+
+
+
+	private fun writeInitialiser(node: AstNode, type: Type) {
+		val start = writer.pos
+
+		if(node is InitNode) {
+			val size = when(type) {
+				is Struct    -> type.members.size
+				is ArrayType -> type.count
+				else         -> err(node.srcPos, "Invalid initialiser")
+			}
+
+			fun offset(index: Int): Int = when(type) {
+				is Struct    -> type.members[index].offset
+				is ArrayType -> type.type.size * index
+				else         -> err(node.srcPos, "Invalid initialiser")
+			}
+
+			fun type(index: Int): Type = when(type) {
+				is Struct    -> type.members[index].type
+				is ArrayType -> type.type
+				else         -> err(node.srcPos, "Invalid initialiser")
+			}
+
+			if(node.values.size > size)
+				err(node.srcPos, "Too many initialisers. Found: ${node.values.size}. Expected: <= $size")
+			for((i, n) in node.values.withIndex()) {
+				writer.seek(start + offset(i))
+				writeInitialiser(n, type(i))
+			}
+			writer.seek(start + type.size)
+		} else {
+			val width = when(type.size) {
+				1    -> BYTE
+				2    -> WORD
+				4    -> DWORD
+				8    -> QWORD
+				else -> error("Invalid initialiser: ${type.name}, of size: ${type.size}")
+			}
+			imm(resolveImm(node), width)
+		}
 	}
 
 
@@ -265,7 +370,7 @@ class Assembler(private val context: CompilerContext) {
 			return 0L
 		}
 
-		if(node is RefNode)
+		if(node is ReflectNode)
 			return (node.intSupplier ?: err(node.srcPos, "Ref node is not of type int")).invoke()
 
 		if(node is SymNode) {
@@ -569,14 +674,14 @@ class Assembler(private val context: CompilerContext) {
         else  -> width
     }
 
-    private fun encode1REL(opcode: Int, width: Width, node: InsNode) {
+    private fun encode1REL(opcode: Int, width: Width, node: Ins) {
         if(node.size != 1) insErr()
         if(node.op1.type != OpType.IMM) insErr()
         writer.varLengthInt(opcode)
         rel(node.op1, width)
     }
 
-    private fun encode1I(opcode: Int, width: Width, node: InsNode) {
+    private fun encode1I(opcode: Int, width: Width, node: Ins) {
         if(node.size != 1) insErr()
         if(node.op1.type != OpType.IMM) insErr()
         writer.varLengthInt(opcode)
@@ -699,7 +804,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-    fun assembleDebug(node: InsNode): Pair<Int, Int> {
+    fun assembleDebug(node: Ins): Pair<Int, Int> {
         val start = writer.pos
         assemble(node)
         return Pair(start, writer.pos - start)
@@ -707,7 +812,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-    fun assemble(node: InsNode) {
+    fun assemble(node: Ins) {
         currentIns = node
 
 		if(node.size == 0) {
@@ -729,10 +834,10 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-    private val InsNode.single get() = if(size != 1) insErr() else op1
+    private val Ins.single get() = if(size != 1) insErr() else op1
 
     private fun populateAssemblers() {
-        operator fun Mnemonic.plusAssign(assembler: (InsNode) -> Unit) = assemblers.set(ordinal, assembler)
+        operator fun Mnemonic.plusAssign(assembler: (Ins) -> Unit) = assemblers.set(ordinal, assembler)
 
         Mnemonic.DLLCALL += ::encodeDLLCALL
         Mnemonic.PUSH    += ::encodePUSH
@@ -827,7 +932,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-    private fun encodeHRESET(node: InsNode) {
+    private fun encodeHRESET(node: Ins) {
         if(node.size != 1 && (node.size == 2 && node.r2 != Reg.EAX)) insErr()
         if(node.op1.type != OpType.IMM) insErr()
         word(0x0FF3)
@@ -835,7 +940,7 @@ class Assembler(private val context: CompilerContext) {
         imm(node.op1, BYTE)
     }
 
-    private fun encodeFSTSW(node: InsNode) {
+    private fun encodeFSTSW(node: Ins) {
         if(node.mnemonic == Mnemonic.FSTSW) byte(0x9B)
         val op1 = node.single
         when {
@@ -845,7 +950,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeSHLD(opcode: Int, node: InsNode) {
+    private fun encodeSHLD(opcode: Int, node: Ins) {
         if(node.size != 3) insErr()
         when {
             node.op3.reg == Reg.CL      -> encode2RMR(opcode + (1 shl 8), 0b1110, node.op1, node.op2.reg, 0)
@@ -854,7 +959,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeADD(start: Int, ext: Int, node: InsNode) {
+    private fun encodeADD(start: Int, ext: Int, node: Ins) {
         if(node.size != 2) insErr()
         val op1 = node.op1
         val op2 = node.op2
@@ -884,7 +989,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeROL(ext: Int, node: InsNode) {
+    private fun encodeROL(ext: Int, node: Ins) {
         if(node.size != 2)
 			insErr()
 
@@ -901,7 +1006,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeTEST(node: InsNode) {
+    private fun encodeTEST(node: Ins) {
         if(node.size != 2) insErr()
         val op1 = node.op1
         val op2 = node.op2
@@ -916,7 +1021,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeIMUL(node: InsNode) {
+    private fun encodeIMUL(node: Ins) {
         val op1 = node.op1
         val op2 = node.op2
         val op3 = node.op3
@@ -938,7 +1043,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeIN(node: InsNode) {
+    private fun encodeIN(node: Ins) {
         if(node.size != 2) insErr()
         when {
             node.r2 == Reg.DX -> when(node.r1) {
@@ -957,7 +1062,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeOUT(node: InsNode) {
+    private fun encodeOUT(node: Ins) {
         if(node.size != 2) insErr()
         when {
             node.r1 == Reg.DX -> when(node.r2) {
@@ -976,12 +1081,12 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeLEA(node: InsNode) {
+    private fun encodeLEA(node: Ins) {
         if(node.size != 2 || !node.op2.isMem) insErr()
         encode2RM(0x8D, 0b1110, node.op1.reg, node.op2, 0)
     }
 
-    private fun encodeENTER(node: InsNode) {
+    private fun encodeENTER(node: Ins) {
         if(node.size != 2) insErr()
         if(node.op1.type != OpType.IMM || node.op2.type != OpType.IMM) insErr()
         val imm1 = resolveImm(node.op1)
@@ -992,7 +1097,7 @@ class Assembler(private val context: CompilerContext) {
         imm(imm2, BYTE)
     }
 
-    private fun encodeXCHG(node: InsNode) {
+    private fun encodeXCHG(node: Ins) {
         if(node.size != 2) insErr()
         val op1 = node.op1
         val op2 = node.op2
@@ -1008,7 +1113,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeBSWAP(node: InsNode) {
+    private fun encodeBSWAP(node: Ins) {
         if(node.size != 1) insErr()
         val op1 = node.op1.reg
         when(op1.type) {
@@ -1044,7 +1149,7 @@ class Assembler(private val context: CompilerContext) {
         byte(0b11_000_000 or (op1.value shl 3) or (op2.value))
     }
 
-    private fun encodeMOV(node: InsNode) {
+    private fun encodeMOV(node: Ins) {
         if(node.size != 2) insErr()
         val op1 = node.op1
         val op2 = node.op2
@@ -1084,7 +1189,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeCALL(node: InsNode) {
+    private fun encodeCALL(node: Ins) {
         when(node.single.type) {
             OpType.MEM -> encode1MSingle(0xFF, QWORD, 2, node.op1)
             OpType.IMM -> byte(0xE8).rel(node.op1, DWORD)
@@ -1092,7 +1197,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeJMP(node: InsNode) {
+    private fun encodeJMP(node: Ins) {
         when(node.single.type) {
             OpType.MEM -> encode1MSingle(0xFF, QWORD, 4, node.op1)
             OpType.IMM -> encode1Rel832(0xEB, 0xE9, node.op1)
@@ -1100,12 +1205,12 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeJCC(rel8Opcode: Int, rel32Opcode: Int, node: InsNode) {
+    private fun encodeJCC(rel8Opcode: Int, rel32Opcode: Int, node: Ins) {
         if(node.size != 1) insErr()
         encode1Rel832(rel8Opcode, rel32Opcode, node.op1)
     }
 
-    private fun encodePUSH(node: InsNode) {
+    private fun encodePUSH(node: Ins) {
         when(node.single.type) {
             OpType.R16 -> encode1O(0x50, 0b1010, node.r1)
             OpType.R64 -> encode1O(0x50, 0b1010, node.r1)
@@ -1139,7 +1244,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodePOP(node: InsNode) {
+    private fun encodePOP(node: Ins) {
         when(node.single.type) {
             OpType.MEM -> encode1M(0x8F, 0b1010, 0, node.op1, 0)
             OpType.SEG -> when(node.r1) {
@@ -1151,7 +1256,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodePUSHW(node: InsNode) {
+    private fun encodePUSHW(node: Ins) {
         when(node.single.reg) {
             Reg.FS -> writer.i24(0xA80F66)
             Reg.GS -> writer.i32(0xA80F66)
@@ -1159,7 +1264,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodePOPW(node: InsNode) {
+    private fun encodePOPW(node: Ins) {
         when(node.single.reg) {
             Reg.FS -> writer.i24(0xA10F66)
             Reg.GS -> writer.i32(0xA10F66)
@@ -1167,7 +1272,7 @@ class Assembler(private val context: CompilerContext) {
         }
     }
 
-    private fun encodeDLLCALL(node: InsNode) {
+    private fun encodeDLLCALL(node: Ins) {
         val op1 = node.single
         val nameNode = op1.node as? NameNode ?: insErr()
         nameNode.symbol = context.getDllImport(nameNode.value)
@@ -1240,7 +1345,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-    fun getEnc(node: InsNode): NasmEnc? {
+    fun getEnc(node: Ins): NasmEnc? {
         val ops = listOf(node.op1, node.op2, node.op3, node.op4)
 
         val simdOps = AutoOps(
@@ -1257,7 +1362,7 @@ class Assembler(private val context: CompilerContext) {
 
 
 
-    private fun assembleAuto(node: InsNode) {
+    private fun assembleAuto(node: Ins) {
         if(node.high() == 1)
 			insErr("EVEX not currently supported")
 

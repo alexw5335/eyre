@@ -1,8 +1,5 @@
 package eyre
 
-import java.util.function.IntSupplier
-import java.util.function.LongSupplier
-
 
 // Type system is a mess
 
@@ -51,10 +48,6 @@ interface TypedSymbol : Symbol {
 	val type: Type
 }
 
-interface CountedSymbol : Symbol {
-	val count: Int
-}
-
 interface IntSymbol : Symbol {
 	val intValue: Long
 }
@@ -63,6 +56,9 @@ interface ScopedSymbol : Symbol {
 	val thisScope get() = base.thisScope
 }
 
+/**
+ * - [pos] and [section] should be set by the Assembler
+ */
 interface PosSymbol : Symbol {
 	var pos get() = base.pos; set(value) { base.pos = value }
 	var section get() = base.section; set(value) { base.section = value }
@@ -129,6 +125,22 @@ class ScopeEnd(val symbol: Symbol?): AstNode {
 
 
 
+class PosRefSym(
+	val receiver: PosSymbol,
+	val offset: Int,
+	override val type: Type
+) : PosSymbol, TypedSymbol {
+	override val base = Base.EMPTY
+	override var pos
+		set(_) = error("Cannot set ref symbol pos")
+		get() = receiver.pos + offset
+	override var section
+		set(_) = error("Cannot set ref symbol section")
+		get() = receiver.section
+}
+
+
+
 class DllImport(name: Name) : PosSymbol {
 	override val base = Base().also {
 		it.name = name
@@ -154,12 +166,6 @@ class Member(
 class Struct(override val base: Base, val members: List<Member>) : AstNode, ScopedSymbol, Type {
 	override var size = 0
 	override var alignment = 0
-}
-
-
-
-class VarRes(override val base: Base, val typeNode: TypeNode) : AstNode, TypedSymbol, PosSymbol {
-	override var type: Type = VoidType
 }
 
 
@@ -204,20 +210,20 @@ class Enum(
 	override val base: Base,
 	val entries: ArrayList<EnumEntry>,
 	val isBitmask: Boolean
-) : AstNode, ScopedSymbol, Type, CountedSymbol {
+) : AstNode, ScopedSymbol, Type {
 	override var size = 0
-	override val count get() = entries.size
 }
 
 
 
-class VarDb(
+class Var(
 	override val base : Base,
 	val typeNode      : TypeNode?,
-	val parts         : List<Part>
+	val valueNode     : AstNode?,
+	val isVal         : Boolean
 ) : AstNode, PosSymbol, TypedSymbol {
 	override var type: Type = VoidType
-	class Part(val width: Width, val nodes: List<AstNode>)
+	var size = 0
 }
 
 
@@ -227,6 +233,19 @@ class Proc(override val base: Base, val parts: List<AstNode>): AstNode, ScopedSy
 }
 
 
+
+class InitNode(val values: List<AstNode>) : AstNode {
+	override val base = Base()
+}
+
+class IndexNode(val index: AstNode) : AstNode {
+	override val base = Base()
+}
+
+class Directive(val name: Name, val values: List<AstNode>) : AstNode {
+	override val base = Base()
+	var target: AstNode = NullNode
+}
 
 class Namespace(override val base: Base) : AstNode, ScopedSymbol
 
@@ -265,12 +284,20 @@ class DotNode(
 	override val base = Base()
 }
 
-class RefNode(
+class ReflectNode(
 	val left: AstNode,
 	val right: Name
 ) : AstNode {
 	override val base = Base()
 	var intSupplier: (() -> Long)? = null
+}
+
+class ArrayNode(
+	val left: AstNode,
+	val right: AstNode,
+	override var symbol: Symbol? = null
+) : SymNode {
+	override val base = Base()
 }
 
 class BinaryNode(
@@ -301,7 +328,7 @@ class OpNode(val type: OpType, val width: Width?, val node: AstNode, val reg: Re
 
 
 
-class InsNode(
+class Ins(
 	val mnemonic : Mnemonic,
 	val op1      : OpNode,
 	val op2      : OpNode,

@@ -1,6 +1,8 @@
 package eyre
 
 import eyre.util.Util
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.bufferedWriter
@@ -33,7 +35,7 @@ object DebugOutput {
 
 
 
-	fun printSymbols(context: CompilerContext) {
+	fun writeSymbols(context: CompilerContext) {
 		val dir = Paths.get("build")
 		dir.createDirectories()
 
@@ -55,7 +57,7 @@ object DebugOutput {
 
 
 
-	fun printTokens(context: CompilerContext) {
+	fun writeTokens(context: CompilerContext) {
 		val dir = Paths.get("build").also(Files::createDirectories)
 
 		Files.newBufferedWriter(dir.resolve("tokens.txt")).use {
@@ -117,7 +119,7 @@ object DebugOutput {
 
 
 
-	fun printNodes(context: CompilerContext) {
+	fun writeNodes(context: CompilerContext) {
 		val dir = Paths.get("build").also(Files::createDirectories)
 
 		Files.newBufferedWriter(dir.resolve("nodes.txt")).use {
@@ -259,7 +261,7 @@ object DebugOutput {
 			}
 		}
 
-		is InsNode -> {
+		is Ins -> {
 			append(node.mnemonic.string)
 			if(node.size == 0) return
 			append(' ')
@@ -288,21 +290,6 @@ object DebugOutput {
 			append(node.qualifiedName)
 		}
 
-		is VarDb -> {
-			append("VAR ")
-			append(node.qualifiedName)
-			append(' ')
-			for(part in node.parts) {
-				append(part.width.varString)
-				append(' ')
-				for((index, node2) in part.nodes.withIndex()) {
-					appendNode(node2)
-					if(index != part.nodes.lastIndex) append(',')
-					append(' ')
-				}
-			}
-		}
-
 		is Const -> {
 			append("CONST ")
 			append(node.qualifiedName)
@@ -328,6 +315,30 @@ object DebugOutput {
 		print("\u001B[32m")
 		print(string)
 		println("\u001B[0m")
+	}
+
+
+
+	fun writeDisassembly(context: CompilerContext) {
+		val params = arrayOf("objdump", "-M", "intel-mnemonic", "-d", "build/test.exe")
+		val process = Runtime.getRuntime().exec(params)
+		val reader = BufferedReader(InputStreamReader(process.inputStream))
+
+		val lines = ArrayList<String>()
+
+		while(true) reader.readLine()?.let(lines::add) ?: break
+
+		process.errorReader().readText().let {
+			if(it.isNotEmpty())
+				print(it)
+		}
+
+		process.waitFor()
+
+		val buildDir = Paths.get("build").also(Files::createDirectories)
+		Files.write(buildDir.resolve("disasm.txt"), lines)
+
+		disassemble(context)
 	}
 
 

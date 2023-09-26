@@ -70,9 +70,9 @@ class Parser(private val context: CompilerContext) {
 
 	fun parse(srcFile: SrcFile) {
 		this.srcFile = srcFile
-		this.nodes = srcFile.nodes
-		this.tokens = srcFile.tokens
-		pos = 0
+		this.nodes   = srcFile.nodes
+		this.tokens  = srcFile.tokens
+		this.pos     = 0
 
 		try {
 			parseScope()
@@ -91,7 +91,7 @@ class Parser(private val context: CompilerContext) {
 			when(val token = tokens[pos]) {
 				is Name            -> parseName(token)
 				SymToken.RBRACE    -> break
-				SymToken.HASH      -> { }
+				SymToken.HASH      -> parseDirective()
 				EndToken           -> break
 				SymToken.SEMICOLON -> pos++
 				is SymToken        -> err(1, "Invalid symbol: ${token.string}")
@@ -228,46 +228,16 @@ class Parser(private val context: CompilerContext) {
 			null
 		}
 
-		val first = tokens[pos]
-
-		if(first is Name && first in Names.varWidths) {
-			val parts = ArrayList<VarDb.Part>()
-			var size = 0
-
-			while(true) {
-				val width = Names.varWidths[id()]
-				val nodes = ArrayList<AstNode>()
-
-				while(true) {
-					val component = parseExpression()
-					nodes.add(component)
-
-					size += when(component) {
-						is StringNode -> width.bytes * component.value.length
-						else -> width.bytes
-					}
-
-					if(tokens[pos] != SymToken.COMMA) break
-					pos++
-				}
-
-				parts.add(VarDb.Part(width, nodes))
-				if(tokens[pos] !is Name || tokens[pos] as Name !in Names.varWidths)
-					break
-			}
-
-			if(parts.isEmpty()) err(srcPos, "Empty initialiser")
-			val node = VarDb(currentScope.base(name), typeNode, parts).addNodeSym(srcPos)
-			node.section = if(isVal) Section.RDATA else Section.DATA
-			expectTerminator()
-			return
-		} else if(atTerminator) {
-			if(typeNode == null) err(srcPos, "Expecting type")
-			val node = VarRes(currentScope.base(name), typeNode).addNodeSym(srcPos)
-			node.section = Section.BSS
-		} else {
-			err(srcPos, "Expecting variable value")
+		val value = when {
+			tokens[pos] == SymToken.EQUALS -> { pos++; parseExpression() }
+			atTerminator -> null
+			else -> err(srcPos, "Expecting variable value")
 		}
+
+		val varNode = Var(currentScope.base(name), typeNode, value, isVal).addNodeSym(srcPos)
+
+		if(varNode.valueNode == null && typeNode == null)
+			err(srcPos, "Expecting variable value and/or type")
 	}
 
 
@@ -280,6 +250,31 @@ class Parser(private val context: CompilerContext) {
 		val const = Const(currentScope.base(name), value).addNodeSym(srcPos)
 		context.unorderedNodes.add(const)
 		expectTerminator()
+	}
+
+
+
+	private fun parseDirective() {
+		pos++
+		val srcPos = srcPos()
+		if(atNewline) err(srcPos, "Invalid directive")
+		val name = id()
+		val values = if(atTerminator) {
+			emptyList()
+		} else {
+			val values = ArrayList<AstNode>()
+
+			do {
+				values.add(parseExpression())
+				if(tokens[pos] == SymToken.COMMA) pos++
+			} while(!atNewline)
+
+			values
+		}
+
+		val node = Directive(name, values)
+		node.srcPos = srcPos
+		node.addNode()
 	}
 
 
@@ -365,11 +360,29 @@ class Parser(private val context: CompilerContext) {
 
 		fun invalidToken(): Nothing = err(1, "unexpected token: $token")
 
-		val node = when(token) {
-			is SymToken -> if(token == SymToken.LPAREN)
-				parseExpression().also { expect(SymToken.RPAREN) }
-			else
-				UnaryNode(token.unaryOp ?: invalidToken(), parseAtom())
+		val node: AstNode = when(token) {
+			is SymToken -> when(token) {
+				SymToken.LPAREN ->
+					parseExpression().also { expect(SymToken.RPAREN) }
+
+				SymToken.LBRACE -> {
+					val entries = ArrayList<AstNode>()
+					while(true) {
+						if(tokens[pos] == SymToken.RBRACE) break
+						entries.add(parseExpression())
+						if(tokens[pos] != SymToken.COMMA) break
+						pos++
+					}
+					pos++
+					InitNode(entries)
+				}
+
+				SymToken.LBRACKET ->
+					IndexNode(parseExpression()).also { expect(SymToken.RBRACKET) }
+
+				else ->
+					UnaryNode(token.unaryOp ?: invalidToken(), parseAtom())
+			}
 
 			is RegToken    -> RegNode(token.value)
 			is Name        -> NameNode(token)
@@ -396,11 +409,13 @@ class Parser(private val context: CompilerContext) {
 			pos++
 			val expression = parseExpression(op.precedence + 1)
 
+			fun asName() = (expression as? NameNode)?.value ?: err(expression.srcPos, "Expecting name")
+
 			left = when(op) {
 				//BinaryOp.SET -> EqualsNode(atom, expression)
-				//BinaryOp.ARR -> { expect(SymToken.RBRACKET); ArrayNode(atom.asSymNode, expression) }
-				BinaryOp.DOT -> DotNode(left, (expression as? NameNode)?.value ?: err(expression.srcPos, "Expecting name"))
-				BinaryOp.REF -> RefNode(left, (expression as? NameNode)?.value ?: err(expression.srcPos, "Expecting name"))
+				BinaryOp.ARR -> ArrayNode(left, expression).also { expect(SymToken.RBRACKET) }
+				BinaryOp.DOT -> DotNode(left, asName())
+				BinaryOp.REF -> ReflectNode(left, asName())
 				else         -> BinaryNode(op, left, expression)
 			}
 
@@ -447,28 +462,28 @@ class Parser(private val context: CompilerContext) {
 		val srcPos = srcPos()
 		pos++
 
-		fun inner(): InsNode {
+		fun inner(): Ins {
 			if(atNewline || tokens[pos] == EndToken)
-				return InsNode(mnemonic, OpNode.NULL, OpNode.NULL, OpNode.NULL, OpNode.NULL)
+				return Ins(mnemonic, OpNode.NULL, OpNode.NULL, OpNode.NULL, OpNode.NULL)
 
 			val op1 = parseOperand()
 			if(tokens[pos] != SymToken.COMMA)
-				return InsNode(mnemonic, op1, OpNode.NULL, OpNode.NULL, OpNode.NULL)
+				return Ins(mnemonic, op1, OpNode.NULL, OpNode.NULL, OpNode.NULL)
 			pos++
 
 			val op2 = parseOperand()
 			if(tokens[pos] != SymToken.COMMA)
-				return InsNode(mnemonic, op1, op2, OpNode.NULL, OpNode.NULL,)
+				return Ins(mnemonic, op1, op2, OpNode.NULL, OpNode.NULL,)
 			pos++
 
 			val op3 = parseOperand()
 			if(tokens[pos] != SymToken.COMMA)
-				return InsNode(mnemonic, op1, op2, op3, OpNode.NULL)
+				return Ins(mnemonic, op1, op2, op3, OpNode.NULL)
 			pos++
 
 			val op4 = parseOperand()
 			expectTerminator()
-			return InsNode(mnemonic, op1, op2, op3, op4)
+			return Ins(mnemonic, op1, op2, op3, op4)
 		}
 
 		val node = inner()

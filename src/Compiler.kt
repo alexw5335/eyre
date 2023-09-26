@@ -70,18 +70,21 @@ class Compiler(private val context: CompilerContext) {
 		for(s in context.srcFiles)
 			if(!s.invalid)
 				lexer.lex(s)
-		DebugOutput.printTokens(context)
+		DebugOutput.writeTokens(context)
 
 		// Parsing
 		val parser = Parser(context)
 		for(s in context.srcFiles)
 			if(!s.invalid)
 				parser.parse(s)
-		DebugOutput.printNodes(context)
+		DebugOutput.writeNodes(context)
 		checkErrors()
 
 		// Resolving
-		Resolver(context).resolve()
+		val resolver = Resolver(context)
+		for(s in context.srcFiles)
+			if(!s.invalid)
+				resolver.resolve(s)
 		checkErrors()
 
 		// Assembling
@@ -91,9 +94,9 @@ class Compiler(private val context: CompilerContext) {
 		// Linking
 		Linker(context).link()
 		checkErrors()
-		buildDir.createDirectories()
 		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())
-		DebugOutput.printSymbols(context)
+		DebugOutput.writeSymbols(context)
+		DebugOutput.writeDisassembly(context)
 	}
 
 
