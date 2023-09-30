@@ -1,0 +1,7 @@
+typedef i8 = byte
+typedef i16 = word
+typedef i32 = dword
+typedef i64 = qword
+typedef String = qword
+
+

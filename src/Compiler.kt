@@ -24,7 +24,7 @@ class Compiler(private val context: CompilerContext) {
 			if(srcFiles.isEmpty())
 				error("No source files found")
 
-			return Compiler(CompilerContext(srcFiles))
+			return Compiler(CompilerContext(srcFiles, Paths.get("build")))
 		}
 
 		fun create(directory: String, files: List<String>): Compiler {
@@ -35,7 +35,7 @@ class Compiler(private val context: CompilerContext) {
 				SrcFile(path, relPath)
 			}
 
-			return Compiler(CompilerContext(srcFiles))
+			return Compiler(CompilerContext(srcFiles, Paths.get("build")))
 		}
 
 	}
@@ -57,7 +57,8 @@ class Compiler(private val context: CompilerContext) {
 
 
 	fun compile() {
-		val buildDir = Paths.get("build").also(Files::createDirectories)
+		val buildDir = context.buildDir
+		buildDir.createDirectories()
 
 		Files
 			.list(buildDir)
@@ -77,14 +78,12 @@ class Compiler(private val context: CompilerContext) {
 		for(s in context.srcFiles)
 			if(!s.invalid)
 				parser.parse(s)
-		DebugOutput.writeNodes(context)
+		//DebugOutput.writeNodes(context)
 		checkErrors()
 
 		// Resolving
 		val resolver = Resolver(context)
-		for(s in context.srcFiles)
-			if(!s.invalid)
-				resolver.resolve(s)
+		resolver.resolve()
 		checkErrors()
 
 		// Assembling
@@ -95,8 +94,9 @@ class Compiler(private val context: CompilerContext) {
 		Linker(context).link()
 		checkErrors()
 		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())
+		DebugOutput.disassemble(context)
+		AstWriter(context).write()
 		DebugOutput.writeSymbols(context)
-		DebugOutput.writeDisassembly(context)
 	}
 
 

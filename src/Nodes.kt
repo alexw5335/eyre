@@ -109,6 +109,7 @@ object QwordType : IntType {
 object VoidType : Type {
 	override val base = Base.EMPTY
 	override val size = 0
+	override fun toString() = "VoidType"
 }
 
 class AnonPosSymbol(override var section: Section, override var pos: Int) : PosSymbol {
@@ -121,6 +122,12 @@ data object NullNode : AstNode {
 
 class ScopeEnd(val symbol: Symbol?): AstNode {
 	override val base = Base.EMPTY
+}
+
+
+
+class ImportNode(val names: Array<Name>) : AstNode {
+	override val base = Base()
 }
 
 
@@ -230,6 +237,8 @@ class Var(
 
 class Proc(override val base: Base, val parts: List<AstNode>): AstNode, ScopedSymbol, PosSymbol {
 	var size = 0 // Set by the Assembler
+	class StackInfo(val regs: List<RegNode>, val bytes: Int)
+	var stackInfo: StackInfo? = null
 }
 
 
@@ -312,7 +321,7 @@ class NameNode(val value: Name, override var symbol: Symbol? = null) : SymNode {
 	override val base = Base()
 }
 
-class OpNode(val type: OpType, val width: Width?, val node: AstNode, val reg: Reg) : AstNode {
+data class OpNode(val type: OpType, val width: Width?, val node: AstNode, val reg: Reg) : AstNode {
 	override val base = Base()
 
 	val isMem get() = type == OpType.MEM

@@ -22,12 +22,12 @@ class Linker(private val context: CompilerContext) {
 	fun link() {
 		writeHeaders()
 
-		section(Section.BSS, context.bssSize) { }
-
 		section(Section.TEXT, 0) {
 			if(context.textWriter.isNotEmpty)
 				writer.bytes(context.textWriter)
 		}
+
+		section(Section.BSS, context.bssSize) { }
 
 		section(Section.DATA, 0) {
 			if(context.dataWriter.isNotEmpty)
@@ -48,6 +48,11 @@ class Linker(private val context: CompilerContext) {
 				writeAbsRelocs(currentSecRva + writer.pos - currentSecPos, writer)
 			}
 		}
+
+		//for(symbol in context.symbols) {
+		//	if(symbol is PosSymbol)
+		//		context.debugDirectives += DebugDirective(symbol.qualifiedName, symbol.pos, symbol.section)
+		//}
 
 		if(context.debugDirectives.isNotEmpty())
 			writeSymbolTable()
@@ -111,7 +116,9 @@ class Linker(private val context: CompilerContext) {
 			} else
 				writer.ascii64(name)
 			writer.i32(directive.pos)
-			writer.i16(1)
+			val secIndex = context.getIndex(directive.sec)
+			if(secIndex == -1) context.internalError("Invalid section")
+			writer.i16(secIndex + 1)
 			writer.i16(0)
 			writer.i8(2)
 			writer.i8(0)
@@ -244,6 +251,7 @@ class Linker(private val context: CompilerContext) {
 	private inline fun section(sec: Section, uninitSize: Int, block: () -> Unit) {
 		context.setAddr(sec, currentSecRva)
 		context.setPos(sec, currentSecPos)
+		context.setIndex(sec, numSections)
 
 		block()
 

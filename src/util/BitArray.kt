@@ -32,7 +32,7 @@ class BitArray(private val fields: LongArray, val size: Int) {
 	fun count(index: Int): Int {
 		var count = 0
 		val fieldIndex = index shr 6
-		for(i in 0 until fieldIndex)
+		for(i in 0 ..< fieldIndex)
 			count += fields[i].countOneBits()
 		count += (fields[fieldIndex] and (1L shl index) - 1).countOneBits()
 		return count

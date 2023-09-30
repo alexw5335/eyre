@@ -9,6 +9,8 @@ class Resolver(private val context: CompilerContext) {
 
     private var importStack = Array(64) { ArrayList<Symbol>() }
 
+	private var scopeStackStart = 0
+
 
 
     private fun pushScope(scope: Scope) {
@@ -20,13 +22,43 @@ class Resolver(private val context: CompilerContext) {
         scopeStackSize--
     }
 
+
+	private fun addImport(srcPos: SrcPos?, import: Array<Name>) {
+		importStack[scopeStackSize - 1].add(resolveNames(srcPos, import))
+	}
+
 	private fun err(srcPos: SrcPos?, message: String): Nothing {
 		context.err(srcPos, message)
 	}
 
 
 
-	fun resolve(srcFile: SrcFile) {
+	fun resolve() {
+		for(srcFile in context.srcFiles)
+			resolveTypesInFile(srcFile)
+		for(srcFile in context.srcFiles)
+			resolveNodesInFile(srcFile)
+	}
+
+
+
+	private fun resolveTypesInFile(srcFile: SrcFile) {
+		val prevScopeStackStart = scopeStackStart
+		scopeStackStart = scopeStackSize
+
+		try {
+			for(node in srcFile.nodes)
+				determineTypes(node)
+		} catch(_: EyreException) {
+			srcFile.invalid = true
+		}
+
+		scopeStackStart = prevScopeStackStart
+	}
+
+
+
+	fun resolveNodesInFile(srcFile: SrcFile) {
 		if(srcFile.resolved)
 			return
 
@@ -35,16 +67,17 @@ class Resolver(private val context: CompilerContext) {
 
 		srcFile.resolving = true
 
-		pushScope(Scopes.EMPTY)
+		val prevScopeStackStart = scopeStackStart
+		scopeStackStart = scopeStackSize
 
 		try {
-			srcFile.nodes.forEach(::determineTypes)
-			srcFile.nodes.forEach(::resolveNode)
+			for(node in srcFile.nodes)
+				resolveNode(node)
 		} catch(_: EyreException) {
 			srcFile.invalid = true
 		}
 
-		popScope()
+		scopeStackStart = prevScopeStackStart
 
 		srcFile.resolved = true
 		srcFile.resolving = false
@@ -62,12 +95,14 @@ class Resolver(private val context: CompilerContext) {
 	 * Resolves a [name] within the current scope context.
 	 */
 	private fun resolveName(srcPos: SrcPos?, name: Name): Symbol {
-		for(i in scopeStackSize - 1 downTo 0) {
+		for(i in scopeStackSize - 1 downTo scopeStackStart) {
 			val scope = scopeStack[i]
 			context.symbols.get(scope, name)?.let { return it }
 		}
 
-		for(i in scopeStackSize - 1 downTo 0) {
+		context.symbols.get(Scopes.EMPTY, name)?.let { return it }
+
+		for(i in scopeStackSize - 1 downTo scopeStackStart) {
 			for(import in importStack[i]) {
 				if(import is ScopedSymbol) {
 					context.symbols.get(import.thisScope, name)?.let { return it }
@@ -105,13 +140,15 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun determineTypes(node: AstNode) { when(node) {
-		is Namespace -> pushScope(node.thisScope)
-		is Proc      -> pushScope(node.thisScope)
-		is ScopeEnd  -> popScope()
-		is Struct    -> for(member in node.members) member.type = determineTypeNode(member.typeNode)
-		is Typedef   -> determineTypeNode(node.typeNode)
-		is Var       -> if(node.typeNode != null) node.type = determineTypeNode(node.typeNode)
-		else         -> { }
+		is Namespace  -> pushScope(node.thisScope)
+		is Proc       -> pushScope(node.thisScope)
+		is ScopeEnd   -> popScope()
+		is ImportNode -> addImport(node.srcPos, node.names)
+
+		is Struct  -> for(member in node.members) member.type = determineTypeNode(member.typeNode)
+		is Typedef -> determineTypeNode(node.typeNode)
+		is Var     -> if(node.typeNode != null) node.type = determineTypeNode(node.typeNode)
+		else       -> { }
 	}}
 
 
@@ -142,9 +179,8 @@ class Resolver(private val context: CompilerContext) {
 
 
 
-	private fun resolveNodeFile(node: AstNode) {
-		Resolver(context).resolve(node.srcPos!!.file)
-	}
+	private fun resolveNodeFile(node: AstNode) =
+		resolveNodesInFile(node.srcPos?.file ?: context.internalError())
 
 
 
@@ -181,9 +217,10 @@ class Resolver(private val context: CompilerContext) {
 
 
 	private fun resolveNode(node: AstNode) { when(node) {
-		is Namespace -> pushScope(node.thisScope)
-		is Proc      -> pushScope(node.thisScope)
-		is ScopeEnd  -> popScope()
+		is Namespace  -> pushScope(node.thisScope)
+		is Proc       -> pushScope(node.thisScope)
+		is ScopeEnd   -> popScope()
+		is ImportNode -> addImport(node.srcPos, node.names)
 
 		is Ins -> {
 			if(node.mnemonic.type == Mnemonic.Type.PSEUDO) return
@@ -318,8 +355,7 @@ class Resolver(private val context: CompilerContext) {
 			is TypedSymbol -> {
 				val type = receiver.type
 				if(type !is ScopedSymbol)
-					err(node.srcPos, "Invalid receiver")
-
+					err(node.srcPos, "Invalid receiver (receiver = $receiver, type = $type)")
 				if(receiver is PosSymbol) {
 					val invoker = context.symbols.get(type.thisScope, node.right)
 					if(invoker !is Member) err(node.srcPos, "Expecting struct member")

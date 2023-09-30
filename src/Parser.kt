@@ -72,7 +72,10 @@ class Parser(private val context: CompilerContext) {
 		this.srcFile = srcFile
 		this.nodes   = srcFile.nodes
 		this.tokens  = srcFile.tokens
-		this.pos     = 0
+
+		pos = 0
+		currentNamespace = null
+		currentScope = Scopes.EMPTY
 
 		try {
 			parseScope()
@@ -136,6 +139,15 @@ class Parser(private val context: CompilerContext) {
 		val typeNode = parseType()
 		expectTerminator()
 		Typedef(currentScope.base(name), typeNode).addNodeSym(srcPos)
+	}
+
+
+
+	private fun parseNames(): Array<Name> {
+		nameBuilder.clear()
+		do { nameBuilder += id() } while(tokens[pos++] == SymToken.PERIOD)
+		pos--
+		return nameBuilder.toTypedArray()
 	}
 
 
@@ -210,7 +222,10 @@ class Parser(private val context: CompilerContext) {
 		val proc = Proc(currentScope.base(thisScope, name), parts).addNodeSym(srcPos)
 
 		expect(SymToken.LBRACE)
+		val prev = currentScope
+		currentScope = thisScope
 		parseScope()
+		currentScope = prev
 		expect(SymToken.RBRACE)
 		ScopeEnd(proc).addNode()
 	}
@@ -354,6 +369,15 @@ class Parser(private val context: CompilerContext) {
 
 
 
+	private fun parseImport() {
+		val srcPos = srcPos()
+		val node = ImportNode(parseNames())
+		node.srcPos = srcPos
+		node.addNode()
+	}
+
+
+
 	private fun parseAtom(): AstNode {
 		val srcPos = srcPos()
 		val token = tokens[pos++]
@@ -370,6 +394,7 @@ class Parser(private val context: CompilerContext) {
 					while(true) {
 						if(tokens[pos] == SymToken.RBRACE) break
 						entries.add(parseExpression())
+						if(atNewline) continue
 						if(tokens[pos] != SymToken.COMMA) break
 						pos++
 					}
@@ -514,6 +539,7 @@ class Parser(private val context: CompilerContext) {
 				Keyword.NAMESPACE -> parseNamespace()
 				Keyword.PROC      -> parseProc()
 				Keyword.TYPEDEF   -> parseTypedef()
+				Keyword.IMPORT    -> parseImport()
 				else              -> context.internalError()
 			}
 		} else if(name in Names.mnemonics) {

@@ -3,5 +3,5 @@ package eyre
 
 
 fun main() {
-	Compiler.create("samples/simple").compile()
+	Compiler.create("samples/a").compile()
 }

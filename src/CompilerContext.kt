@@ -1,8 +1,9 @@
 package eyre
 
 import eyre.util.NativeWriter
+import java.nio.file.Path
 
-class CompilerContext(val srcFiles: List<SrcFile>) {
+class CompilerContext(val srcFiles: List<SrcFile>, val buildDir: Path) {
 
 
 	var entryPoint: PosSymbol? = null
@@ -32,6 +33,10 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val debugDirectives = ArrayList<DebugDirective>()
 
+	val secIndexes = IntArray(Section.entries.size) { -1 }
+	fun getIndex(sec: Section) = secIndexes[sec.ordinal]
+	fun setIndex(sec: Section, value: Int) { secIndexes[sec.ordinal] = value }
+
 	// Virtual addresses of each section relative to image start
 	val secAddresses = IntArray(Section.entries.size)
 	fun getAddr(sec: Section) = secAddresses[sec.ordinal]
@@ -50,8 +55,6 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 
 	val unorderedNodes = ArrayList<AstNode>()
 
-	val typeNodes = HashMap<Type, TypeNode>()
-
 
 
 	init {
@@ -61,6 +64,11 @@ class CompilerContext(val srcFiles: List<SrcFile>) {
 		symbols.add(DwordType)
 		symbols.add(QwordType)
 	}
+
+
+
+	fun getSymbolAddress(symbol: PosSymbol) = getAddr(symbol.section) + symbol.pos
+
 
 
 

@@ -1,6 +1,8 @@
 package eyre
 
 import eyre.util.Util
+import eyre.util.hex32Full
+import eyre.util.hexFull
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.file.Files
@@ -42,7 +44,7 @@ object DebugOutput {
 		dir.resolve("symbols.txt").bufferedWriter().use {
 			for(symbol in context.symbols) {
 				if(symbol is PosSymbol)
-					it.append("${symbol::class.simpleName} -- ${symbol.qualifiedName} ${symbol.base.pos} ${symbol.base.section}\n")
+					it.append("${symbol::class.simpleName} -- ${symbol.qualifiedName} ${symbol.base.pos} -- ${symbol.base.section} ${context.getSymbolAddress(symbol).hexFull}\n")
 				else
 					it.append("${symbol::class.simpleName} -- ${symbol.qualifiedName}\n")
 			}

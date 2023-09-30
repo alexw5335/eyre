@@ -153,17 +153,26 @@ class Assembler(private val context: CompilerContext) {
 
 		for(n in node.parts)
 			if(n is RegNode)
-				regs += n.value
+				if(n.value in regs)
+					err(node.srcPos, "Duplicate register pushed to stack: ${n.value}")
+				else
+					regs += n.value
 			else
 				toAlloc += resolveImmSimple(n)
 
-		if(toAlloc.isImm8) {
+		if(toAlloc < 0 || toAlloc > Int.MAX_VALUE)
+			err(node.srcPos, "Stack allocation is too large")
+
+		val totalSize = toAlloc + regs.size * 8 + 8
+		val excess = totalSize % 16
+		if(excess != 0L) toAlloc += 16 - excess
+		val isImm8 = toAlloc < Byte.MAX_VALUE
+
+		if(isImm8) {
 			writer.i32(0xEC_83_48 or (toAlloc.toInt() shl 24))
-		} else if(toAlloc.isImm32) {
+		} else {
 			writer.i24(0xEC_81_48)
 			writer.i32(toAlloc.toInt())
-		} else {
-			err(node, "Proc stack allocation is too large")
 		}
 
 		for(r in regs)
@@ -172,7 +181,7 @@ class Assembler(private val context: CompilerContext) {
 			else
 				writer.i8(0x50 + r.value)
 
-		if(toAlloc.isImm8) {
+		if(isImm8) {
 			epilogueWriter.i32(0xC4_83_48 or (toAlloc.toInt() shl 24))
 		} else {
 			epilogueWriter.i24(0xC4_81_48)
@@ -214,11 +223,13 @@ class Assembler(private val context: CompilerContext) {
 					else -> argErr()
 				}
 
-				if(target !is PosSymbol)
-					err(node.srcPos, "#debug directive requires a positional symbol target")
-
-				context.debugDirectives += DebugDirective(name, writer.pos, target.section)
+				when(target) {
+					is Proc, is Ins ->
+						context.debugDirectives += DebugDirective(name, writer.pos, section)
+					else -> err(node.srcPos, "Invalid debug directive target: $target")
+				}
 			}
+
 			else -> err(node.srcPos, "Invalid directive")
 		}
 	}
@@ -252,21 +263,7 @@ class Assembler(private val context: CompilerContext) {
 					else
 						byte(char.code)
 			} else {
-				if(node.type is IntType) {
-					val imm = resolveImm(node.valueNode)
-
-					val width: Width = when(node.type.size) {
-						1    -> BYTE
-						2    -> WORD
-						4    -> DWORD
-						8    -> QWORD
-						else -> err(node.srcPos, "Invalid integer type size: ${node.type.size}")
-					}
-
-					imm(imm, width)
-				} else {
-					writeInitialiser(node.valueNode, node.type)
-				}
+				writeInitialiser(node.valueNode, node.type)
 			}
 		}
 	}

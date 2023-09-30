@@ -1,0 +1,11 @@
+namespace eyre
+
+
+proc main {
+	int3
+	sub rsp, 40
+	lea rcx, ["Value: %d\n"]
+	mov edx, edx
+	dllcall printf
+	dllcall ExitProcess
+}
