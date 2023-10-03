@@ -14,7 +14,7 @@ class Assembler(private val context: CompilerContext) {
 
     private var currentIns: Ins? = null
 
-    private val assemblers = Array<(Ins) -> Unit>(Mnemonic.entries.size) { ::assembleAuto }
+	private val assemblers = Array<(Ins) -> Unit>(Mnemonic.entries.size) { ::assembleAuto }
 
     private val epilogueWriter = NativeWriter()
 

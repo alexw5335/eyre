@@ -85,6 +85,7 @@ object Names : Interner<String, Name>() {
 	val prefixes     = createRange(InsPrefix.entries, InsPrefix::string)
 	val mnemonics    = createRange(Mnemonic.entries, Mnemonic::string)
 
+	// EMPTY must come first, since an ID of zero indicates an empty name
 	val EMPTY = add("")
 	val MAIN  = add("main")
 	val SIZE  = add("size")
