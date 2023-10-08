@@ -24,11 +24,11 @@ sealed interface NodeOrSym {
 	val base: Base
 }
 
-sealed interface AstNode : NodeOrSym {
+sealed interface Node : NodeOrSym {
 	var srcPos get() = base.srcPos; set(value) { base.srcPos = value }
 }
 
-sealed interface Symbol : NodeOrSym {
+sealed interface Sym : NodeOrSym {
 	val scope get() = base.scope
 	val name get() = base.name
 	// If all compile-time constants that can be accessed by referencing this symbol have been calculated.
@@ -39,36 +39,42 @@ sealed interface Symbol : NodeOrSym {
 	val qualifiedName get() = if(scope.isEmpty) "$name" else "$scope.$name"
 }
 
-interface Type : Symbol {
-	val size: Int
+interface Type : SizedSym {
 	val alignment get() = size
 }
 
-interface TypedSymbol : Symbol {
+interface TypedSym : Sym {
 	val type: Type
 }
 
-interface IntSymbol : Symbol {
+interface IntSym : Sym {
 	val intValue: Long
 }
 
-interface ScopedSymbol : Symbol {
+interface ScopedSym : Sym {
 	val thisScope get() = base.thisScope
 }
 
 /**
  * - [pos] and [section] should be set by the Assembler
  */
-interface PosSymbol : Symbol {
+interface PosSym : Sym {
 	var pos get() = base.pos; set(value) { base.pos = value }
 	var section get() = base.section; set(value) { base.section = value }
 }
 
 /**
- * A symbol that defines an offset into some base symbol, typically another [OffsetSymbol] or a [PosSymbol].
+ * A symbol that defines an offset into some base symbol, typically another [OffsetSym] or a [PosSym].
  */
-interface OffsetSymbol : Symbol {
+interface OffsetSym : Sym {
 	val offset: Int
+}
+
+/**
+ * [size] is only guaranteed to be set after the [Assembler] has run
+ */
+interface SizedSym : Sym {
+	val size: Int
 }
 
 
@@ -112,31 +118,31 @@ object VoidType : Type {
 	override fun toString() = "VoidType"
 }
 
-class AnonPosSymbol(override var section: Section, override var pos: Int) : PosSymbol {
+class AnonPosSym(override var section: Section, override var pos: Int) : PosSym {
 	override val base = Base.EMPTY
 }
 
-data object NullNode : AstNode {
+data object NullNode : Node {
 	override val base = Base.EMPTY
 }
 
-class ScopeEnd(val symbol: Symbol?): AstNode {
+class ScopeEnd(val sym: Sym?): Node {
 	override val base = Base.EMPTY
 }
 
 
 
-class ImportNode(val names: Array<Name>) : AstNode {
+class ImportNode(val names: Array<Name>) : Node {
 	override val base = Base()
 }
 
 
 
 class PosRefSym(
-	val receiver: PosSymbol,
+	val receiver: PosSym,
 	val offset: Int,
 	override val type: Type
-) : PosSymbol, TypedSymbol {
+) : PosSym, TypedSym {
 	override val base = Base.EMPTY
 	override var pos
 		set(_) = error("Cannot set ref symbol pos")
@@ -148,7 +154,7 @@ class PosRefSym(
 
 
 
-class DllImport(name: Name) : PosSymbol {
+class DllImport(name: Name) : PosSym {
 	override val base = Base().also {
 		it.name = name
 		it.section = Section.RDATA
@@ -160,7 +166,7 @@ class DllImport(name: Name) : PosSymbol {
 class Member(
 	override val base: Base,
 	val typeNode: TypeNode
-) : AstNode, IntSymbol, TypedSymbol, OffsetSymbol {
+) : Node, IntSym, TypedSym, OffsetSym {
 	var size = 0
 	override var type: Type = VoidType
 	override var offset = 0
@@ -170,14 +176,14 @@ class Member(
 
 
 
-class Struct(override val base: Base, val members: List<Member>) : AstNode, ScopedSymbol, Type {
+class Struct(override val base: Base, val members: List<Member>) : Node, ScopedSym, Type {
 	override var size = 0
 	override var alignment = 0
 }
 
 
 
-class EnumEntry(override val base: Base, val valueNode: AstNode?) : AstNode, Symbol, IntSymbol {
+class EnumEntry(override val base: Base, val valueNode: Node?) : Node, Sym, IntSym {
 	var value = 0L
 	override val intValue get() = value
 	lateinit var parent: Enum
@@ -185,7 +191,7 @@ class EnumEntry(override val base: Base, val valueNode: AstNode?) : AstNode, Sym
 
 
 
-class Const(override val base: Base, val valueNode: AstNode) : AstNode, IntSymbol {
+class Const(override val base: Base, val valueNode: Node) : Node, IntSym {
 	override var intValue = 0L
 }
 
@@ -195,7 +201,7 @@ class Typedef(
 	override val base: Base,
 	val typeNode: TypeNode,
 	var type: Type = VoidType
-) : AstNode, Type {
+) : Node, Type {
 	override val size get() = type.size
 	override val alignment get() = type.alignment
 }
@@ -205,8 +211,8 @@ class Typedef(
 class TypeNode(
 	val name: Name?,
 	val names: Array<Name>?,
-	val arraySizes: Array<AstNode>?,
-) : AstNode {
+	val arraySizes: Array<Node>?,
+) : Node {
 	override val base = Base()
 	var type: Type? = null
 }
@@ -217,7 +223,7 @@ class Enum(
 	override val base: Base,
 	val entries: ArrayList<EnumEntry>,
 	val isBitmask: Boolean
-) : AstNode, ScopedSymbol, Type {
+) : Node, ScopedSym, Type {
 	override var size = 0
 }
 
@@ -226,102 +232,100 @@ class Enum(
 class Var(
 	override val base : Base,
 	val typeNode      : TypeNode?,
-	val valueNode     : AstNode?,
+	val valueNode     : Node?,
 	val isVal         : Boolean
-) : AstNode, PosSymbol, TypedSymbol {
+) : Node, PosSym, TypedSym, SizedSym {
 	override var type: Type = VoidType
-	var size = 0
+	override var size = 0
 }
 
 
 
-class Proc(override val base: Base, val parts: List<AstNode>): AstNode, ScopedSymbol, PosSymbol {
-	var size = 0 // Set by the Assembler
-	class StackInfo(val regs: List<RegNode>, val bytes: Int)
-	var stackInfo: StackInfo? = null
+class Proc(override val base: Base, val parts: List<Node>): Node, ScopedSym, PosSym, SizedSym {
+	override var size = 0
 }
 
 
 
-class InitNode(val values: List<AstNode>) : AstNode {
+class InitNode(val values: List<Node>) : Node {
 	override val base = Base()
 }
 
-class IndexNode(val index: AstNode) : AstNode {
+class IndexNode(val index: Node) : Node {
 	override val base = Base()
 }
 
-class Directive(val name: Name, val values: List<AstNode>) : AstNode {
+class Directive(val name: Name, val values: List<Node>) : Node {
 	override val base = Base()
-	var target: AstNode = NullNode
+	var target: Node = NullNode
 }
 
-class Namespace(override val base: Base) : AstNode, ScopedSymbol
+class Namespace(override val base: Base) : Node, ScopedSym
 
-class Label(override val base: Base) : AstNode, PosSymbol
+class Label(override val base: Base) : Node, PosSym
 
-class RegNode(val value: Reg) : AstNode {
-	override val base = Base()
-}
-
-/** [symbol] is only for string literals in OpNodes */
-class StringNode(val value: String, override var symbol: Symbol? = null) : AstNode, SymNode {
+class RegNode(val value: Reg) : Node {
 	override val base = Base()
 }
 
-class FloatNode(val value: Double) : AstNode {
+/** [sym] is only for string literals in OpNodes */
+class StringNode(val value: String, override var sym: Sym? = null) : Node, SymNode {
 	override val base = Base()
 }
 
-class IntNode(val value: Long) : AstNode {
+class FloatNode(val value: Double) : Node {
 	override val base = Base()
 }
 
-class UnaryNode(val op: UnaryOp, val node: AstNode) : AstNode {
+class IntNode(val value: Long) : Node {
 	override val base = Base()
 }
 
-interface SymNode : AstNode {
-	var symbol: Symbol?
+class UnNode(val op: UnOp, val node: Node) : Node {
+	override val base = Base()
+}
+
+interface SymNode : Node {
+	var sym: Sym?
 }
 
 class DotNode(
-	val left: AstNode,
+	val left: Node,
 	val right: Name,
-	override var symbol: Symbol? = null
+	override var sym: Sym? = null
 ) : SymNode {
 	override val base = Base()
 }
 
 class ReflectNode(
-	val left: AstNode,
+	val left: Node,
 	val right: Name
-) : AstNode {
+) : Node {
 	override val base = Base()
 	var intSupplier: (() -> Long)? = null
 }
 
 class ArrayNode(
-	val left: AstNode,
-	val right: AstNode,
-	override var symbol: Symbol? = null
+	val left: Node,
+	val right: Node,
+	override var sym: Sym? = null
 ) : SymNode {
 	override val base = Base()
 }
 
-class BinaryNode(
-	val op     : BinaryOp,
-	val left   : AstNode,
-	val right  : AstNode,
-) : AstNode {
+class BinNode(
+	val op     : BinOp,
+	val left   : Node,
+	val right  : Node,
+) : Node {
 	override val base = Base()
 }
 
-class NameNode(val value: Name, override var symbol: Symbol? = null) : SymNode {
+class NameNode(val value: Name, override var sym: Sym? = null) : SymNode {
 	override val base = Base()
 }
 
-data class OpNode(val type: OpType, val width: Width?, val node: AstNode, val reg: Reg) : AstNode {
+data class OpNode(val type: OpType, val width: Width?, val node: Node, val reg: Reg) : Node {
 	override val base = Base()
 
 	val isMem get() = type == OpType.MEM
@@ -330,8 +334,8 @@ data class OpNode(val type: OpType, val width: Width?, val node: AstNode, val re
 	companion object {
 		val NULL = OpNode(OpType.NONE, null, NullNode, Reg.NONE)
 		fun reg(reg: Reg) = OpNode(reg.type, reg.type.gpWidth, NullNode, reg)
-		fun mem(width: Width?, mem: AstNode) = OpNode(OpType.MEM, width, mem, Reg.NONE)
-		fun imm(width: Width?, imm: AstNode) = OpNode(OpType.IMM, width, imm, Reg.NONE)
+		fun mem(width: Width?, mem: Node) = OpNode(OpType.MEM, width, mem, Reg.NONE)
+		fun imm(width: Width?, imm: Node) = OpNode(OpType.IMM, width, imm, Reg.NONE)
 	}
 }
 
@@ -343,11 +347,12 @@ class Ins(
 	val op2      : OpNode,
 	val op3      : OpNode,
 	val op4      : OpNode
-) : AstNode {
+) : Node, PosSym, SizedSym {
 
 	override val base = Base()
+	override var size = 0
 
-	val size = when {
+	val opCount = when {
 		op1 == OpNode.NULL -> 0
 		op2 == OpNode.NULL -> 1
 		op3 == OpNode.NULL -> 2
@@ -372,17 +377,17 @@ Helper functions
 
 
 
-inline fun UnaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long): Long = op.calculate(
-	function(node, validity && (op == UnaryOp.POS))
+inline fun UnNode.calc(validity: Boolean, function: (Node, Boolean) -> Long): Long = op.calc(
+	function(node, validity && (op == UnOp.POS))
 )
 
-inline fun UnaryNode.calculate(function: (AstNode) -> Long): Long =
-	op.calculate(function(node))
+inline fun UnNode.calc(function: (Node) -> Long): Long =
+	op.calc(function(node))
 
-inline fun BinaryNode.calculate(validity: Boolean, function: (AstNode, Boolean) -> Long): Long = op.calculate(
-	function(left, validity && (op == BinaryOp.ADD || op == BinaryOp.SUB)),
-	function(right, validity && (op == BinaryOp.ADD))
+inline fun BinNode.calc(validity: Boolean, function: (Node, Boolean) -> Long): Long = op.calc(
+	function(left, validity && (op == BinOp.ADD || op == BinOp.SUB)),
+	function(right, validity && (op == BinOp.ADD))
 )
 
-inline fun BinaryNode.calculate(function: (AstNode) -> Long): Long =
-	op.calculate(function(left), function(right))
+inline fun BinNode.calc(function: (Node) -> Long): Long =
+	op.calc(function(left), function(right))

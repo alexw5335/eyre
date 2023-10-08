@@ -1,9 +1,9 @@
 package eyre
 
-class SymbolTable : Iterable<Symbol> {
+class SymbolTable : Iterable<Sym> {
 
 
-	private data class Node(var value: Symbol?, var next: Node?) : Iterable<Node> {
+	private data class Node(var value: Sym?, var next: Node?) : Iterable<Node> {
 		override fun iterator() = object : Iterator<Node> {
 			override fun hasNext() = next != null
 			override fun next() = next!!
@@ -16,12 +16,12 @@ class SymbolTable : Iterable<Symbol> {
 
 
 
-	fun add(symbol: Symbol): Symbol? {
-		val hash = symbol.scope.id * 31 + symbol.name.id
+	fun add(sym: Sym): Sym? {
+		val hash = sym.scope.id * 31 + sym.name.id
 		var node = nodes[hash and (nodes.size - 1)]
 
 		if(node.value == null) {
-			node.value = symbol
+			node.value = sym
 			return null
 		}
 
@@ -31,23 +31,23 @@ class SymbolTable : Iterable<Symbol> {
 			val value = node.value
 			if(value == null)
 				emptyNode = node
-			else if(value.scope == symbol.scope && value.name == symbol.name)
+			else if(value.scope == sym.scope && value.name == sym.name)
 				return value
 			node = node.next ?: break
 		}
 
 		if(emptyNode != null) {
-			emptyNode.value = symbol
+			emptyNode.value = sym
 			return null
 		}
 
-		node.next = Node(symbol, null)
+		node.next = Node(sym, null)
 		return null
 	}
 
 
 
-	fun get(scope: Scope, name: Name): Symbol? {
+	fun get(scope: Scope, name: Name): Sym? {
 		val hash = scope.id * 31 + name.id
 		var node = nodes[hash and (nodes.size - 1)]
 
@@ -64,7 +64,7 @@ class SymbolTable : Iterable<Symbol> {
 
 
 
-	override fun iterator() = object : Iterator<Symbol> {
+	override fun iterator() = object : Iterator<Sym> {
 		var index = 0
 		var next: Node? = null
 
@@ -80,7 +80,7 @@ class SymbolTable : Iterable<Symbol> {
 
 		override fun hasNext() = next != null && next!!.value != null
 
-		override fun next(): Symbol {
+		override fun next(): Sym {
 			val value = next!!.value!!
 
 			if(next!!.next != null) {

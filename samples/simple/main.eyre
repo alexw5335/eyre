@@ -52,7 +52,6 @@ proc createClass(32) {
 	mov rax, [cursor]
 	mov [class.hCursor], rax
 
-	// RegisterClassA(class)
 	lea rcx, [class]
 	dllcall RegisterClassA
 

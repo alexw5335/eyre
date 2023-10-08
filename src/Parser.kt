@@ -1,11 +1,11 @@
 package eyre
 
-class Parser(private val context: CompilerContext) {
+class Parser(private val context: Context) {
 
 
 	private lateinit var srcFile: SrcFile
 
-	private lateinit var nodes: MutableList<AstNode>
+	private lateinit var nodes: MutableList<Node>
 
 	private lateinit var tokens: List<Token>
 
@@ -29,15 +29,15 @@ class Parser(private val context: CompilerContext) {
 	private fun err(offset: Int, message: String): Nothing =
 		err(SrcPos(srcFile, srcFile.tokenLines[pos - offset]), message)
 
-	private fun AstNode.addNode() = nodes.add(this)
+	private fun Node.addNode() = nodes.add(this)
 
-	private fun<T> T.addSym() where T : AstNode, T : Symbol {
+	private fun<T> T.addSym() where T : Node, T : Sym {
 		context.symbols.add(this)?.let {
 			err(srcPos ?: context.internalError(), "Symbol redeclaration: $qualifiedName")
 		}
 	}
 
-	private fun<T> T.addNodeSym(srcPos: SrcPos): T where T : AstNode, T : Symbol {
+	private fun<T> T.addNodeSym(srcPos: SrcPos): T where T : Node, T : Sym {
 		this.srcPos = srcPos
 		nodes.add(this)
 		context.symbols.add(this)?.let {
@@ -58,7 +58,7 @@ class Parser(private val context: CompilerContext) {
 
 	private val nameBuilder = ArrayList<Name>()
 
-	private val arraySizes = ArrayList<AstNode>()
+	private val arraySizes = ArrayList<Node>()
 
 
 
@@ -96,7 +96,7 @@ class Parser(private val context: CompilerContext) {
 				SymToken.RBRACE    -> break
 				SymToken.HASH      -> parseDirective()
 				EndToken           -> break
-				SymToken.SEMICOLON -> pos++
+				SymToken.SEMI -> pos++
 				is SymToken        -> err(1, "Invalid symbol: ${token.string}")
 				else               -> err(1, "Invalid token: $token")
 			}
@@ -204,7 +204,7 @@ class Parser(private val context: CompilerContext) {
 		val name = id()
 		val thisScope = Scopes.add(currentScope, name)
 
-		val parts = ArrayList<AstNode>()
+		val parts = ArrayList<Node>()
 
 		if(tokens[pos] == SymToken.LPAREN) {
 			pos++
@@ -277,7 +277,7 @@ class Parser(private val context: CompilerContext) {
 		val values = if(atTerminator) {
 			emptyList()
 		} else {
-			val values = ArrayList<AstNode>()
+			val values = ArrayList<Node>()
 
 			do {
 				values.add(parseExpression())
@@ -319,9 +319,11 @@ class Parser(private val context: CompilerContext) {
 		expect(SymToken.LBRACE)
 
 		while(tokens[pos] != SymToken.RBRACE) {
+			val memberSrcPos = srcPos()
 			val typeNode = parseType()
 			val name = id()
 			val member = Member(thisScope.base(name), typeNode)
+			member.srcPos = memberSrcPos
 			member.parent = struct
 			members.add(member)
 			member.addSym()
@@ -378,19 +380,19 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseAtom(): AstNode {
+	private fun parseAtom(): Node {
 		val srcPos = srcPos()
 		val token = tokens[pos++]
 
 		fun invalidToken(): Nothing = err(1, "unexpected token: $token")
 
-		val node: AstNode = when(token) {
+		val node: Node = when(token) {
 			is SymToken -> when(token) {
 				SymToken.LPAREN ->
 					parseExpression().also { expect(SymToken.RPAREN) }
 
 				SymToken.LBRACE -> {
-					val entries = ArrayList<AstNode>()
+					val entries = ArrayList<Node>()
 					while(true) {
 						if(tokens[pos] == SymToken.RBRACE) break
 						entries.add(parseExpression())
@@ -406,7 +408,7 @@ class Parser(private val context: CompilerContext) {
 					IndexNode(parseExpression()).also { expect(SymToken.RBRACKET) }
 
 				else ->
-					UnaryNode(token.unaryOp ?: invalidToken(), parseAtom())
+					UnNode(token.unOp ?: invalidToken(), parseAtom())
 			}
 
 			is RegToken    -> RegNode(token.value)
@@ -424,12 +426,12 @@ class Parser(private val context: CompilerContext) {
 
 
 
-	private fun parseExpression(precedence: Int = 0): AstNode {
+	private fun parseExpression(precedence: Int = 0): Node {
 		var left = parseAtom()
 
 		while(true) {
 			val token = tokens[pos]
-			val op = (token as? SymToken)?.binaryOp ?: break
+			val op = (token as? SymToken)?.binOp ?: break
 			if(op.precedence < precedence) break
 			pos++
 			val expression = parseExpression(op.precedence + 1)
@@ -438,10 +440,10 @@ class Parser(private val context: CompilerContext) {
 
 			left = when(op) {
 				//BinaryOp.SET -> EqualsNode(atom, expression)
-				BinaryOp.ARR -> ArrayNode(left, expression).also { expect(SymToken.RBRACKET) }
-				BinaryOp.DOT -> DotNode(left, asName())
-				BinaryOp.REF -> ReflectNode(left, asName())
-				else         -> BinaryNode(op, left, expression)
+				BinOp.ARR -> ArrayNode(left, expression).also { expect(SymToken.RBRACKET) }
+				BinOp.DOT -> DotNode(left, asName())
+				BinOp.REF -> ReflectNode(left, asName())
+				else         -> BinNode(op, left, expression)
 			}
 
 			left.srcPos = expression.srcPos

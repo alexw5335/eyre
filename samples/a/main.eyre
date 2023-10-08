@@ -1,11 +1,7 @@
 namespace eyre
 
+var myVar: dword = 10
 
-proc main {
-	int3
-	sub rsp, 40
-	lea rcx, ["Value: %d\n"]
-	mov edx, edx
-	dllcall printf
-	dllcall ExitProcess
+proc main(32) {
+	lea rcx, [myVar]
 }

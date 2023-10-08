@@ -2,35 +2,35 @@ package eyre
 
 
 
-class DebugPrinter(val context: CompilerContext) {
+class DebugPrinter(val context: Context) {
 
 }
 
 
 
-private fun Appendable.appendSymbol(symbol: Symbol?) {
-	if(symbol == null) {
+private fun Appendable.appendSymbol(sym: Sym?) {
+	if(sym == null) {
 		append("*NULL*")
 		return
 	}
 
-	append(symbol.qualifiedName)
+	append(sym.qualifiedName)
 	append(" (")
-	append(symbol::class.simpleName)
-	if(symbol is TypedSymbol) {
+	append(sym::class.simpleName)
+	if(sym is TypedSym) {
 		append(", type=")
-		append(symbol.type.qualifiedName)
+		append(sym.type.qualifiedName)
 	}
 	append(')')
 }
 
 
 
-fun Appendable.appendNodes(node: AstNode) {
+fun Appendable.appendNodes(node: Node) {
 
 }
-fun Appendable.appendNode(node: AstNode, indent: Int) {
-	fun appendChild(node: AstNode) {
+fun Appendable.appendNode(node: Node, indent: Int) {
+	fun appendChild(node: Node) {
 		repeat(indent + 1) { append('\t') }
 		appendNode(node, indent + 1)
 	}
@@ -62,19 +62,19 @@ fun Appendable.appendNode(node: AstNode, indent: Int) {
 		is NameNode -> {
 			append(node.value.string)
 			append(" (symbol = ")
-			appendSymbol(node.symbol)
+			appendSymbol(node.sym)
 			append(')')
 			appendLine()
 		}
 
-		is UnaryNode  -> {
+		is UnNode  -> {
 			append("UnaryNode ")
-			append(node.op.symbol)
+			append(node.op.string)
 			appendLine()
 			appendChild(node.node)
 		}
 
-		is BinaryNode -> {
+		is BinNode -> {
 			append("BinaryNode ")
 			append(node.op.string)
 			appendLine()

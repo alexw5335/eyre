@@ -3,7 +3,7 @@ package eyre
 import java.nio.file.Files
 import java.util.*
 
-class Lexer(val context: CompilerContext) {
+class Lexer(val context: Context) {
 
 
 	private lateinit var srcFile: SrcFile
@@ -271,13 +271,13 @@ class Lexer(val context: CompilerContext) {
 			charMap[')'] = { addTerm(SymToken.RPAREN) }
 			charMap['+'] = { add(SymToken.PLUS) }
 			charMap['-'] = { add(SymToken.MINUS) }
-			charMap['*'] = { add(SymToken.ASTERISK) }
+			charMap['*'] = { add(SymToken.STAR) }
 			charMap['['] = { add(SymToken.LBRACKET) }
 			charMap[']'] = { addTerm(SymToken.RBRACKET) }
 			charMap['{'] = { add(SymToken.LBRACE) }
 			charMap['}'] = { addTerm(SymToken.RBRACE) }
 			charMap['.'] = { add(SymToken.PERIOD) }
-			charMap[';'] = { addTerm(SymToken.SEMICOLON) }
+			charMap[';'] = { addTerm(SymToken.SEMI) }
 			charMap['^'] = { add(SymToken.CARET) }
 			charMap['~'] = { add(SymToken.TILDE) }
 			charMap[','] = { add(SymToken.COMMA) }
@@ -286,15 +286,15 @@ class Lexer(val context: CompilerContext) {
 
 			// Compound symbols
 			charMap['&'] = { when(chars[pos]) {
-				'&'  -> addAdv(SymToken.LOGIC_AND)
-				else -> add(SymToken.AMPERSAND)
+				'&'  -> addAdv(SymToken.LAND)
+				else -> add(SymToken.AMP)
 			}}
 			charMap['|'] = { when(chars[pos]) {
-				'|'  -> addAdv(SymToken.LOGIC_OR)
+				'|'  -> addAdv(SymToken.LOR)
 				else -> add(SymToken.PIPE)
 			}}
 			charMap[':'] = { when(chars[pos]) {
-				':'  -> addAdv(SymToken.REFERENCE)
+				':'  -> addAdv(SymToken.REF)
 				else -> add(SymToken.COLON)
 			}}
 			charMap['<'] = { when(chars[pos]) {
@@ -303,12 +303,12 @@ class Lexer(val context: CompilerContext) {
 				else -> add(SymToken.LT)
 			}}
 			charMap['='] = { when(chars[pos]) {
-				'='  -> addAdv(SymToken.EQUALITY)
+				'='  -> addAdv(SymToken.EQU)
 				else -> add(SymToken.EQUALS)
 			}}
 			charMap['!'] = { when(chars[pos]) {
-				'='  -> addAdv(SymToken.INEQUALITY)
-				else -> SymToken.EXCLAMATION
+				'='  -> addAdv(SymToken.INEQ)
+				else -> SymToken.BANG
 			}}
 			charMap['>'] = { when(chars[pos]) {
 				'>' -> when(chars[++pos]) {

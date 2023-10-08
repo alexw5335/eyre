@@ -3,7 +3,7 @@ package eyre
 import eyre.util.IntList
 import eyre.util.NativeWriter
 
-class Linker(private val context: CompilerContext) {
+class Linker(private val context: Context) {
 
 
 	private val writer = context.linkWriter
@@ -287,19 +287,19 @@ class Linker(private val context: CompilerContext) {
 
 
 
-	private val PosSymbol.address get() = context.getAddr(section) + pos
+	private val PosSym.address get() = context.getAddr(section) + pos
 
 
 
-	private fun resolveImmRec(node: AstNode, regValid: Boolean): Long {
+	private fun resolveImmRec(node: Node, regValid: Boolean): Long {
 		if(node is SymNode) {
-			val symbol = node.symbol ?:
+			val symbol = node.sym ?:
 				context.err(node.srcPos, "Unresolved symbol (this should never happen here)")
 
-			if(symbol is PosSymbol)
+			if(symbol is PosSym)
 				return symbol.address.toLong()
 
-			if(symbol is IntSymbol)
+			if(symbol is IntSym)
 				return symbol.intValue
 
 			context.err(node.srcPos, "Invalid symbol: $symbol")
@@ -311,18 +311,18 @@ class Linker(private val context: CompilerContext) {
 		if(node is IntNode)
 			return node.value
 
-		if(node is UnaryNode)
-			return node.calculate(regValid, ::resolveImmRec)
+		if(node is UnNode)
+			return node.calc(regValid, ::resolveImmRec)
 
-		if(node is BinaryNode)
-			return node.calculate(regValid, ::resolveImmRec)
+		if(node is BinNode)
+			return node.calc(regValid, ::resolveImmRec)
 
 		context.err(node.srcPos, "Invalid immediate node (this should never happen here")
 	}
 
 
 
-	private fun resolveImm(node: AstNode): Long {
+	private fun resolveImm(node: Node): Long {
 		return resolveImmRec(node, true)
 	}
 

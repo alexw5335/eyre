@@ -1,5 +1,6 @@
 package eyre
 
+import eyre.util.Unsafe
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.*
@@ -8,7 +9,7 @@ import kotlin.system.exitProcess
 /**
  * Token and node lines aren't working properly
  */
-class Compiler(private val context: CompilerContext) {
+class Compiler(private val context: Context) {
 
 
 	companion object {
@@ -24,7 +25,7 @@ class Compiler(private val context: CompilerContext) {
 			if(srcFiles.isEmpty())
 				error("No source files found")
 
-			return Compiler(CompilerContext(srcFiles, Paths.get("build")))
+			return Compiler(Context(srcFiles, Paths.get("build")))
 		}
 
 		fun create(directory: String, files: List<String>): Compiler {
@@ -35,23 +36,23 @@ class Compiler(private val context: CompilerContext) {
 				SrcFile(path, relPath)
 			}
 
-			return Compiler(CompilerContext(srcFiles, Paths.get("build")))
+			return Compiler(Context(srcFiles, Paths.get("build")))
 		}
 
 	}
 
 
 
-	private fun checkErrors() {
+	private fun checkErrors(): Boolean {
 		if(context.errors.isNotEmpty()) {
 			for(e in context.errors) {
-				//System.err.println("${e.srcPos} -- ${e.message}")
 				e.printStackTrace()
 				System.err.println()
 			}
 			System.err.println("Compiler encountered errors")
-			exitProcess(1)
+			return true
 		}
+		return false
 	}
 
 
@@ -60,11 +61,11 @@ class Compiler(private val context: CompilerContext) {
 		val buildDir = context.buildDir
 		buildDir.createDirectories()
 
-		Files
+/*		Files
 			.list(buildDir)
 			.toList()
 			.filter { it.isDirectory() }
-			.forEach { it.deleteIfExists() }
+			.forEach { it.deleteIfExists() }*/
 
 		// Lexing
 		val lexer = Lexer(context)
@@ -78,25 +79,47 @@ class Compiler(private val context: CompilerContext) {
 		for(s in context.srcFiles)
 			if(!s.invalid)
 				parser.parse(s)
-		//DebugOutput.writeNodes(context)
-		checkErrors()
+		if(checkErrors()) {
+			NodePrinter(context, CompilerStage.LEX).print()
+			exitProcess(1)
+		}
 
 		// Resolving
 		val resolver = Resolver(context)
 		resolver.resolve()
-		checkErrors()
+		if(checkErrors()) {
+			NodePrinter(context, CompilerStage.PARSE).print()
+			exitProcess(1)
+		}
 
 		// Assembling
 		Assembler(context).assemble()
-		checkErrors()
+		if(checkErrors()) {
+			NodePrinter(context, CompilerStage.RESOLVE).print()
+			exitProcess(1)
+		}
 
 		// Linking
 		Linker(context).link()
-		checkErrors()
+		if(checkErrors()) {
+			NodePrinter(context, CompilerStage.ASSEMBLE).print()
+			exitProcess(1)
+		} else {
+			NodePrinter(context, CompilerStage.LINK).print()
+		}
+
 		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())
-		DebugOutput.disassemble(context)
-		AstWriter(context).write()
-		DebugOutput.writeSymbols(context)
+
+/*		for(sym in context.symbols) {
+			if(sym !is Proc) continue
+			if(sym.section != Section.TEXT) context.internalError("Invalid")
+			println(sym.qualifiedName)
+			val data = Unsafe.malloc(sym.size)
+			Unsafe.setBytes(data, context.textWriter.bytes, sym.pos, sym.size)
+			Natives.disassembleAndPrint(data, sym.size, context.getAddr(Section.TEXT).toLong())
+			Unsafe.free(data)
+			println()
+		}*/
 	}
 
 

@@ -1,7 +1,6 @@
 package eyre
 
 import eyre.util.Util
-import eyre.util.hex32Full
 import eyre.util.hexFull
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -37,13 +36,13 @@ object DebugOutput {
 
 
 
-	fun writeSymbols(context: CompilerContext) {
+	fun writeSymbols(context: Context) {
 		val dir = Paths.get("build")
 		dir.createDirectories()
 
 		dir.resolve("symbols.txt").bufferedWriter().use {
 			for(symbol in context.symbols) {
-				if(symbol is PosSymbol)
+				if(symbol is PosSym)
 					it.append("${symbol::class.simpleName} -- ${symbol.qualifiedName} ${symbol.base.pos} -- ${symbol.base.section} ${context.getSymbolAddress(symbol).hexFull}\n")
 				else
 					it.append("${symbol::class.simpleName} -- ${symbol.qualifiedName}\n")
@@ -59,7 +58,7 @@ object DebugOutput {
 
 
 
-	fun writeTokens(context: CompilerContext) {
+	fun writeTokens(context: Context) {
 		val dir = Paths.get("build").also(Files::createDirectories)
 
 		Files.newBufferedWriter(dir.resolve("tokens.txt")).use {
@@ -121,7 +120,7 @@ object DebugOutput {
 
 
 
-	fun writeNodes(context: CompilerContext) {
+	fun writeNodes(context: Context) {
 		val dir = Paths.get("build").also(Files::createDirectories)
 
 		Files.newBufferedWriter(dir.resolve("nodes.txt")).use {
@@ -145,7 +144,7 @@ object DebugOutput {
 		var indent = 0
 		val lineCharCount = lineCharCount(srcFile)
 
-		fun printNode(node: AstNode) {
+		fun printNode(node: Node) {
 			if(node is ScopeEnd) {
 				indent--
 				writer.appendLine()
@@ -185,14 +184,14 @@ object DebugOutput {
 
 
 
-	fun printString(node: AstNode) = buildString { appendNode(node) }
+	fun printString(node: Node) = buildString { appendNode(node) }
 
 
 
 	/**
 	 * Appends a single-line string representation of a node
 	 */
-	private fun Appendable.appendNode(node: AstNode) { when(node) {
+	private fun Appendable.appendNode(node: Node) { when(node) {
 		is IntNode    -> append(node.value.toString())
 		is FloatNode  -> append(node.value.toString())
 		is NameNode   -> append(node.value.string)
@@ -228,17 +227,17 @@ object DebugOutput {
 			}
 		}
 
-		is UnaryNode  -> {
+		is UnNode  -> {
 			append('(')
-			append(node.op.symbol)
+			append(node.op.string)
 			appendNode(node.node)
 			append(')')
 		}
 
-		is BinaryNode -> {
+		is BinNode -> {
 			append('(')
 			appendNode(node.left)
-			append(node.op.infixString)
+			append(node.op.string)
 			appendNode(node.right)
 			append(')')
 		}
@@ -265,16 +264,16 @@ object DebugOutput {
 
 		is Ins -> {
 			append(node.mnemonic.string)
-			if(node.size == 0) return
+			if(node.opCount == 0) return
 			append(' ')
 			appendNode(node.op1)
-			if(node.size == 1) return
+			if(node.opCount == 1) return
 			append(", ")
 			appendNode(node.op2)
-			if(node.size == 2) return
+			if(node.opCount == 2) return
 			append(", ")
 			appendNode(node.op3)
-			if(node.size == 3) return
+			if(node.opCount == 3) return
 			append(", ")
 			appendNode(node.op4)
 		}
@@ -321,7 +320,7 @@ object DebugOutput {
 
 
 
-	fun writeDisassembly(context: CompilerContext) {
+	fun writeDisassembly(context: Context) {
 		val params = arrayOf("objdump", "-M", "intel-mnemonic", "-d", "build/test.exe")
 		val process = Runtime.getRuntime().exec(params)
 		val reader = BufferedReader(InputStreamReader(process.inputStream))
@@ -345,7 +344,7 @@ object DebugOutput {
 
 
 
-	fun disassemble(context: CompilerContext) {
+	fun disassemble(context: Context) {
 		printHeader("DISASSEMBLY")
 
 		val buildDir = Paths.get("build")

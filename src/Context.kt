@@ -3,10 +3,10 @@ package eyre
 import eyre.util.NativeWriter
 import java.nio.file.Path
 
-class CompilerContext(val srcFiles: List<SrcFile>, val buildDir: Path) {
+class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 
 
-	var entryPoint: PosSymbol? = null
+	var entryPoint: PosSym? = null
 
 	var textWriter = NativeWriter()
 
@@ -47,13 +47,16 @@ class CompilerContext(val srcFiles: List<SrcFile>, val buildDir: Path) {
 	fun getPos(sec: Section) = secPositions[sec.ordinal]
 	fun setPos(sec: Section, value: Int) { secPositions[sec.ordinal] = value }
 
+	fun getTotalPos(sym: PosSym) = getPos(sym.section) + sym.pos
+	fun getTotalAddr(sym: PosSym) = getAddr(sym.section) + sym.pos
+
 	val errors = ArrayList<EyreException>()
 
 	val dllImports = HashMap<Name, DllImports>()
 
 	val dllDefs = HashMap<Name, DllDef>()
 
-	val unorderedNodes = ArrayList<AstNode>()
+	val unorderedNodes = ArrayList<Node>()
 
 
 
@@ -67,7 +70,7 @@ class CompilerContext(val srcFiles: List<SrcFile>, val buildDir: Path) {
 
 
 
-	fun getSymbolAddress(symbol: PosSymbol) = getAddr(symbol.section) + symbol.pos
+	fun getSymbolAddress(symbol: PosSym) = getAddr(symbol.section) + symbol.pos
 
 
 

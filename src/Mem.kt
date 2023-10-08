@@ -7,7 +7,7 @@ class Mem {
 
 	companion object { val NULL = Mem() }
 
-    var node: AstNode = NullNode
+    var node: Node = NullNode
     var scale = 0
     var index = Reg.NONE
     var base = Reg.NONE

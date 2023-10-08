@@ -1948,7 +1948,7 @@ enum class Mnemonic(val type: Type) {
 		GP,
 		/** Mnemoinc has at least one encoding that contains an ST register */
 		FPU,
-		/** Mnemonic has at least one encoding that contains an MM or XMM register */
+		/** Mnemonic has at least one encoding that contains an MM or XMM register and doesn't use VEX/EVEX */
 		SSE,
 		/** Mnemonic has at least one encoding that uses VEX or EVEX */
 		AVX,

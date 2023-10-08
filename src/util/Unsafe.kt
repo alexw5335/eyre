@@ -120,6 +120,10 @@ object Unsafe {
 
 
 
+	fun setBytes(address: Long, value: ByteArray, offset: Int, length: Int) {
+		instance.copyMemory(value, 16L + offset, null, address, length.toLong())
+	}
+
 	fun setBytes(address: Long, value: ByteArray) {
 		instance.copyMemory(value, 16L, null, address, value.size.toLong())
 	}

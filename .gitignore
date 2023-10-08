@@ -10,3 +10,4 @@ prev/
 *.dll
 /temp/
 /temp.*
+/natives/

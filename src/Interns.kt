@@ -9,6 +9,7 @@ import kotlin.enums.EnumEntries
 interface Intern {
 	val id: Int
 	val isEmpty get() = id == 0
+	val isNotEmpty get() = id != 0
 }
 
 

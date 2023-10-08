@@ -2,7 +2,7 @@ package eyre
 
 import java.nio.file.Files
 
-class AstWriter(val context: CompilerContext) {
+class AstWriter(val context: Context) {
 
 
 	private val lineNumLength = lineNumLength()
@@ -43,7 +43,7 @@ class AstWriter(val context: CompilerContext) {
 
 
 
-	private fun Appendable.appendNode(node: AstNode) {
+	private fun Appendable.appendNode(node: Node) {
 		if(node is ScopeEnd) {
 			indent--
 			appendLine()
@@ -90,21 +90,21 @@ class AstWriter(val context: CompilerContext) {
 			is NameNode -> {
 				append(node.value.string)
 				append(" (symbol = ")
-				appendSymbol(node.symbol)
+				appendSymbol(node.sym)
 				append(')')
 				appendLine()
 			}
 
-			is UnaryNode -> {
+			is UnNode -> {
 				append("UnaryNode ")
-				append(node.op.symbol)
+				append(node.op.string)
 				appendLine()
 				indent++
 				appendNode(node.node)
 				indent--
 			}
 
-			is BinaryNode -> {
+			is BinNode -> {
 				append("BinaryNode ")
 				append(node.op.string)
 				appendLine()
@@ -157,18 +157,18 @@ class AstWriter(val context: CompilerContext) {
 
 
 
-	private fun Appendable.appendSymbol(symbol: Symbol?) {
-		if(symbol == null) {
+	private fun Appendable.appendSymbol(sym: Sym?) {
+		if(sym == null) {
 			append("*NULL*")
 			return
 		}
 
-		append(symbol.qualifiedName)
+		append(sym.qualifiedName)
 		append(" (")
-		append(symbol::class.simpleName)
-		if(symbol is TypedSymbol) {
+		append(sym::class.simpleName)
+		if(sym is TypedSym) {
 			append(", type=")
-			append(symbol.type.qualifiedName)
+			append(sym.type.qualifiedName)
 		}
 		append(')')
 	}

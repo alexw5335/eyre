@@ -24,58 +24,105 @@ enum class Section(val string: String, val flags: Int) {
 
 
 
-enum class UnaryOp(
-	val symbol     : String,
-	val calculate  : (Long) -> Long,
-) {
+enum class UnOp(val string: String) {
 
-	POS("+", { it }),
-	NEG("-", { -it }),
-	NOT("~", { it.inv() }),
-	LNOT("!", { if(it == 0L) 1L else 0L }),
+	POS("+"),
+	NEG("-",),
+	NOT("~"),
+	LNOT("!");
+
+	fun calc(value: Int): Int = when(this) {
+		POS  -> value
+		NEG  -> -value
+		NOT  -> value.inv()
+		LNOT -> if(value == 0) 1 else 0
+	}
+
+	fun calc(value: Long): Long = when(this) {
+		POS  -> value
+		NEG  -> -value
+		NOT  -> value.inv()
+		LNOT -> if(value == 0L) 1L else 0L
+	}
 
 }
 
 
 
-enum class BinaryOp(
-	val string      : String?,
-	val infixString : String?,
-	val precedence  : Int,
-	val calculate   : (Long, Long) -> Long = { _, _ -> 0L },
-) {
+enum class BinOp(val precedence: Int, val string: String?) {
 
-	ARR (null, null, 10),
-	DOT (null, ".", 10),
+	ARR (10, null),
+	DOT (10, "."),
+	REF (9, "::"),
+	MUL (8, "*"),
+	DIV (8, "/"),
+	ADD (7, "+"),
+	SUB (7, "-"),
+	SHL (6, "<<"),
+	SHR (6, ">>"),
+	SAR (6, ">>>"),
+	GT  (5, ">"),
+	LT  (5, "<"),
+	GTE (5, ">="),
+	LTE (5, "<="),
+	EQ  (4, "=="),
+	INEQ(4, "!="),
+	AND (3, "&"),
+	XOR (3, "^"),
+	OR  (3, "|"),
+	LAND(2, "&&"),
+	LOR (2, "||"),
+	SET (1, "=");
 
-	REF (null, "::", 9),
+	fun calc(a: Int, b: Int): Int = when(this) {
+		ARR -> 0
+		DOT  -> 0
+		REF  -> 0
+		MUL  -> a * b
+		DIV  -> a / b
+		ADD  -> a + b
+		SUB  -> a - b
+		SHL  -> a shl b
+		SHR  -> a shr b
+		SAR  -> a ushr b
+		GT   -> if(a > b) 1 else 0
+		LT   -> if(a < b) 1 else 0
+		GTE  -> if(a >= b) 1 else 0
+		LTE  -> if(a <= b) 1 else 0
+		EQ   -> if(a == b) 1 else 0
+		INEQ -> if(a != b) 1 else 0
+		AND  -> a and b
+		XOR  -> a xor b
+		OR   -> a or b
+		LAND -> if(a != 0 && b != 0) 1 else 0
+		LOR  -> if(a == 0 || b == 0) 1 else 0
+		SET  -> 0
+	}
 
-	MUL ("*", " * ", 8, { a, b -> a * b }),
-	DIV ("/", " / ", 8, { a, b -> a / b }),
-
-	ADD ("+", " + ", 7, { a, b -> a + b }),
-	SUB ("-", " - ", 7, { a, b -> a - b }),
-
-	SHL ("<<", " << ",  6, { a, b -> a shl b.toInt() }),
-	SHR (">>", " >> ", 6, { a, b -> a shr b.toInt() }),
-	SAR (">>>", " >>> ", 6, { a, b -> a ushr b.toInt() }),
-
-	GT  (">", " > ", 5, { a, b -> if(a > b) 1 else 0 }),
-	LT  ("<", " < ", 5, { a, b -> if(a < b) 1 else 0 }),
-	GTE (">=", " >= ", 5, { a, b -> if(a >= b) 1 else 0 }),
-	LTE ("<=", " <= ", 5, { a, b -> if(a <= b) 1 else 0 }),
-
-	EQ  ("==", " == ", 4, { a, b -> if(a == b) 1 else 0 }),
-	INEQ("!=", " != ", 4, { a, b -> if(a != b) 1 else 0 }),
-
-	AND ("&", " & ", 3, { a, b -> a and b }),
-	XOR ("^", " ^ ", 3, { a, b -> a xor b }),
-	OR  ("|", " | ", 3, { a, b -> a or b }),
-
-	LAND("&&", " && ", 2, { a, b -> if(a != 0L && b != 0L) 1 else 0 }),
-	LOR ("||", " || ", 2, { a, b -> if(a != 0L || b != 0L) 1 else 0 }),
-
-	SET("=", " = ", 1)
+	fun calc(a: Long, b: Long): Long = when(this) {
+		ARR  -> 0
+		DOT  -> 0
+		REF  -> 0
+		MUL  -> a * b
+		DIV  -> a / b
+		ADD  -> a + b
+		SUB  -> a - b
+		SHL  -> a shl b.toInt()
+		SHR  -> a shr b.toInt()
+		SAR  -> a ushr b.toInt()
+		GT   -> if(a > b) 1 else 0
+		LT   -> if(a < b) 1 else 0
+		GTE  -> if(a >= b) 1 else 0
+		LTE  -> if(a <= b) 1 else 0
+		EQ   -> if(a == b) 1 else 0
+		INEQ -> if(a != b) 1 else 0
+		AND  -> a and b
+		XOR  -> a xor b
+		OR   -> a or b
+		LAND -> if(a != 0L && b != 0L) 1 else 0
+		LOR  -> if(a == 0L || b == 0L) 1 else 0
+		SET  -> 0
+	}
 
 }
 
@@ -122,10 +169,11 @@ class SrcFile(val path: Path, val relPath: Path) {
 	val tokenLines  = IntList()
 	val newlines    = BitList()
 	val terminators = BitList()
-	val nodes       = ArrayList<AstNode>()
+	val nodes       = ArrayList<Node>()
 	var invalid     = false // Set by lexer and parser
 	var resolved    = false
 	var resolving   = false
+	val lineCount get() = if(tokenLines.size == 0) 0 else tokenLines[tokenLines.size - 1]
 
 }
 
@@ -138,12 +186,12 @@ class SrcPos(val file: SrcFile, val line: Int) {
 
 
 class Reloc(
-	val pos    : Int,
-	val sec    : Section,
-	val node   : AstNode,
-	val width  : Width,
-	val offset : Int,
-	val rel    : Boolean
+    val pos    : Int,
+    val sec    : Section,
+    val node   : Node,
+    val width  : Width,
+    val offset : Int,
+    val rel    : Boolean
 )
 
 
