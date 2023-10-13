@@ -1,4 +1,4 @@
-package eyre.util
+package eyre
 
 import sun.misc.Unsafe
 

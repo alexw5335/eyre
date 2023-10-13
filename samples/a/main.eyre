@@ -1,7 +1,8 @@
 namespace eyre
 
-var myVar: dword = 10
-
-proc main(32) {
-	lea rcx, [myVar]
+proc main {
+	sub rsp, 40
+	lea rcx, [main]
+	dllcall ExitProcess
+	ret
 }

@@ -1,48 +1,102 @@
 package eyre
 
-import kotlin.Enum
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
-import kotlin.enums.EnumEntries
+import java.util.ArrayList
+import java.util.HashMap
 
 
-interface Intern {
-	val id: Int
-	val isEmpty get() = id == 0
-	val isNotEmpty get() = id != 0
+
+abstract class Intern(val id: Int) {
+	override fun equals(other: Any?) = this === other
+	override fun hashCode() = id
+	val isNull get() = id == 0
+	val isNotNull get() = id != 0
+}
+
+
+
+abstract class Interner<K, V : Intern> {
+	private var count = 0
+	private val list = ArrayList<V>()
+	private val map = HashMap<K, V>()
+	abstract val creator: (id: Int, key: K) -> V
+	fun add(key: K): V = map.getOrPut(key) { creator(count++, key).also(list::add) }
+	operator fun get(id: Int) = list[id]
+	operator fun get(key: K) = add(key)
+}
+
+
+
+class Name(id: Int, val string: String) : Intern(id), Token {
+	override fun toString() = string
+
+	companion object : Interner<String, Name>() {
+		override val creator = ::Name
+
+		val NULL = add("")
+		val MAIN = add("main")
+		val PROC = add("proc")
+		val SIZE = add("size")
+		val COUNT = add("count")
+		val ENUM = add("enum")
+		val STRUCT = add("struct")
+		val CONST = add("const")
+		val NAMESPACE = add("namespace")
+
+		val regs      = Reg.entries.associateBy { add(it.string) }
+		val mnemonics = Mnemonic.entries.associateBy { add(it.string) }
+		val widths    = Width.entries.associateBy { add(it.string) }
+	}
+}
+
+
+
+class Scope(id: Int, val array: IntArray) : Intern(id) {
+	val last get() = Name[array.last()]
+
+	override fun toString() = array.joinToString(transform = { Name[it].string }, separator = ".")
+
+	fun add(value: Name) = add(array + value.id)
+
+	fun add(addition: IntArray, size: Int): Scope {
+		val array = array.copyOf(array.size + size)
+		for(i in 0 ..< size) array[array.size + i] = addition[i]
+		return add(array)
+	}
+
+	companion object : Interner<IntArray, Scope>() {
+		override val creator = ::Scope
+		val NULL = add(IntArray(0))
+	}
+}
+
+
+
+
+/*abstract class Intern(val id: Int) {
+	val isNull get() = id == 0
+	val isNotNull get() = id != 0
+	override fun equals(other: Any?) = this === other
+	override fun hashCode() = id
 }
 
 
 
 class InternRange<T>(private val range: IntRange, private val elements: List<T>) {
-	operator fun contains(intern: Name) = intern.id in range
-	operator fun get(intern: Name) = elements[intern.id - range.first]
+	operator fun contains(intern: Intern) = intern.id in range
+	operator fun get(intern: Intern) = elements[intern.id - range.first]
 }
 
 
 
-class Name(override val id: Int, val hash: Int, val string: String) : Intern, Token {
-	override fun equals(other: Any?) = this === other
-	override fun hashCode() = id
+class Name(id: Int, val string: String) : Intern(id), Token {
 	override fun toString() = if(id == 0) "_" else string
 }
 
 
 
-class Scope(override val id: Int, val hash: Int, val array: IntArray) : Intern {
-	val last get() = Names[array[array.size - 1]]
-	override fun equals(other: Any?) = this === other
-	override fun hashCode() = id
-	override fun toString() = array.joinToString(transform = { Names[it].string }, separator = ".")
-}
-
-
-
-@JvmInline
-value class NameArray(val array: IntArray) {
-	val size get() = array.size
-	operator fun get(index: Int) = Names[array[index]]
-	override fun toString() = array.joinToString(".") { this[it].string }
+class Scope(id: Int, val names: IntArray) : Intern(id) {
+	val last get() = Names[names[names.size - 1]]
+	override fun toString() = names.joinToString(transform = { Names[it].string }, separator = ".")
 }
 
 
@@ -50,18 +104,13 @@ value class NameArray(val array: IntArray) {
 abstract class Interner<K, V : Intern> {
 
 	protected var count = 0
-
 	private val list = ArrayList<V>()
+	private val map = HashMap<K, V>()
 
-	protected val map = HashMap<K, V>()
-
-	protected fun addInternal(key: K, value: V): V {
-		list += value
-		map[key] = value
-		return value
-	}
-
+	protected abstract fun create(key: K): V
 	operator fun get(id: Int) = list[id]
+
+	fun add(key: K): V = map.getOrPut(key) { create(key).also(list::add) }
 
 }
 
@@ -69,25 +118,20 @@ abstract class Interner<K, V : Intern> {
 
 object Names : Interner<String, Name>() {
 
-	fun add(key: String) = map[key] ?: addInternal(key, Name(count++, key.hashCode(), key))
+	val NULL = Name(0, "")
 
-	operator fun get(key: String) = map[key] ?: addInternal(key, Name(count++, key.hashCode(), key))
+	override fun create(key: String) = Name(count++, key)
 
-	private fun<T : Enum<T>> createRange(elements: EnumEntries<T>, supplier: (T) -> String?): InternRange<T> {
+	private fun<T : Enum<T>> range(elements: EnumEntries<T>, supplier: (T) -> String?): InternRange<T> {
 		val range = IntRange(count, count + elements.size - 1)
 		for(e in elements) supplier(e)?.let { if(it != "NONE") add(it) }
 		return InternRange(range, elements)
 	}
 
-	val keywords     = createRange(Keyword.entries, Keyword::string)
-	val widths       = createRange(Width.entries, Width::string)
-	val varWidths    = createRange(Width.entries, Width::varString)
-	val registers    = createRange(Reg.entries, Reg::string)
-	val prefixes     = createRange(InsPrefix.entries, InsPrefix::string)
-	val mnemonics    = createRange(Mnemonic.entries, Mnemonic::string)
+	val widths    = range(Width.entries, Width::string)
+	val registers = range(Reg.entries, Reg::string)
+	val mnemonics = range(Mnemonic.entries, Mnemonic::string)
 
-	// EMPTY must come first, since an ID of zero indicates an empty name
-	val EMPTY = add("")
 	val MAIN  = add("main")
 	val SIZE  = add("size")
 	val COUNT = add("count")
@@ -100,22 +144,20 @@ object Names : Interner<String, Name>() {
 
 object Scopes : Interner<IntArray, Scope>() {
 
-	fun add(key: IntArray, hash: Int) = map[key] ?: addInternal(key, Scope(count++, hash, key))
+	val NULL = Scope(0, IntArray(0))
 
-	fun add(key: IntArray) = add(key, key.contentHashCode())
+	override fun create(key: IntArray) = Scope(count++, key)
 
 	fun add(base: Scope, addition: Intern): Scope {
-		val array = base.array.copyOf(base.array.size + 1)
-		array[base.array.size] = addition.id
+		val array = base.names.copyOf(base.names.size + 1)
+		array[base.names.size] = addition.id
 		return add(array)
 	}
 
 	fun add(base: Scope, addition: IntArray, size: Int): Scope {
-		val array = base.array.copyOf(base.array.size + size)
-		for(i in 0 ..< size) array[base.array.size + i] = addition[i]
+		val array = base.names.copyOf(base.names.size + size)
+		for(i in 0 ..< size) array[base.names.size + i] = addition[i]
 		return add(array)
 	}
 
-	val EMPTY = add(IntArray(0), 0)
-
-}
+}*/

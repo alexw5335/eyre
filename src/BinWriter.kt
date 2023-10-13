@@ -1,4 +1,4 @@
-package eyre.util
+package eyre
 
 import java.nio.charset.Charset
 import java.nio.file.Files
@@ -8,7 +8,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 @Suppress("Unused", "MemberVisibilityCanBePrivate")
-class NativeWriter(bytes: ByteArray) {
+class BinWriter(bytes: ByteArray) {
 
 
 	constructor(initialSize: Int) : this(ByteArray(initialSize))
@@ -18,10 +18,10 @@ class NativeWriter(bytes: ByteArray) {
 
 
 	companion object {
-		fun write(path: String, block: (NativeWriter) -> Unit) {
-			val writer = NativeWriter()
+		fun write(path: String, block: (BinWriter) -> Unit) {
+			val writer = BinWriter()
 			block(writer)
-			Files.write(Paths.get(path), writer.getTrimmedBytes())
+			Files.write(Paths.get(path), writer.copy())
 		}
 	}
 
@@ -31,11 +31,11 @@ class NativeWriter(bytes: ByteArray) {
 
 	var pos = 0
 
-	fun getTrimmedBytes() = bytes.copyOf(pos)
+	fun copy() = bytes.copyOf(pos)
 
-	fun getTrimmedBytes(count: Int) = bytes.copyOf(count)
+	fun copy(count: Int) = bytes.copyOf(count)
 
-	fun getTrimmedBytes(pos: Int, count: Int) = bytes.copyOfRange(pos, pos + count)
+	fun copy(pos: Int, count: Int) = bytes.copyOfRange(pos, pos + count)
 
 	val isEmpty get() = pos == 0
 
@@ -52,57 +52,42 @@ class NativeWriter(bytes: ByteArray) {
 	fun reset() {
 		pos = 0
 	}
-
-
-
+	
 	fun clear() {
 		pos = 0
 		Arrays.fill(bytes, 0)
 	}
-
-
-
+	
 	inline fun at(newPos: Int, block: () -> Unit) {
 		val pos = pos
 		this.pos = newPos
 		block()
 		this.pos = pos
 	}
-
-
-
+	
 	fun ensureCapacity() {
 		if(pos >= bytes.size)
 			bytes = bytes.copyOf(pos shl 2)
 	}
-
-
-
+	
 	fun ensureCapacity(count: Int) {
 		if(pos + count > bytes.size)
 			bytes = bytes.copyOf((pos + count) shl 2)
 	}
-
-
-
+	
 	fun align2() = if(pos and 1 != 0) i8(0) else Unit
 
 	fun align(alignment: Int) {
 		pos = (pos + alignment - 1) and -alignment
 		ensureCapacity()
 	}
-
-
-
-
+	
 	fun varLengthInt(value: Int) {
 		ensureCapacity(4)
 		Unsafe.instance.putInt(bytes, pos + 16L, value)
 		pos += ((39 - (value or 1).countLeadingZeroBits()) and -8) shr 3
 	}
-
-
-
+	
 	fun seek(pos: Int) {
 		this.pos = pos
 		ensureCapacity()
@@ -232,11 +217,11 @@ class NativeWriter(bytes: ByteArray) {
 	 */
 
 
-	fun bytes(pos: Int, writer: NativeWriter, srcPos: Int = 0, length: Int = writer.pos) {
+	fun bytes(pos: Int, writer: BinWriter, srcPos: Int = 0, length: Int = writer.pos) {
 		System.arraycopy(writer.bytes, srcPos, bytes, pos, length)
 	}
 
-	fun bytes(writer: NativeWriter, srcPos: Int = 0, length: Int = writer.pos) {
+	fun bytes(writer: BinWriter, srcPos: Int = 0, length: Int = writer.pos) {
 		ensureCapacity(length)
 		System.arraycopy(writer.bytes, srcPos, bytes, pos, length)
 		pos += length
@@ -274,65 +259,47 @@ class NativeWriter(bytes: ByteArray) {
 		bytes(charset.encode(string).array())
 	}
 
-
-
 	fun ascii(string: String) {
 		for(c in string) i8(c.code)
 	}
-
-
 
 	fun asciiNT(string: String) {
 		for(c in string) i8(c.code)
 		i8(0)
 	}
 
-
-
 	fun ascii64(string: String) {
 		ensureCapacity(8)
-		for(i in 0 until min(8, string.length))
+		for(i in 0 ..< min(8, string.length))
 			i8(string[i].code)
-		for(i in 0 until max(0, 8 - string.length))
+		for(i in 0 ..< max(0, 8 - string.length))
 			i8(0)
 	}
-
-
-
+	
 	fun set(count: Int, value: Int) {
 		if(count <= 0) return
 		ensureCapacity(count)
 		Unsafe.instance.setMemory(bytes, pos + 16L, count.toLong(), value.toByte())
 		pos += count
 	}
-
-
-
+	
 	fun setTo(pos: Int, value: Int) {
 		if(pos <= this.pos) return
 		ensureCapacity(pos - this.pos)
 		Unsafe.instance.setMemory(bytes, this.pos + 16L, pos.toLong() - this.pos, value.toByte())
 		this.pos = pos
 	}
-
-
-
+	
 	fun zero(count: Int) = set(count, 0)
-
-
-
+	
 	fun zeroTo(pos: Int) = setTo(pos, 0)
-
-
-
+	
 	fun advance(count: Int) {
 		if(count <= 0) return
 		ensureCapacity(count)
 		pos += count
 	}
-
-
-
+	
 	fun advanceTo(pos: Int) {
 		ensureCapacity(pos - this.pos)
 		this.pos = pos

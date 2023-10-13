@@ -1,5 +1,7 @@
 package eyre.gen
 
+import eyre.Width
+
 enum class NasmArch {
 	NONE,
 	_8086,
@@ -160,7 +162,7 @@ enum class NasmExt {
 
 enum class NasmOpEnc(val string: String?) {
 	NONE(null),
-	ij("ij"),
+	IJ("ij"),
 	N("-"),
 	NI("-i"),
 	RN("r-"),
@@ -258,4 +260,121 @@ enum class NasmVexW(val value: Int) {
 	WIG(0),
 	W0(0),
 	W1(1);
+}
+
+
+
+enum class NasmOpType {
+	R,
+	M,
+	I,
+	A,
+	C,
+	ST,
+	X,
+	Y,
+	Z,
+	K,
+	T,
+	MM,
+	MISC,
+	REL,
+	VM,
+	SEG,
+	MOFFS,
+	MULTI;
+}
+
+
+
+enum class NasmOp(
+	val nasmString : String?,
+	val type       : NasmOpType,
+	val width      : Width?,
+	val multi1     : NasmOp? = null,
+	val multi2     : NasmOp? = null
+) {
+
+	NONE(null, NasmOpType.MISC, null),
+	R8("reg8", NasmOpType.R, Width.BYTE),
+	R16("reg16", NasmOpType.R, Width.WORD),
+	R32("reg32", NasmOpType.R, Width.DWORD),
+	R64("reg64", NasmOpType.R, Width.QWORD),
+	MEM(null, NasmOpType.M, null),
+	M8("mem8", NasmOpType.M, Width.BYTE),
+	M16("mem16", NasmOpType.M, Width.WORD),
+	M32("mem32", NasmOpType.M, Width.DWORD),
+	M64("mem64", NasmOpType.M, Width.QWORD),
+	M80("mem80", NasmOpType.M, Width.TWORD),
+	M128("mem128", NasmOpType.M, Width.XWORD),
+	M256("mem256", NasmOpType.M, Width.YWORD),
+	M512("mem512", NasmOpType.M, Width.ZWORD),
+	I8("imm8", NasmOpType.I, Width.BYTE),
+	I16("imm16", NasmOpType.I, Width.WORD),
+	I32("imm32", NasmOpType.I, Width.DWORD),
+	I64("imm64", NasmOpType.I, Width.QWORD),
+	AL("reg_al", NasmOpType.A, Width.BYTE),
+	AX("reg_ax", NasmOpType.A, Width.WORD),
+	EAX("reg_eax", NasmOpType.A, Width.DWORD),
+	RAX("reg_rax", NasmOpType.A, Width.QWORD),
+	CL("reg_cl", NasmOpType.C, Width.BYTE),
+	ECX("reg_ecx", NasmOpType.C, Width.DWORD),
+	RCX("reg_rcx", NasmOpType.C, Width.QWORD),
+	DX("reg_dx", NasmOpType.MISC, Width.WORD),
+	REL8(null, NasmOpType.REL, Width.BYTE),
+	REL16(null, NasmOpType.REL, Width.WORD),
+	REL32(null, NasmOpType.REL, Width.DWORD),
+	ST("fpureg", NasmOpType.ST, Width.TWORD),
+	ST0("fpu0", NasmOpType.ST, Width.TWORD),
+	ONE("unity", NasmOpType.MISC, null),
+	MM("mmxreg", NasmOpType.MM, Width.QWORD),
+	X("xmmreg", NasmOpType.X, Width.XWORD),
+	Y("ymmreg", NasmOpType.Y, Width.YWORD),
+	Z("zmmreg", NasmOpType.Z, Width.ZWORD),
+	VM32X("xmem32", NasmOpType.VM, Width.DWORD),
+	VM64X("xmem64", NasmOpType.VM, Width.QWORD),
+	VM32Y("ymem32", NasmOpType.VM, Width.DWORD),
+	VM64Y("ymem64", NasmOpType.VM, Width.QWORD),
+	VM32Z("zmem32", NasmOpType.VM, Width.DWORD),
+	VM64Z("zmem64", NasmOpType.VM, Width.QWORD),
+	K("kreg", NasmOpType.K, null),
+	BND("bndreg", NasmOpType.MISC, null),
+	T("tmmreg", NasmOpType.T, null),
+	MOFFS8(null, NasmOpType.MOFFS, Width.BYTE),
+	MOFFS16(null, NasmOpType.MOFFS, Width.WORD),
+	MOFFS32(null, NasmOpType.MOFFS, Width.DWORD),
+	MOFFS64(null, NasmOpType.MOFFS, Width.QWORD),
+	SEG("reg_sreg", NasmOpType.SEG, null),
+	CR("reg_creg", NasmOpType.MISC, Width.QWORD),
+	DR("reg_dreg", NasmOpType.MISC, Width.QWORD),
+	FS("reg_fs", NasmOpType.MISC, null),
+	GS("reg_gs", NasmOpType.MISC, null),
+
+	RM8  ("rm8",      R8,  M8),
+	RM16 ("rm16",     R16, M16),
+	RM32 ("rm32",     R32, M32),
+	RM64 ("rm64",     R64, M64),
+	MMM64("mmxrm64",  MM,  M64),
+	XM8  ("xmmrm8",   X,   M8),
+	XM16 ("xmmrm16",  X,   M16),
+	XM32 ("xmmrm32",  X,   M32),
+	XM64 ("xmmrm64",  X,   M64),
+	XM128("xmmrm128", X,   M128),
+	XM256("xmmrm256", X,   M256),
+	YM16 ("ymmrm16",  Y,   M16),
+	YM128("ymmrm128", Y,   M128),
+	YM256("ymmrm256", Y,   M256),
+	ZM16 ("zmmrm16",  Z,   M16),
+	ZM128("zmmrm128", Z,   M128),
+	ZM512("zmmrm512", Z,   M512),
+	KM8  ("krm8",     K,   M8),
+	KM16 ("krm16",    K,   M16),
+	KM32 ("krm32",    K,   M32),
+	KM64 ("krm64",    K,   M64);
+
+	constructor(nasmName: String, op1: NasmOp, op2: NasmOp) :
+		this(nasmName, NasmOpType.MULTI, null, op1, op2)
+
+	val isMulti get() = type == NasmOpType.MULTI
+
 }

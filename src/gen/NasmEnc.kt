@@ -10,7 +10,7 @@ import eyre.*
  */
 data class NasmEnc(
 	val parent   : NasmEnc?,
-	val mnemonic : Mnemonic,
+	val mnemonic : String,
 	val prefix   : Prefix,
 	val escape   : Escape,
 	val opcode   : Int,
@@ -36,65 +36,33 @@ data class NasmEnc(
 	val avx      : Boolean,
 	val evex     : Boolean
 ) {
-	val opsString = ops.joinToString("_")
-	val op1 = ops.getOrNull(0) ?: NasmOp.NONE
-	val op2 = ops.getOrNull(1) ?: NasmOp.NONE
-	val op3 = ops.getOrNull(2) ?: NasmOp.NONE
-	val op4 = ops.getOrNull(3) ?: NasmOp.NONE
 
-	val simdOpEnc = OpEnc.entries.firstOrNull { opEnc in it.encs } ?: OpEnc.RVM
-
-	val i8 = ops.isNotEmpty() && ops.last() == NasmOp.I8
-
-	val vsibValue = when(ops.firstOrNull { it.type.isMem }) {
-		NasmOp.VM32X, NasmOp.VM64X -> 1
-		NasmOp.VM32Y, NasmOp.VM64Y -> 2
-		NasmOp.VM32Z, NasmOp.VM64Z -> 3
-		else -> 0
+	override fun toString() = buildString {
+		@Suppress("UnusedReceiverParameter")
+		fun Any.comma() = append(", ")
+		append("NasmEnc(")
+		append(mnemonic).comma()
+		append(prefix).comma()
+		append(escape).comma()
+		append(opcode.hexc).comma()
+		append('/'); append(ext).comma()
+		append(opEnc).comma()
+		append(ops.joinToString("_")).comma()
+		append("RW="); append(rw).comma()
+		append("O16="); append(o16).comma()
+		append("A32="); append(a32).comma()
+		if(!avx) { delete(length - 2, length); append(')'); return@buildString }
+		append(vexw).comma()
+		append(vexl).comma()
+		if(!evex) { delete(length - 2, length); append(')'); return@buildString }
+		append(tuple).comma()
+		append("SAE="); append(sae).comma()
+		append("ER="); append(er).comma()
+		append("BCST="); append(bcst).comma()
+		append("K="); append(k).comma()
+		append("Z="); append(z).comma()
+		delete(length - 2, length)
+		append(')')
 	}
 
-	private val NasmOp?.opType: OpType get() = when {
-		this == null -> OpType.BND
-		type.isReg -> when(this) {
-			NasmOp.R8  -> OpType.R8
-			NasmOp.R16 -> OpType.R16
-			NasmOp.R32 -> OpType.R32
-			NasmOp.R64 -> OpType.R64
-			NasmOp.MM  -> OpType.MM
-			NasmOp.X   -> OpType.X
-			NasmOp.Y   -> OpType.Y
-			NasmOp.Z   -> OpType.Z
-			NasmOp.K   -> OpType.K
-			NasmOp.T   -> OpType.T
-			NasmOp.ST  -> OpType.ST
-			NasmOp.AX  -> OpType.R16
-			else   -> OpType.BND
-		}
-		type.isMem -> OpType.MEM
-		this == NasmOp.I8 -> OpType.IMM
-		else -> OpType.NONE
-	}
-
-	val simdOps = AutoOps(
-		op1.opType.ordinal,
-		op2.opType.ordinal,
-		op3.opType.ordinal,
-		op4.opType.ordinal,
-		ops.firstOrNull { it.type.isMem }?.width?.let { it.ordinal + 1 } ?: 0,
-		vsibValue,
-	)
-
-	val rel = ops.size == 1 && ops[0].type == NasmOpType.REL
-	val ax = ops.size == 1 && ops[0] == NasmOp.AX
-
-	// 0: None, 1: ST or ST_ST0, 2: ST0_ST
-	val fpuOps: Int = when(ops.size) {
-		1 -> if(ops[0] == NasmOp.ST) 1 else 0
-		2 -> when {
-			ops[0] == NasmOp.ST0 && ops[1] == NasmOp.ST -> 1
-			ops[0] == NasmOp.ST && ops[1] == NasmOp.ST0 -> 2
-			else -> 0
-		}
-		else -> 0
-	}
 }

@@ -1,77 +1,35 @@
 package eyre
 
-import eyre.util.NativeWriter
 import java.nio.file.Path
 
 class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 
-
+	val symbols = SymTable()
 	var entryPoint: PosSym? = null
-
-	var textWriter = NativeWriter()
-
-	var dataWriter = NativeWriter()
-
-	var rdataWriter = NativeWriter()
-
+	val errors = ArrayList<EyreError>()
 	val linkRelocs = ArrayList<Reloc>()
-
 	val absRelocs = ArrayList<Reloc>()
-
-	val linkWriter = NativeWriter()
-
-	var bssSize = 0
-
-	val symbols = SymbolTable()
-
-	fun writer(sec: Section) = when(sec) {
-		Section.TEXT  -> textWriter
-		Section.DATA  -> dataWriter
-		Section.RDATA -> rdataWriter
-		else          -> error("Invalid section: $sec")
-	}
-
-	val debugDirectives = ArrayList<DebugDirective>()
-
-	val secIndexes = IntArray(Section.entries.size) { -1 }
-	fun getIndex(sec: Section) = secIndexes[sec.ordinal]
-	fun setIndex(sec: Section, value: Int) { secIndexes[sec.ordinal] = value }
-
-	// Virtual addresses of each section relative to image start
-	val secAddresses = IntArray(Section.entries.size)
-	fun getAddr(sec: Section) = secAddresses[sec.ordinal]
-	fun setAddr(sec: Section, value: Int) { secAddresses[sec.ordinal] = value }
-
-	// File positions of each section relative to image file start
-	val secPositions = IntArray(Section.entries.size)
-	fun getPos(sec: Section) = secPositions[sec.ordinal]
-	fun setPos(sec: Section, value: Int) { secPositions[sec.ordinal] = value }
-
-	fun getTotalPos(sym: PosSym) = getPos(sym.section) + sym.pos
-	fun getTotalAddr(sym: PosSym) = getAddr(sym.section) + sym.pos
-
-	val errors = ArrayList<EyreException>()
-
+	val textWriter = BinWriter()
+	val dataWriter = BinWriter()
+	val rdataWriter = BinWriter()
+	val linkWriter = BinWriter()
+	val bssSize = 0
+	val sections  = ArrayList<Section>()
+	val textSec = Section(0, ".text").also(sections::add)
+	val dataSec = Section(1, ".data").also(sections::add)
+	val rdataSec = Section(2, ".rdata").also(sections::add)
+	val bssSec = Section(3, ".bss").also(sections::add)
 	val dllImports = HashMap<Name, DllImports>()
-
 	val dllDefs = HashMap<Name, DllDef>()
-
-	val unorderedNodes = ArrayList<Node>()
 
 
 
 	init {
-		loadDefaultDllDefs()
-		symbols.add(ByteType)
-		symbols.add(WordType)
-		symbols.add(DwordType)
-		symbols.add(QwordType)
+		loadDllDef("kernel32", DefaultDllDefs.kernel32)
+		loadDllDef("user32", DefaultDllDefs.user32)
+		loadDllDef("gdi32", DefaultDllDefs.gdi32)
+		loadDllDef("msvcrt", DefaultDllDefs.msvcrt)
 	}
-
-
-
-	fun getSymbolAddress(symbol: PosSym) = getAddr(symbol.section) + symbol.pos
-
 
 
 
@@ -81,18 +39,14 @@ class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 
 
 
-	fun internalError(message: String? = null): Nothing {
-		if(message != null)
-			error("Internal compiler error: $message")
-		else
-			error("Internal compiler error")
-	}
+	fun internalErr(message: String? = "no reason given"): Nothing =
+		error("Internal compiler error: $message")
 
-	fun err(srcPos: SrcPos?, message: String): Nothing {
-		val error = EyreException(srcPos, message)
-		errors.add(error)
-		throw error
-	}
+	fun srcPosString(srcPos: SrcPos) =
+		"${srcFiles[srcPos.file].relPath}:${srcPos.line} -- "
+
+	fun err(srcPos: SrcPos, message: String): Nothing =
+		throw EyreError(srcPos, message).also(errors::add)
 
 
 
@@ -102,32 +56,19 @@ class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 
 
 
-	fun loadDefaultDllDefs() {
-		loadDllDef("kernel32", DefaultDllDefs.kernel32)
-		loadDllDef("user32", DefaultDllDefs.user32)
-		loadDllDef("gdi32", DefaultDllDefs.gdi32)
-		loadDllDef("msvcrt", DefaultDllDefs.msvcrt)
-	}
-
-
-
 	fun loadDllDef(dllName: String, names: Array<String>) {
-		val def = DllDef(Names.add(dllName), names.map(Names::add).toSet())
+		val def = DllDef(Name.add(dllName), names.map(Name::add).toSet())
 		dllDefs[def.name] = def
 	}
-
-
 
 	fun loadDllDefFromResources(name: String) {
 		val path = "/defs/$name.txt"
 		val stream = this::class.java.getResourceAsStream(path)
 			?: error("Could not load dll def: $path")
-		val exports = stream.reader().readLines().map(Names::add).toSet()
-		val nameIntern = Names.add(name)
+		val exports = stream.reader().readLines().map(Name::add).toSet()
+		val nameIntern = Name.add(name)
 		dllDefs[nameIntern] = DllDef(nameIntern, exports)
 	}
-
-
 
 	fun getDllImport(name: Name): DllImport? {
 		for(dll in dllImports.values)

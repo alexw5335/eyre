@@ -1,7 +1,6 @@
 package eyre
 
 import java.nio.file.Files
-import java.util.*
 
 class Lexer(val context: Context) {
 
@@ -11,9 +10,9 @@ class Lexer(val context: Context) {
 	private var chars = CharArray(0)
 
 	private var size = 0
-	
+
 	private var lineCount = 0
-	
+
 	private var pos = 0
 
 	private var stringBuilder = StringBuilder()
@@ -30,44 +29,30 @@ class Lexer(val context: Context) {
 
 		this.srcFile = srcFile
 		size = Files.size(srcFile.path).toInt() + 1
-
-		Arrays.fill(chars, Char(0))
-
 		if(chars.size <= size)
 			chars = CharArray(size * 2)
-
 		Files.newBufferedReader(srcFile.path).use {
 			it.read(chars, 0, size)
 		}
-
 		chars[size] = Char(0)
 
-		while(!hasError) {
-			val char = chars[pos++]
-			if(char.code == 0) break
-			charMap[char.code]!!()
+		try {
+			while(!srcFile.invalid) {
+				val char = chars[pos++]
+				if(char.code == 0) break
+				charMap[char.code]!!()
+			}
+		} catch(_: EyreError) {
+			srcFile.invalid = true
 		}
 
-		srcFile.terminators.set(srcFile.tokens.size)
-		add(EndToken)
-		srcFile.newlines.ensureCapacity(srcFile.tokens.size)
-		srcFile.terminators.ensureCapacity(srcFile.tokens.size)
+		srcFile.lineCount = lineCount
+		add(SymToken.NEWLINE)
 	}
 
 
 
-	private fun add(token: Token) {
-		srcFile.tokens.add(token)
-		srcFile.tokenLines.add(lineCount)
-		srcFile.tokenLines[srcFile.tokens.size] = lineCount
-	}
-
-
-
-	private fun addTerm(token: Token) {
-		srcFile.terminators.set(srcFile.tokens.size)
-		add(token)
-	}
+	private fun add(token: Token) = srcFile.tokens.add(token)
 
 
 
@@ -78,16 +63,13 @@ class Lexer(val context: Context) {
 
 
 
-	private fun err(message: String): Nothing {
-		srcFile.invalid = true
+	private fun err(message: String): Nothing =
 		context.err(SrcPos(srcFile, lineCount), message)
-	}
 
 
 
 	private fun onNewline() {
-		srcFile.terminators.set(srcFile.tokens.size)
-		srcFile.newlines.set(srcFile.tokens.size)
+		add(SymToken.NEWLINE)
 		lineCount++
 	}
 
@@ -242,12 +224,14 @@ class Lexer(val context: Context) {
 			pos++
 		}
 
-		val name = Names.add(String(chars, startPos, pos - startPos))
+		val name = Name.add(String(chars, startPos, pos - startPos))
 
-		if(name in Names.registers)
-			add(RegToken(Names.registers[name]))
-		else
-			add(name)
+		Name.regs[name]?.let {
+			add(RegToken(it))
+			return
+		}
+
+		add(name)
 	}
 
 
@@ -268,16 +252,16 @@ class Lexer(val context: Context) {
 
 			// Single symbols
 			charMap['('] = { add(SymToken.LPAREN) }
-			charMap[')'] = { addTerm(SymToken.RPAREN) }
+			charMap[')'] = { add(SymToken.RPAREN) }
 			charMap['+'] = { add(SymToken.PLUS) }
 			charMap['-'] = { add(SymToken.MINUS) }
 			charMap['*'] = { add(SymToken.STAR) }
 			charMap['['] = { add(SymToken.LBRACKET) }
-			charMap[']'] = { addTerm(SymToken.RBRACKET) }
+			charMap[']'] = { add(SymToken.RBRACKET) }
 			charMap['{'] = { add(SymToken.LBRACE) }
-			charMap['}'] = { addTerm(SymToken.RBRACE) }
+			charMap['}'] = { add(SymToken.RBRACE) }
 			charMap['.'] = { add(SymToken.PERIOD) }
-			charMap[';'] = { addTerm(SymToken.SEMI) }
+			charMap[';'] = { add(SymToken.SEMI) }
 			charMap['^'] = { add(SymToken.CARET) }
 			charMap['~'] = { add(SymToken.TILDE) }
 			charMap[','] = { add(SymToken.COMMA) }
@@ -303,8 +287,8 @@ class Lexer(val context: Context) {
 				else -> add(SymToken.LT)
 			}}
 			charMap['='] = { when(chars[pos]) {
-				'='  -> addAdv(SymToken.EQU)
-				else -> add(SymToken.EQUALS)
+				'='  -> addAdv(SymToken.EQ)
+				else -> add(SymToken.SET)
 			}}
 			charMap['!'] = { when(chars[pos]) {
 				'='  -> addAdv(SymToken.INEQ)
@@ -316,7 +300,7 @@ class Lexer(val context: Context) {
 					else -> add(SymToken.SHR)
 				}
 				'='  -> addAdv(SymToken.GTE)
-				else -> addTerm(SymToken.GT)
+				else -> add(SymToken.GT)
 			}}
 
 			// Complex symbols

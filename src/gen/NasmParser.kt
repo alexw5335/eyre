@@ -1,9 +1,14 @@
 package eyre.gen
 
 import eyre.*
-import eyre.util.isHex
+import java.nio.file.Files
+import java.nio.file.Paths
 
 class NasmParser(private val inputs: List<String>) {
+
+
+	constructor(path: String) : this(Files.readAllLines(Paths.get(path)))
+
 
 
 	val rawLines = ArrayList<RawNasmLine>()
@@ -15,12 +20,10 @@ class NasmParser(private val inputs: List<String>) {
 	val encs = ArrayList<NasmEnc>()
 	
 	val expandedEncs = ArrayList<NasmEnc>()
-
-	val encsMap = HashMap<Mnemonic, ArrayList<NasmEnc>>()
 	
 
 
-	fun read() {
+	fun parseAndConvert(): List<NasmEnc> {
 		for(i in inputs.indices) readRawLine(i, inputs[i])?.let(rawLines::add)
 		for(l in rawLines) if(filterLine(l)) filteredRawLines.add(l)
 		for(l in filteredRawLines) scrapeLine(l, lines)
@@ -28,7 +31,7 @@ class NasmParser(private val inputs: List<String>) {
 		for(l in lines) convertLine(l, encs)
 		encs.sortBy { it.mnemonic }
 		for(e in encs) expandEnc(e, expandedEncs)
-		for(e in encs) encsMap.getOrPut(e.mnemonic, ::ArrayList).add(e)
+		return expandedEncs
 	}
 
 
@@ -69,15 +72,15 @@ class NasmParser(private val inputs: List<String>) {
 
 
 	private fun filterLine(line: RawNasmLine) = when {
-		line.mnemonic in EncGenLists.essentialMnemonics -> true
+		line.mnemonic in NasmLists.essentialMnemonics -> true
 		(line.mnemonic == "PINSRB" || line.mnemonic == "PINSRW") && "mem" in line.operands -> false
 		line.mnemonic == "PUSH" && line.operands[0] == "imm64" -> false
 		"r+mi:" in line.parts -> false
 		line.mnemonic == "aw" -> true
 		"ND" in line.extras && line.operands[0] != "void" -> false
-		line.mnemonic in EncGenLists.invalidMnemonics -> false
-		EncGenLists.invalidExtras.any(line.extras::contains) -> false
-		EncGenLists.invalidOperands.any(line.operands::contains) -> false
+		line.mnemonic in NasmLists.invalidMnemonics -> false
+		NasmLists.invalidExtras.any(line.extras::contains) -> false
+		NasmLists.invalidOperands.any(line.operands::contains) -> false
 		else -> true
 	}
 
@@ -87,10 +90,10 @@ class NasmParser(private val inputs: List<String>) {
 		val line = NasmLine(raw)
 
 		for(extra in raw.extras) when(extra) {
-			in EncGenLists.arches -> line.arch = EncGenLists.arches[extra]!!
-			in EncGenLists.extensions -> line.extensions += EncGenLists.extensions[extra]!!
-			in EncGenLists.opWidths -> line.opSize = EncGenLists.opWidths[extra]!!
-			in EncGenLists.ignoredExtras -> continue
+			in NasmLists.arches -> line.arch = NasmLists.arches[extra]!!
+			in NasmLists.extensions -> line.extensions += NasmLists.extensions[extra]!!
+			in NasmLists.opWidths -> line.opSize = NasmLists.opWidths[extra]!!
+			in NasmLists.ignoredExtras -> continue
 			"SM"  -> line.sm = true
 			"SM2" -> line.sm = true
 			"AR0" -> line.ar = 0
@@ -100,13 +103,13 @@ class NasmParser(private val inputs: List<String>) {
 		}
 
 		for(part in raw.parts) when {
-			part in EncGenLists.immTypes -> line.immType = EncGenLists.immTypes[part]!!
-			part in EncGenLists.vsibs -> line.vsib = EncGenLists.vsibs[part]!!
-			part in EncGenLists.ignoredParts -> continue
-			part.startsWith("vex")    -> line.vex = part
-			part.startsWith("evex")   -> line.vex = part
-			part.endsWith("+c")       -> { line.cc = true; line.addOpcode(part.dropLast(2).toInt(16)) }
-			part.endsWith("+r")       -> { line.opreg = true; line.addOpcode(part.dropLast(2).toInt(16)) }
+			part in NasmLists.immTypes -> line.immType = NasmLists.immTypes[part]!!
+			part in NasmLists.vsibs -> line.vsib = NasmLists.vsibs[part]!!
+			part in NasmLists.ignoredParts -> continue
+			part.startsWith("vex")  -> line.vex = part
+			part.startsWith("evex") -> line.vex = part
+			part.endsWith("+c")     -> { line.cc = true; line.addOpcode(part.dropLast(2).toInt(16)) }
+			part.endsWith("+r")     -> { line.opreg = true; line.addOpcode(part.dropLast(2).toInt(16)) }
 			part == "/r"   -> line.modrm  = true
 			part == "/is4" -> line.is4    = true
 			part == "o16"  -> line.o16    = 1
@@ -117,11 +120,12 @@ class NasmParser(private val inputs: List<String>) {
 			part == "f3i"  -> line.prefix = Prefix.PF3
 			part == "wait" -> line.prefix = Prefix.P9B
 			part[0] == '/' -> if(line.mnemonic != "SETcc" && part != "/3r0") line.ext = part[1].digitToInt(10)
+
 			part.contains(':') -> {
 				val array = part.split(':').filter { it.isNotEmpty() }
-				line.enc = EncGenLists.opEncs[array[0]] ?: raw.error("Invalid ops: ${array[0]}")
+				line.enc = NasmLists.opEncs[array[0]] ?: raw.error("Invalid ops: ${array[0]}")
 				if(array.size > 1)
-					line.tuple = EncGenLists.tupleTypes[array[1]] ?: raw.error("Invalid tuple type")
+					line.tuple = NasmLists.tupleTypes[array[1]] ?: raw.error("Invalid tuple type")
 				if(array.size == 3)
 					line.vex = array[2]
 			}
@@ -200,8 +204,8 @@ class NasmParser(private val inputs: List<String>) {
 		}
 
 		if(line.sm) {
-			EncGenLists.ops[strings[0]]?.width?.let { widths[1] = it }
-			EncGenLists.ops[strings[1]]?.width?.let { widths[0] = it }
+			NasmLists.ops[strings[0]]?.width?.let { widths[1] = it }
+			NasmLists.ops[strings[1]]?.width?.let { widths[0] = it }
 		}
 
 		if(line.ar >= 0)
@@ -233,7 +237,7 @@ class NasmParser(private val inputs: List<String>) {
 					else     -> NasmOp.I64
 				}
 
-				in EncGenLists.ops -> EncGenLists.ops[string]!!
+				in NasmLists.ops -> NasmLists.ops[string]!!
 
 				"xmmrm" -> when(widths[i]) {
 					Width.DWORD -> NasmOp.XM32
@@ -301,7 +305,7 @@ class NasmParser(private val inputs: List<String>) {
 
 	private fun NasmLine.toEnc(mnemonic: String, opcode: Int) = NasmEnc(
 		null,
-		EncGenLists.mnemonics[mnemonic] ?: error("Unrecognised mnemonic: $mnemonic"),
+		mnemonic,
 		prefix,
 		escape,
 		opcode,
@@ -315,7 +319,7 @@ class NasmParser(private val inputs: List<String>) {
 		a32,
 		opreg,
 		pseudo,
-		enc in EncGenLists.mrEncs,
+		enc in NasmLists.mrEncs,
 		vexw,
 		vexl,
 		tuple,
@@ -332,7 +336,7 @@ class NasmParser(private val inputs: List<String>) {
 
 	private fun convertLine(line: NasmLine, list: ArrayList<NasmEnc>) {
 		if(line.cc)
-			for((postfix, opcodeInc) in EncGenLists.ccList)
+			for((postfix, opcodeInc) in ccList)
 				list += line.toEnc(line.mnemonic.replace("cc", postfix), line.opcode + opcodeInc)
 		else
 			list += line.toEnc(line.mnemonic, line.opcode)

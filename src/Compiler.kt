@@ -1,6 +1,5 @@
 package eyre
 
-import eyre.util.Unsafe
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.*
@@ -20,7 +19,7 @@ class Compiler(private val context: Context) {
 			val srcFiles = Files.walk(Paths.get(directory))
 				.toList()
 				.filter { it.extension == "eyre" }
-				.map { SrcFile(it, it.relativeTo(root)) }
+				.mapIndexed { i, p -> SrcFile(i, p, p.relativeTo(root)) }
 
 			if(srcFiles.isEmpty())
 				error("No source files found")
@@ -29,11 +28,11 @@ class Compiler(private val context: Context) {
 		}
 
 		fun create(directory: String, files: List<String>): Compiler {
-			val srcFiles = files.map {
+			val srcFiles = files.mapIndexed { i, p ->
 				val root = Paths.get(directory)
-				val path = root.resolve(it)
+				val path = root.resolve(p)
 				val relPath = path.relativeTo(root)
-				SrcFile(path, relPath)
+				SrcFile(i, path, relPath)
 			}
 
 			return Compiler(Context(srcFiles, Paths.get("build")))
@@ -60,19 +59,19 @@ class Compiler(private val context: Context) {
 	fun compile() {
 		val buildDir = context.buildDir
 		buildDir.createDirectories()
-
-/*		Files
+		Files
 			.list(buildDir)
 			.toList()
-			.filter { it.isDirectory() }
-			.forEach { it.deleteIfExists() }*/
+			.filter { !it.isDirectory() }
+			.forEach { it.deleteIfExists() }
 
 		// Lexing
 		val lexer = Lexer(context)
 		for(s in context.srcFiles)
 			if(!s.invalid)
 				lexer.lex(s)
-		DebugOutput.writeTokens(context)
+		TokenPrinter(context).print()
+		checkErrors()
 
 		// Parsing
 		val parser = Parser(context)
@@ -97,8 +96,11 @@ class Compiler(private val context: Context) {
 		if(checkErrors()) {
 			NodePrinter(context, CompilerStage.RESOLVE).print()
 			exitProcess(1)
+		} else {
+			NodePrinter(context, CompilerStage.ASSEMBLE).print()
 		}
 
+	/*
 		// Linking
 		Linker(context).link()
 		if(checkErrors()) {
@@ -108,18 +110,7 @@ class Compiler(private val context: Context) {
 			NodePrinter(context, CompilerStage.LINK).print()
 		}
 
-		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())
-
-/*		for(sym in context.symbols) {
-			if(sym !is Proc) continue
-			if(sym.section != Section.TEXT) context.internalError("Invalid")
-			println(sym.qualifiedName)
-			val data = Unsafe.malloc(sym.size)
-			Unsafe.setBytes(data, context.textWriter.bytes, sym.pos, sym.size)
-			Natives.disassembleAndPrint(data, sym.size, context.getAddr(Section.TEXT).toLong())
-			Unsafe.free(data)
-			println()
-		}*/
+		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())*/
 	}
 
 

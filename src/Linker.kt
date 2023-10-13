@@ -294,7 +294,7 @@ class Linker(private val context: Context) {
 	private fun resolveImmRec(node: Node, regValid: Boolean): Long {
 		if(node is SymNode) {
 			val symbol = node.sym ?:
-				context.err(node.srcPos, "Unresolved symbol (this should never happen here)")
+			context.err(node.srcPos, "Unresolved symbol (this should never happen here)")
 
 			if(symbol is PosSym)
 				return symbol.address.toLong()

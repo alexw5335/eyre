@@ -1,10 +1,8 @@
 package eyre
 
-
+// Name (in Interns.kt) is also a token
 
 sealed interface Token
-
-object EndToken : Token { override fun toString() = "END OF FILE" }
 
 data class IntToken(val value: Long) : Token
 
@@ -17,15 +15,19 @@ data class FloatToken(val value: Double) : Token
 data class RegToken(val value: Reg) : Token
 
 
-
-enum class SymToken(val string: String, val binOp: BinOp? = null, val unOp: UnOp? = null) : Token {
+enum class SymToken(
+	val string : String,
+	val binOp  : BinOp? = null,
+	val unOp   : UnOp?  = null
+) : Token {
+	NEWLINE  ("\\n"),
 	LPAREN   ("("),
 	RPAREN   (")"),
 	PLUS     ("+", BinOp.ADD, UnOp.POS),
 	MINUS    ("-", BinOp.SUB, UnOp.NEG),
 	STAR     ("*", BinOp.MUL),
 	SLASH    ("/", BinOp.DIV),
-	EQUALS   ("=", BinOp.SET),
+	SET      ("=", BinOp.SET),
 	COMMA    (","),
 	SEMI     (";"),
 	COLON    (":"),
@@ -42,7 +44,7 @@ enum class SymToken(val string: String, val binOp: BinOp? = null, val unOp: UnOp
 	SAR      (">>>", BinOp.SAR),
 	LTE      ("<=", BinOp.LTE),
 	GTE      (">=", BinOp.GTE),
-	EQU      ("==", BinOp.EQ),
+	EQ       ("==", BinOp.EQ),
 	INEQ     ("!=", BinOp.INEQ),
 	BANG     ("!", null, UnOp.LNOT),
 	QUESTION ("?"),

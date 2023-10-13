@@ -1,6 +1,6 @@
 package eyre
 
-class SymbolTable : Iterable<Sym> {
+class SymTable : Iterable<Sym> {
 
 
 	private data class Node(var value: Sym?, var next: Node?) : Iterable<Node> {
@@ -17,7 +17,7 @@ class SymbolTable : Iterable<Sym> {
 
 
 	fun add(sym: Sym): Sym? {
-		val hash = sym.scope.id * 31 + sym.name.id
+		val hash = sym.place.hashCode()
 		var node = nodes[hash and (nodes.size - 1)]
 
 		if(node.value == null) {
@@ -31,7 +31,7 @@ class SymbolTable : Iterable<Sym> {
 			val value = node.value
 			if(value == null)
 				emptyNode = node
-			else if(value.scope == sym.scope && value.name == sym.name)
+			else if(value.place == sym.place)
 				return value
 			node = node.next ?: break
 		}
@@ -47,8 +47,12 @@ class SymbolTable : Iterable<Sym> {
 
 
 
-	fun get(scope: Scope, name: Name): Sym? {
-		val hash = scope.id * 31 + name.id
+	fun get(scope: Scope, name: Name) = get(Place(scope, name))
+
+
+
+	fun get(place: Place): Sym? {
+		val hash = place.hashCode()
 		var node = nodes[hash and (nodes.size - 1)]
 
 		if(node.value == null)
@@ -56,7 +60,7 @@ class SymbolTable : Iterable<Sym> {
 
 		while(true) {
 			val value = node.value
-			if(value != null && value.scope == scope && value.name == name)
+			if(value != null && value.place == place)
 				return value
 			node = node.next ?: return null
 		}
