@@ -1,6 +1,7 @@
 package eyre
 
 enum class Mnemonic {
+	NONE,
 	DLLCALL,
 	RETURN,
 	AADD,

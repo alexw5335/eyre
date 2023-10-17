@@ -42,9 +42,6 @@ class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 	fun internalErr(message: String? = "no reason given"): Nothing =
 		error("Internal compiler error: $message")
 
-	fun srcPosString(srcPos: SrcPos) =
-		"${srcFiles[srcPos.file].relPath}:${srcPos.line} -- "
-
 	fun err(srcPos: SrcPos, message: String): Nothing =
 		throw EyreError(srcPos, message).also(errors::add)
 

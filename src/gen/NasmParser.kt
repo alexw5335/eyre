@@ -19,19 +19,34 @@ class NasmParser(private val inputs: List<String>) {
 
 	val encs = ArrayList<NasmEnc>()
 	
-	val expandedEncs = ArrayList<NasmEnc>()
+	val allEncs = ArrayList<NasmEnc>()
+
+	val groups = ArrayList<NasmGroup>()
+
+	val groupMap = HashMap<Mnemonic, NasmGroup>()
 	
 
 
-	fun parseAndConvert(): List<NasmEnc> {
+	fun parseAndConvert() {
 		for(i in inputs.indices) readRawLine(i, inputs[i])?.let(rawLines::add)
 		for(l in rawLines) if(filterLine(l)) filteredRawLines.add(l)
 		for(l in filteredRawLines) scrapeLine(l, lines)
 		for(l in lines) determineOperands(l)
 		for(l in lines) convertLine(l, encs)
-		encs.sortBy { it.mnemonic }
-		for(e in encs) expandEnc(e, expandedEncs)
-		return expandedEncs
+		encs.sortBy(NasmEnc::mnemonic)
+
+		for(e in encs) {
+			val group = groupMap[e.mnemonic] ?: NasmGroup(e.mnemonic).also {
+				groupMap[e.mnemonic] = it
+				groups.add(it)
+			}
+
+			val existing = group.encs.firstOrNull { it.opsString == e.opsString }
+			if(existing != null && existing.avxOnly && e.avxOnly) continue
+			group.encs.add(e)
+			expandEnc(e, group.allEncs)
+			allEncs.addAll(group.allEncs)
+		}
 	}
 
 
@@ -90,6 +105,7 @@ class NasmParser(private val inputs: List<String>) {
 		val line = NasmLine(raw)
 
 		for(extra in raw.extras) when(extra) {
+			"ND" -> line.nd = true
 			in NasmLists.arches -> line.arch = NasmLists.arches[extra]!!
 			in NasmLists.extensions -> line.extensions += NasmLists.extensions[extra]!!
 			in NasmLists.opWidths -> line.opSize = NasmLists.opWidths[extra]!!
@@ -118,7 +134,7 @@ class NasmParser(private val inputs: List<String>) {
 			part == "odf"  -> line.odf    = true
 			part == "f2i"  -> line.prefix = Prefix.PF2
 			part == "f3i"  -> line.prefix = Prefix.PF3
-			part == "wait" -> line.prefix = Prefix.P9B
+			part == "wait" -> if(line.mnemonic == "FWAIT") line.opcode = 0x9B else line.prefix = Prefix.P9B
 			part[0] == '/' -> if(line.mnemonic != "SETcc" && part != "/3r0") line.ext = part[1].digitToInt(10)
 
 			part.contains(':') -> {
@@ -157,8 +173,11 @@ class NasmParser(private val inputs: List<String>) {
 
 		list += line
 
+		// Nasm encoding errors
 		if(line.mnemonic == "PTWRITE")
 			line.prefix = Prefix.PF3
+		if(line.mnemonic == "VPBLENDVB")
+			line.vexw = NasmVexW.W0
 
 		val parts = (line.vex ?: return).split('.')
 
@@ -305,7 +324,7 @@ class NasmParser(private val inputs: List<String>) {
 
 	private fun NasmLine.toEnc(mnemonic: String, opcode: Int) = NasmEnc(
 		null,
-		mnemonic,
+		NasmLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
 		prefix,
 		escape,
 		opcode,
@@ -320,6 +339,8 @@ class NasmParser(private val inputs: List<String>) {
 		opreg,
 		pseudo,
 		enc in NasmLists.mrEncs,
+		modrm,
+		nd,
 		vexw,
 		vexl,
 		tuple,
@@ -346,12 +367,16 @@ class NasmParser(private val inputs: List<String>) {
 
 	private fun expandEnc(enc: NasmEnc, list: ArrayList<NasmEnc>) {
 		for((i, m) in enc.ops.withIndex()) {
-			if(m.isMulti) {
-				list += enc.copy(parent = enc, ops = ArrayList(enc.ops).also { it[i] = m.multi1 })
-				list += enc.copy(parent = enc, ops = ArrayList(enc.ops).also { it[i] = m.multi2 })
-				return
-			}
+			if(!m.isMulti) continue
+			val enc1 = enc.copy(parent = enc, ops = ArrayList(enc.ops).also { it[i] = m.multi1 })
+			val enc2 = enc.copy(parent = enc, ops = ArrayList(enc.ops).also { it[i] = m.multi2 })
+			enc.children.add(enc1)
+			enc.children.add(enc2)
+			list.add(enc1)
+			list.add(enc2)
+			return
 		}
+
 		list += enc
 	}
 

@@ -45,7 +45,13 @@ class Compiler(private val context: Context) {
 	private fun checkErrors(): Boolean {
 		if(context.errors.isNotEmpty()) {
 			for(e in context.errors) {
-				e.printStackTrace()
+				if(e.srcPos.isNotNull) {
+					val file = context.srcFiles[e.srcPos.file]
+					System.err.println("${file.relPath}:${e.srcPos.line} -- ${e.message}")
+				}
+				for(s in e.stackTrace)
+					if("err" !in s.methodName && "Err" !in s.methodName)
+						System.err.println("\t$s")
 				System.err.println()
 			}
 			System.err.println("Compiler encountered errors")
@@ -99,6 +105,9 @@ class Compiler(private val context: Context) {
 		} else {
 			NodePrinter(context, CompilerStage.ASSEMBLE).print()
 		}
+
+		val code = context.textWriter.copy()
+		buildDir.resolve("code.bin").writeBytes(code)
 
 	/*
 		// Linking

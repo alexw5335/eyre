@@ -1,5 +1,6 @@
 package eyre.gen
 
+import eyre.Mnemonic
 import eyre.OpEnc
 import eyre.OpType
 import eyre.Width
@@ -13,6 +14,7 @@ object NasmLists {
 	val tupleTypes = NasmTuple.entries.associateBy { it.name.lowercase() }
 	val opEncs     = NasmOpEnc.entries.associateBy { it.string }
 	val ops        = NasmOp.entries.associateBy { it.nasmString }
+	val mnemonics  = Mnemonic.entries.associateBy { it.name }
 
 	val mrEncs = setOf(NasmOpEnc.MR, NasmOpEnc.MRN, NasmOpEnc.MRX, NasmOpEnc.MRI)
 

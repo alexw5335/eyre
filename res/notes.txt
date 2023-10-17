@@ -312,6 +312,7 @@ if_("AMD",               "AMD-specific");
 - ERROR? Intel gives F3 prefix for PTWRITE, NASM gives no prefix
 - ERROR?: SETcc has /0, but should have no extension?
 - ERROR?: RETW IMM16 is missing o16
+- ERROR?: VPBLENDVB Y_Y_YM256_Y should have W0 not WIG. Intel manual gives W0, NASM gives WIG
 
 - If prefix (66, F2, F3), escape (0F, 0F 38, 0F 3A) and wait (9B) are removed, then opcodes don't exceed 2 bytes
 	- 5 FPU instructions start with 9B and have two other opcode bytes

@@ -1,5 +1,6 @@
 package eyre
 
+import eyre.gen.NasmEnc
 import java.nio.file.Path
 import java.util.*
 import kotlin.collections.AbstractList
@@ -193,6 +194,22 @@ enum class OpEnc {
 	MRV,
 	MVR,
 	VMR;
+}
+
+
+
+enum class VexW(val value: Int) {
+	WIG(0),
+	W0(0),
+	W1(1);
+}
+
+
+
+enum class VexL(val value: Int) {
+	LIG(0),
+	L0(0),
+	L1(1);
 }
 
 
@@ -404,7 +421,7 @@ val ccList = arrayOf(
 	"NBE" to 7, "A" to 7,
 	"S" to 8,
 	"NS" to 9,
-	"P" to 9, "PE" to 10,
+	"P" to 10, "PE" to 10,
 	"NP" to 11, "PO" to 11,
 	"L" to 12, "NGE" to 12,
 	"NL" to 13, "GE" to 13,

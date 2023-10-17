@@ -4,6 +4,9 @@ class Mem {
 
 	companion object { val NULL = Mem() }
 
+	val isNull get() = this == NULL
+	val isNotNull get() = this != NULL
+
 	var node: Node = NullNode
 	var scale = 0
 	var index = Reg.NONE
@@ -13,7 +16,7 @@ class Mem {
 	val hasBase get() = base != Reg.NONE
 	val hasIndex get() = index != Reg.NONE
 	var vsib = 0
-	var disp = 0
+	var disp = 0L
 	var width: Width? = null
 
 	fun reset() {

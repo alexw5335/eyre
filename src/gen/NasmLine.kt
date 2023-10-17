@@ -26,6 +26,7 @@ class NasmLine(val raw: RawNasmLine) {
 	var cc = false
 	var opreg = false
 	var modrm = false
+	var nd = false
 	var odf = false
 
 	var vex: String? = null

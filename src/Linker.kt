@@ -1,5 +1,6 @@
 package eyre
 
+/*
 import eyre.util.IntList
 import eyre.util.NativeWriter
 
@@ -341,7 +342,7 @@ class Linker(private val context: Context) {
 
 
 }
-
+*/
 
 
 private const val imageBase = 0x400000L

@@ -1,6 +1,7 @@
 package eyre.gen
 
 import eyre.Escape
+import eyre.Mnemonic
 import eyre.Prefix
 
 data class ManualLine(

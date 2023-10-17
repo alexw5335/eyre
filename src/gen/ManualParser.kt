@@ -36,15 +36,14 @@ class ManualParser(private val chars: CharArray) {
 
 
 
-	fun parseAndConvert(): List<ManualEnc> {
+	fun parseAndConvert() {
 		parseLines()
 		convertToEncs()
-		return encs
 	}
 
 	fun parseLines() {
 		try {
-			while(pos < chars.size) when(chars[pos]) {
+			while(pos < 1185) when(chars[pos]) {
 				'\n' -> { pos++; lineNum++ }
 				' '  -> skipLine()
 				'\r' -> pos++
@@ -131,12 +130,25 @@ class ManualParser(private val chars: CharArray) {
 		var ops = "NONE"
 		var rw = 0
 		var o16 = 0
-		val mnemonic: String
+		var mnemonic = ""
 		var pseudo = -1
 		var noRw = 0
+		var vexw = VexW.W0
+		var vexl = VexL.L0
+		var vex = false
 
 		while(true) {
 			val part = readPart()
+
+			when(part) {
+				"WG" -> { vexw = VexW.WIG; vex = true; continue }
+				"W0" -> { vexw = VexW.W0; vex = true; continue }
+				"W1" -> { vexw = VexW.W1; vex = true; continue }
+				"LL" -> { vexl = VexL.L0; vex = true; continue }
+				"LG" -> { vexl = VexL.LIG; vex = true; continue }
+				"L0" -> { vexl = VexL.L0; vex = true; continue }
+				"L1" -> { vexl = VexL.L1; vex = true; continue }
+			}
 
 			if(part.length == 4 && part[2] == '/') {
 				ext = part[3].digitToInt()

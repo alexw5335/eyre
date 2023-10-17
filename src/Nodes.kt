@@ -64,6 +64,13 @@ class DllImport(name: Name) : PosSym {
 
 
 
+class AnonPosSym(override var pos: Pos) : PosSym {
+	override val place = Place()
+	override var resolved = true
+}
+
+
+
 /*
 Expression nodes
  */
@@ -134,6 +141,7 @@ class Ins(
 ) : TopNode, AnonSym, PosSym, SizedSym {
 	override var pos = Pos()
 	override var size = 0
+
 	val count = when {
 		op1 == null -> 0
 		op2 == null -> 1

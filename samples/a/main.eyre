@@ -1,8 +1,1 @@
-namespace eyre
-
-proc main {
-	sub rsp, 40
-	lea rcx, [main]
-	dllcall ExitProcess
-	ret
-}
+add r12d, rcx
