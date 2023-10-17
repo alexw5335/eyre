@@ -2,6 +2,9 @@
 # Mnemonics are grouped by type (GP, FPU, MPX, MMX, SSE)
 # Mnemonics within types are roughly grouped by opcode
 # Mnemonic types are based on operands
+# GP format:  PREFIX? ESCAPE? OPCODE/EXT  MNEMONIC  OPS  WIDTHS?  MODIFIERS
+# SSE format: PREFIX? ESCAPE? OPCODE  MNEMONIC  OPS  MODIFIERS  PSEUDO?
+# VEX format: VEX.W VEX.L PREFIX ESCAPE OPCODE  MNEMONIC  OPS  MODIFIERS  PSEUDO?
 
 
 

@@ -30,12 +30,12 @@ object EncGen {
 
 
 	fun main() {
-		test()
+		genManualAvxEncs()
 	}
 
 
 
-	private fun test() {
+	private fun genManualAvxEncs() {
 		var prev = Mnemonic.NONE.name
 
 		class Combo(val x: String, val y: String, val s: String)
@@ -64,7 +64,6 @@ object EncGen {
 				if(!enc.isAvx) continue
 				if(enc.rw == 1 || enc.a32 == 1 || enc.o16 == 1) error("Unexpected")
 				if(enc in ignored) continue
-				if(enc.pseudo == -1) continue
 
 				if(first) {
 					first = false
@@ -123,12 +122,14 @@ object EncGen {
 
 				print(enc.prefix.avxString)
 				print(' ')
+				print(enc.escape.avxString)
+				print(' ')
 				print(enc.opcode.hexc8)
 				print("  ")
 				print(enc.mnemonic)
 				print("  ")
 				print(opsString)
-				if(enc.pseudo != -1) print("  :${enc.pseudo}")
+				print("  :${enc.pseudo}")
 				println()
 			}
 		}
