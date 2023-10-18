@@ -125,11 +125,12 @@ object EncGen {
 				print(enc.escape.avxString)
 				print(' ')
 				print(enc.opcode.hexc8)
+				if(enc.hasExt) print("/${enc.ext}")
 				print("  ")
 				print(enc.mnemonic)
 				print("  ")
 				print(opsString)
-				print("  :${enc.pseudo}")
+				if(enc.pseudo != -1) print("  :${enc.pseudo}")
 				println()
 			}
 		}
