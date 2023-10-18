@@ -20,7 +20,7 @@ class ManualParser(private val chars: CharArray) {
 
 	private var lineNum = 1
 
-	private val opsMap = Ops.entries.associateBy { it.name }
+	private val opsMap = CompactOps.entries.associateBy { it.name }
 
 	private val multiOpsMap = MultiOps.entries.associateBy { it.name }
 
@@ -43,7 +43,7 @@ class ManualParser(private val chars: CharArray) {
 
 	fun parseLines() {
 		try {
-			while(pos < 1185) when(chars[pos]) {
+			while(pos < chars.size) when(chars[pos]) {
 				'\n' -> { pos++; lineNum++ }
 				' '  -> skipLine()
 				'\r' -> pos++
@@ -91,7 +91,7 @@ class ManualParser(private val chars: CharArray) {
 
 
 	private fun ManualLine.toEncs() {
-		fun add(mnemonic: String, opcode: Int, ops: Ops) = ManualEnc(
+		fun add(mnemonic: String, opcode: Int, ops: CompactOps) = ManualEnc(
 			mnemonic,
 			prefix,
 			escape,
@@ -100,7 +100,8 @@ class ManualParser(private val chars: CharArray) {
 			mask,
 			ops,
 			rw,
-			o16
+			o16,
+			a32
 		).let(encs::add)
 
 		fun add(mnemonic: String, opcode: Int) {
@@ -113,7 +114,7 @@ class ManualParser(private val chars: CharArray) {
 		}
 
 		if(mnemonic.endsWith("cc"))
-			for((postfix, opcodeInc) in ccList)
+			for((postfix, opcodeInc) in NasmLists.ccList)
 				add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc)
 		else
 			add(mnemonic, opcode)

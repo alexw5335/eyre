@@ -15,6 +15,7 @@ data class ManualLine(
     val mask     : Int,
     val rw       : Int,
     val o16      : Int,
+	val a32      : Int,
     val noRw     : Int,
     val pseudo   : Int,
 )

@@ -1,9 +1,7 @@
 package eyre
 
-import eyre.gen.NasmEnc
 import java.nio.file.Path
 import java.util.*
-import kotlin.collections.AbstractList
 
 
 
@@ -318,23 +316,23 @@ enum class BinOp(val precedence: Int, val string: String?) {
 
 
 
-enum class MultiOps(vararg val parts: Ops, val width: Width? = null, val mr: Boolean = false) {
-	RM(Ops.R, Ops.M),
-	R_RM(Ops.R_R, Ops.R_M),
-	RM_R(Ops.R_R, Ops.M_R, mr = true),
-	O_A(Ops.A_O),
-	MEM(Ops.M, width = null),
-	M8(Ops.M, width = Width.BYTE),
-	M16(Ops.M, width = Width.WORD),
-	M32(Ops.M, width = Width.DWORD),
-	M64(Ops.M, width = Width.QWORD),
-	M80(Ops.M, width = Width.TWORD),
-	M128(Ops.M, width = Width.XWORD);
+enum class MultiOps(vararg val parts: CompactOps, val width: Width? = null, val mr: Boolean = false) {
+	RM(CompactOps.R, CompactOps.M),
+	R_RM(CompactOps.R_R, CompactOps.R_M),
+	RM_R(CompactOps.R_R, CompactOps.M_R, mr = true),
+	O_A(CompactOps.A_O),
+	MEM(CompactOps.M, width = null),
+	M8(CompactOps.M, width = Width.BYTE),
+	M16(CompactOps.M, width = Width.WORD),
+	M32(CompactOps.M, width = Width.DWORD),
+	M64(CompactOps.M, width = Width.QWORD),
+	M80(CompactOps.M, width = Width.TWORD),
+	M128(CompactOps.M, width = Width.XWORD);
 }
 
 
 
-enum class Ops(val mr: Boolean = false) {
+enum class CompactOps(val mr: Boolean = false) {
 	NONE,
 
 	R,
@@ -407,27 +405,6 @@ enum class Ops(val mr: Boolean = false) {
 	A_DX,
 	DX_A,
 }
-
-
-
-val ccList = arrayOf(
-	"O" to 0,
-	"NO" to 1,
-	"B" to 2, "NAE" to 2, "C" to 2,
-	"NB" to 3, "AE" to 3, "NC" to 3,
-	"Z" to 4, "E" to 4,
-	"NZ" to 5, "NE" to 5,
-	"BE" to 6, "NA" to 6,
-	"NBE" to 7, "A" to 7,
-	"S" to 8,
-	"NS" to 9,
-	"P" to 10, "PE" to 10,
-	"NP" to 11, "PO" to 11,
-	"L" to 12, "NGE" to 12,
-	"NL" to 13, "GE" to 13,
-	"LE" to 14, "NG" to 14,
-	"NLE" to 15, "G" to 15
-)
 
 
 
