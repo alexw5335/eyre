@@ -316,25 +316,9 @@ enum class BinOp(val precedence: Int, val string: String?) {
 
 
 
-enum class MultiOps(vararg val parts: CompactOps, val width: Width? = null, val mr: Boolean = false) {
-	RM(CompactOps.R, CompactOps.M),
-	R_RM(CompactOps.R_R, CompactOps.R_M),
-	RM_R(CompactOps.R_R, CompactOps.M_R, mr = true),
-	O_A(CompactOps.A_O),
-	MEM(CompactOps.M, width = null),
-	M8(CompactOps.M, width = Width.BYTE),
-	M16(CompactOps.M, width = Width.WORD),
-	M32(CompactOps.M, width = Width.DWORD),
-	M64(CompactOps.M, width = Width.QWORD),
-	M80(CompactOps.M, width = Width.TWORD),
-	M128(CompactOps.M, width = Width.XWORD);
-}
-
-
-
 enum class CompactOps(val mr: Boolean = false) {
 	NONE,
-
+	// Single
 	R,
 	M,
 	I8,
@@ -346,8 +330,7 @@ enum class CompactOps(val mr: Boolean = false) {
 	ST,
 	FS,
 	GS,
-	O,
-
+	// Double
 	R_R,
 	R_M,
 	M_R,
@@ -359,35 +342,18 @@ enum class CompactOps(val mr: Boolean = false) {
 	A_O,
 	ST0_ST,
 	ST_ST0,
-
 	// IMUL
 	R_RM_I,
 	R_RM_I8,
 	// SHLD/SHRD
 	RM_R_I8(mr = true),
 	RM_R_CL(mr = true),
-
-	// Non-functional ops (handled separately)
-
-	// LEA/LFS/LGS/LSS
-	R_MEM,
 	// MOVSX/MOVZX/CRC32
 	R_RM8,
 	R_RM16,
 	// MOVSXD
 	R_RM32,
-	// INVEPT/INVVPID/INVPCID
-	R_M128,
-	// ENQCMD/ENQCMDS/MOVDIR64B
-	RA_M512,
-
-	// ENTER
-	I16_I8,
-	// UMONITOR
-	RA,
-
 	// MOV
-	O_I,
 	R_SEG(mr = true),
 	M_SEG(mr = true),
 	SEG_R,
@@ -398,7 +364,6 @@ enum class CompactOps(val mr: Boolean = false) {
 	DR_R,
 	R_CR(mr = true),
 	CR_R,
-
 	// IN/OUT
 	A_I8,
 	I8_A,

@@ -27,7 +27,7 @@ class NasmParser(private val inputs: List<String>) {
 	
 
 
-	fun parseAndConvert() {
+	fun parse() {
 		for(i in inputs.indices) readRawLine(i, inputs[i])?.let(rawLines::add)
 		for(l in rawLines) if(filterLine(l)) filteredRawLines.add(l)
 		for(l in filteredRawLines) scrapeLine(l, lines)
@@ -357,7 +357,7 @@ class NasmParser(private val inputs: List<String>) {
 
 	private fun convertLine(line: NasmLine, list: ArrayList<NasmEnc>) {
 		if(line.cc)
-			for((postfix, opcodeInc) in ccList)
+			for((postfix, opcodeInc) in NasmLists.ccList)
 				list += line.toEnc(line.mnemonic.replace("cc", postfix), line.opcode + opcodeInc)
 		else
 			list += line.toEnc(line.mnemonic, line.opcode)

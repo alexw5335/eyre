@@ -1,9 +1,12 @@
 package eyre.gen
 
-import eyre.Width.*
-import eyre.Width
+enum class ManualOp(
+	val first: ManualOp? = null,
+	val second: ManualOp? = null,
+	val widths: Array<ManualOp>? = null
+) {
+	NONE,
 
-enum class ManualOp {
 	R8,
 	R16,
 	R32,
@@ -12,10 +15,12 @@ enum class ManualOp {
 	M16,
 	M32,
 	M64,
+	M80,
 	M128,
 	M256,
 	M512,
 	MEM,
+	MM,
 	X,
 	Y,
 	DX,
@@ -30,29 +35,47 @@ enum class ManualOp {
 	I64,
 	REL8,
 	REL32,
+	FS,
+	GS,
+	SEG,
+	MOF,
+	CR,
+	DR,
+	ONE,
+	ST,
+	ST0,
+	X0,
+	VM32X,
+	VM64X,
+	VM32Y,
+	VM64Y,
 
 	// Width multi ops
-	A,
-	R,
-	M,
-	I,
-	O,
+	A(widths = arrayOf(AL, AX, EAX, RAX)),
+	R(widths = arrayOf(R8, R16, R32, R64)),
+	M(widths = arrayOf(M8, M16, M32, M64)),
+	I(widths = arrayOf(I8, I16, I32, I32)),
 
 	// Multi ops
-	E,
-	EM,
-	S,
-	SM,
-	RM,
-	XM,
-	YM;
-
-	fun ofWidth(width: Width) = when(this) {
-		A -> when(width) { BYTE -> AL; WORD -> AX; DWORD -> EAX; QWORD -> RAX; else -> error("Invalid width") }
-		O, R -> when(width) { BYTE -> R8; WORD -> R16; DWORD -> R32; QWORD -> R64; else -> error("Invalid width") }
-		M -> when(width) { BYTE -> M8; WORD -> M16; DWORD -> M32; QWORD -> M64; else -> error("Invalid width") }
-		I -> when(width) { BYTE -> I8; WORD -> I16; DWORD -> I32; QWORD -> I32; else -> error("Invalid width") }
-		else -> error("Invalid op")
-	}
+	RM(R, M),
+	XM(X, M128),
+	YM(Y, M256),
+	MMM(MM, M64),
+	RM8(R8, M8),
+	RM16(R16, M16),
+	RM32(R32, M32),
+	RM64(R64, M64),
+	MMM64(MM, M64),
+	XM8(X, M8),
+	XM16(X, M16),
+	XM32(X, M32),
+	XM64(X, M64),
+	XM128(X, M128),
+	YM8(Y, M8),
+	YM16(Y, M16),
+	YM32(Y, M32),
+	YM64(Y, M64),
+	YM128(Y, M128),
+	YM256(Y, M256);
 
 }

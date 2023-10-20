@@ -19,10 +19,8 @@ class DisasmGroup(val opcode: Int) {
 object EncGen {
 
 
-	val manualParser = ManualParser("res/encs.txt").also { it.parseAndConvert() }
-	val manualEncs   = manualParser.encs
-	val nasmParser   = NasmParser("res/nasm.txt").also { it.parseAndConvert() }
-	val encs         = nasmParser.encs
+	val manualParser = ManualParser("res/encs.txt").also { it.parse() }
+	val nasmParser   = NasmParser("res/nasm.txt").also { it.parse() }
 	val expandedEncs = nasmParser.allEncs
 	val groups       = nasmParser.groups
 	val disasmGroups = createDisasmGroups()
@@ -30,30 +28,14 @@ object EncGen {
 
 
 	fun main() {
-		genManualAvxEncs()
+		for(enc in manualParser.encs)
+			println(enc)
 	}
 
 
 
 	private fun genManualAvxEncs() {
 		var prev = Mnemonic.NONE.name
-
-		class Combo(val x: String, val y: String, val s: String)
-
-		val combos = listOf(
-			Combo("X_X_XM128", "Y_Y_YM256", "S_S_SM"),
-			Combo("X_X_M128", "Y_Y_M256", "S_S_M"),
-			Combo("M128_X_X", "M256_Y_Y", "M_S_S"),
-			Combo("X_XM128_I8", "Y_YM256_I8", "S_SM_I8"),
-			Combo("X_X_XM128_X", "Y_Y_YM256_Y", "S_S_SM_S"),
-			Combo("X_XM128", "Y_YM256", "S_SM"),
-			Combo("XM128_X", "YM256_Y", "SM_S"),
-			Combo("M128_X", "M256_Y", "M_S"),
-			Combo("X_M128", "Y_M256", "S_M"),
-			Combo("R32_X", "R32_Y", "R32_S"),
-			Combo("R64_X", "R64_Y", "R64_S"),
-			Combo("X_X_XM128_I8", "Y_Y_YM256_I8", "S_S_SM_I8")
-		)
 
 		for(group in groups) {
 			val ignored = ArrayList<NasmEnc>()
@@ -87,9 +69,9 @@ object EncGen {
 
 				var opsString = enc.opsString
 				var ambiguousL = false
-				for(combo in combos) {
-					if(enc.opsString == combo.x) {
-						group.encs.firstOrNull { it.isAvx && it.opsString == combo.y }?.let {
+				for(combo in SimdCombo.entries) {
+					if(enc.opsString == combo.first) {
+						group.encs.firstOrNull { it.isAvx && it.opsString == combo.second }?.let {
 							if (enc.prefix != it.prefix ||
 								enc.opcode != it.opcode ||
 								enc.vexw != it.vexw ||
@@ -98,7 +80,7 @@ object EncGen {
 							)
 								error("Invalid combo: $enc  --  $it")
 							ignored.add(it)
-							opsString = combo.s
+							opsString = combo.name
 							ambiguousL = true
 						}
 					}

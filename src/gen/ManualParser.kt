@@ -3,30 +3,17 @@ package eyre.gen
 import eyre.*
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.system.exitProcess
 
-class ManualParser(private val chars: CharArray) {
+class ManualParser(private val lines: List<String>) {
 
+	constructor(path: String) : this(Files.readAllLines(Paths.get(path)))
 
-	constructor(path: String) : this(Files.readString(Paths.get(path)).let {
-		val chars = CharArray(it.length + 4)
-		it.toCharArray(chars)
-		chars.fill('\n', fromIndex = it.length)
-		chars
-	})
-
-
-
-	private var pos = 0
-
-	private var lineNum = 1
-
-	private val opsMap = CompactOps.entries.associateBy { it.name }
-
-	private val multiOpsMap = MultiOps.entries.associateBy { it.name }
-
-	val lines = ArrayList<ManualLine>()
-
+	private val compactOpsMap = CompactOps.entries.associateBy { it.name }
+	private val opMap = ManualOp.entries.associateBy { it.name }
+	private val combosMap = SimdCombo.entries.associateBy { it.name }
 	val encs = ArrayList<ManualEnc>()
+	val allEncs = ArrayList<ManualEnc>()
 
 
 
@@ -36,93 +23,53 @@ class ManualParser(private val chars: CharArray) {
 
 
 
-	fun parseAndConvert() {
-		parseLines()
-		convertToEncs()
-	}
-
-	fun parseLines() {
-		try {
-			while(pos < chars.size) when(chars[pos]) {
-				'\n' -> { pos++; lineNum++ }
-				' '  -> skipLine()
-				'\r' -> pos++
-				'#'  -> skipLine()
-				else -> lines.add(parseLine())
-			}
-		} catch(e: Exception) {
-			System.err.println("Error on line $lineNum")
-			throw e
-		}
-	}
-
-	fun convertToEncs() {
-		for(line in lines) {
-			if(line.ops in opsMap || line.ops in multiOpsMap) {
-				line.toEncs()
+	fun parse() {
+		for(i in lines.indices) {
+			try {
+				parseLine(lines[i])
+			} catch(e: Exception) {
+				System.err.println("Error on line ${i+1}: ${lines[i]}")
+				e.printStackTrace()
+				exitProcess(1)
 			}
 		}
+
+		encs.forEach(::expand)
 	}
 
 
 
-	/*
-	Private functions
-	 */
+	private fun expand(enc: ManualEnc) {
+		val multiIndex = enc.ops.indexOfFirst { it.first != null }
 
-
-
-	private fun skipSpaces() {
-		while(chars[pos] == ' ') pos++
-	}
-
-	private fun readPart(): String {
-		val start = pos
-		while(!chars[pos].isWhitespace()) pos++
-		return String(chars, start, pos - start)
-	}
-
-	private fun skipLine() {
-		while(chars[pos] != '\n') pos++
-	}
-
-	private fun atNewline() = (chars[pos] == '\n' || chars[pos] == '\r')
-
-
-
-	private fun ManualLine.toEncs() {
-		fun add(mnemonic: String, opcode: Int, ops: CompactOps) = ManualEnc(
-			mnemonic,
-			prefix,
-			escape,
-			opcode,
-			ext,
-			mask,
-			ops,
-			rw,
-			o16,
-			a32
-		).let(encs::add)
-
-		fun add(mnemonic: String, opcode: Int) {
-			val multi = multiOpsMap[ops]
-			if(multi != null)
-				for(part in multi.parts)
-					add(mnemonic, opcode, part)
-			else
-				add(mnemonic, opcode, opsMap[ops] ?: error("Invalid ops: $ops"))
+		if(multiIndex != -1) {
+			val multi = enc.ops[multiIndex]
+			expand(enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.first }))
+			expand(enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.second }))
+		} else if(enc.mask != 0) {
+			fun ops(index: Int) = enc.ops.map { it.widths?.get(index) ?: it }
+			val o16 = if(enc.mask == 2) 0 else 1
+			val opcode = enc.opcode + if(enc.mask and 1 == 1) 1 else 0
+			val rw = if(enc.mask and 4 == 4) 1 else 0
+			if(enc.mask and 1 == 1) expand(enc.copy(mask = 0, ops = ops(0)))
+			if(enc.mask and 2 == 2) expand(enc.copy(mask = 0, ops = ops(1), opcode = opcode, o16 = o16))
+			if(enc.mask and 4 == 4) expand(enc.copy(mask = 0, ops = ops(2), opcode = opcode))
+			if(enc.mask and 8 == 8) expand(enc.copy(mask = 0, ops = ops(3), opcode = opcode, rw = rw))
+			for(i in 0..3) {
+				if(enc.mask and (1 shl i) == 0)
+					continue
+				expand(enc.copy(mask = 0, ops = enc.ops.map { it.widths?.get(i) ?: it }))
+			}
+		} else {
+			allEncs.add(enc)
 		}
-
-		if(mnemonic.endsWith("cc"))
-			for((postfix, opcodeInc) in NasmLists.ccList)
-				add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc)
-		else
-			add(mnemonic, opcode)
 	}
 
 
 
-	private fun parseLine(): ManualLine {
+	private fun parseLine(line: String) {
+		if(line.isEmpty() || line[0] == '#') return
+
 		var prefix = Prefix.NONE
 		var escape = Escape.NONE
 		var opcode = 0
@@ -131,51 +78,68 @@ class ManualParser(private val chars: CharArray) {
 		var ops = "NONE"
 		var rw = 0
 		var o16 = 0
+		var a32 = 0
+		var opreg = false
 		var mnemonic = ""
 		var pseudo = -1
-		var noRw = 0
 		var vexw = VexW.W0
 		var vexl = VexL.L0
-		var vex = false
+		val vex = line.startsWith("W")
 
-		while(true) {
-			val part = readPart()
+		for(part in line.split(' ').filter(String::isNotEmpty)) {
+			if(part.isEmpty()) error("Empty part: '$part'")
+			val isExt = part.length == 4 && part[2] == '/'
 
-			when(part) {
-				"WG" -> { vexw = VexW.WIG; vex = true; continue }
-				"W0" -> { vexw = VexW.W0; vex = true; continue }
-				"W1" -> { vexw = VexW.W1; vex = true; continue }
-				"LL" -> { vexl = VexL.L0; vex = true; continue }
-				"LG" -> { vexl = VexL.LIG; vex = true; continue }
-				"L0" -> { vexl = VexL.L0; vex = true; continue }
-				"L1" -> { vexl = VexL.L1; vex = true; continue }
-			}
+			when {
+				part == "WG" -> vexw = VexW.WIG
+				part == "W0" -> vexw = VexW.W0
+				part == "W1" -> vexw = VexW.W1
+				part == "LL" -> vexl = VexL.L0
+				part == "LG" -> vexl = VexL.LIG
+				part == "L0" -> vexl = VexL.L0
+				part == "L1" -> vexl = VexL.L1
+				part == "RW" -> rw = 1
+				part == "O16" -> o16 = 1
+				part == "A32" -> a32 = 1
+				part == "NP" -> prefix = Prefix.NONE
+				part == "OPREG" -> opreg = true
 
-			if(part.length == 4 && part[2] == '/') {
-				ext = part[3].digitToInt()
-			} else if(part.length > 2 || !part[0].isHex || !part[1].isHex) {
-				mnemonic = part
-				break
-			}
+				part[0] == ':' ->
+					pseudo = part.drop(1).toInt()
 
-			val value = (part[0].digitToInt(16) shl 4) or part[1].digitToInt(16)
+				mnemonic.isEmpty() && !isExt && (!part[0].isHex || !part[1].isHex || part.length > 2 ) ->
+					mnemonic = part
 
-			if(opcode == 0) {
-				when(value) {
-					0x66 -> if(escape == Escape.NONE) prefix = Prefix.P66 else opcode = 0x66
-					0xF2 -> if(escape == Escape.NONE) prefix = Prefix.PF2 else opcode = 0xF2
-					0xF3 -> if(escape == Escape.NONE) prefix = Prefix.PF3 else opcode = 0xF3
-					0x9B -> if(escape == Escape.NONE) prefix = Prefix.P9B else opcode = 0x9B
-					0x0F -> if(escape == Escape.NONE) escape = Escape.E0F else opcode = 0x0F
-					0x38 -> if(escape == Escape.E0F) escape = Escape.E38 else opcode = 0x38
-					0x3A -> if(escape == Escape.E0F) escape = Escape.E3A else opcode = 0x3A
-					else -> opcode = value
+				mnemonic.isNotEmpty() && (part[0] == '0' || part[0] == '1') ->
+					mask = part.toInt(2)
+
+				mnemonic.isNotEmpty() ->
+					ops = part
+
+				else -> {
+					if(isExt)
+						ext = part[3].digitToInt()
+					else if(part.length != 2)
+						error("Invalid part: $part")
+
+					val value = (part[0].digitToInt(16) shl 4) or part[1].digitToInt(16)
+
+					if(opcode == 0) {
+						when(value) {
+							0x66 -> if(escape == Escape.NONE) prefix = Prefix.P66 else opcode = 0x66
+							0xF2 -> if(escape == Escape.NONE) prefix = Prefix.PF2 else opcode = 0xF2
+							0xF3 -> if(escape == Escape.NONE) prefix = Prefix.PF3 else opcode = 0xF3
+							0x9B -> if(escape == Escape.NONE) prefix = Prefix.P9B else opcode = 0x9B
+							0x0F -> if(escape == Escape.NONE) escape = Escape.E0F else opcode = 0x0F
+							0x38 -> if(escape == Escape.E0F) escape = Escape.E38 else opcode = 0x38
+							0x3A -> if(escape == Escape.E0F) escape = Escape.E3A else opcode = 0x3A
+							else -> opcode = value
+						}
+					} else {
+						opcode = opcode or (value shl 8)
+					}
 				}
-			} else {
-				opcode = opcode or (value shl 8)
 			}
-
-			skipSpaces()
 		}
 
 		if(prefix == Prefix.P9B && opcode == 0) {
@@ -183,40 +147,36 @@ class ManualParser(private val chars: CharArray) {
 			prefix = Prefix.NONE
 		}
 
-		skipSpaces()
-
-		var firstPart = true
-
-		while(!atNewline()) {
-			val part = readPart()
-			if(part.isEmpty()) error("Empty part")
-			when {
-				part == "RW" -> rw = 1
-				part == "O16" -> o16 = 1
-				part == "NORW" -> noRw = 1
-				part[0] == '0' || part[0] == '1' -> mask = part.toInt(2)
-				part[0] == ':' -> pseudo = part.drop(1).toInt()
-				!firstPart -> error("Invalid part: $part")
-				else -> ops = part
-			}
-			firstPart = false
-			skipSpaces()
-		}
-
-		return ManualLine(
-			lineNum,
+		fun add(mnemonic: String, opcode: Int, ops: String, prefix: Prefix, vexl: VexL) = ManualEnc(
 			mnemonic,
 			prefix,
 			escape,
 			opcode,
 			ext,
-			ops,
 			mask,
+			compactOpsMap[ops] ?: CompactOps.NONE,
 			rw,
 			o16,
-			noRw,
-			pseudo
-		)
+			a32,
+			opreg,
+			ops.split('_').map { opMap[it] ?: error("Missing ops: $it") },
+			pseudo,
+			vex,
+			vexw,
+			vexl
+		).also(encs::add)
+
+		if(ops in combosMap) {
+			val combo = combosMap[ops]!!
+			add(mnemonic, opcode, combo.first, prefix, if(combo.isAvx) VexL.L0 else vexl)
+			add(mnemonic, opcode, combo.second, if(combo.isSse) Prefix.P66 else prefix, if(combo.isAvx) VexL.L1 else vexl)
+			return
+		} else if(mnemonic.endsWith("cc")) {
+			for((postfix, opcodeInc) in NasmLists.ccList)
+				add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc, ops, prefix, vexl)
+		} else {
+			add(mnemonic, opcode, ops, prefix, vexl)
+		}
 	}
 
 
