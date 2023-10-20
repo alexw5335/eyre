@@ -9,6 +9,7 @@ data class ManualEnc(
 	val opcode: Int,
 	val ext: Int,
 	val mask: Int,
+	val opsString: String,
 	val compactOps: CompactOps,
 	val rw: Int,
 	val o16: Int,
