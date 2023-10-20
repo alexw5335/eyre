@@ -14,7 +14,6 @@ class ManualParser(private val lines: List<String>) {
 	private val combosMap = SimdCombo.entries.associateBy { it.name }
 	val encs = ArrayList<ManualEnc>()
 	val allEncs = ArrayList<ManualEnc>()
-	val groups = HashMap<String, EncGroup>()
 
 
 
@@ -35,9 +34,7 @@ class ManualParser(private val lines: List<String>) {
 			}
 		}
 
-		for(e in encs) {
-
-		}
+		encs.forEach(::expand)
 	}
 
 
@@ -150,20 +147,19 @@ class ManualParser(private val lines: List<String>) {
 			prefix = Prefix.NONE
 		}
 
-		fun add(mnemonic: String, opcode: Int, opsString: String, prefix: Prefix, vexl: VexL) = ManualEnc(
+		fun add(mnemonic: String, opcode: Int, ops: String, prefix: Prefix, vexl: VexL) = ManualEnc(
 			mnemonic,
 			prefix,
 			escape,
 			opcode,
 			ext,
 			mask,
-			opsString,
-			compactOpsMap[opsString] ?: CompactOps.NONE,
+			compactOpsMap[ops] ?: CompactOps.NONE,
 			rw,
 			o16,
 			a32,
 			opreg,
-			opsString.split('_').map { opMap[it] ?: error("Missing ops: $it") },
+			ops.split('_').map { opMap[it] ?: error("Missing ops: $it") },
 			pseudo,
 			vex,
 			vexw,
