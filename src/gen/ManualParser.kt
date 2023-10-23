@@ -14,6 +14,18 @@ class ManualParser(private val lines: List<String>) {
 	private val combosMap = SimdCombo.entries.associateBy { it.name }
 	val encs = ArrayList<ManualEnc>()
 	val allEncs = ArrayList<ManualEnc>()
+	val groups = LinkedHashMap<String, ManualGroup>()
+
+
+
+	private val compactMnemonics = setOf(
+		"ADD", "OR", "ADC", "SBB", "AND",
+		"SUB", "XOR", "CMP", "PUSH", "POP",
+		"PUSHW", "POPW", "IMUL", "Jcc", "TEST",
+		"XCHG", "MOV", "ROL", "ROR", "RCL", "RCR",
+		"SAL", "SHL", "SHR", "SAR", "RET", "RETW",
+		"RETF", "RETFQ",
+	)
 
 
 
@@ -34,31 +46,40 @@ class ManualParser(private val lines: List<String>) {
 			}
 		}
 
-		encs.forEach(::expand)
+		for(e in encs) {
+			val group = groups.getOrPut(e.mnemonic, ::ManualGroup)
+			if(e.isAmbiguous) {
+				group.isCompact = true
+				group.encs.add(e)
+			} else {
+				expand(group.encs, e)
+			}
+		}
+
 	}
 
 
 
-	private fun expand(enc: ManualEnc) {
+	private fun expand(list: ArrayList<ManualEnc>, enc: ManualEnc) {
 		val multiIndex = enc.ops.indexOfFirst { it.first != null }
 
 		if(multiIndex != -1) {
 			val multi = enc.ops[multiIndex]
-			expand(enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.first }))
-			expand(enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.second }))
+			expand(list, enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.first }))
+			expand(list, enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.second }))
 		} else if(enc.mask != 0) {
 			fun ops(index: Int) = enc.ops.map { it.widths?.get(index) ?: it }
 			val o16 = if(enc.mask == 2) 0 else 1
 			val opcode = enc.opcode + if(enc.mask and 1 == 1) 1 else 0
 			val rw = if(enc.mask and 4 == 4) 1 else 0
-			if(enc.mask and 1 == 1) expand(enc.copy(mask = 0, ops = ops(0)))
-			if(enc.mask and 2 == 2) expand(enc.copy(mask = 0, ops = ops(1), opcode = opcode, o16 = o16))
-			if(enc.mask and 4 == 4) expand(enc.copy(mask = 0, ops = ops(2), opcode = opcode))
-			if(enc.mask and 8 == 8) expand(enc.copy(mask = 0, ops = ops(3), opcode = opcode, rw = rw))
+			if(enc.mask and 1 == 1) expand(list, enc.copy(mask = 0, ops = ops(0)))
+			if(enc.mask and 2 == 2) expand(list, enc.copy(mask = 0, ops = ops(1), opcode = opcode, o16 = o16))
+			if(enc.mask and 4 == 4) expand(list, enc.copy(mask = 0, ops = ops(2), opcode = opcode))
+			if(enc.mask and 8 == 8) expand(list, enc.copy(mask = 0, ops = ops(3), opcode = opcode, rw = rw))
 			for(i in 0..3) {
 				if(enc.mask and (1 shl i) == 0)
 					continue
-				expand(enc.copy(mask = 0, ops = enc.ops.map { it.widths?.get(i) ?: it }))
+				expand(list, enc.copy(mask = 0, ops = enc.ops.map { it.widths?.get(i) ?: it }))
 			}
 		} else {
 			allEncs.add(enc)

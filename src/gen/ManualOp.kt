@@ -1,7 +1,5 @@
 package eyre.gen
 
-import eyre.Mnemonic.*
-
 enum class ManualOp(
 	val first: ManualOp? = null,
 	val second: ManualOp? = null,

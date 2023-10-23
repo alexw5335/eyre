@@ -2,10 +2,6 @@ package eyre
 
 
 
-class AutoGroup(val encs: LongArray)
-
-
-
 @JvmInline
 value class AutoOps(val value: Int) {
 

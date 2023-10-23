@@ -2,6 +2,16 @@ package eyre.gen
 
 import eyre.*
 
+
+
+class ManualGroup {
+	var isCompact = false
+	var ops = 0
+	val encs = ArrayList<ManualEnc>()
+}
+
+
+
 data class ManualEnc(
 	val mnemonic: String,
 	val prefix: Prefix,
@@ -20,6 +30,8 @@ data class ManualEnc(
 	val vexw: VexW,
 	val vexl: VexL,
 ) {
+	val isAmbiguous = ops.any { it.isAmbiguous }
+	val isCompact get() = compactOps != CompactOps.NONE
 	val opcode1 = opcode and 0xFF
 	val opcode2 = opcode shr 8
 	val hasExt get() = ext >= 0
