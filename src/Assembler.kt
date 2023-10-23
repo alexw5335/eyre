@@ -423,6 +423,37 @@ class Assembler(private val context: Context) {
 
 
 
+	private fun assembleCompact(ins: Ins) {
+		var mem = Mem.NULL
+		var imm = Mem.NULL
+
+		fun type(node: OpNode?) = when(node) {
+			null       -> OpType.NONE
+			is RegNode -> node.value.type
+			is MemNode -> OpType.MEM.also { mem = resolve(node) }
+			is ImmNode -> OpType.IMM.also { imm = resolve(node) }
+		}
+
+		val type1 = type(ins.op1)
+		val type2 = type(ins.op2)
+		val type3 = type(ins.op3)
+		val type4 = type(ins.op4)
+
+		when(ins.count) {
+			1 -> {
+
+			}
+			2 -> {
+
+			}
+			3 -> {
+
+			}
+		}
+	}
+
+
+
 	private fun assembleAuto(ins: Ins) {
 		var mem = Mem.NULL
 		var imm = Mem.NULL
