@@ -1,5 +1,6 @@
 package eyre
 
+import eyre.gen.EncGen
 import eyre.gen.NasmEnc
 
 class Assembler(private val context: Context) {
@@ -401,24 +402,33 @@ class Assembler(private val context: Context) {
 
 	private fun assembleIns(ins: Ins) {
 		ins.pos = Pos(context.textSec, writer.pos)
-		assembleAuto(ins)
+
+		if(ins.count == 0) {
+			val opcode = EncGen.zeroOperandOpcodes[ins.mnemonic.ordinal]
+			if(opcode == 0) insErr()
+			writer.varLengthInt(opcode)
+		} else {
+			val group = EncGen.manualGroups[ins.mnemonic.name] ?: insErr()
+			for(enc in group.encs) {
+				if(enc.isCompact) {
+
+				} else {
+
+				}
+			}
+		}
+
 		ins.size = writer.pos - ins.pos.disp
 	}
 
 
 
-	private fun getAutoEnc(mnemonic: Mnemonic, ops: AutoOps): AutoEnc {
+	/*private fun getAutoEnc(mnemonic: Mnemonic, ops: AutoOps): AutoEnc {
 		val encs = Encs.autoEncs[mnemonic] ?: return AutoEnc()
 		for(e in encs) if(AutoEnc(e).ops == ops) return AutoEnc(e)
 		if(ops.width != 0) return AutoEnc()
 		for(e in encs) if(AutoEnc(e).ops.equalsExceptWidth(ops)) return AutoEnc(e)
 		return AutoEnc()
-	}
-
-
-
-	private fun assembleLast() {
-
 	}
 
 
@@ -521,7 +531,7 @@ class Assembler(private val context: Context) {
 		Escape.E0F  -> word(0x0F or (opcode shl 8))
 		Escape.E38  -> i24(0x380F or (opcode shl 16))
 		Escape.E3A  -> i24(0x3A0F or (opcode shl 16))
-	} }
+	} }*/
 
 
 }

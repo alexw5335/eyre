@@ -186,6 +186,13 @@ enum class Escape(val avxValue: Int, val string: String?, val avxString: String)
 
 
 
+/*
+RMV: 156: S_SM_I8
+RVM: 501  S_S_SM
+MRV: 35
+MVR: 4 M_S_S only
+VMR: 10 S_S_I8 only
+ */
 enum class OpEnc {
 	RMV,
 	RVM,

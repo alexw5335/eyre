@@ -24,23 +24,25 @@ object EncGen {
 	val expandedEncs = nasmParser.allEncs
 	val groups       = nasmParser.groups
 	val disasmGroups = createDisasmGroups()
+	val zeroOperandOpcodes = genZeroOperandOpcodes()
+	val manualGroups = manualParser.groups
 
 
 
 	fun main() {
-
+		genManualAvxEncs()
 	}
 
 
 
-	private fun genZeroOperandOpcodes(): LongArray {
-		val values = LongArray(Mnemonic.entries.size)
+	private fun genZeroOperandOpcodes(): IntArray {
+		val values = IntArray(Mnemonic.entries.size)
 		for(enc in manualParser.encs) {
 			if(enc.ops.isNotEmpty()) continue
-			var value = 0L
-			value = value or enc.opcode1.toLong()
+			var value = 0
+			value = value or enc.opcode1
 			if(enc.opcode and 0xFF00 != 0)
-				value = (value shl 8) or enc.opcode2.toLong()
+				value = (value shl 8) or enc.opcode2
 			value = when(enc.escape) {
 				Escape.NONE -> value
 				Escape.E0F  -> (value shl 8) or 0x0F
@@ -48,7 +50,7 @@ object EncGen {
 				Escape.E3A  -> (value shl 16) or 0x3A0F
 			}
 			if(enc.prefix != Prefix.NONE)
-				value = (value shl 8) or enc.prefix.value.toLong()
+				value = (value shl 8) or enc.prefix.value
 			values[enc.mnemonic.ordinal] = value
 		}
 		return values
@@ -134,6 +136,8 @@ object EncGen {
 				print(enc.mnemonic)
 				print("  ")
 				print(opsString)
+				print("  ")
+				print(NasmLists.opEncConversionMap[enc.opEnc])
 				if(enc.pseudo != -1) print("  :${enc.pseudo}")
 				println()
 			}
