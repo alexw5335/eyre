@@ -18,17 +18,6 @@ class ManualParser(private val lines: List<String>) {
 
 
 
-	private val compactMnemonics = setOf(
-		"ADD", "OR", "ADC", "SBB", "AND",
-		"SUB", "XOR", "CMP", "PUSH", "POP",
-		"PUSHW", "POPW", "IMUL", "Jcc", "TEST",
-		"XCHG", "MOV", "ROL", "ROR", "RCL", "RCR",
-		"SAL", "SHL", "SHR", "SAR", "RET", "RETW",
-		"RETF", "RETFQ",
-	)
-
-
-
 	/*
 	Public functions
 	 */
@@ -47,15 +36,15 @@ class ManualParser(private val lines: List<String>) {
 		}
 
 		for(e in encs) {
-			val group = groups.getOrPut(e.mnemonic, ::ManualGroup)
-			if(e.isAmbiguous) {
-				group.isCompact = true
+			val group = groups.getOrPut(e.mnemonicString, ::ManualGroup)
+
+			if(e.isCompact) {
+				group.ops = group.ops or (1 shl e.compactOps.ordinal)
 				group.encs.add(e)
 			} else {
 				expand(group.encs, e)
 			}
 		}
-
 	}
 
 
@@ -96,7 +85,7 @@ class ManualParser(private val lines: List<String>) {
 		var opcode = 0
 		var ext = -1
 		var mask = 0
-		var ops = "NONE"
+		var ops = ""
 		var rw = 0
 		var o16 = 0
 		var a32 = 0
@@ -170,6 +159,7 @@ class ManualParser(private val lines: List<String>) {
 
 		fun add(mnemonic: String, opcode: Int, ops: String, prefix: Prefix, vexl: VexL) = ManualEnc(
 			mnemonic,
+			NasmLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
 			prefix,
 			escape,
 			opcode,
@@ -180,7 +170,7 @@ class ManualParser(private val lines: List<String>) {
 			o16,
 			a32,
 			opreg,
-			ops.split('_').map { opMap[it] ?: error("Missing ops: $it") },
+			if(ops.isEmpty()) emptyList() else ops.split('_').map { opMap[it] ?: error("Missing ops: $it") },
 			pseudo,
 			vex,
 			vexw,

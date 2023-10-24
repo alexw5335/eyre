@@ -5,7 +5,6 @@ import eyre.*
 
 
 class ManualGroup {
-	var isCompact = false
 	var ops = 0
 	val encs = ArrayList<ManualEnc>()
 }
@@ -13,7 +12,8 @@ class ManualGroup {
 
 
 data class ManualEnc(
-	val mnemonic: String,
+	val mnemonicString: String,
+	val mnemonic: Mnemonic,
 	val prefix: Prefix,
 	val escape: Escape,
 	val opcode: Int,

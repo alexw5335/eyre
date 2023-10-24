@@ -1,7 +1,14 @@
 package eyre
 
 enum class Mnemonic {
-	NONE,
+	WAIT,
+	ENTERW,
+	LEAVEW,
+	CALLF,
+	JMPF,
+	SYSRETQ,
+	SYSEXITQ,
+	AOR,
 	DLLCALL,
 	RETURN,
 	AADD,
