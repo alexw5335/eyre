@@ -42,7 +42,15 @@ class ManualParser(private val lines: List<String>) {
 				group.ops = group.ops or (1 shl e.compactOps.ordinal)
 				group.encs.add(e)
 			} else {
-				expand(group.encs, e)
+				group.encs.add(e)
+				//expand(group.encs, e)
+			}
+		}
+
+		for(g in groups.values) {
+			for(enc in g.encs) {
+				if(enc.isCompact == g.encs[0].isCompact) continue
+				println(enc)
 			}
 		}
 	}

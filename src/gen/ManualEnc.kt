@@ -30,7 +30,19 @@ data class ManualEnc(
 	val vexw: VexW,
 	val vexl: VexL,
 ) {
-	val isAmbiguous = ops.any { it.isAmbiguous }
+	val op1 = ops.getOrElse(0) { ManualOp.NONE }
+	val op2 = ops.getOrElse(1) { ManualOp.NONE }
+	val op3 = ops.getOrElse(2) { ManualOp.NONE }
+	val op4 = ops.getOrElse(3) { ManualOp.NONE }
+
+	val opEnc: OpEnc = when {
+		op1.type.isMem && op2.type.isReg && op3.type.isReg -> OpEnc.MVR
+		op1.type.isMem && op2.type.isReg -> OpEnc.MRV
+		op1.type.isReg && op2.type.isMem -> OpEnc.RMV
+		op1.type.isReg && op2.type.isReg && hasExt -> OpEnc.VMR
+		else -> OpEnc.RVM
+	}
+
 	val isCompact get() = compactOps != CompactOps.NONE
 	val opcode1 = opcode and 0xFF
 	val opcode2 = opcode shr 8

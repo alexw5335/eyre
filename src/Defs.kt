@@ -45,6 +45,12 @@ enum class OpType(val gpWidth: Width = Width.BYTE) {
 	CR,
 	DR,
 	BND;
+
+	val isR get() = ordinal <= R64.ordinal
+	val isReg get() = this != MEM && this != IMM && this != NONE
+	val isMem get() = this == MEM
+	val isImm get() = this == IMM
+
 }
 
 
@@ -194,10 +200,15 @@ MVR: 4 M_S_S only
 VMR: 10 S_S_I8 only
  */
 enum class OpEnc {
-	RMV,
+	/** 501, of the form RRM */
 	RVM,
+	/** 156, of the form RMR */
+	RMV,
+	/** 35, of the form MR or MRI */
 	MRV,
+	/** 4, of the form MRR, M_S_S only */
 	MVR,
+	/** 10, of the form RR with opcode ext, S_S_I8 only. ModRM:REG is used for ext. */
 	VMR;
 }
 
@@ -323,7 +334,11 @@ enum class BinOp(val precedence: Int, val string: String?) {
 
 
 
-enum class CompactOps(val mr: Boolean = false) {
+enum class CompactOps(
+	val first: CompactOps? = null,
+	val second: CompactOps? = null,
+	val mr: Boolean = false
+) {
 	NONE,
 	// Single
 	R,
@@ -346,7 +361,8 @@ enum class CompactOps(val mr: Boolean = false) {
 	A_I,
 	RM_1,
 	RM_CL,
-	A_O,
+	A_R,
+	R_A,
 	ST0_ST,
 	ST_ST0,
 	// IMUL
@@ -376,6 +392,11 @@ enum class CompactOps(val mr: Boolean = false) {
 	I8_A,
 	A_DX,
 	DX_A,
+
+	// Multi ops
+	RM(R, M),
+	RM_R(R_R, M_R),
+	R_RM(R_R, R_M);
 }
 
 

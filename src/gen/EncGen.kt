@@ -24,13 +24,12 @@ object EncGen {
 	val expandedEncs = nasmParser.allEncs
 	val groups       = nasmParser.groups
 	val disasmGroups = createDisasmGroups()
-	val zeroOperandOpcodes = genZeroOperandOpcodes()
 	val manualGroups = manualParser.groups
-
+	val zeroOperandOpcodes = genZeroOperandOpcodes()
 
 
 	fun main() {
-		genManualAvxEncs()
+		//genManualAvxEncs()
 	}
 
 
