@@ -5,7 +5,7 @@ import eyre.OpEnc
 import eyre.OpType
 import eyre.Width
 
-object NasmLists {
+object GenLists {
 
 	val arches     = NasmArch.entries.associateBy { it.name.trimStart('_') }
 	val extensions = NasmExt.entries.associateBy { it.name.trimStart('_') }

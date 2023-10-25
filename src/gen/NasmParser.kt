@@ -87,15 +87,15 @@ class NasmParser(private val inputs: List<String>) {
 
 
 	private fun filterLine(line: RawNasmLine) = when {
-		line.mnemonic in NasmLists.essentialMnemonics -> true
+		line.mnemonic in GenLists.essentialMnemonics -> true
 		(line.mnemonic == "PINSRB" || line.mnemonic == "PINSRW") && "mem" in line.operands -> false
 		line.mnemonic == "PUSH" && line.operands[0] == "imm64" -> false
 		"r+mi:" in line.parts -> false
 		line.mnemonic == "aw" -> true
 		"ND" in line.extras && line.operands[0] != "void" -> false
-		line.mnemonic in NasmLists.invalidMnemonics -> false
-		NasmLists.invalidExtras.any(line.extras::contains) -> false
-		NasmLists.invalidOperands.any(line.operands::contains) -> false
+		line.mnemonic in GenLists.invalidMnemonics -> false
+		GenLists.invalidExtras.any(line.extras::contains) -> false
+		GenLists.invalidOperands.any(line.operands::contains) -> false
 		else -> true
 	}
 
@@ -106,10 +106,10 @@ class NasmParser(private val inputs: List<String>) {
 
 		for(extra in raw.extras) when(extra) {
 			"ND" -> line.nd = true
-			in NasmLists.arches -> line.arch = NasmLists.arches[extra]!!
-			in NasmLists.extensions -> line.extensions += NasmLists.extensions[extra]!!
-			in NasmLists.opWidths -> line.opSize = NasmLists.opWidths[extra]!!
-			in NasmLists.ignoredExtras -> continue
+			in GenLists.arches -> line.arch = GenLists.arches[extra]!!
+			in GenLists.extensions -> line.extensions += GenLists.extensions[extra]!!
+			in GenLists.opWidths -> line.opSize = GenLists.opWidths[extra]!!
+			in GenLists.ignoredExtras -> continue
 			"SM"  -> line.sm = true
 			"SM2" -> line.sm = true
 			"AR0" -> line.ar = 0
@@ -119,9 +119,9 @@ class NasmParser(private val inputs: List<String>) {
 		}
 
 		for(part in raw.parts) when {
-			part in NasmLists.immTypes -> line.immType = NasmLists.immTypes[part]!!
-			part in NasmLists.vsibs -> line.vsib = NasmLists.vsibs[part]!!
-			part in NasmLists.ignoredParts -> continue
+			part in GenLists.immTypes -> line.immType = GenLists.immTypes[part]!!
+			part in GenLists.vsibs -> line.vsib = GenLists.vsibs[part]!!
+			part in GenLists.ignoredParts -> continue
 			part.startsWith("vex")  -> line.vex = part
 			part.startsWith("evex") -> line.vex = part
 			part.endsWith("+c")     -> { line.cc = true; line.addOpcode(part.dropLast(2).toInt(16)) }
@@ -139,9 +139,9 @@ class NasmParser(private val inputs: List<String>) {
 
 			part.contains(':') -> {
 				val array = part.split(':').filter { it.isNotEmpty() }
-				line.enc = NasmLists.opEncs[array[0]] ?: raw.error("Invalid ops: ${array[0]}")
+				line.enc = GenLists.opEncs[array[0]] ?: raw.error("Invalid ops: ${array[0]}")
 				if(array.size > 1)
-					line.tuple = NasmLists.tupleTypes[array[1]] ?: raw.error("Invalid tuple type")
+					line.tuple = GenLists.tupleTypes[array[1]] ?: raw.error("Invalid tuple type")
 				if(array.size == 3)
 					line.vex = array[2]
 			}
@@ -223,8 +223,8 @@ class NasmParser(private val inputs: List<String>) {
 		}
 
 		if(line.sm) {
-			NasmLists.ops[strings[0]]?.width?.let { widths[1] = it }
-			NasmLists.ops[strings[1]]?.width?.let { widths[0] = it }
+			GenLists.ops[strings[0]]?.width?.let { widths[1] = it }
+			GenLists.ops[strings[1]]?.width?.let { widths[0] = it }
 		}
 
 		if(line.ar >= 0)
@@ -256,7 +256,7 @@ class NasmParser(private val inputs: List<String>) {
 					else     -> NasmOp.I64
 				}
 
-				in NasmLists.ops -> NasmLists.ops[string]!!
+				in GenLists.ops -> GenLists.ops[string]!!
 
 				"xmmrm" -> when(widths[i]) {
 					Width.DWORD -> NasmOp.XM32
@@ -324,7 +324,7 @@ class NasmParser(private val inputs: List<String>) {
 
 	private fun NasmLine.toEnc(mnemonic: String, opcode: Int) = NasmEnc(
 		null,
-		NasmLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
+		GenLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
 		prefix,
 		escape,
 		opcode,
@@ -338,7 +338,7 @@ class NasmParser(private val inputs: List<String>) {
 		a32,
 		opreg,
 		pseudo,
-		enc in NasmLists.mrEncs,
+		enc in GenLists.mrEncs,
 		modrm,
 		nd,
 		vexw,
@@ -357,7 +357,7 @@ class NasmParser(private val inputs: List<String>) {
 
 	private fun convertLine(line: NasmLine, list: ArrayList<NasmEnc>) {
 		if(line.cc)
-			for((postfix, opcodeInc) in NasmLists.ccList)
+			for((postfix, opcodeInc) in GenLists.ccList)
 				list += line.toEnc(line.mnemonic.replace("cc", postfix), line.opcode + opcodeInc)
 		else
 			list += line.toEnc(line.mnemonic, line.opcode)

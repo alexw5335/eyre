@@ -5,6 +5,8 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.system.exitProcess
 
+
+
 class ManualParser(private val lines: List<String>) {
 
 	constructor(path: String) : this(Files.readAllLines(Paths.get(path)))
@@ -13,8 +15,7 @@ class ManualParser(private val lines: List<String>) {
 	private val opMap = ManualOp.entries.associateBy { it.name }
 	private val combosMap = SimdCombo.entries.associateBy { it.name }
 	val encs = ArrayList<ManualEnc>()
-	val allEncs = ArrayList<ManualEnc>()
-	val groups = LinkedHashMap<String, ManualGroup>()
+	val groups = LinkedHashMap<Mnemonic, ManualGroup>()
 
 
 
@@ -36,23 +37,18 @@ class ManualParser(private val lines: List<String>) {
 		}
 
 		for(e in encs) {
-			val group = groups.getOrPut(e.mnemonicString, ::ManualGroup)
+			val group = groups.getOrPut(e.mnemonic) { ManualGroup(e.mnemonic) }
 
 			if(e.isCompact) {
+				group.isCompact = true
 				group.ops = group.ops or (1 shl e.compactOps.ordinal)
 				group.encs.add(e)
 			} else {
-				group.encs.add(e)
-				//expand(group.encs, e)
+				expand(group.encs, e)
 			}
 		}
 
-		for(g in groups.values) {
-			for(enc in g.encs) {
-				if(enc.isCompact == g.encs[0].isCompact) continue
-				println(enc)
-			}
-		}
+		groups[Mnemonic.MOV]!!.isCompact = true
 	}
 
 
@@ -79,7 +75,7 @@ class ManualParser(private val lines: List<String>) {
 				expand(list, enc.copy(mask = 0, ops = enc.ops.map { it.widths?.get(i) ?: it }))
 			}
 		} else {
-			allEncs.add(enc)
+			list.add(enc)
 		}
 	}
 
@@ -166,8 +162,7 @@ class ManualParser(private val lines: List<String>) {
 		}
 
 		fun add(mnemonic: String, opcode: Int, ops: String, prefix: Prefix, vexl: VexL) = ManualEnc(
-			mnemonic,
-			NasmLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
+			GenLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
 			prefix,
 			escape,
 			opcode,
@@ -178,7 +173,7 @@ class ManualParser(private val lines: List<String>) {
 			o16,
 			a32,
 			opreg,
-			if(ops.isEmpty()) emptyList() else ops.split('_').map { opMap[it] ?: error("Missing ops: $it") },
+			if(ops == "") emptyList() else ops.split('_').map { opMap[it] ?: error("Missing ops: $it") },
 			pseudo,
 			vex,
 			vexw,
@@ -191,7 +186,7 @@ class ManualParser(private val lines: List<String>) {
 			add(mnemonic, opcode, combo.second, if(combo.isSse) Prefix.P66 else prefix, if(combo.isAvx) VexL.L1 else vexl)
 			return
 		} else if(mnemonic.endsWith("cc")) {
-			for((postfix, opcodeInc) in NasmLists.ccList)
+			for((postfix, opcodeInc) in GenLists.ccList)
 				add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc, ops, prefix, vexl)
 		} else {
 			add(mnemonic, opcode, ops, prefix, vexl)

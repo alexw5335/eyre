@@ -28,6 +28,7 @@ object EncGen {
 	val zeroOperandOpcodes = genZeroOperandOpcodes()
 
 
+
 	fun main() {
 		//genManualAvxEncs()
 	}
@@ -136,7 +137,7 @@ object EncGen {
 				print("  ")
 				print(opsString)
 				print("  ")
-				print(NasmLists.opEncConversionMap[enc.opEnc])
+				print(GenLists.opEncConversionMap[enc.opEnc])
 				if(enc.pseudo != -1) print("  :${enc.pseudo}")
 				println()
 			}
@@ -172,14 +173,14 @@ object EncGen {
 			if(enc.avx || enc.evex) continue
 			if(enc.opcode shr 16 != 0) continue
 			if(enc.mnemonic == Mnemonic.MOV) continue
-			if(enc.ops.any { !NasmLists.opTypeConversionMap.contains(it) }) continue
+			if(enc.ops.any { !GenLists.opTypeConversionMap.contains(it) }) continue
 
-			val opEnc = NasmLists.opEncConversionMap[enc.opEnc] ?: continue
+			val opEnc = GenLists.opEncConversionMap[enc.opEnc] ?: continue
 
 			fun type(index: Int): Int {
 				if(index >= enc.ops.size) return OpType.NONE.ordinal
 				val op = enc.ops[index]
-				val type = NasmLists.opTypeConversionMap[op] ?: error("Invalid op: $op -- $enc")
+				val type = GenLists.opTypeConversionMap[op] ?: error("Invalid op: $op -- $enc")
 				return type.ordinal
 			}
 
