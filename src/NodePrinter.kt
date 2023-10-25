@@ -106,16 +106,21 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 			is IntNode    -> appendLine(node.value.toString())
 			is Namespace  -> appendLine("NAMESPACE ${node.place}")
 
-			is MemNode -> {
-				node.width?.let { append(it.toString()); append(' ') }
-				appendLine("PTR")
-				appendChild(node.node)
-			}
+			is OpNode -> {
+				node.width?.let {
+					append(it.toString())
+					append(' ')
+				}
 
-			is ImmNode -> {
-				node.width?.let { append(it.toString()); append(' ') }
-				appendLine("IMM")
-				appendChild(node.node)
+				if(node.type.isMem) {
+					appendLine("PTR")
+					appendChild(node.node)
+				} else if(node.type.isImm) {
+					appendLine("PTR")
+					appendChild(node.node)
+				} else {
+					appendLine(node.reg.toString())
+				}
 			}
 
 			is NameNode -> {
@@ -157,7 +162,7 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 			}
 
 
-			is Ins -> {
+			is InsNode -> {
 				append(node.mnemonic.toString())
 				appendPosInfo(node)
 
@@ -179,10 +184,10 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 				}
 
 				appendLine()
-				if(node.op1 != null) appendChild(node.op1)
-				if(node.op2 != null) appendChild(node.op2)
-				if(node.op3 != null) appendChild(node.op3)
-				if(node.op4 != null) appendChild(node.op4)
+				if(node.op1.isNotNone) appendChild(node.op1)
+				if(node.op2.isNotNone) appendChild(node.op2)
+				if(node.op3.isNotNone) appendChild(node.op3)
+				if(node.op4.isNotNone) appendChild(node.op4)
 			}
 
 			else -> appendLine(node.toString())

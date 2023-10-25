@@ -10,10 +10,6 @@ Interfaces
 
 sealed interface Node
 
-sealed interface OpNode : Node {
-	val type: OpType
-}
-
 sealed interface TopNode : Node {
 	val srcPos: SrcPos
 }
@@ -91,16 +87,17 @@ class BinNode(val op: BinOp, val left: Node, val right: Node) : Node
 
 class NameNode(val value: Name, var sym: Sym? = null) : Node
 
-class RegNode(val value: Reg) : OpNode {
-	override val type = value.type
-}
+class RegNode(val value: Reg) : Node
 
-class MemNode(val width: Width?, val node: Node) : OpNode {
-	override val type = OpType.MEM
-}
-
-class ImmNode(val width: Width?, val node: Node) : OpNode {
-	override val type = OpType.IMM
+class OpNode(val type: OpType, val reg: Reg, val node: Node, val width: Width?) : Node {
+	val isNone get() = this == NONE
+	val isNotNone get() = this != NONE
+	companion object {
+		val NONE = OpNode(OpType.NONE, Reg.NONE, NullNode, null)
+		fun reg(reg: Reg) = OpNode(reg.type, reg, NullNode, null)
+		fun mem(node: Node, width: Width?) = OpNode(OpType.MEM, Reg.NONE, node, width)
+		fun imm(node: Node, width: Width?) = OpNode(OpType.IMM, Reg.NONE, node, width)
+	}
 }
 
 
@@ -131,22 +128,22 @@ class Proc(
 	override var size = 0
 }
 
-class Ins(
+class InsNode(
 	override val srcPos: SrcPos,
 	val mnemonic: Mnemonic,
-	val op1: OpNode?,
-	val op2: OpNode?,
-	val op3: OpNode?,
-	val op4: OpNode?
+	val op1: OpNode,
+	val op2: OpNode,
+	val op3: OpNode,
+	val op4: OpNode
 ) : TopNode, AnonSym, PosSym, SizedSym {
 	override var pos = Pos()
 	override var size = 0
 
 	val count = when {
-		op1 == null -> 0
-		op2 == null -> 1
-		op3 == null -> 2
-		op4 == null -> 3
+		op1.isNone -> 0
+		op2.isNone -> 1
+		op3.isNone -> 2
+		op4.isNone -> 3
 		else -> 4
 	}
 }

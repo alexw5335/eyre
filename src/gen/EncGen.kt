@@ -215,6 +215,7 @@ object EncGen {
 				enc.a32,
 				enc.opreg.int,
 				opEnc.ordinal,
+				enc.pseudo,
 				AutoOps(
 					type(0),
 					type(1),

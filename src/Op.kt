@@ -1,12 +1,47 @@
-package eyre.gen
+package eyre
 
-import eyre.OpType
 
-enum class ManualOp(
+
+enum class Ops(val first: Ops? = null, val second: Ops? = null) {
+	NONE,
+	R,
+	M,
+	I8,
+	I16,
+	I32,
+	AX,
+	REL8,
+	REL32,
+	FS,
+	GS,
+	R_R,
+	R_M,
+	M_R,
+	RM_I,
+	RM_I8,
+	RM_ONE,
+	A_I,
+	RM_CL,
+	A_R,
+	R_A,
+	R_RM_I,
+	R_RM_I8,
+	RM_R_I8,
+	RM_R_CL,
+
+	// Multi ops
+	RM(R, M),
+	RM_R(R_R, M_R),
+	R_RM(R_R, R_M);
+}
+
+
+
+enum class Op(
 	val type: OpType,
-	val first: ManualOp?,
-	val second: ManualOp?,
-	val widths: Array<ManualOp>?
+	val first: Op?,
+	val second: Op?,
+	val widths: Array<Op>?
 ) {
 	NONE(OpType.NONE),
 
@@ -50,6 +85,8 @@ enum class ManualOp(
 	VM64X(OpType.MEM),
 	VM32Y(OpType.MEM),
 	VM64Y(OpType.MEM),
+	VM32Z(OpType.MEM),
+	VM64Z(OpType.MEM),
 
 	// Width multi ops
 	A(arrayOf(AL, AX, EAX, RAX)),
@@ -79,34 +116,39 @@ enum class ManualOp(
 	YM128(Y, M128),
 	YM256(Y, M256);
 	
-	constructor(first: ManualOp, second: ManualOp) : this(OpType.NONE, first, second, null)
-	constructor(widths: Array<ManualOp>) : this(OpType.NONE, null, null, widths)
+	constructor(first: Op, second: Op) : this(OpType.NONE, first, second, null)
+	constructor(widths: Array<Op>) : this(OpType.NONE, null, null, widths)
 	constructor(type: OpType) : this(type, null, null, null)
+
+	val usesModRm get() = this in modrmOps
+	val isAmbiguous get() = this in ambiguousOps
+
+	companion object {
+		val modrmOps = setOf(
+			R8, R16, R32, R64,
+			M8, M16, M32, M64,
+			M80, M128, M256, M512,
+			MEM, MM, X, Y,
+			SEG, CR, DR, VM32X,
+			VM64X, VM32Y, VM64Y, VM32Z,
+			VM64Z, R, M, RM, XM,
+			YM, MMM, RM8, RM16,
+			RM32, RM64, MMM64, XM8,
+			XM16, XM32, XM64, XM128,
+			YM8, YM16, YM32, YM64,
+			YM128, YM256
+		)
+
+		val ambiguousOps = setOf(
+			DX, CL, AL, AX, EAX,
+			RAX, I16, I32, I64,
+			REL8, REL32, FS, GS,
+			SEG, CR, DR, ONE, ST,
+			ST0, A, I,
+		)
+	}
 
 }
 
 
 
-val ambiguousOps = setOf(
-	ManualOp.DX,
-	ManualOp.CL,
-	ManualOp.AL,
-	ManualOp.AX,
-	ManualOp.EAX,
-	ManualOp.RAX,
-	ManualOp.I16,
-	ManualOp.I32,
-	ManualOp.I64,
-	ManualOp.REL8,
-	ManualOp.REL32,
-	ManualOp.FS,
-	ManualOp.GS,
-	ManualOp.SEG,
-	ManualOp.CR,
-	ManualOp.DR,
-	ManualOp.ONE,
-	ManualOp.ST,
-	ManualOp.ST0,
-	ManualOp.A,
-	ManualOp.I,
-)

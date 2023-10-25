@@ -11,8 +11,8 @@ class ManualParser(private val lines: List<String>) {
 
 	constructor(path: String) : this(Files.readAllLines(Paths.get(path)))
 
-	private val compactOpsMap = CompactOps.entries.associateBy { it.name }
-	private val opMap = ManualOp.entries.associateBy { it.name }
+	private val compactOpsMap = Ops.entries.associateBy { it.name }
+	private val opMap = Op.entries.associateBy { it.name }
 	private val combosMap = SimdCombo.entries.associateBy { it.name }
 	val encs = ArrayList<ManualEnc>()
 	val groups = LinkedHashMap<Mnemonic, ManualGroup>()
@@ -41,14 +41,22 @@ class ManualParser(private val lines: List<String>) {
 
 			if(e.isCompact) {
 				group.isCompact = true
-				group.ops = group.ops or (1 shl e.compactOps.ordinal)
-				group.encs.add(e)
+				if(e.compactOps !in group) {
+					group.ops = group.ops or (1 shl e.compactOps.ordinal)
+					expand(group.encs, e)
+				}
 			} else {
 				expand(group.encs, e)
 			}
+
 		}
 
 		groups[Mnemonic.MOV]!!.isCompact = true
+
+		for(group in groups.values) {
+			if(!group.isCompact) continue
+			group.encs.sortBy { it.compactOps.ordinal }
+		}
 	}
 
 
@@ -56,7 +64,14 @@ class ManualParser(private val lines: List<String>) {
 	private fun expand(list: ArrayList<ManualEnc>, enc: ManualEnc) {
 		val multiIndex = enc.ops.indexOfFirst { it.first != null }
 
-		if(multiIndex != -1) {
+		if(enc.isCompact) {
+			if(enc.compactOps.first != null) {
+				expand(list, enc.copy(compactOps = enc.compactOps.first, ops = enc.compactOps.first.name.splitOps()))
+				expand(list, enc.copy(compactOps = enc.compactOps.first, ops = enc.compactOps.first.name.splitOps()))
+			} else {
+				list.add(enc)
+			}
+		} else if(multiIndex != -1) {
 			val multi = enc.ops[multiIndex]
 			expand(list, enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.first }))
 			expand(list, enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.second }))
@@ -78,6 +93,13 @@ class ManualParser(private val lines: List<String>) {
 			list.add(enc)
 		}
 	}
+
+
+
+	private fun String.splitOps() = if(isEmpty())
+		emptyList()
+	else
+		split('_').map { opMap[it] ?: error("Missing ops: $it") }
 
 
 
@@ -168,7 +190,7 @@ class ManualParser(private val lines: List<String>) {
 			opcode,
 			ext,
 			mask,
-			compactOpsMap[ops] ?: CompactOps.NONE,
+			compactOpsMap[ops] ?: Ops.NONE,
 			rw,
 			o16,
 			a32,

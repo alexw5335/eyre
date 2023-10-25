@@ -91,6 +91,7 @@ value class AutoEnc(val value: Long) {
 		a32: Int,
 		opReg: Int,
 		opEnc: Int,
+		pseudo: Int,
 		ops: Int
 	) : this(
 		(opcode.toLong() shl OPCODE) or
@@ -102,6 +103,7 @@ value class AutoEnc(val value: Long) {
 		(a32.toLong() shl A32) or
 		(opReg.toLong() shl OPREG) or
 		(opEnc.toLong() shl OPENC) or
+		(pseudo.toLong() shl PSEUDO) or
 		(ops.toLong() shl OPS)
 	)
 
@@ -114,6 +116,7 @@ value class AutoEnc(val value: Long) {
 	val a32     get() = ((value shr A32) and 1).toInt()
 	val opReg   get() = ((value shr OPREG) and 1).toInt()
 	val opEnc   get() = ((value shr OPENC) and 7).toInt()
+	val pseudo  get() = ((value shr PSEUDO) and 63).toInt()
 	val ops     get() = ((value shr OPS)).toInt().let(::AutoOps)
 
 	companion object {
@@ -126,7 +129,8 @@ value class AutoEnc(val value: Long) {
 		private const val A32     = 26 // 1
 		private const val OPREG   = 27 // 1
 		private const val OPENC   = 28 // 3  RMV RVM MRV MVR VMR
-		private const val OPS     = 32 // 22
+		private const val PSEUDO  = 32 // 5
+		private const val OPS     = 40 // 22
 	}
 
 	override fun toString() = buildString {
@@ -140,6 +144,7 @@ value class AutoEnc(val value: Long) {
 		add("a32", a32)
 		add("opReg", opReg)
 		add("opEnc", opEnc)
+		add("pseudo", pseudo)
 		add("r1", ops.r1)
 		add("r2", ops.r2)
 		add("r3", ops.r3)

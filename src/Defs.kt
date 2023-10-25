@@ -334,41 +334,6 @@ enum class BinOp(val precedence: Int, val string: String?) {
 
 
 
-enum class CompactOps(val first: CompactOps? = null, val second: CompactOps? = null) {
-	NONE,
-	R,
-	M,
-	I8,
-	I16,
-	I32,
-	AX,
-	REL8,
-	REL32,
-	FS,
-	GS,
-	R_R,
-	R_M,
-	M_R,
-	RM_I,
-	RM_I8,
-	RM_ONE,
-	A_I,
-	RM_CL,
-	A_R,
-	R_A,
-	R_RM_I,
-	R_RM_I8,
-	RM_R_I8,
-	RM_R_CL,
-
-	// Multi ops
-	RM(R, M),
-	RM_R(R_R, M_R),
-	R_RM(R_R, R_M);
-}
-
-
-
 enum class CompilerStage {
 	LEX,
 	PARSE,

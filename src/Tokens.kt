@@ -15,6 +15,7 @@ data class FloatToken(val value: Double) : Token
 data class RegToken(val value: Reg) : Token
 
 
+
 enum class SymToken(
 	val string : String,
 	val binOp  : BinOp? = null,

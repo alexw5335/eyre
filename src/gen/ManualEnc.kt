@@ -8,6 +8,11 @@ class ManualGroup(val mnemonic: Mnemonic) {
 	var ops = 0
 	var isCompact = false
 	val encs = ArrayList<ManualEnc>()
+
+	private val Ops.index get() = (ops and ((1 shl ordinal) - 1)).countOneBits()
+	operator fun get(ops: Ops) = encs[ops.index]
+	operator fun contains(operands: Ops) = this.ops and (1 shl operands.ordinal) != 0
+
 }
 
 
@@ -19,31 +24,66 @@ data class ManualEnc(
 	val opcode: Int,
 	val ext: Int,
 	val mask: Int,
-	val compactOps: CompactOps,
+	val compactOps: Ops,
 	val rw: Int,
 	val o16: Int,
 	val a32: Int,
 	val opreg: Boolean,
-	val ops: List<ManualOp>,
+	val ops: List<Op>,
 	val pseudo: Int,
 	val vex: Boolean,
 	val vexw: VexW,
 	val vexl: VexL,
 ) {
-	val op1 = ops.getOrElse(0) { ManualOp.NONE }
-	val op2 = ops.getOrElse(1) { ManualOp.NONE }
-	val op3 = ops.getOrElse(2) { ManualOp.NONE }
-	val op4 = ops.getOrElse(3) { ManualOp.NONE }
+	val op1 = ops.getOrElse(0) { Op.NONE }
+	val op2 = ops.getOrElse(1) { Op.NONE }
+	val op3 = ops.getOrElse(2) { Op.NONE }
+	val op4 = ops.getOrElse(3) { Op.NONE }
+
+	val actualExt = ext.coerceAtLeast(0)
+
+	var width = 0
+	var vsib = 0
+
+	init {
+		for(op in ops) when(op) {
+			Op.M8 -> width = 1
+			Op.M16 -> width = 2
+			Op.M32 -> width = 3
+			Op.M64 -> width = 4
+			Op.M80 -> width = 5
+			Op.M128 -> width = 6
+			Op.M256 -> width = 7
+			Op.M512 -> width = 8
+			Op.VM32X -> { width = 3; vsib = 1 }
+			Op.VM64X -> { width = 4; vsib = 1 }
+			Op.VM32Y -> { width = 3; vsib = 2 }
+			Op.VM64Y -> { width = 4; vsib = 2 }
+			Op.VM32Z -> { width = 3; vsib = 3 }
+			Op.VM64Z -> { width = 4; vsib = 3 }
+			else -> continue
+		}
+	}
+
+	val autoOps = AutoOps(
+		op1.type.ordinal,
+		op2.type.ordinal,
+		op3.type.ordinal,
+		op4.type.ordinal,
+		width,
+		vsib
+	)
 
 	val opEnc: OpEnc = when {
 		op1.type.isMem && op2.type.isReg && op3.type.isReg -> OpEnc.MVR
 		op1.type.isMem && op2.type.isReg -> OpEnc.MRV
 		op1.type.isReg && op2.type.isMem -> OpEnc.RMV
 		op1.type.isReg && op2.type.isReg && hasExt -> OpEnc.VMR
+		op1.type.isReg && (op2.type.isReg || op2.type.isMem) -> OpEnc.RMV
 		else -> OpEnc.RVM
 	}
 
-	val isCompact get() = compactOps != CompactOps.NONE
+	val isCompact get() = compactOps != Ops.NONE
 	val opcode1 = opcode and 0xFF
 	val opcode2 = opcode shr 8
 	val hasExt get() = ext >= 0

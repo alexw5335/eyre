@@ -165,21 +165,19 @@ class Resolver(private val context: Context) {
 		is Proc       -> pushScope(node.thisScope)
 		is ScopeEnd   -> popScope()
 
-		is Ins -> {
+		is InsNode -> {
 			if(node.mnemonic.isPseudo) return
-			if(node.op1 != null) resolveNode(node.op1)
-			if(node.op2 != null) resolveNode(node.op2)
-			if(node.op3 != null) resolveNode(node.op3)
-			if(node.op4 != null) resolveNode(node.op4)
+			if(node.op1.isNotNone) resolveNode(node.op1)
+			if(node.op2.isNotNone) resolveNode(node.op2)
+			if(node.op3.isNotNone) resolveNode(node.op3)
+			if(node.op4.isNotNone) resolveNode(node.op4)
 		}
-
+		
+		is OpNode   -> if(node.node != NullNode) resolveNode(node.node)
 		is NameNode -> resolveNameNode(node)
 		is Const    -> { } //node.resolve { intValue = resolveInt(valueNode) }
 		is UnNode   -> resolveNode(node.node)
 		is BinNode  -> { resolveNode(node.left); resolveNode(node.right) }
-
-		is ImmNode -> resolveNode(node.node)
-		is MemNode -> resolveNode(node.node)
 
 		is RegNode,
 		is StringNode,

@@ -217,28 +217,28 @@ class Parser(private val context: Context) {
 			pos++
 			val value = parseExpression()
 			expect(SymToken.RBRACKET)
-			return MemNode(width, value)
+			return OpNode.mem(value, width)
 		}
 
 		if(width != null)
 			err(srcPos, "Width specifier not allowed")
 
-		return when(val expression = parseExpression()) {
-			is RegNode -> RegNode(expression.value)
-			else       -> ImmNode(width, expression)
-		}
+		if(tokens[pos] is RegToken)
+			return OpNode.reg((tokens[pos++] as RegToken).value)
+
+		return OpNode.imm(parseExpression(), width)
 	}
 
 
 
-	private fun parseIns(mnemonic: Mnemonic): Ins {
+	private fun parseIns(mnemonic: Mnemonic): InsNode {
 		val srcPos = srcPos()
 		pos++
 
-		var op1: OpNode? = null
-		var op2: OpNode? = null
-		var op3: OpNode? = null
-		var op4: OpNode? = null
+		var op1 = OpNode.NONE
+		var op2 = OpNode.NONE
+		var op3 = OpNode.NONE
+		var op4 = OpNode.NONE
 
 		fun commaOrNewline(): Boolean {
 			if(atNewline) return false
@@ -261,7 +261,7 @@ class Parser(private val context: Context) {
 			}
 		}
 
-		return Ins(srcPos, mnemonic, op1, op2, op3, op4)
+		return InsNode(srcPos, mnemonic, op1, op2, op3, op4)
 	}
 
 
