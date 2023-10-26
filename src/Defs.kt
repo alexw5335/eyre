@@ -29,6 +29,9 @@ enum class Width(val bytes: Int) {
 
 
 enum class OpType(val gpWidth: Width = Width.BYTE) {
+	NONE,
+	MEM,
+	IMM,
 	R8(Width.BYTE),
 	R16(Width.WORD),
 	R32(Width.DWORD),
@@ -40,16 +43,13 @@ enum class OpType(val gpWidth: Width = Width.BYTE) {
 	Z,
 	K,
 	T,
-	NONE,
-	MEM,
-	IMM,
 	SEG,
 	CR,
 	DR,
 	BND;
 
-	val isR get() = ordinal <= R64.ordinal
-	val isReg get() = this != MEM && this != IMM && this != NONE
+	val isR   get() = ordinal in 3..6
+	val isReg get() = ordinal >= 3
 	val isMem get() = this == MEM
 	val isImm get() = this == IMM
 

@@ -703,8 +703,6 @@ class Assembler(private val context: Context) {
 		fun ri8() = encode1R(Ops.RM_I8.enc, op1).imm(imm, width)
 
 		when {
-			ins.mnemonic == Mnemonic.MOV -> encodeMov2RI(op1, imm)
-
 			Ops.RM_I8 in group -> when {
 				!imm.hasReloc && imm.isImm8 -> ri8()
 				Ops.A_I in group -> ai()
@@ -893,10 +891,8 @@ class Assembler(private val context: Context) {
 				encodeMovMSEG(0x8C, op2.reg, op1)
 			else
 				encode2RM(0x8A, 0b1111, op1.reg, op2, 0)
-			return
 		} else if(op1.type.isR && op2.type == op1.type) {
 			encode2RR(0x88, 0b1111, op1.reg, op2.reg)
-			return
 		} else when {
 			op1.type == OpType.CR  -> encodeMovRR(0x220F, op1.reg, op2.reg)
 			op2.type == OpType.CR  -> encodeMovRR(0x200F, op2.reg, op1.reg)
@@ -907,39 +903,7 @@ class Assembler(private val context: Context) {
 			else -> insErr()
 		}
 	}
-
-
-
-	private fun encodeMov2RI(op1: Reg, imm: Mem) {
-		when(op1.type) {
-			OpType.R8 -> {
-				writeRex(0, 0, 0, op1.rex, op1.rex8, op1.noRex)
-				byte(0xB0 + op1.value)
-				imm(imm, BYTE)
-			}
-
-			OpType.R16 -> {
-				byte(0x66)
-				writeRex(0, 0, op1.rex, 0)
-				byte(0xB8 + op1.value)
-				imm(imm, WORD)
-			}
-
-			OpType.R32 -> {
-				writeRex(0, 0, op1.rex, 0)
-				byte(0xB8 + op1.value)
-				imm(imm, DWORD)
-			}
-
-			OpType.R64 -> {
-				writeRex(1, 0, op1.rex, 0)
-				byte(0xB8 + op1.value)
-				imm(imm, QWORD)
-			}
-			else -> insErr()
-		}
-	}
-
+	
 	private fun encodeMovRR(opcode: Int, op1: Reg, op2: Reg) {
 		if(op2.type != OpType.R64) insErr()
 		writeRex(0, op1.rex, 0, op2.rex)
@@ -992,19 +956,19 @@ class Assembler(private val context: Context) {
 
 	private fun assembleFpu(ins: InsNode) {
 		if(ins.count == 1) {
-			val enc = getAutoEnc(AutoOps(OpType.ST.ordinal, OpType.NONE.ordinal, OpType.NONE.ordinal, 0, 0, 0, 0)) ?: insErr()
+			val enc = getAutoEnc(AutoOps.ST) ?: insErr()
 			word(enc.opcode + (ins.op1.reg.value shl 8))
 		} else if(ins.count == 2) {
 			if(ins.op1.reg == Reg.ST0) {
 				if(ins.op2.type != OpType.ST) insErr()
-				var enc = getAutoEnc(AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 0))
+				var enc = getAutoEnc(AutoOps.ST0_ST)
 				if(enc == null) {
 					if(ins.op2.reg != Reg.ST0) insErr()
-					enc = getAutoEnc(AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 1)) ?: insErr()
+					enc = getAutoEnc(AutoOps.ST_ST0) ?: insErr()
 				}
 				word(enc.opcode + (ins.op2.reg.value shl 8))
 			} else if(ins.op2.reg == Reg.ST0) {
-				val enc = getAutoEnc(AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 1)) ?: insErr()
+				val enc = getAutoEnc(AutoOps.ST_ST0) ?: insErr()
 				word(enc.opcode + (ins.op2.reg.value shl 8))
 			} else {
 				insErr()
