@@ -222,7 +222,8 @@ object EncGen {
 					type(2),
 					type(3),
 					width,
-					vsib
+					vsib,
+					0
 				).value
 			)
 

@@ -17,6 +17,7 @@ enum class Width(val bytes: Int) {
 	ZWORD(64);
 
 	val immWidth get() = if(this > DWORD) DWORD else this
+	val immLength = bytes.coerceAtMost(4)
 	val string = name.lowercase()
 	val min: Long = if(bytes > 8) 0 else -(1L shl ((bytes shl 3) - 1))
 	val max: Long = if(bytes > 8) 0 else (1L shl ((bytes shl 3) - 1)) - 1

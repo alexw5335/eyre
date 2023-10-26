@@ -1,1 +1,1 @@
-mov rax, 10
+fadd st0, st1

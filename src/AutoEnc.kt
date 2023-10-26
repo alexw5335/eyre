@@ -11,14 +11,16 @@ value class AutoOps(val value: Int) {
 		r3: Int,
 		r4: Int,
 		width: Int,
-		vsib: Int
+		vsib: Int,
+		st: Int
 	) : this(
 		(r1 shl R1) or
 		(r2 shl R2) or
 		(r3 shl R3) or
 		(r4 shl R4) or
 		(width shl WIDTH) or
-		(vsib shl VSIB)
+		(vsib shl VSIB) or
+		(st shl ST)
 	)
 
 	val r1    get() = ((value shr R1) and 15)
@@ -27,6 +29,7 @@ value class AutoOps(val value: Int) {
 	val r4    get() = ((value shr R4) and 15)
 	val width get() = ((value shr WIDTH) and 15)
 	val vsib  get() = ((value shr VSIB) and 3)
+	val st    get() = ((value shr ST) and 3)
 
 	fun equalsExceptWidth(other: AutoOps) =
 		value and WIDTH_MASK == other.value and WIDTH_MASK
@@ -38,6 +41,7 @@ value class AutoOps(val value: Int) {
 		const val R4    = 12
 		const val WIDTH = 16 // 4: NONE BYTE WOR, DWORD QWORD TWORD XWORD YWORD ZWORD
 		const val VSIB  = 20 // 2: NONE X Y Z
+		const val ST    = 22 // 1: NONE/ST0_ST ST_ST0
 		const val WIDTH_MASK = -1 xor (15 shl WIDTH)
 	}
 
@@ -48,6 +52,7 @@ value class AutoOps(val value: Int) {
 		append("r4=$r4 ")
 		append("width=$width ")
 		append("vsib=$vsib ")
+		append("st = $st")
 	}
 
 }

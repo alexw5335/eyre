@@ -4,6 +4,7 @@ import eyre.gen.EncGen
 import eyre.gen.ManualEnc
 import eyre.gen.EncGroup
 import eyre.Width.*
+import javax.management.ImmutableDescriptor
 
 class Assembler(private val context: Context) {
 
@@ -67,6 +68,12 @@ class Assembler(private val context: Context) {
 
 	private fun insErr(message: String = "Invalid encoding"): Nothing =
 		context.err(SrcPos(), message)
+
+	private fun widthMismatchErr(): Nothing =
+		insErr("Width mismatch")
+
+	private fun noWidthErr(): Nothing =
+		insErr("Width not specified")
 
 
 
@@ -465,66 +472,93 @@ class Assembler(private val context: Context) {
 		writeOpcode(enc.opcode, mask, width.ordinal)
 	}
 
-	private fun encode1R(enc: ManualEnc, op1: Reg) {
-		val width = op1.width.ordinal
-		val mask = enc.mask
-		if((1 shl width) and mask == 0) insErr()
-		if(enc.mask != 2 && width == 1) writer.i8(0x66)
-		if(enc.prefix != Prefix.NONE) byte(enc.prefix.value)
-		writeRex(((1 shl width) shr 3) and (mask shr 2), 0, 0, op1.rex, op1.rex8, op1.noRex)
-		writeEscape(enc)
-		writeOpcode(enc.opcode, mask, width)
-		byte(0b11_000_000 or (enc.actualExt shl 3) or op1.value)
-	}
-
-	private fun encode1O(enc: ManualEnc, op1: Reg) {
-		val width = op1.width.ordinal
-		val mask = enc.mask
-		if((1 shl width) and mask == 0) insErr()
-		if(enc.mask != 2 && width == 1) writer.i8(0x66)
-		writeRex(((1 shl width) shr 3) and (mask shr 2), 0, 0, op1.rex, op1.rex8, op1.noRex)
-		byte(enc.opcode + (((mask and 1) and (1 shl width).inv()) shl 3) + op1.value)
-	}
-
-	private fun encode1M(enc: ManualEnc, op1: OpNode, immLength: Int) {
-		val mem = resolve(op1)
-		val width = op1.width?.ordinal ?: insErr()
-		val mask = enc.mask
-		if((1 shl width) and mask == 0) insErr()
-		if(enc.mask != 2 && width == 1) writer.i8(0x66)
-		if(mem.vsib != 0) insErr("VSIB not valid here")
-		if(mem.aso == 1) byte(0x67)
-		writeRex(((1 shl width) shr 3) and (mask shr 2), 0, mem.rexX, mem.rexB)
-		writeEscape(enc)
-		writeOpcode(enc.opcode, mask, width)
-		mem.writeMem(enc.actualExt, immLength)
-	}
-
-	private fun encode2RM(enc: ManualEnc, op1: Reg, op2: OpNode, immLength: Int) {
+	private fun encode1R(opcode: Int, mask: Int, ext: Int, op1: Reg) {
 		val width = op1.type.ordinal
-		val mask = enc.mask
-		if(op2.width != null && op2.width.ordinal != width) insErr()
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writeRex(rexw(mask, width), 0, 0, op1.rex, op1.rex8, op1.noRex)
+		writeOpcode(opcode, mask, op1.type.ordinal)
+		byte(0b11_000_000 or (ext shl 3) or op1.value)
+	}
+
+	private fun encode1O(opcode: Int, mask: Int, op1: Reg) {
+		val width = op1.type.ordinal
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writeRex(rexw(mask, width), 0, 0, op1.rex, op1.rex8, op1.noRex)
+		byte(opcode + (((mask and 1) and (1 shl width).inv()) shl 3) + op1.value)
+	}
+
+	private fun encode1M(opcode: Int, mask: Int, ext: Int, op1: OpNode, immLength: Int) {
+		val mem = resolve(op1)
+		val width = op1.width?.ordinal ?: noWidthErr()
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writeA32(mem)
+		writeRex(rexw(mask, width), 0, mem.rexX, mem.rexB)
+		writeOpcode(opcode, mask, width)
+		mem.writeMem(ext, immLength)
+	}
+
+	private fun encode2RM(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immLength: Int) {
+		val width = op1.type.ordinal
+		if(op2.width != null && op2.width.ordinal != width) widthMismatchErr()
 		val mem = resolve(op2)
-		if((1 shl width) and mask == 0) insErr()
-		if(enc.mask != 2 && width == 1) writer.i8(0x66)
-		if(mem.aso == 1) byte(0x67)
-		writeRex(((1 shl width) shr 3) and (mask shr 2), op1.rex, mem.rexX, mem.rexB, op1.rex8, op1.noRex)
-		writeEscape(enc)
-		writeOpcode(enc.opcode, mask, width)
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writeA32(mem)
+		writeRex(rexw(mask, width), op1.rex, mem.rexX, mem.rexB, op1.rex8, op1.noRex)
+		writeOpcode(opcode, mask, width)
 		mem.writeMem(op1.value, immLength)
 	}
 
-	private fun encode2RR(enc: ManualEnc, op1: Reg, op2: Reg) {
+	private fun encode2RR(opcode: Int, mask: Int, op1: Reg, op2: Reg) {
 		val width = op1.type.ordinal
-		val mask = enc.mask
-		if(op1.type != op2.type) insErr()
-		if(enc.mask != 2 && width == 1) writer.i8(0x66)
-		writeRex(((1 shl width) shr 3) and (mask shr 2), op1.rex, 0, op2.rex, op1.rex8 or op2.rex8, op1.noRex or op2.noRex)
-		writeEscape(enc)
-		writeOpcode(enc.opcode, mask, width)
+		if(op1.type != op2.type) widthMismatchErr()
+		checkWidth(mask, width)
+		writeO16(mask, width)
+		writeRex(rexw(mask, width), op1.rex, 0, op2.rex, op1.rex8 or op2.rex8, op1.noRex or op2.noRex)
+		writeOpcode(opcode, mask, width)
 		byte(0b11_000_000 or (op1.value shl 3) or (op2.value))
 	}
 
+	private fun encode1R(enc: ManualEnc, op1: Reg) =
+		encode1R(enc.opcode, enc.mask, enc.ext, op1)
+
+	private fun encode1O(enc: ManualEnc, op1: Reg) =
+		encode1O(enc.opcode, enc.mask, op1)
+
+	private fun encode1M(enc: ManualEnc, op1: OpNode, immLength: Int) =
+		encode1M(enc.opcode, enc.mask, enc.ext, op1, immLength)
+
+	private fun encode2RR(enc: ManualEnc, op1: Reg, op2: Reg) =
+		encode2RR(enc.opcode, enc.mask, op1, op2)
+
+	private fun encode2RM(enc: ManualEnc, op1: Reg, op2: OpNode, immLength: Int) =
+		encode2RM(enc.opcode, enc.mask, op1, op2, immLength)
+
+
+
+	private fun encode1RM(opcode: Int, mask: Int, ext: Int, op1: OpNode, immLength: Int) {
+		when(op1.type) {
+			OpType.MEM -> encode1M(opcode, mask, ext, op1, immLength)
+			else       -> encode1R(opcode, mask, ext, op1.reg)
+		}
+	}
+
+	private fun encode2RRM(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immLength: Int) {
+		when(op2.type) {
+			OpType.MEM -> encode2RM(opcode, mask, op1, op2, immLength)
+			else       -> encode2RR(opcode, mask, op1, op2.reg)
+		}
+	}
+
+	private fun encode2RMR(opcode: Int, mask: Int, op1: OpNode, op2: Reg, immLength: Int) {
+		when(op1.type) {
+			OpType.MEM -> encode2RM(opcode, mask, op2, op1, immLength)
+			else -> encode2RR(opcode, mask, op2, op1.reg)
+		}
+	}
 
 
 
@@ -547,6 +581,8 @@ class Assembler(private val context: Context) {
 			val opcode = EncGen.zeroOperandOpcodes[ins.mnemonic.ordinal]
 			if(opcode == 0) insErr()
 			writer.varLengthInt(opcode)
+		} else if(ins.mnemonic == Mnemonic.MOV) {
+			assembleMov(ins)
 		} else {
 			group = EncGen.manualGroups[ins.mnemonic] ?: error("Missing mneomnic")
 
@@ -568,17 +604,32 @@ class Assembler(private val context: Context) {
 				OpType.IMM -> assemble1I(ins.op1)
 				else       -> assemble1R(ins.op1.reg)
 			}
+
 			2 -> when(ins.op1.type) {
-				OpType.MEM -> { }
-				OpType.IMM -> { }
+				OpType.MEM -> when(ins.op2.type) {
+					OpType.IMM -> assemble2MI(ins.op1, ins.op2)
+					else       -> assemble2MR(ins.op1, ins.op2.reg)
+				}
+
+				OpType.IMM -> when(ins.op2.type) {
+					OpType.IMM -> assemble2II(ins, ins.op1, ins.op2)
+					else       -> assemble2IR(ins, ins.op1, ins.op2.reg)
+				}
+
 				else -> when(ins.op2.type) {
-					OpType.MEM -> { }
+					OpType.MEM -> encode2RM(Ops.R_M.enc, ins.op1.reg, ins.op2, 0)
 					OpType.IMM -> assemble2RI(ins, ins.op1.reg, ins.op2)
-					else -> assemble2RR(ins, ins.op1.reg, ins.op2.reg)
+					else       -> assemble2RR(ins, ins.op1.reg, ins.op2.reg)
 				}
 			}
 
-			3 -> { }
+			3 -> when(ins.mnemonic) {
+				Mnemonic.SHLD -> assembleShld(0xA40F, ins)
+				Mnemonic.SHRD -> assembleShld(0xAC0F, ins)
+				Mnemonic.IMUL -> assembleImul(ins)
+				else -> insErr()
+			}
+
 			else -> insErr()
 		}
 	}
@@ -642,25 +693,6 @@ class Assembler(private val context: Context) {
 	}
 
 
-	private fun assemble2RM(ins: InsNode, op1: Reg, op2: OpNode) {
-		when {
-			op2.width != null && op1.width != op2.width -> insErr()
-
-			ins.mnemonic == Mnemonic.MOV -> {
-
-			}
-
-			op1.type == RegType.SEG -> encode2RM(Ops.SEG_M.enc, op1, op2)
-			Ops.R_M in group -> encode2RM(Ops.R_M.enc, op1, op2)
-
-			Ops.R_M128 in group -> encode2RM(Ops.R_M128.enc, op1, op2)
-			Ops.RA_M512 in group -> encode2RAM(Ops.RA_M512.enc, op1, op2)
-
-			else -> invalid()
-		}
-	}
-
-
 
 	private fun assemble2RI(ins: InsNode, op1: Reg, op2: OpNode) {
 		val imm = resolve(op2)
@@ -690,6 +722,40 @@ class Assembler(private val context: Context) {
 				else    -> insErr()
 			}
 
+			else -> insErr()
+		}
+	}
+
+
+
+	private fun assemble2MI(op1: OpNode, op2: OpNode) {
+		val imm = resolve(op2)
+
+		val width = op1.width?.immWidth ?: noWidthErr()
+		fun mi() = encode1M(Ops.M_I.enc, op1, width.bytes).imm(imm, width)
+		fun mi8() = encode1M(Ops.RM_I8.enc, op1, width.bytes).imm(imm, width)
+
+		when {
+			Ops.M_I in group -> when {
+				Ops.RM_I8 in group -> when {
+					width == BYTE -> mi8()
+					imm.hasReloc -> mi()
+					imm.isImm8 -> mi8()
+					else -> mi()
+				}
+				else -> mi()
+			}
+			Ops.RM_I8 in group -> mi8()
+			else -> insErr()
+		}
+	}
+
+
+
+	private fun assemble2MR(op1: OpNode, op2: Reg) {
+		when {
+			op1.width != null && op1.width != op2.width -> insErr()
+			Ops.M_R in group -> encode2RM(Ops.M_R.enc, op2, op1, 0)
 			else -> insErr()
 		}
 	}
@@ -734,16 +800,63 @@ class Assembler(private val context: Context) {
 				else -> insErr()
 			}
 
-			ins.mnemonic == Mnemonic.MOV -> when {
-				op1.type == OpType.CR  -> encodeMovRR(0x220F, op1, op2)
-				op2.type == OpType.CR  -> encodeMovRR(0x200F, op2, op1)
-				op1.type == OpType.DR  -> encodeMovRR(0x230F, op1, op2)
-				op2.type == OpType.DR  -> encodeMovRR(0x210F, op2, op1)
-				op1.type == OpType.SEG -> encodeMovRSEG(0x8E, op1, op2)
-				op2.type == OpType.SEG -> encodeMovRSEG(0x8C, op2, op1)
-			}
-
 			else -> insErr()
+		}
+	}
+
+
+
+	private fun assemble2IR(ins: InsNode, op1: OpNode, op2: Reg) {
+		if(ins.mnemonic != Mnemonic.OUT) insErr()
+		when(op2) {
+			Reg.AL  -> byte(0xE6).imm(op1, BYTE)
+			Reg.AX  -> word(0xE766).imm(op1, BYTE)
+			Reg.EAX -> byte(0xE7).imm(op1, BYTE)
+			else    -> insErr()
+		}
+	}
+
+
+
+	private fun assemble2II(ins: InsNode, op1: OpNode, op2: OpNode) {
+		val imm1 = resolve(op1)
+		if(imm1.hasReloc || !imm1.isImm16) insErr()
+		val imm2 = resolve(op2)
+		if(imm2.hasReloc || !imm1.isImm8) insErr()
+		if(ins.mnemonic == Mnemonic.ENTER)
+			byte(0xC8)
+		else
+			word(0xC866)
+		word(imm1.disp.toInt())
+		byte(imm2.disp.toInt())
+	}
+
+
+
+	private fun assembleImul(node: InsNode) {
+		if(node.count != 3) insErr()
+		val op1 = node.op1
+		val op2 = node.op2
+		val op3 = node.op3
+
+		val imm = resolve(op3)
+
+		if(op3.width == BYTE || (op3.width == null && !imm.hasReloc && imm.disp.isImm8)) {
+			encode2RRM(0x6B, 0b1110, op1.reg, op2, 1).imm(imm, BYTE)
+		} else {
+			val width = if(op1.width == QWORD) DWORD else op1.reg.width
+			encode2RRM(0x69, 0b1110, op1.reg, op2, width.bytes).imm(imm, width)
+		}
+	}
+
+
+
+	private fun assembleShld(opcode: Int, node: InsNode) {
+		if(node.count != 3) insErr()
+		when {
+			node.op3.reg == Reg.CL      -> encode2RMR(opcode + (1 shl 8), 0b1110, node.op1, node.op2.reg, 0)
+			node.op3.type == OpType.IMM -> encode2RMR(opcode, 0b1110, node.op1, node.op2.reg, 1).imm(node.op3, BYTE)
+			else                        -> insErr()
 		}
 	}
 
@@ -755,7 +868,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun encodeMov(ins: InsNode) {
+	private fun assembleMov(ins: InsNode) {
 		if(ins.count != 2) insErr()
 		val op1 = ins.op1
 		val op2 = ins.op2
@@ -763,51 +876,35 @@ class Assembler(private val context: Context) {
 		if(op2.type == OpType.IMM) {
 			val imm = resolve(op2)
 			if(op1.type == OpType.MEM) {
-				val mem = resolve(op1)
-				val width = op1.width?.ordinal ?: insErr()
-				val mask = 0b1111
-				if((1 shl width) and mask == 0) insErr()
-				if(width == 1) writer.i8(0x66)
-				if(mem.vsib != 0) insErr("VSIB not valid here")
-				if(mem.aso == 1) byte(0x67)
-				writeRex(((1 shl width) shr 3) and (mask shr 2), 0, mem.rexX, mem.rexB)
-				writeOpcode(0xC6, mask, width)
-				mem.writeMem(0, width.coerceAtMost(4))
-				imm(imm, op1.width.immWidth)
+				val width = op1.width ?: noWidthErr()
+				encode1M(0xC6, 0b1111, 0, op1, width.bytes.coerceAtMost(4))
+				imm(imm, width)
 			} else {
-				encodeMov2RI(op1.reg, imm)
+				encode1O(0xB0, 0b1111, op1.reg)
+				imm(imm, op1.reg.width)
 			}
 		} else if(op1.type.isMem) {
-			if(op2.type == OpType.SEG) {
+			if(op2.type == OpType.SEG)
 				encodeMovMSEG(0x8C, op2.reg, op1)
-			} else {
+			else
 				encode2RM(0x88, 0b1111, op2.reg, op1, 0)
-			}
 		} else if(op2.type.isMem) {
-			if(op1.type == OpType.SEG) {
+			if(op1.type == OpType.SEG)
 				encodeMovMSEG(0x8C, op2.reg, op1)
+			else
 				encode2RM(0x8A, 0b1111, op1.reg, op2, 0)
-			}
-		} else {
-			val r1 = op1.reg
-			val r2 = op2.reg
-			when {
-				op1.type.isR && op2.type == op1.type -> {
-					val width = op1.type.ordinal
-					val mask = 0b1111
-					if(width == 1) writer.i8(0x66)
-					writeRex(((1 shl width) shr 3) and (mask shr 2), r1.rex, 0, r2.rex, r1.rex8 or r2.rex8, r1.noRex or r2.noRex)
-					writeOpcode(0x88, mask, width)
-					byte(0b11_000_000 or (r1.value shl 3) or (r2.value))
-				}
-				op1.type == OpType.CR  -> encodeMovRR(0x220F, r1, r2)
-				op2.type == OpType.CR  -> encodeMovRR(0x200F, r2, r1)
-				op1.type == OpType.DR  -> encodeMovRR(0x230F, r1, r2)
-				op2.type == OpType.DR  -> encodeMovRR(0x210F, r2, r1)
-				op1.type == OpType.SEG -> encodeMovRSEG(0x8E, r1, r2)
-				op2.type == OpType.SEG -> encodeMovRSEG(0x8C, r2, r1)
-				else -> insErr()
-			}
+			return
+		} else if(op1.type.isR && op2.type == op1.type) {
+			encode2RR(0x88, 0b1111, op1.reg, op2.reg)
+			return
+		} else when {
+			op1.type == OpType.CR  -> encodeMovRR(0x220F, op1.reg, op2.reg)
+			op2.type == OpType.CR  -> encodeMovRR(0x200F, op2.reg, op1.reg)
+			op1.type == OpType.DR  -> encodeMovRR(0x230F, op1.reg, op2.reg)
+			op2.type == OpType.DR  -> encodeMovRR(0x210F, op2.reg, op1.reg)
+			op1.type == OpType.SEG -> encodeMovRSEG(0x8E, op1.reg, op2.reg)
+			op2.type == OpType.SEG -> encodeMovRSEG(0x8C, op2.reg, op1.reg)
+			else -> insErr()
 		}
 	}
 
@@ -893,7 +990,38 @@ class Assembler(private val context: Context) {
 
 
 
+	private fun assembleFpu(ins: InsNode) {
+		if(ins.count == 1) {
+			val enc = getAutoEnc(AutoOps(OpType.ST.ordinal, OpType.NONE.ordinal, OpType.NONE.ordinal, 0, 0, 0, 0)) ?: insErr()
+			word(enc.opcode + (ins.op1.reg.value shl 8))
+		} else if(ins.count == 2) {
+			if(ins.op1.reg == Reg.ST0) {
+				if(ins.op2.type != OpType.ST) insErr()
+				var enc = getAutoEnc(AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 0))
+				if(enc == null) {
+					if(ins.op2.reg != Reg.ST0) insErr()
+					enc = getAutoEnc(AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 1)) ?: insErr()
+				}
+				word(enc.opcode + (ins.op2.reg.value shl 8))
+			} else if(ins.op2.reg == Reg.ST0) {
+				val enc = getAutoEnc(AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 1)) ?: insErr()
+				word(enc.opcode + (ins.op2.reg.value shl 8))
+			} else {
+				insErr()
+			}
+		} else {
+			insErr()
+		}
+	}
+
+
+
 	private fun assembleAuto(ins: InsNode) {
+		if(ins.op1.type == OpType.ST) {
+			assembleFpu(ins)
+			return
+		}
+
 		var mem = Mem.NULL
 		var imm = Mem.NULL
 		var immLength = 0
@@ -922,7 +1050,8 @@ class Assembler(private val context: Context) {
 			ins.op3.type.ordinal,
 			ins.op4.type.ordinal,
 			mem.width?.let { it.ordinal + 1 } ?: 0,
-			mem.vsib
+			mem.vsib,
+			0
 		)
 
 		val enc = getAutoEnc(ops) ?: insErr()

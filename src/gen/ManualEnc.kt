@@ -85,7 +85,8 @@ data class ManualEnc(
 			op3.type.ordinal,
 			op4.type.ordinal,
 			width,
-			vsib
+			vsib,
+			if(op2 == Op.ST0) 1 else 0
 		)
 	}
 

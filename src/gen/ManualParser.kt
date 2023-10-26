@@ -38,6 +38,14 @@ class ManualParser(private val lines: List<String>) {
 			expand(group, e)
 		}
 
+		for(g in groups.values) {
+			for(enc in g.encs) {
+				if(enc.isCompact != g.isCompact && enc.ops.isNotEmpty() && enc.mnemonic != Mnemonic.MOV) {
+					System.err.println("Compact mismatch: $enc")
+				}
+			}
+		}
+
 		for(group in groups.values)
 			if(group.isCompact)
 				group.encs.sortBy { it.compactOps.ordinal }
@@ -48,18 +56,18 @@ class ManualParser(private val lines: List<String>) {
 	private fun expand(group: EncGroup, enc: ManualEnc) {
 		val multiIndex = enc.ops.indexOfFirst { it.first != null }
 
-		if(multiIndex != -1) {
-			val multi = enc.ops[multiIndex]
-			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.first!!)))
-			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.second!!)))
-			return
-		}
-
 		if(enc.isCompact) {
 			if(enc.compactOps in group) return
 			group.ops = group.ops or (1 shl enc.compactOps.ordinal)
 			group.encs.add(enc)
 			group.isCompact = true
+			return
+		}
+
+		if(multiIndex != -1) {
+			val multi = enc.ops[multiIndex]
+			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.first!!)))
+			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.second!!)))
 			return
 		}
 
