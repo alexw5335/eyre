@@ -11,11 +11,8 @@ class ManualParser(private val lines: List<String>) {
 
 	constructor(path: String) : this(Files.readAllLines(Paths.get(path)))
 
-	private val compactOpsMap = Ops.entries.associateBy { it.name }
-	private val opMap = Op.entries.associateBy { it.name }
-	private val combosMap = SimdCombo.entries.associateBy { it.name }
 	val encs = ArrayList<ManualEnc>()
-	val groups = LinkedHashMap<Mnemonic, ManualGroup>()
+	val groups = LinkedHashMap<Mnemonic, EncGroup>()
 
 
 
@@ -37,69 +34,56 @@ class ManualParser(private val lines: List<String>) {
 		}
 
 		for(e in encs) {
-			val group = groups.getOrPut(e.mnemonic) { ManualGroup(e.mnemonic) }
-
-			if(e.isCompact) {
-				group.isCompact = true
-				if(e.compactOps !in group) {
-					group.ops = group.ops or (1 shl e.compactOps.ordinal)
-					expand(group.encs, e)
-				}
-			} else {
-				expand(group.encs, e)
-			}
-
+			val group = groups.getOrPut(e.mnemonic) { EncGroup(e.mnemonic) }
+			expand(group, e)
 		}
 
-		groups[Mnemonic.MOV]!!.isCompact = true
-
-		for(group in groups.values) {
-			if(!group.isCompact) continue
-			group.encs.sortBy { it.compactOps.ordinal }
-		}
+		for(group in groups.values)
+			if(group.isCompact)
+				group.encs.sortBy { it.compactOps.ordinal }
 	}
 
 
 
-	private fun expand(list: ArrayList<ManualEnc>, enc: ManualEnc) {
+	private fun expand(group: EncGroup, enc: ManualEnc) {
 		val multiIndex = enc.ops.indexOfFirst { it.first != null }
 
-		if(enc.isCompact) {
-			if(enc.compactOps.first != null) {
-				expand(list, enc.copy(compactOps = enc.compactOps.first, ops = enc.compactOps.first.name.splitOps()))
-				expand(list, enc.copy(compactOps = enc.compactOps.first, ops = enc.compactOps.first.name.splitOps()))
-			} else {
-				list.add(enc)
-			}
-		} else if(multiIndex != -1) {
+		if(multiIndex != -1) {
 			val multi = enc.ops[multiIndex]
-			expand(list, enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.first }))
-			expand(list, enc.copy(ops = ArrayList(enc.ops).also { it[multiIndex] = multi.second }))
-		} else if(enc.mask != 0) {
+			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.first!!)))
+			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.second!!)))
+			return
+		}
+
+		if(enc.isCompact) {
+			if(enc.compactOps in group) return
+			group.ops = group.ops or (1 shl enc.compactOps.ordinal)
+			group.encs.add(enc)
+			group.isCompact = true
+			return
+		}
+
+		if(enc.mask != 0) {
 			fun ops(index: Int) = enc.ops.map { it.widths?.get(index) ?: it }
+
 			val o16 = if(enc.mask == 2) 0 else 1
 			val opcode = enc.opcode + if(enc.mask and 1 == 1) 1 else 0
 			val rw = if(enc.mask and 4 == 4) 1 else 0
-			if(enc.mask and 1 == 1) expand(list, enc.copy(mask = 0, ops = ops(0)))
-			if(enc.mask and 2 == 2) expand(list, enc.copy(mask = 0, ops = ops(1), opcode = opcode, o16 = o16))
-			if(enc.mask and 4 == 4) expand(list, enc.copy(mask = 0, ops = ops(2), opcode = opcode))
-			if(enc.mask and 8 == 8) expand(list, enc.copy(mask = 0, ops = ops(3), opcode = opcode, rw = rw))
-			for(i in 0..3) {
-				if(enc.mask and (1 shl i) == 0)
-					continue
-				expand(list, enc.copy(mask = 0, ops = enc.ops.map { it.widths?.get(i) ?: it }))
-			}
-		} else {
-			list.add(enc)
+
+			if(enc.mask and 1 == 1)
+				expand(group, enc.copy(mask = 0, ops = ops(0)))
+			if(enc.mask and 2 == 2)
+				expand(group, enc.copy(mask = 0, ops = ops(1), opcode = opcode, o16 = o16))
+			if(enc.mask and 4 == 4)
+				expand(group, enc.copy(mask = 0, ops = ops(2), opcode = opcode))
+			if(enc.mask and 8 == 8)
+				expand(group, enc.copy(mask = 0, ops = ops(3), opcode = opcode, rw = rw))
+
+			return
 		}
+
+		group.encs.add(enc)
 	}
-
-
-
-	private fun String.splitOps() = if(isEmpty())
-		emptyList()
-	else
-		split('_').map { opMap[it] ?: error("Missing ops: $it") }
 
 
 
@@ -190,20 +174,19 @@ class ManualParser(private val lines: List<String>) {
 			opcode,
 			ext,
 			mask,
-			compactOpsMap[ops] ?: Ops.NONE,
 			rw,
 			o16,
 			a32,
 			opreg,
-			if(ops == "") emptyList() else ops.split('_').map { opMap[it] ?: error("Missing ops: $it") },
+			if(ops == "") emptyList() else ops.split('_').map { Op.map[it] ?: error("Missing ops: $it") },
 			pseudo,
 			vex,
 			vexw,
 			vexl
 		).also(encs::add)
 
-		if(ops in combosMap) {
-			val combo = combosMap[ops]!!
+		if(ops in SimdCombo.map) {
+			val combo = SimdCombo.map[ops]!!
 			add(mnemonic, opcode, combo.first, prefix, if(combo.isAvx) VexL.L0 else vexl)
 			add(mnemonic, opcode, combo.second, if(combo.isSse) Prefix.P66 else prefix, if(combo.isAvx) VexL.L1 else vexl)
 			return

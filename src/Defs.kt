@@ -16,6 +16,7 @@ enum class Width(val bytes: Int) {
 	YWORD(32),
 	ZWORD(64);
 
+	val immWidth get() = if(this > DWORD) DWORD else this
 	val string = name.lowercase()
 	val min: Long = if(bytes > 8) 0 else -(1L shl ((bytes shl 3) - 1))
 	val max: Long = if(bytes > 8) 0 else (1L shl ((bytes shl 3) - 1)) - 1
@@ -192,13 +193,6 @@ enum class Escape(val avxValue: Int, val string: String?, val avxString: String)
 
 
 
-/*
-RMV: 156: S_SM_I8
-RVM: 501  S_S_SM
-MRV: 35
-MVR: 4 M_S_S only
-VMR: 10 S_S_I8 only
- */
 enum class OpEnc {
 	/** 501, of the form RRM */
 	RVM,
@@ -370,6 +364,7 @@ class Section(val index: Int, val name: String) {
 	var pos = 0
 	var addr = 0
 	val present get() = addr != 0
+	override fun toString() = name
 }
 
 

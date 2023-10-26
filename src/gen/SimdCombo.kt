@@ -21,4 +21,8 @@ enum class SimdCombo(val first: String, val second: String) {
 	val isSse get() = this == E_EM || this == E_I8 // MM, X  prefix=NONE for MM, prefix=66 for X
 	val isAvx get() = !isSse // X, Y   VEX.L=0 for X, VEX.L=1 for Y
 
+	companion object {
+		val map = entries.associateBy { it.name }
+	}
+
 }

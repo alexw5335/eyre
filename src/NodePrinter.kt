@@ -58,14 +58,16 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 		val sec = context.sections[sym.pos.secIndex]
 		append(" --- ")
 		append(sec.toString())
-		append(':')
+		append(' ')
 		append(sym.pos.disp.hex)
-		append(':')
-		append((sec.pos + sym.pos.disp).hex)
-		append(':')
-		append((sec.addr + sym.pos.disp).hex)
+		if(stage >= CompilerStage.LINK) {
+			append(' ')
+			append((sec.pos + sym.pos.disp).hex)
+			append(' ')
+			append((sec.addr + sym.pos.disp).hex)
+		}
 		if(sym is SizedSym) {
-			append("::")
+			append("|")
 			append(sym.size.hex)
 		}
 	}

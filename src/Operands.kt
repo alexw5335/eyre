@@ -2,37 +2,47 @@ package eyre
 
 
 
-enum class Ops(val first: Ops? = null, val second: Ops? = null) {
+enum class Ops(val op1: Op = Op.NONE, val op2: Op = Op.NONE, val op3: Op = Op.NONE) {
 	NONE,
-	R,
-	M,
-	I8,
-	I16,
-	I32,
-	AX,
-	REL8,
-	REL32,
-	FS,
-	GS,
-	R_R,
-	R_M,
-	M_R,
-	RM_I,
-	RM_I8,
-	RM_ONE,
-	A_I,
-	RM_CL,
-	A_R,
-	R_A,
-	R_RM_I,
-	R_RM_I8,
-	RM_R_I8,
-	RM_R_CL,
+	R(Op.R),
+	M(Op.M),
+	I8(Op.I8),
+	I16(Op.I16),
+	I32(Op.I32),
+	AX(Op.AX),
+	REL8(Op.REL8),
+	REL32(Op.REL32),
+	FS(Op.FS),
+	GS(Op.GS),
+	R_R(Op.R, Op.R),
+	R_M(Op.R, Op.M),
+	M_R(Op.M, Op.R),
+	R_I(Op.R, Op.I),
+	M_I(Op.M, Op.I),
+	RM_I8(Op.RM, Op.I8),
+	RM_ONE(Op.RM, Op.ONE),
+	A_I(Op.A, Op.I),
+	RM_CL(Op.RM, Op.CL),
+	A_R(Op.A, Op.R),
+	R_A(Op.R, Op.A),
+	R_RM_I(Op.R, Op.RM, Op.I),
+	R_RM_I8(Op.R, Op.RM, Op.I8),
+	RM_R_I8(Op.RM, Op.R, Op.I8),
+	RM_R_CL(Op.RM, Op.R, Op.CL);
 
-	// Multi ops
-	RM(R, M),
-	RM_R(R_R, M_R),
-	R_RM(R_R, R_M);
+	companion object {
+
+		private fun value(op1: Op, op2: Op, op3: Op) =
+			op1.ordinal or (op2.ordinal shl 8) or (op3.ordinal shl 16)
+
+		private val map =
+			entries.associateBy { value(it.op1, it.op2, it.op3) }
+
+		fun get(op1: Op, op2: Op, op3: Op) =
+			map[value(op1, op2, op3)] ?: NONE
+
+	}
+
 }
 
 
@@ -124,6 +134,8 @@ enum class Op(
 	val isAmbiguous get() = this in ambiguousOps
 
 	companion object {
+		val map = entries.associateBy { it.name }
+
 		val modrmOps = setOf(
 			R8, R16, R32, R64,
 			M8, M16, M32, M64,
