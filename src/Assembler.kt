@@ -12,6 +12,8 @@ class Assembler(private val context: Context) {
 
 	private var section = context.textSec
 
+	private var currentIns: InsNode? = null
+
 
 
 	fun assemble() {
@@ -66,7 +68,10 @@ class Assembler(private val context: Context) {
 		context.err(SrcPos(), message)
 
 	private fun insErr(message: String = "Invalid encoding"): Nothing =
-		context.err(SrcPos(), message)
+		if(currentIns != null)
+			context.err(SrcPos(), "$message  --  ${NodeStrings.string(currentIns!!)}")
+		else
+			context.err(SrcPos(), message)
 
 	private fun widthMismatchErr(): Nothing =
 		insErr("Width mismatch")
@@ -472,16 +477,16 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun encode1R(opcode: Int, mask: Int, ext: Int, op1: Reg) {
-		val width = op1.type.ordinal
+		val width = op1.width.ordinal
 		checkWidth(mask, width)
 		writeO16(mask, width)
 		writeRex(rexw(mask, width), 0, 0, op1.rex, op1.rex8, op1.noRex)
-		writeOpcode(opcode, mask, op1.type.ordinal)
+		writeOpcode(opcode, mask, width)
 		byte(0b11_000_000 or (ext shl 3) or op1.value)
 	}
 
 	private fun encode1O(opcode: Int, mask: Int, op1: Reg) {
-		val width = op1.type.ordinal
+		val width = op1.width.ordinal
 		checkWidth(mask, width)
 		writeO16(mask, width)
 		writeRex(rexw(mask, width), 0, 0, op1.rex, op1.rex8, op1.noRex)
@@ -500,7 +505,7 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun encode2RM(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immLength: Int) {
-		val width = op1.type.ordinal
+		val width = op1.width.ordinal
 		if(op2.width != null && op2.width.ordinal != width) widthMismatchErr()
 		val mem = resolve(op2)
 		checkWidth(mask, width)
@@ -512,7 +517,7 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun encode2RR(opcode: Int, mask: Int, op1: Reg, op2: Reg) {
-		val width = op1.type.ordinal
+		val width = op1.width.ordinal
 		if(op1.type != op2.type) widthMismatchErr()
 		checkWidth(mask, width)
 		writeO16(mask, width)
@@ -573,7 +578,8 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun assembleIns(ins: InsNode) {
+	fun assembleIns(ins: InsNode) {
+		currentIns = ins
 		ins.pos = Pos(context.textSec, writer.pos)
 
 		if(ins.count == 0) {
@@ -592,6 +598,7 @@ class Assembler(private val context: Context) {
 		}
 
 		ins.size = writer.pos - ins.pos.disp
+		currentIns = null
 	}
 
 
@@ -703,13 +710,18 @@ class Assembler(private val context: Context) {
 
 		when {
 			Ops.RM_I8 in group -> when {
+				Ops.R_I !in group -> ri8()
+
 				!imm.hasReloc && imm.isImm8 -> ri8()
 				Ops.A_I in group -> ai()
 				Ops.R_I in group -> ri()
 				else -> insErr()
 			}
 
-			Ops.A_I in group -> ai()
+			Ops.A_I in group -> when {
+
+			}
+
 			Ops.R_I in group -> ri()
 
 			ins.mnemonic == Mnemonic.IN -> when(op1) {
@@ -733,16 +745,15 @@ class Assembler(private val context: Context) {
 		fun mi8() = encode1M(Ops.RM_I8.enc, op1, width.bytes).imm(imm, width)
 
 		when {
-			Ops.M_I in group -> when {
-				Ops.RM_I8 in group -> when {
-					width == BYTE -> mi8()
-					imm.hasReloc -> mi()
-					imm.isImm8 -> mi8()
-					else -> mi()
-				}
+			Ops.RM_I8 in group -> when {
+				Ops.M_I !in group -> mi8()
+				width != BYTE -> mi()
+				op2.width == BYTE -> mi8()
+				imm.hasReloc -> mi()
+				imm.isImm8 -> mi8()
 				else -> mi()
 			}
-			Ops.RM_I8 in group -> mi8()
+			Ops.M_I in group -> mi()
 			else -> insErr()
 		}
 	}
@@ -785,7 +796,8 @@ class Assembler(private val context: Context) {
 					else -> insErr()
 				}
 
-				Ops.A_R in group -> when {
+				ins.mnemonic == Mnemonic.XCHG -> when {
+					op1.type == OpType.R8 -> encode2RR(Ops.R_R.enc, op1, op2)
 					op1.isA -> encode1O(Ops.A_R.enc, op2)
 					op2.isA -> encode1O(Ops.A_R.enc, op1)
 					else    -> encode2RR(Ops.R_R.enc, op1, op2)
@@ -887,7 +899,7 @@ class Assembler(private val context: Context) {
 				encode2RM(0x88, 0b1111, op2.reg, op1, 0)
 		} else if(op2.type.isMem) {
 			if(op1.type == OpType.SEG)
-				encodeMovMSEG(0x8C, op2.reg, op1)
+				encodeMovMSEG(0x8C, op1.reg, op2)
 			else
 				encode2RM(0x8A, 0b1111, op1.reg, op2, 0)
 		} else if(op1.type.isR && op2.type == op1.type) {
@@ -937,14 +949,14 @@ class Assembler(private val context: Context) {
 
 
 	private fun getAutoEnc(ops: AutoOps): ParsedEnc? {
-		for(e in group.encs)
+		for(e in group.allEncs)
 			if(e.autoOps == ops)
 				return e
 
 		if(ops.width != 0)
 			return null
 
-		for(e in group.encs)
+		for(e in group.allEncs)
 			if(e.autoOps.equalsExceptWidth(ops))
 				return e
 

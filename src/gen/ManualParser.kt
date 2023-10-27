@@ -36,45 +36,45 @@ class ManualParser(private val lines: List<String>) {
 			}
 		}
 
-		for(e in encs) {
-			val group = groups.getOrPut(e.mnemonic) { EncGroup(e.mnemonic) }
-			expand(group, e)
-		}
-
-		for(g in groups.values) {
-			for(enc in g.encs) {
-				if(enc.isCompact != g.isCompact && enc.ops.isNotEmpty() && enc.mnemonic != Mnemonic.MOV) {
+		for(group in groups.values) {
+			for(enc in group.compactEncs)
+				if(enc.isCompact != group.isCompact && enc.ops.isNotEmpty() && enc.mnemonic != Mnemonic.MOV)
 					System.err.println("Compact mismatch: $enc")
-				}
-			}
-		}
 
-		for(group in groups.values)
 			if(group.isCompact)
-				group.encs.sortBy { it.compactOps.ordinal }
+				group.compactEncs.sortBy(ParsedEnc::compactOps)
+		}
 	}
 
 
 
-	private fun expand(group: EncGroup, enc: ParsedEnc) {
+	private fun add(enc: ParsedEnc) {
+		val group = groups.getOrPut(enc.mnemonic) { EncGroup(enc.mnemonic) }
 		val multiIndex = enc.ops.indexOfFirst { it.first != null }
 
-		if(enc.isCompact) {
-			if(enc.compactOps in group) return
-			group.ops = group.ops or (1 shl enc.compactOps.ordinal)
-			group.encs.add(enc)
-			group.isCompact = true
+		if(enc.ops.isEmpty()) {
+			group.allEncs.add(enc)
+			encs.add(enc)
+			allEncs.add(enc)
 			return
+		}
+
+		if(enc.isCompact) {
+			if(enc.compactOps !in group) {
+				group.ops = group.ops or (1 shl enc.compactOps.ordinal)
+				group.compactEncs.add(enc)
+				group.isCompact = true
+			}
 		}
 
 		if(multiIndex != -1) {
 			val multi = enc.ops[multiIndex]
-			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.first!!)))
-			expand(group, enc.copy(ops = enc.withOp(multiIndex, multi.second!!)))
+			add(enc.copy(ops = enc.withOp(multiIndex, multi.first!!)))
+			add(enc.copy(ops = enc.withOp(multiIndex, multi.second!!)))
 			return
 		}
 
-		if(enc.mask != 0) {
+		if(enc.ops.any { it.widths != null }) {
 			fun ops(index: Int) = enc.ops.map { it.widths?.get(index) ?: it }
 
 			val o16 = if(enc.mask == 2) 0 else 1
@@ -82,18 +82,20 @@ class ManualParser(private val lines: List<String>) {
 			val rw = if(enc.mask and 4 == 4) 1 else 0
 
 			if(enc.mask and 1 == 1)
-				expand(group, enc.copy(mask = 0, ops = ops(0)))
+				add(enc.copy(ops = ops(0)))
 			if(enc.mask and 2 == 2)
-				expand(group, enc.copy(mask = 0, ops = ops(1), opcode = opcode, o16 = o16))
+				add(enc.copy(ops = ops(1), opcode = opcode, o16 = o16))
 			if(enc.mask and 4 == 4)
-				expand(group, enc.copy(mask = 0, ops = ops(2), opcode = opcode))
+				add(enc.copy(ops = ops(2), opcode = opcode))
 			if(enc.mask and 8 == 8)
-				expand(group, enc.copy(mask = 0, ops = ops(3), opcode = opcode, rw = rw))
+				add(enc.copy(ops = ops(3), opcode = opcode, rw = rw))
 
 			return
 		}
 
-		group.encs.add(enc)
+		if(!enc.isCompact)
+			group.allEncs.add(enc)
+		allEncs.add(enc)
 	}
 
 
@@ -194,13 +196,15 @@ class ManualParser(private val lines: List<String>) {
 			vex,
 			vexw,
 			vexl
-		).also(encs::add)
+		).also(this::add)
 
 		if(ops in SimdCombo.map) {
 			val combo = SimdCombo.map[ops]!!
-			add(mnemonic, opcode, combo.first, prefix, if(combo.isAvx) VexL.L0 else vexl)
-			add(mnemonic, opcode, combo.second, if(combo.isSse) Prefix.P66 else prefix, if(combo.isAvx) VexL.L1 else vexl)
-			return
+			val firstVexL = if(combo.isAvx) VexL.L0 else vexl
+			val secondVexL = if(combo.isAvx) VexL.L1 else vexl
+			val secondPrefix = if(combo.isSse) Prefix.P66 else prefix
+			add(mnemonic, opcode, combo.first, prefix, firstVexL)
+			add(mnemonic, opcode, combo.second, secondPrefix, secondVexL)
 		} else if(mnemonic.endsWith("cc")) {
 			for((postfix, opcodeInc) in GenLists.ccList)
 				add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc, ops, prefix, vexl)

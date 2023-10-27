@@ -131,10 +131,10 @@ class Proc(
 class InsNode(
 	override val srcPos: SrcPos,
 	val mnemonic: Mnemonic,
-	val op1: OpNode,
-	val op2: OpNode,
-	val op3: OpNode,
-	val op4: OpNode
+	val op1: OpNode = OpNode.NONE,
+	val op2: OpNode = OpNode.NONE,
+	val op3: OpNode = OpNode.NONE,
+	val op4: OpNode = OpNode.NONE
 ) : TopNode, AnonSym, PosSym, SizedSym {
 	override var pos = Pos()
 	override var size = 0
