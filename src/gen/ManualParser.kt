@@ -11,7 +11,10 @@ class ManualParser(private val lines: List<String>) {
 
 	constructor(path: String) : this(Files.readAllLines(Paths.get(path)))
 
-	val encs = ArrayList<ManualEnc>()
+	val encs = ArrayList<ParsedEnc>()
+
+	val allEncs = ArrayList<ParsedEnc>()
+
 	val groups = LinkedHashMap<Mnemonic, EncGroup>()
 
 
@@ -53,7 +56,7 @@ class ManualParser(private val lines: List<String>) {
 
 
 
-	private fun expand(group: EncGroup, enc: ManualEnc) {
+	private fun expand(group: EncGroup, enc: ParsedEnc) {
 		val multiIndex = enc.ops.indexOfFirst { it.first != null }
 
 		if(enc.isCompact) {
@@ -175,7 +178,7 @@ class ManualParser(private val lines: List<String>) {
 			prefix = Prefix.NONE
 		}
 
-		fun add(mnemonic: String, opcode: Int, ops: String, prefix: Prefix, vexl: VexL) = ManualEnc(
+		fun add(mnemonic: String, opcode: Int, ops: String, prefix: Prefix, vexl: VexL) = ParsedEnc(
 			GenLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
 			prefix,
 			escape,

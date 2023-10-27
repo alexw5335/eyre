@@ -1,10 +1,9 @@
 package eyre
 
 import eyre.gen.EncGen
-import eyre.gen.ManualEnc
+import eyre.gen.ParsedEnc
 import eyre.gen.EncGroup
 import eyre.Width.*
-import javax.management.ImmutableDescriptor
 
 class Assembler(private val context: Context) {
 
@@ -331,7 +330,7 @@ class Assembler(private val context: Context) {
 	 *     x: ~REX.X (SIB:INDEX)
 	 *     b: ~REX.B (SIB:BASE, MODRM:RM, OPREG)
 	 */
-	private fun ManualEnc.writeVex(r: Int, x: Int, b: Int, vvvv: Int) {
+	private fun ParsedEnc.writeVex(r: Int, x: Int, b: Int, vvvv: Int) {
 		if(vexw.value != 0 || escape.avxValue > 1 || x == 0 || b == 0)
 			dword(
 				(0xC4 shl 0) or
@@ -430,7 +429,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun writePrefix(enc: ManualEnc) {
+	private fun writePrefix(enc: ParsedEnc) {
 		when(enc.prefix) {
 			Prefix.NONE -> Unit
 			Prefix.P66  -> writer.i8(0x66)
@@ -440,7 +439,7 @@ class Assembler(private val context: Context) {
 		}
 	}
 
-	private fun writeEscape(enc: ManualEnc) {
+	private fun writeEscape(enc: ParsedEnc) {
 		when(enc.escape) {
 			Escape.NONE -> Unit
 			Escape.E0F  -> writer.i8(0x0F)
@@ -449,12 +448,12 @@ class Assembler(private val context: Context) {
 		}
 	}
 
-	private fun writeOpcode(enc: ManualEnc) {
+	private fun writeOpcode(enc: ParsedEnc) {
 		writeEscape(enc)
 		if(enc.opcode and 0xFF00 != 0) word(enc.opcode) else byte(enc.opcode)
 	}
 
-	private fun encodeNone(enc: ManualEnc) {
+	private fun encodeNone(enc: ParsedEnc) {
 		if(enc.o16 == 1) writer.i8(0x66)
 		writePrefix(enc)
 		if(enc.rw == 1) writer.i8(0x48)
@@ -462,7 +461,7 @@ class Assembler(private val context: Context) {
 		if(enc.opcode and 0xFF00 != 0) word(enc.opcode) else byte(enc.opcode)
 	}
 
-	private fun encodeNone(enc: ManualEnc, width: Width) {
+	private fun encodeNone(enc: ParsedEnc, width: Width) {
 		val mask = enc.mask
 		if((1 shl width.ordinal) and mask == 0) insErr()
 		if(enc.mask != 2 && width.ordinal == 1) writer.i8(0x66)
@@ -522,19 +521,19 @@ class Assembler(private val context: Context) {
 		byte(0b11_000_000 or (op1.value shl 3) or (op2.value))
 	}
 
-	private fun encode1R(enc: ManualEnc, op1: Reg) =
+	private fun encode1R(enc: ParsedEnc, op1: Reg) =
 		encode1R(enc.opcode, enc.mask, enc.ext, op1)
 
-	private fun encode1O(enc: ManualEnc, op1: Reg) =
+	private fun encode1O(enc: ParsedEnc, op1: Reg) =
 		encode1O(enc.opcode, enc.mask, op1)
 
-	private fun encode1M(enc: ManualEnc, op1: OpNode, immLength: Int) =
+	private fun encode1M(enc: ParsedEnc, op1: OpNode, immLength: Int) =
 		encode1M(enc.opcode, enc.mask, enc.ext, op1, immLength)
 
-	private fun encode2RR(enc: ManualEnc, op1: Reg, op2: Reg) =
+	private fun encode2RR(enc: ParsedEnc, op1: Reg, op2: Reg) =
 		encode2RR(enc.opcode, enc.mask, op1, op2)
 
-	private fun encode2RM(enc: ManualEnc, op1: Reg, op2: OpNode, immLength: Int) =
+	private fun encode2RM(enc: ParsedEnc, op1: Reg, op2: OpNode, immLength: Int) =
 		encode2RM(enc.opcode, enc.mask, op1, op2, immLength)
 
 
@@ -584,7 +583,7 @@ class Assembler(private val context: Context) {
 		} else if(ins.mnemonic == Mnemonic.MOV) {
 			assembleMov(ins)
 		} else {
-			group = EncGen.manualGroups[ins.mnemonic] ?: error("Missing mneomnic")
+			group = EncGen.groups[ins.mnemonic] ?: error("Missing mneomnic")
 
 			if(group.isCompact)
 				assembleCompact(ins)
@@ -903,7 +902,7 @@ class Assembler(private val context: Context) {
 			else -> insErr()
 		}
 	}
-	
+
 	private fun encodeMovRR(opcode: Int, op1: Reg, op2: Reg) {
 		if(op2.type != OpType.R64) insErr()
 		writeRex(0, op1.rex, 0, op2.rex)
@@ -937,7 +936,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun getAutoEnc(ops: AutoOps): ManualEnc? {
+	private fun getAutoEnc(ops: AutoOps): ParsedEnc? {
 		for(e in group.encs)
 			if(e.autoOps == ops)
 				return e
@@ -1076,7 +1075,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun ManualEnc.writeSimdOpcode() { when(escape) {
+	private fun ParsedEnc.writeSimdOpcode() { when(escape) {
 		Escape.NONE -> byte(opcode)
 		Escape.E0F  -> word(0x0F or (opcode shl 8))
 		Escape.E38  -> i24(0x380F or (opcode shl 16))
