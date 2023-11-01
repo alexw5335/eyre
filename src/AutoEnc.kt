@@ -90,7 +90,6 @@ value class AutoEnc(val value: Long) {
 		rw: Int,
 		o16: Int,
 		a32: Int,
-		opReg: Int,
 		opEnc: Int,
 		pseudo: Int,
 		ops: Int
@@ -102,7 +101,6 @@ value class AutoEnc(val value: Long) {
 		(rw.toLong() shl RW) or
 		(o16.toLong() shl O16) or
 		(a32.toLong() shl A32) or
-		(opReg.toLong() shl OPREG) or
 		(opEnc.toLong() shl OPENC) or
 		(pseudo.toLong() shl PSEUDO) or
 		(ops.toLong() shl OPS)
@@ -111,11 +109,10 @@ value class AutoEnc(val value: Long) {
 	val opcode  get() = ((value shr OPCODE) and 0xFF).toInt()
 	val prefix  get() = ((value shr PREFIX) and 3).toInt()
 	val escape  get() = ((value shr ESCAPE) and 3).toInt()
-	val ext     get() = ((value shr EXT) and 15).toInt()
+	val ext     get() = ((value shr EXT) and 7).toInt()
 	val rw      get() = ((value shr RW) and 1).toInt()
 	val o16     get() = ((value shr O16) and 1).toInt()
 	val a32     get() = ((value shr A32) and 1).toInt()
-	val opReg   get() = ((value shr OPREG) and 1).toInt()
 	val opEnc   get() = ((value shr OPENC) and 7).toInt()
 	val pseudo  get() = ((value shr PSEUDO) and 63).toInt()
 	val ops     get() = ((value shr OPS)).toInt().let(::AutoOps)
@@ -124,26 +121,24 @@ value class AutoEnc(val value: Long) {
 		private const val OPCODE  = 0  // 16
 		private const val PREFIX  = 16 // 2  NONE 66 F3 F2
 		private const val ESCAPE  = 18 // 2  NONE 0F 38 3A
-		private const val EXT     = 20 // 4  0 1 2 3 4 5 6 7
-		private const val RW      = 24 // 1
-		private const val O16     = 25 // 1
-		private const val A32     = 26 // 1
-		private const val OPREG   = 27 // 1
-		private const val OPENC   = 28 // 3  RMV RVM MRV MVR VMR
-		private const val PSEUDO  = 32 // 5
-		private const val OPS     = 40 // 22
+		private const val EXT     = 20 // 3  0 1 2 3 4 5 6 7
+		private const val RW      = 23 // 1
+		private const val O16     = 24 // 1
+		private const val A32     = 25 // 1
+		private const val OPENC   = 26 // 3  RMV RVM MRV MVR VMR
+		private const val PSEUDO  = 29 // 6  0..31. 0 = not present, must subtract 1 to get real value
+		private const val OPS     = 35 // 22
 	}
 
 	override fun toString() = buildString {
 		fun add(name: String, value: Int) = append("$name=$value ")
 		add("opcode", opcode)
 		add("prefix", prefix)
-		add("escape" , escape)
+		add("escape", escape)
 		add("ext", ext)
 		add("rw", rw)
 		add("o16", o16)
 		add("a32", a32)
-		add("opReg", opReg)
 		add("opEnc", opEnc)
 		add("pseudo", pseudo)
 		add("r1", ops.r1)

@@ -1,5 +1,6 @@
 package eyre.gen
 
 fun main() {
-	EncTesting.test()
+	EncGen.genAutoEncs()
+	//EncTesting.test()
 }

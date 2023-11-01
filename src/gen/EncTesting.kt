@@ -35,14 +35,24 @@ object EncTesting {
 		val disp = IntNode(Random.nextInt(512).toLong())
 		fun add(a: Node, b: Node) = BinNode(BinOp.ADD, a, b)
 
-		val node = when(Random.nextInt(6)) {
-			0 -> base
-			1 -> index
-			2 -> add(base, index)
-			3 -> add(base, disp)
-			4 -> add(index, disp)
-			5 -> add(base, add(index, disp))
-			else -> error("")
+		val node: Node = if(vm != null) {
+			when(Random.nextInt(4)) {
+				0 -> index
+				1 -> add(index, base)
+				2 -> add(index, disp)
+				3 -> add(index, add(base, disp))
+				else -> error("")
+			}
+		} else {
+			when(Random.nextInt(6)) {
+				0 -> base
+				1 -> index
+				2 -> add(base, index)
+				3 -> add(base, disp)
+				4 -> add(index, disp)
+				5 -> add(base, add(index, disp))
+				else -> error("")
+			}
 		}
 
 		return OpNode.mem(node, width)
@@ -113,15 +123,11 @@ object EncTesting {
 		else       -> error("Invalid node: $this")
 	}
 
-
-
 	private fun OpNode.nasmString(): String = when(type) {
 		OpType.MEM -> "${width.opString.replace('x', 'o')}[${node.exprString()}]"
 		OpType.IMM -> "${width.opString.replace('x', 'o')}${node.exprString()}"
 		else       -> reg.toString()
 	}
-
-
 
 	private fun InsNode.nasmString(): String = buildString {
 		append(mnemonic)
@@ -138,14 +144,11 @@ object EncTesting {
 
 
 	/*
-	Testing
+	Testing predicates
 	 */
 
 
 
-	/**
-	 * The encodings of these mnemonics must be tested manually.
-	 */
 	private val ignoredMnemonics = setOf(
 		// Custom mnemonics
 		Mnemonic.CALLF, Mnemonic.JMPF, Mnemonic.SYSRETQ, Mnemonic.PUSHW,
@@ -155,19 +158,18 @@ object EncTesting {
 		Mnemonic.PREFETCHW, Mnemonic.CLDEMOTE, Mnemonic.CLWB, Mnemonic.CLFLUSHOPT, Mnemonic.CLFLUSH,
 		// NASM gives MEM, INTEL gives M64
 		Mnemonic.VMPTRLD, Mnemonic.VMPTRST, Mnemonic.VMXON, Mnemonic.VMCLEAR,
-		// ???
-		Mnemonic.PSUBQ, Mnemonic.PSHUFW, Mnemonic.PSHUFD, Mnemonic.PSHUFLW,
-		Mnemonic.PMULUDQ, Mnemonic.PSHUFHW, Mnemonic.PALIGNR,
-		Mnemonic.VGATHERDPD, Mnemonic.VGATHERQPD, Mnemonic.VGATHERQPS, Mnemonic.VGATHERDPS,
-		Mnemonic.VPGATHERDD, Mnemonic.VPGATHERDQ, Mnemonic.VPGATHERQD, Mnemonic.VPGATHERQQ,
+		// NASM gives MMXRM, but doesn't accept QWORD mem for some reason
+		Mnemonic.PMULUDQ, Mnemonic.PSUBQ, Mnemonic.PSHUFW,
+		// Nasm gives XMMRM, but doesn't accept XWORD mem for some reason
+		Mnemonic.PALIGNR,
+		// NASM gives MEM, manual gives M128
+		Mnemonic.PSHUFD, Mnemonic.PSHUFLW, Mnemonic.PSHUFHW,
 		// NASM gives M128 rather than M64?
 		Mnemonic.CMPSD,
 		// NASM doesn't insert F3 prefix for some reason
 		Mnemonic.PTWRITE,
 		// NASM inserts 48 for some reason
-		Mnemonic.INVPCID,
-		Mnemonic.ENQCMD,
-		Mnemonic.ENQCMDS,
+		Mnemonic.INVPCID, Mnemonic.ENQCMD, Mnemonic.ENQCMDS,
 		// Many duplicate encodings
 		Mnemonic.MOVQ
 	)
@@ -190,6 +192,12 @@ object EncTesting {
 		mnemonic == Mnemonic.SLDT && op1 == Op.R64 -> false
 		else -> true
 	}
+
+
+
+	/*
+	Testing
+	 */
 
 
 
@@ -245,13 +253,14 @@ object EncTesting {
 		Files.delete(nasmInputPath)
 		val nasmOutputPath = Paths.get("test.obj")
 		val reader = BinReader(Files.readAllBytes(nasmOutputPath))
+		Files.delete(nasmOutputPath)
 		reader.pos = 20
 		if(reader.ascii(5) != ".text") error("NASM error")
 		val nasmBytes = reader.bytes(reader.i32(40), reader.i32(36))
 		val eyreBytes = context.textWriter.copy()
 
 		for(test in tests) {
-			//println(NodeStrings.string(test.node))
+			println(NodeStrings.string(test.node))
 			if(eyreBytes.size < test.pos + test.size)
 				error("Out of bounds")
 			for(i in 0 ..< test.size) {

@@ -25,8 +25,6 @@ data class ParsedEnc(
 	val op3 = ops.getOrElse(2) { Op.NONE }
 	val op4 = ops.getOrElse(3) { Op.NONE }
 
-	val actualExt = ext.coerceAtLeast(0)
-
 	val opcode1 = opcode and 0xFF
 	val opcode2 = opcode shr 8
 	val hasExt get() = ext >= 0

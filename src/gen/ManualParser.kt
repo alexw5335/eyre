@@ -177,14 +177,11 @@ class ManualParser(private val lines: List<String>) {
 
 			val opEnc = when {
 				mr -> OpEnc.MRV
-
 				op3.isMem -> OpEnc.RVM
-
 				op1.isMem -> when {
 					op3.isReg -> OpEnc.MVR
 					else -> OpEnc.MRV
 				}
-
 				op1.isReg -> when {
 					op2.isReg && op3.isReg -> OpEnc.RVM
 					op2.isMem && op3.isReg -> OpEnc.RMV
@@ -192,7 +189,6 @@ class ManualParser(private val lines: List<String>) {
 					ext != -1 -> OpEnc.MRV
 					else -> OpEnc.RMV
 				}
-
 				else -> OpEnc.RVM
 			}
 
@@ -231,16 +227,5 @@ class ManualParser(private val lines: List<String>) {
 		}
 	}
 
-	/*
-
-	val opEnc: OpEnc = when {
-		op1.type.isMem && op3.type.isReg -> OpEnc.MVR
-		op1.type.isMem && (op2.type.isReg || op2.type.isNone) -> OpEnc.MRV
-		op1.type.isReg && op2.type.isMem -> OpEnc.RMV
-		op1.type.isReg && op2.type.isReg && hasExt -> OpEnc.VMR
-		op1.type.isReg && (op2.type.isReg || op2.type.isMem) -> OpEnc.RMV
-		else -> OpEnc.RVM
-	}
-	 */
 
 }
