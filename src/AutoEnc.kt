@@ -29,7 +29,7 @@ value class AutoOps(val value: Int) {
 	val r4    get() = ((value shr R4) and 15)
 	val width get() = ((value shr WIDTH) and 15)
 	val vsib  get() = ((value shr VSIB) and 3)
-	val st0   get() = ((value shr ST0) and 3)
+	val st0   get() = ((value shr ST0) and 1)
 
 	fun equalsExceptWidth(other: AutoOps) =
 		value and WIDTH_MASK == other.value and WIDTH_MASK
@@ -44,7 +44,7 @@ value class AutoOps(val value: Int) {
 		const val ST0   = 22 // 1: NONE/ST/ST0_ST ST_ST0
 		const val WIDTH_MASK = -1 xor (15 shl WIDTH)
 
-		val ST = AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 0)
+		val ST     = AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 0)
 		val ST0_ST = AutoOps(OpType.ST.ordinal, OpType.ST.ordinal, 0, 0, 0, 0, 0)
 		val ST_ST0 = AutoOps(OpType.ST.ordinal, OpType.ST.ordinal, 0, 0, 0, 0, 1)
 	}

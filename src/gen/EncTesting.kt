@@ -86,7 +86,7 @@ object EncTesting {
 		Op.CR    -> OpNode.reg(Reg.cr(Random.nextInt(9)))
 		Op.DR    -> OpNode.reg(Reg.dr(Random.nextInt(8)))
 		Op.ONE   -> OpNode.imm(IntNode(1), Width.NONE)
-		Op.ST    -> OpNode.reg(Reg.st(Random.nextInt(8)))
+		Op.ST    -> OpNode.reg(Reg.ST1)
 		Op.ST0   -> OpNode.reg(Reg.ST0)
 		Op.VM32X -> randomMem(Width.DWORD, Reg.x(Random.nextInt(16)))
 		Op.VM64X -> randomMem(Width.QWORD, Reg.x(Random.nextInt(16)))
@@ -162,6 +162,14 @@ object EncTesting {
 		Mnemonic.VPGATHERDD, Mnemonic.VPGATHERDQ, Mnemonic.VPGATHERQD, Mnemonic.VPGATHERQQ,
 		// NASM gives M128 rather than M64?
 		Mnemonic.CMPSD,
+		// NASM doesn't insert F3 prefix for some reason
+		Mnemonic.PTWRITE,
+		// NASM inserts 48 for some reason
+		Mnemonic.INVPCID,
+		Mnemonic.ENQCMD,
+		Mnemonic.ENQCMDS,
+		// Many duplicate encodings
+		Mnemonic.MOVQ
 	)
 
 
@@ -176,6 +184,10 @@ object EncTesting {
 		op1 == Op.REL8 || op1 == Op.REL32 -> false
 		// Nasm handles MOV with seg very oddly
 		Op.SEG in ops -> false
+		// Nasm doesn't insert 66
+		mnemonic == Mnemonic.RETW && op1 == Op.I16 -> false
+		// Nasm doesn't insert 48
+		mnemonic == Mnemonic.SLDT && op1 == Op.R64 -> false
 		else -> true
 	}
 

@@ -355,15 +355,15 @@ class Assembler(private val context: Context) {
 		if(vexw.value != 0 || escape.avxValue > 1 || x == 0 || b == 0)
 			dword(
 				(0xC4 shl 0) or
-					(r shl 15) or (x shl 14) or (b shl 13) or (escape.avxValue shl 8) or
-					(vexw.value shl 23) or (vvvv shl 19) or (vexl.value shl 18) or (prefix.avxValue shl 16) or
-					(opcode shl 24)
+				(r shl 15) or (x shl 14) or (b shl 13) or (escape.avxValue shl 8) or
+				(vexw.value shl 23) or (vvvv shl 19) or (vexl.value shl 18) or (prefix.avxValue shl 16) or
+				(opcode shl 24)
 			)
 		else
 			i24(
 				(0xC5 shl 0) or
-					(r shl 15) or (vvvv shl 11) or (vexl.value shl 10) or (prefix.avxValue shl 8) or
-					(opcode shl 16)
+				(r shl 15) or (vvvv shl 11) or (vexl.value shl 10) or (prefix.avxValue shl 8) or
+				(opcode shl 16)
 			)
 	}
 
@@ -1090,29 +1090,31 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun assembleFpu(ins: InsNode) {
-		if(ins.count == 1) {
+	private fun assembleFpu(ins: InsNode) { when {
+		ins.count == 1 -> {
 			val enc = getAutoEnc(ins.mnemonic, AutoOps.ST) ?: insErr()
 			word(enc.opcode + (ins.op1.reg.value shl 8))
-		} else if(ins.count == 2) {
-			if(ins.op1.reg == Reg.ST0) {
-				if(ins.op2.type != OpType.ST) insErr()
-				var enc = getAutoEnc(ins.mnemonic, AutoOps.ST0_ST)
-				if(enc == null) {
-					if(ins.op2.reg != Reg.ST0) insErr()
-					enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0) ?: insErr()
-				}
-				word(enc.opcode + (ins.op2.reg.value shl 8))
-			} else if(ins.op2.reg == Reg.ST0) {
-				val enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0) ?: insErr()
-				word(enc.opcode + (ins.op2.reg.value shl 8))
-			} else {
-				insErr()
-			}
-		} else {
-			insErr()
 		}
-	}
+
+		ins.count != 2 -> insErr()
+
+		ins.op1.reg == Reg.ST0 -> {
+			if(ins.op2.type != OpType.ST) insErr()
+			var enc = getAutoEnc(ins.mnemonic, AutoOps.ST0_ST)
+			if(enc == null) {
+				if(ins.op2.reg != Reg.ST0) insErr()
+				enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0) ?: insErr()
+			}
+			word(enc.opcode + (ins.op2.reg.value shl 8))
+		}
+
+		ins.op2.reg == Reg.ST0 -> {
+			val enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0) ?: insErr()
+			word(enc.opcode + (ins.op1.reg.value shl 8))
+		}
+
+		else -> insErr()
+	} }
 
 
 
@@ -1165,10 +1167,6 @@ class Assembler(private val context: Context) {
 			OpEnc.MRV -> { m = r1; r = r2; v = r3 }
 			OpEnc.MVR -> { m = r1; v = r2; r = r3 }
 			OpEnc.VMR -> { v = r1; m = r2; r = r3 }
-		}
-
-		if(enc.mnemonic == Mnemonic.NOP) {
-			println("$r $m $v $r1 $r2 $r3 ${enc.opEnc} ${enc.ops}")
 		}
 
 		if(enc.hasExt)

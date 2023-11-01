@@ -88,7 +88,7 @@ class ManualParser(private val lines: List<String>) {
 		var opcode = 0
 		var ext = -1
 		var mask = 0
-		var ops = ""
+		var opsString = ""
 		var rw = 0
 		var o16 = 0
 		var a32 = 0
@@ -98,6 +98,7 @@ class ManualParser(private val lines: List<String>) {
 		var vexw = VexW.W0
 		var vexl = VexL.L0
 		val vex = line.startsWith("W")
+		var mr = false
 
 		for(part in line.split(' ').filter(String::isNotEmpty)) {
 			if(part.isEmpty()) error("Empty part: '$part'")
@@ -117,6 +118,7 @@ class ManualParser(private val lines: List<String>) {
 				part == "NP"    -> prefix = Prefix.NONE
 				part == "OPREG" -> opreg = true
 				part == "I64"   -> { }
+				part == "MR"    -> mr = true
 
 				part[0] == ':' ->
 					pseudo = part.drop(1).toInt()
@@ -128,7 +130,7 @@ class ManualParser(private val lines: List<String>) {
 					mask = part.toInt(2)
 
 				mnemonic.isNotEmpty() ->
-					ops = part
+					opsString = part
 
 				else -> {
 					if(isExt)
@@ -145,8 +147,10 @@ class ManualParser(private val lines: List<String>) {
 							0xF3 -> if(escape == Escape.NONE) prefix = Prefix.PF3 else opcode = 0xF3
 							0x9B -> if(escape == Escape.NONE) prefix = Prefix.P9B else opcode = 0x9B
 							0x0F -> if(escape == Escape.NONE) escape = Escape.E0F else opcode = 0x0F
-							0x38 -> if(escape == Escape.E0F) escape = Escape.E38 else opcode = 0x38
-							0x3A -> if(escape == Escape.E0F) escape = Escape.E3A else opcode = 0x3A
+							0x38 -> if(escape == Escape.E0F || (vex && escape == Escape.NONE))
+								escape = Escape.E38 else opcode = 0x38
+							0x3A -> if(escape == Escape.E0F || (vex && escape == Escape.NONE))
+								escape = Escape.E3A else opcode = 0x3A
 							else -> opcode = value
 						}
 					} else {
@@ -161,29 +165,59 @@ class ManualParser(private val lines: List<String>) {
 			prefix = Prefix.NONE
 		}
 
-		fun add(mnemonic: String, opcode: Int, ops: String, prefix: Prefix, vexl: VexL) = ParsedEnc(
-			GenLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
-			prefix,
-			escape,
-			opcode,
-			ext,
-			mask,
-			rw,
-			o16,
-			a32,
-			opreg,
-			if(ops == "")
-				emptyList()
+		fun add(mnemonic: String, opcode: Int, opsString: String, prefix: Prefix, vexl: VexL) {
+			val ops = if(opsString.isNotEmpty())
+				opsString.split('_').map { Op.map[it] ?: error("Missing ops: $it") }
 			else
-				ops.split('_').map { Op.map[it] ?: error("Missing ops: $it") },
-			pseudo,
-			vex,
-			vexw,
-			vexl
-		).also(this::add)
+				emptyList()
 
-		if(ops in SimdCombo.map) {
-			val combo = SimdCombo.map[ops]!!
+			val op1 = ops.getOrElse(0) { Op.NONE }
+			val op2 = ops.getOrElse(1) { Op.NONE }
+			val op3 = ops.getOrElse(2) { Op.NONE }
+
+			val opEnc = when {
+				mr -> OpEnc.MRV
+
+				op3.isMem -> OpEnc.RVM
+
+				op1.isMem -> when {
+					op3.isReg -> OpEnc.MVR
+					else -> OpEnc.MRV
+				}
+
+				op1.isReg -> when {
+					op2.isReg && op3.isReg -> OpEnc.RVM
+					op2.isMem && op3.isReg -> OpEnc.RMV
+					op2.isReg && ext != -1 -> OpEnc.VMR
+					ext != -1 -> OpEnc.MRV
+					else -> OpEnc.RMV
+				}
+
+				else -> OpEnc.RVM
+			}
+
+			add(ParsedEnc(
+				GenLists.mnemonics[mnemonic] ?: error("Missing mnemonic: $mnemonic"),
+				prefix,
+				escape,
+				opcode,
+				ext,
+				mask,
+				rw,
+				o16,
+				a32,
+				opreg,
+				ops,
+				pseudo,
+				vex,
+				vexw,
+				vexl,
+				opEnc
+			))
+		}
+
+		if(opsString in SimdCombo.map) {
+			val combo = SimdCombo.map[opsString]!!
 			val firstVexL = if(combo.isAvx) VexL.L0 else vexl
 			val secondVexL = if(combo.isAvx) VexL.L1 else vexl
 			val secondPrefix = if(combo.isSse) Prefix.P66 else prefix
@@ -191,11 +225,22 @@ class ManualParser(private val lines: List<String>) {
 			add(mnemonic, opcode, combo.second, secondPrefix, secondVexL)
 		} else if(mnemonic.endsWith("cc")) {
 			for((postfix, opcodeInc) in GenLists.ccList)
-				add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc, ops, prefix, vexl)
+				add(mnemonic.dropLast(2) + postfix, opcode + opcodeInc, opsString, prefix, vexl)
 		} else {
-			add(mnemonic, opcode, ops, prefix, vexl)
+			add(mnemonic, opcode, opsString, prefix, vexl)
 		}
 	}
 
+	/*
+
+	val opEnc: OpEnc = when {
+		op1.type.isMem && op3.type.isReg -> OpEnc.MVR
+		op1.type.isMem && (op2.type.isReg || op2.type.isNone) -> OpEnc.MRV
+		op1.type.isReg && op2.type.isMem -> OpEnc.RMV
+		op1.type.isReg && op2.type.isReg && hasExt -> OpEnc.VMR
+		op1.type.isReg && (op2.type.isReg || op2.type.isMem) -> OpEnc.RMV
+		else -> OpEnc.RVM
+	}
+	 */
 
 }

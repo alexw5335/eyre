@@ -18,6 +18,7 @@ data class ParsedEnc(
 	val vex      : Boolean,
 	val vexw     : VexW,
 	val vexl     : VexL,
+	val opEnc    : OpEnc
 ) {
 	val op1 = ops.getOrElse(0) { Op.NONE }
 	val op2 = ops.getOrElse(1) { Op.NONE }
@@ -25,15 +26,6 @@ data class ParsedEnc(
 	val op4 = ops.getOrElse(3) { Op.NONE }
 
 	val actualExt = ext.coerceAtLeast(0)
-
-	val opEnc: OpEnc = when {
-		op1.type.isMem && op3.type.isReg -> OpEnc.MVR
-		op1.type.isMem && (op2.type.isReg || op2.type.isNone) -> OpEnc.MRV
-		op1.type.isReg && op2.type.isMem -> OpEnc.RMV
-		op1.type.isReg && op2.type.isReg && hasExt -> OpEnc.VMR
-		op1.type.isReg && (op2.type.isReg || op2.type.isMem) -> OpEnc.RMV
-		else -> OpEnc.RVM
-	}
 
 	val opcode1 = opcode and 0xFF
 	val opcode2 = opcode shr 8

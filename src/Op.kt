@@ -83,33 +83,45 @@ enum class Op(
 	constructor(widths: Array<Op>) : this(OpType.NONE, Width.NONE, null, null, widths)
 	constructor(type: OpType, width: Width) : this(type, width, null, null, null)
 
+	val isNone get() = this == NONE
+	val isMem get() = this in memOps
+	val isReg get() = this in regOps
+	val isImm get() = this in immOps
 	val usesModRm get() = this in modrmOps
 	val isAmbiguous get() = this in ambiguousOps
-
+	
 	companion object {
 		val map = entries.associateBy { it.name }
 
+		val immOps = setOf(
+			I8, I16, I32, I64, I, REL8, REL32, ONE
+		)
+
+		val regOps = setOf(
+			R8, R16, R32, R64, MM, X, Y, DX, CL, AL, AX, EAX, RAX,
+			FS, GS, SEG, CR, DR, ONE, ST, ST0, A, R, RM, XM, YM,
+			MMM, RM8, RM16, RM32, RM64, MMM64, XM8, XM16, XM32,
+			XM64, XM128, YM8, YM16, YM32, YM64, YM128, YM256,
+		)
+		
+		val memOps = setOf(
+			MEM, M8, M16, M32, M64, M80, M128, M256, M512, VM32X,
+			VM64X, VM32Y, VM64Y, VM32Z, VM64Z, M, RM, XM, YM, MMM,
+			RM8, RM16, RM32, RM64, MMM64, XM8, XM16, XM32, XM64,
+			XM128, YM8, YM16, YM32, YM64, YM128, YM256,
+		)
+
 		val modrmOps = setOf(
-			R8, R16, R32, R64,
-			M8, M16, M32, M64,
-			M80, M128, M256, M512,
-			MEM, MM, X, Y,
-			SEG, CR, DR, VM32X,
-			VM64X, VM32Y, VM64Y, VM32Z,
-			VM64Z, R, M, RM, XM,
-			YM, MMM, RM8, RM16,
-			RM32, RM64, MMM64, XM8,
-			XM16, XM32, XM64, XM128,
-			YM8, YM16, YM32, YM64,
-			YM128, YM256
+			R8, R16, R32, R64, M8, M16, M32, M64, M80, M128, M256,
+			M512, MEM, MM, X, Y, SEG, CR, DR, VM32X, VM64X, VM32Y,
+			VM64Y, VM32Z, VM64Z, R, M, RM, XM, YM, MMM, RM8, RM16,
+			RM32, RM64, MMM64, XM8, XM16, XM32, XM64, XM128, YM8, 
+			YM16, YM32, YM64, YM128, YM256
 		)
 
 		val ambiguousOps = setOf(
-			DX, CL, AL, AX, EAX,
-			RAX, I16, I32, I64,
-			REL8, REL32, FS, GS,
-			SEG, CR, DR, ONE, ST,
-			ST0, A, I,
+			DX, CL, AL, AX, EAX, RAX, I16, I32, I64, REL8, REL32, 
+			FS, GS, SEG, CR, DR, ONE, ST, ST0, A, I,
 		)
 	}
 
