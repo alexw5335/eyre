@@ -17,7 +17,7 @@ class Mem {
 	val hasIndex get() = index != Reg.NONE
 	var vsib = 0
 	var disp = 0L
-	var width: Width? = null
+	var width = Width.NONE
 
 	fun reset() {
 		node = NullNode
@@ -28,7 +28,7 @@ class Mem {
 		relocs = 0
 		vsib = 0
 		disp = 0
-		width = null
+		width = Width.NONE
 	}
 
 	val rexX     get() = index.rex
@@ -38,6 +38,7 @@ class Mem {
 	val hasReloc get() = relocs != 0
 	val isImm8   get() = disp.isImm8
 	val isImm16  get() = disp.isImm16
+	val isImm32  get() = disp.isImm32
 	val a32      get() = aso == 1
 
 }

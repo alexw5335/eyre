@@ -109,16 +109,13 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 			is Namespace  -> appendLine("NAMESPACE ${node.place}")
 
 			is OpNode -> {
-				node.width?.let {
-					append(it.toString())
-					append(' ')
-				}
-
 				if(node.type.isMem) {
+					if(node.width != Width.NONE) append("${node.width} ")
 					appendLine("PTR")
 					appendChild(node.node)
 				} else if(node.type.isImm) {
-					appendLine("PTR")
+					if(node.width != Width.NONE) append("${node.width} ")
+					appendLine("IMM")
 					appendChild(node.node)
 				} else {
 					appendLine(node.reg.toString())

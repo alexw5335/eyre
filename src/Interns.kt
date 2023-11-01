@@ -42,9 +42,9 @@ class Name(id: Int, val string: String) : Intern(id), Token {
 		val CONST = add("const")
 		val NAMESPACE = add("namespace")
 
-		val regs      = Reg.entries.associateBy { add(it.string) }
+		val regs      = Reg.entries.associateBy { if(it == Reg.NONE) null else add(it.string) }
 		val mnemonics = Mnemonic.entries.associateBy { add(it.string) }
-		val widths    = Width.entries.associateBy { add(it.string) }
+		val widths    = Width.entries.associateBy { if(it == Width.NONE) null else add(it.string) }
 	}
 }
 

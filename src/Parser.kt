@@ -205,10 +205,10 @@ class Parser(private val context: Context) {
 
 	private fun parseOperand(srcPos: SrcPos): OpNode {
 		var token = tokens[pos]
-		var width: Width? = null
+		var width = Width.NONE
 
 		if(token is Name && token in Name.widths) {
-			width = Name.widths[token]
+			width = Name.widths[token]!!
 			pos++
 			token = tokens[pos]
 		}
@@ -220,11 +220,11 @@ class Parser(private val context: Context) {
 			return OpNode.mem(value, width)
 		}
 
-		if(width != null)
-			err(srcPos, "Width specifier not allowed")
-
-		if(tokens[pos] is RegToken)
+		if(tokens[pos] is RegToken) {
+			if(width != Width.NONE)
+				err(srcPos, "Width specifier not allowed for register operands")
 			return OpNode.reg((tokens[pos++] as RegToken).value)
+		}
 
 		return OpNode.imm(parseExpression(), width)
 	}

@@ -7,6 +7,7 @@ import java.util.*
 
 enum class Width(val bytes: Int) {
 
+	NONE(0),
 	BYTE(1),
 	WORD(2),
 	DWORD(4),
@@ -16,9 +17,11 @@ enum class Width(val bytes: Int) {
 	YWORD(32),
 	ZWORD(64);
 
+	fun memNotEqual(other: Width) = this != NONE && this != other
 	val immWidth get() = if(this > DWORD) DWORD else this
 	val immLength = bytes.coerceAtMost(4)
 	val string = name.lowercase()
+	val opString = if(bytes == 0) "" else "$string "
 	val min: Long = if(bytes > 8) 0 else -(1L shl ((bytes shl 3) - 1))
 	val max: Long = if(bytes > 8) 0 else (1L shl ((bytes shl 3) - 1)) - 1
 	operator fun contains(value: Int) = value in min..max
@@ -48,10 +51,11 @@ enum class OpType(val gpWidth: Width = Width.BYTE) {
 	DR,
 	BND;
 
-	val isR   get() = ordinal in 3..6
-	val isReg get() = ordinal >= 3
-	val isMem get() = this == MEM
-	val isImm get() = this == IMM
+	val isNone get() = ordinal == 0
+	val isR    get() = ordinal in 3..6
+	val isReg  get() = ordinal >= 3
+	val isMem  get() = this == MEM
+	val isImm  get() = this == IMM
 
 }
 
@@ -141,7 +145,7 @@ enum class Reg(val type: OpType, val index : Int) {
 
 	val vexRex   = rex xor 1
 	val vValue   = index.inv() and 0b1111
-	val isR      = type.ordinal <= OpType.R64.ordinal
+	val isR      = type.ordinal in OpType.R8.ordinal..OpType.R64.ordinal
 	val isV      = type.ordinal in OpType.X.ordinal..OpType.Z.ordinal
 	val isA      = isR && index == 0
 	val rex8     = if(type == OpType.R8 && value in 4..7 && name.endsWith('L')) 1 else 0

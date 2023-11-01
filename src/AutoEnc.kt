@@ -39,25 +39,17 @@ value class AutoOps(val value: Int) {
 		const val R2    = 4
 		const val R3    = 8
 		const val R4    = 12
-		const val WIDTH = 16 // 4: NONE BYTE WOR, DWORD QWORD TWORD XWORD YWORD ZWORD
+		const val WIDTH = 16 // 4: NONE BYTE WORD DWORD QWORD TWORD XWORD YWORD ZWORD
 		const val VSIB  = 20 // 2: NONE X Y Z
-		const val ST0    = 22 // 1: NONE/ST_ST0
+		const val ST0   = 22 // 1: NONE/ST/ST0_ST ST_ST0
 		const val WIDTH_MASK = -1 xor (15 shl WIDTH)
 
 		val ST = AutoOps(OpType.ST.ordinal, 0, 0, 0, 0, 0, 0)
 		val ST0_ST = AutoOps(OpType.ST.ordinal, OpType.ST.ordinal, 0, 0, 0, 0, 0)
-		val ST_ST0 = AutoOps(OpType.ST.ordinal, OpType.ST.ordinal, 0, 0, 0, 0, 0)
+		val ST_ST0 = AutoOps(OpType.ST.ordinal, OpType.ST.ordinal, 0, 0, 0, 0, 1)
 	}
 
-	override fun toString() = buildString {
-		append("r1=$r1 ")
-		append("r2=$r2 ")
-		append("r3=$r3 ")
-		append("r4=$r4 ")
-		append("width=$width ")
-		append("vsib=$vsib ")
-		append("st0 = $st0")
-	}
+	override fun toString() ="AutoOps($r1 $r2 $r3 $r4, width=$width, vsib=$vsib, st0=$st0)"
 
 }
 

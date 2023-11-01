@@ -29,6 +29,12 @@ object EncGen {
 			}
 			if(enc.prefix != Prefix.NONE)
 				value = (value shl 8) or enc.prefix.value
+			if(enc.o16 == 1)
+				value = (value shl 8) or 0x66
+			if(enc.rw == 1)
+				value = (value shl 8) or 0x48
+			if(enc.a32 == 1)
+				value = (value shl 8) or 0x67
 			values[enc.mnemonic.ordinal] = value
 		}
 		return values

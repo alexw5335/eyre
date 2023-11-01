@@ -89,14 +89,17 @@ class NameNode(val value: Name, var sym: Sym? = null) : Node
 
 class RegNode(val value: Reg) : Node
 
-class OpNode(val type: OpType, val reg: Reg, val node: Node, val width: Width?) : Node {
+class OpNode(val type: OpType, val reg: Reg, val node: Node, val width: Width) : Node {
 	val isNone get() = this == NONE
 	val isNotNone get() = this != NONE
+	val isReg get() = type.isReg
+	val isMem get() = type.isMem
+	val isImm get() = type.isImm
 	companion object {
-		val NONE = OpNode(OpType.NONE, Reg.NONE, NullNode, null)
-		fun reg(reg: Reg) = OpNode(reg.type, reg, NullNode, null)
-		fun mem(node: Node, width: Width?) = OpNode(OpType.MEM, Reg.NONE, node, width)
-		fun imm(node: Node, width: Width?) = OpNode(OpType.IMM, Reg.NONE, node, width)
+		val NONE = OpNode(OpType.NONE, Reg.NONE, NullNode, Width.NONE)
+		fun reg(reg: Reg) = OpNode(reg.type, reg, NullNode, reg.width)
+		fun mem(node: Node, width: Width) = OpNode(OpType.MEM, Reg.NONE, node, width)
+		fun imm(node: Node, width: Width) = OpNode(OpType.IMM, Reg.NONE, node, width)
 	}
 }
 
@@ -138,6 +141,11 @@ class InsNode(
 ) : TopNode, AnonSym, PosSym, SizedSym {
 	override var pos = Pos()
 	override var size = 0
+
+	val r1 get() = op1.reg
+	val r2 get() = op2.reg
+	val r3 get() = op3.reg
+	val r4 get() = op4.reg
 
 	val count = when {
 		op1.isNone -> 0

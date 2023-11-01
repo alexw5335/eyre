@@ -277,6 +277,7 @@ class NasmParser(private val inputs: List<String>) {
 				
 				"mem" -> when(widths[i]) {
 					null        -> NasmOp.MEM
+					Width.NONE  -> NasmOp.MEM
 					Width.BYTE  -> NasmOp.M8
 					Width.WORD  -> NasmOp.M16
 					Width.DWORD -> NasmOp.M32

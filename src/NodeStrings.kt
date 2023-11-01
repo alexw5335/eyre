@@ -27,14 +27,14 @@ object NodeStrings {
 			}
 
 			is OpNode -> {
-				node.width?.let { append(it.string); append(' ') }
-
 				if(node.node != NullNode) {
 					if(node.type == OpType.MEM) {
+						append(node.width.opString)
 						append('[')
 						appendExpr(node.node)
 						append(']')
 					} else {
+						append(node.width.opString)
 						appendExpr(node.node)
 					}
 				} else {

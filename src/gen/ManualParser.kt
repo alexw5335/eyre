@@ -13,8 +13,6 @@ class ManualParser(private val lines: List<String>) {
 
 	val encs = ArrayList<ParsedEnc>()
 
-	val allEncs = ArrayList<ParsedEnc>()
-
 	val groups = LinkedHashMap<Mnemonic, EncGroup>()
 
 
@@ -35,37 +33,12 @@ class ManualParser(private val lines: List<String>) {
 				exitProcess(1)
 			}
 		}
-
-		for(group in groups.values) {
-			for(enc in group.compactEncs)
-				if(enc.isCompact != group.isCompact && enc.ops.isNotEmpty() && enc.mnemonic != Mnemonic.MOV)
-					System.err.println("Compact mismatch: $enc")
-
-			if(group.isCompact)
-				group.compactEncs.sortBy(ParsedEnc::compactOps)
-		}
 	}
 
 
 
 	private fun add(enc: ParsedEnc) {
-		val group = groups.getOrPut(enc.mnemonic) { EncGroup(enc.mnemonic) }
 		val multiIndex = enc.ops.indexOfFirst { it.first != null }
-
-		if(enc.ops.isEmpty()) {
-			group.allEncs.add(enc)
-			encs.add(enc)
-			allEncs.add(enc)
-			return
-		}
-
-		if(enc.isCompact) {
-			if(enc.compactOps !in group) {
-				group.ops = group.ops or (1 shl enc.compactOps.ordinal)
-				group.compactEncs.add(enc)
-				group.isCompact = true
-			}
-		}
 
 		if(multiIndex != -1) {
 			val multi = enc.ops[multiIndex]
@@ -75,7 +48,14 @@ class ManualParser(private val lines: List<String>) {
 		}
 
 		if(enc.ops.any { it.widths != null }) {
-			fun ops(index: Int) = enc.ops.map { it.widths?.get(index) ?: it }
+			fun ops(index: Int) = enc.ops.map { op ->
+				op.widths?.get(index)?.let {
+					if(index == 3 && op == Op.I && enc.opreg)
+						Op.I64
+					else
+						it
+				} ?: op
+			}
 
 			val o16 = if(enc.mask == 2) 0 else 1
 			val opcode = enc.opcode + if(enc.mask and 1 == 1) 1 else 0
@@ -93,9 +73,9 @@ class ManualParser(private val lines: List<String>) {
 			return
 		}
 
-		if(!enc.isCompact)
-			group.allEncs.add(enc)
-		allEncs.add(enc)
+		val group = groups.getOrPut(enc.mnemonic) { EncGroup(enc.mnemonic) }
+		group.encs.add(enc)
+		encs.add(enc)
 	}
 
 
@@ -124,18 +104,19 @@ class ManualParser(private val lines: List<String>) {
 			val isExt = part.length == 4 && part[2] == '/'
 
 			when {
-				part == "WG" -> vexw = VexW.WIG
-				part == "W0" -> vexw = VexW.W0
-				part == "W1" -> vexw = VexW.W1
-				part == "LL" -> vexl = VexL.L0
-				part == "LG" -> vexl = VexL.LIG
-				part == "L0" -> vexl = VexL.L0
-				part == "L1" -> vexl = VexL.L1
-				part == "RW" -> rw = 1
-				part == "O16" -> o16 = 1
-				part == "A32" -> a32 = 1
-				part == "NP" -> prefix = Prefix.NONE
+				part == "WG"    -> vexw = VexW.WIG
+				part == "W0"    -> vexw = VexW.W0
+				part == "W1"    -> vexw = VexW.W1
+				part == "LL"    -> vexl = VexL.L0
+				part == "LG"    -> vexl = VexL.LIG
+				part == "L0"    -> vexl = VexL.L0
+				part == "L1"    -> vexl = VexL.L1
+				part == "RW"    -> rw = 1
+				part == "O16"   -> o16 = 1
+				part == "A32"   -> a32 = 1
+				part == "NP"    -> prefix = Prefix.NONE
 				part == "OPREG" -> opreg = true
+				part == "I64"   -> { }
 
 				part[0] == ':' ->
 					pseudo = part.drop(1).toInt()
@@ -191,7 +172,10 @@ class ManualParser(private val lines: List<String>) {
 			o16,
 			a32,
 			opreg,
-			if(ops == "") emptyList() else ops.split('_').map { Op.map[it] ?: error("Missing ops: $it") },
+			if(ops == "")
+				emptyList()
+			else
+				ops.split('_').map { Op.map[it] ?: error("Missing ops: $it") },
 			pseudo,
 			vex,
 			vexw,
