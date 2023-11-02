@@ -345,28 +345,6 @@ class Assembler(private val context: Context) {
 				byte(0b0100_0000 or value)
 	}
 
-	/**
-	 *     wvvv-vlpp_rxbm-mmmm_1100-0100
-	 *     r: ~REX.R (ModRM:REG)
-	 *     x: ~REX.X (SIB:INDEX)
-	 *     b: ~REX.B (SIB:BASE, MODRM:RM, OPREG)
-	 */
-	private fun ParsedEnc.writeVex(r: Int, x: Int, b: Int, vvvv: Int) {
-		if(vexw.value != 0 || escape.avxValue > 1 || x == 0 || b == 0)
-			dword(
-				(0xC4 shl 0) or
-				(r shl 15) or (x shl 14) or (b shl 13) or (escape.avxValue shl 8) or
-				(vexw.value shl 23) or (vvvv shl 19) or (vexl.value shl 18) or (prefix.avxValue shl 16) or
-				(opcode shl 24)
-			)
-		else
-			i24(
-				(0xC5 shl 0) or
-				(r shl 15) or (vvvv shl 11) or (vexl.value shl 10) or (prefix.avxValue shl 8) or
-				(opcode shl 16)
-			)
-	}
-
 	private fun checkWidth(mask: Int, width: Int) {
 		if((1 shl width) and mask == 0)
 			insErr("Invalid operand width")
@@ -509,6 +487,14 @@ class Assembler(private val context: Context) {
 		byte(opcode + (((mask and 1) and (1 shl width).inv()) shl 3) + op1.value)
 	}
 
+	private fun encode1MEM(opcode: Int, ext: Int, op1: OpNode) {
+		val mem = resolve(op1)
+		writeA32(mem)
+		writeRex(0, 0, mem.rexX, mem.rexB)
+		writer.varLengthInt(opcode)
+		mem.writeMem(ext, NONE)
+	}
+
 	private fun encode1M(opcode: Int, mask: Int, ext: Int, op1: OpNode, immWidth: Width) {
 		val mem = resolve(op1)
 		val width = op1.width.ordinal - 1
@@ -611,9 +597,12 @@ class Assembler(private val context: Context) {
 		Mnemonic.JMP     += ::encodeJMP
 		Mnemonic.LEA     += ::encodeLEA
 		Mnemonic.ENTER   += ::encodeENTER
+		Mnemonic.HRESET  += ::encodeHRESET
 		Mnemonic.FSTSW   += ::encodeFSTSW
 		Mnemonic.FNSTSW  += ::encodeFSTSW
-		Mnemonic.HRESET  += ::encodeHRESET
+		Mnemonic.FSAVE   += { encodeFSAVE(0xDD, 6, it) }
+		Mnemonic.FSTCW   += { encodeFSAVE(0xD9, 7, it) }
+		Mnemonic.FSTENV  += { encodeFSAVE(0xD9, 6, it) }
 		Mnemonic.JO      += { encodeJCC(0x70, 0x800F, it) }
 		Mnemonic.JNO     += { encodeJCC(0x71, 0x810F, it) }
 		Mnemonic.JB      += { encodeJCC(0x72, 0x820F, it) }
@@ -705,6 +694,12 @@ class Assembler(private val context: Context) {
 			node.op1.isMem    -> encode1MSingle(0xDD, WORD, 7, node.op1)
 			else              -> insErr()
 		}
+	}
+
+	private fun encodeFSAVE(opcode: Int, ext: Int, node: InsNode) {
+		if(node.count != 1 || !node.op1.isMem) insErr()
+		byte(0x9B)
+		encode1MEM(opcode, ext, node.op1)
 	}
 
 	private fun encodeSHLD(opcode: Int, node: InsNode) {
@@ -1071,28 +1066,78 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun getAutoEnc(mnemonic: Mnemonic, ops: AutoOps): ParsedEnc? {
-		val encs = EncGen.groups[mnemonic]?.encs ?: return null
+	/**
+	 *     wvvv-vlpp_rxbm-mmmm_1100-0100
+	 *     r: ~REX.R (ModRM:REG)
+	 *     x: ~REX.X (SIB:INDEX)
+	 *     b: ~REX.B (SIB:BASE, MODRM:RM, OPREG)
+	 */
+	private fun AutoEnc.writeVex(r: Int, x: Int, b: Int, vvvv: Int) {
+		if(vexw != 0 || escape > 1 || x == 0 || b == 0)
+			dword(
+				(0xC4 shl 0) or
+				(r shl 15) or (x shl 14) or (b shl 13) or (escape shl 8) or
+				(vexw shl 23) or (vvvv shl 19) or (vexl shl 18) or (prefix shl 16) or
+				(opcode shl 24)
+			)
+		else
+			i24(
+				(0xC5 shl 0) or
+				(r shl 15) or (vvvv shl 11) or (vexl shl 10) or (prefix shl 8) or
+				(opcode shl 16)
+			)
+	}
 
-		for(e in encs)
-			if(e.autoOps == ops)
-				return e
+	private fun AutoEnc.writeSimdOpcode() { when(escape) {
+		0 -> byte(opcode)
+		1 -> word(0x0F or (opcode shl 8))
+		2 -> i24(0x380F or (opcode shl 16))
+		3 -> i24(0x3A0F or (opcode shl 16))
+		else -> context.internalErr()
+	} }
+
+
+
+	private fun AutoEnc.writeSimdPrefix() { when(prefix) {
+		0 -> { }
+		1 -> byte(0x66)
+		2 -> byte(0xF3)
+		3 -> byte(0xF2)
+		4 -> byte(0x9B)
+	}}
+
+
+
+	private fun AutoEnc.checkNull() = this.also { if(isNull) insErr() }
+
+
+
+	private fun getAutoEnc(mnemonic: Mnemonic, ops: AutoOps): AutoEnc {
+		val encs = EncGen.autoEncs[mnemonic.ordinal]
+
+		for(e in encs) {
+			val enc = AutoEnc(e)
+			if(enc.ops == ops)
+				return enc
+		}
 
 		if(ops.width != 0)
-			return null
+			return AutoEnc()
 
-		for(e in encs)
-			if(e.autoOps.equalsExceptWidth(ops))
-				return e
+		for(e in encs) {
+			val enc = AutoEnc(e)
+			if(enc.ops.equalsExceptWidth(ops))
+				return enc
+		}
 
-		return null
+		return AutoEnc()
 	}
 
 
 
 	private fun assembleFpu(ins: InsNode) { when {
 		ins.count == 1 -> {
-			val enc = getAutoEnc(ins.mnemonic, AutoOps.ST) ?: insErr()
+			val enc = getAutoEnc(ins.mnemonic, AutoOps.ST).checkNull()
 			word(enc.opcode + (ins.op1.reg.value shl 8))
 		}
 
@@ -1101,15 +1146,15 @@ class Assembler(private val context: Context) {
 		ins.op1.reg == Reg.ST0 -> {
 			if(ins.op2.type != OpType.ST) insErr()
 			var enc = getAutoEnc(ins.mnemonic, AutoOps.ST0_ST)
-			if(enc == null) {
+			if(enc.isNull) {
 				if(ins.op2.reg != Reg.ST0) insErr()
-				enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0) ?: insErr()
+				enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0).checkNull()
 			}
 			word(enc.opcode + (ins.op2.reg.value shl 8))
 		}
 
 		ins.op2.reg == Reg.ST0 -> {
-			val enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0) ?: insErr()
+			val enc = getAutoEnc(ins.mnemonic, AutoOps.ST_ST0).checkNull()
 			word(enc.opcode + (ins.op1.reg.value shl 8))
 		}
 
@@ -1151,7 +1196,7 @@ class Assembler(private val context: Context) {
 			0
 		)
 
-		val enc = getAutoEnc(ins.mnemonic, ops) ?: insErr()
+		val enc = getAutoEnc(ins.mnemonic, ops).checkNull()
 
 		var r: Reg
 		val m: Reg
@@ -1162,21 +1207,22 @@ class Assembler(private val context: Context) {
 		val r3 = ins.op3.reg
 
 		when(enc.opEnc) {
-			OpEnc.RMV -> { r = r1; m = r2; v = r3 }
-			OpEnc.RVM -> { r = r1; v = r2; m = r3 }
-			OpEnc.MRV -> { m = r1; r = r2; v = r3 }
-			OpEnc.MVR -> { m = r1; v = r2; r = r3 }
-			OpEnc.VMR -> { v = r1; m = r2; r = r3 }
+			OpEnc.RMV.ordinal -> { r = r1; m = r2; v = r3 }
+			OpEnc.RVM.ordinal -> { r = r1; v = r2; m = r3 }
+			OpEnc.MRV.ordinal -> { m = r1; r = r2; v = r3 }
+			OpEnc.MVR.ordinal -> { m = r1; v = r2; r = r3 }
+			OpEnc.VMR.ordinal -> { v = r1; m = r2; r = r3 }
+			else -> context.internalErr()
 		}
 
-		if(enc.hasExt)
+		if(r == Reg.NONE)
 			r = Reg.r32(enc.ext)
 		if(enc.o16 == 1)
 			byte(0x66)
 		if(enc.a32 == 1)
 			byte(0x67)
 
-		if(enc.vex) {
+		if(enc.vex == 1) {
 			if(mem != Mem.NULL) {
 				if(mem.a32) byte(0x67)
 				enc.writeVex(r.vexRex, mem.vexX, mem.vexB, v.vValue)
@@ -1188,12 +1234,12 @@ class Assembler(private val context: Context) {
 		} else {
 			if(mem != Mem.NULL) {
 				if(mem.a32) byte(0x67)
-				if(enc.prefix != Prefix.NONE) byte(enc.prefix.value)
+				enc.writeSimdPrefix()
 				writeRex(enc.rw, r.rex, mem.rexX, mem.rexB, r.rex8 or m.rex8, r.noRex or m.noRex)
 				enc.writeSimdOpcode()
 				mem.writeMem(r.value, immWidth)
 			} else {
-				if(enc.prefix != Prefix.NONE) byte(enc.prefix.value)
+				enc.writeSimdPrefix()
 				writeRex(enc.rw, r.rex, 0, m.rex, r.rex8 or m.rex8, r.noRex or m.noRex)
 				enc.writeSimdOpcode()
 				byte(0b11_000_000 or (r.value shl 3) or (m.value))
@@ -1203,18 +1249,9 @@ class Assembler(private val context: Context) {
 		when {
 			ins.op4.reg != Reg.NONE -> byte(ins.op4.reg.index shl 4)
 			imm != Mem.NULL -> imm(imm, BYTE)
-			enc.pseudo >= 0 -> byte(enc.pseudo)
+			enc.pseudo > 0 -> byte(enc.pseudo - 1)
 		}
 	}
-
-
-
-	private fun ParsedEnc.writeSimdOpcode() { when(escape) {
-		Escape.NONE -> byte(opcode)
-		Escape.E0F  -> word(0x0F or (opcode shl 8))
-		Escape.E38  -> i24(0x380F or (opcode shl 16))
-		Escape.E3A  -> i24(0x3A0F or (opcode shl 16))
-	} }
 
 
 }

@@ -55,26 +55,6 @@ value class AutoOps(val value: Int) {
 
 
 
-/*value class AutoEnc2(val value: Long) {
-	constructor() : this(0L)
-
-	companion object {
-		private const val OPCODE  = 0  // 16
-		private const val PREFIX  = 16 // 2  NONE 66 F3 F2
-		private const val ESCAPE  = 18 // 2  NONE 0F 38 3A
-		private const val EXT     = 20 // 4  0 1 2 3 4 5 6 7
-		private const val RW      = 24 // 1
-		private const val O16     = 25 // 1
-		private const val A32     = 26 // 1
-		private const val OPREG   = 27 // 1
-		private const val OPENC   = 28 // 3  RMV RVM MRV MVR VMR
-		private const val OPS     = 32 // 22
-	}
-
-}*/
-
-
-
 @JvmInline
 value class AutoEnc(val value: Long) {
 
@@ -92,6 +72,9 @@ value class AutoEnc(val value: Long) {
 		a32: Int,
 		opEnc: Int,
 		pseudo: Int,
+		vex: Int,
+		vexw: Int,
+		vexl: Int,
 		ops: Int
 	) : this(
 		(opcode.toLong() shl OPCODE) or
@@ -103,10 +86,13 @@ value class AutoEnc(val value: Long) {
 		(a32.toLong() shl A32) or
 		(opEnc.toLong() shl OPENC) or
 		(pseudo.toLong() shl PSEUDO) or
+		(vex.toLong() shl VEX) or
+		(vexw.toLong() shl VEXW) or
+		(vexl.toLong() shl VEXL) or
 		(ops.toLong() shl OPS)
 	)
 
-	val opcode  get() = ((value shr OPCODE) and 0xFF).toInt()
+	val opcode  get() = ((value shr OPCODE) and 0xFFFF).toInt()
 	val prefix  get() = ((value shr PREFIX) and 3).toInt()
 	val escape  get() = ((value shr ESCAPE) and 3).toInt()
 	val ext     get() = ((value shr EXT) and 7).toInt()
@@ -115,6 +101,9 @@ value class AutoEnc(val value: Long) {
 	val a32     get() = ((value shr A32) and 1).toInt()
 	val opEnc   get() = ((value shr OPENC) and 7).toInt()
 	val pseudo  get() = ((value shr PSEUDO) and 63).toInt()
+	val vex     get() = ((value shr VEX) and 1).toInt()
+	val vexw    get() = ((value shr VEXW) and 1).toInt()
+	val vexl    get() = ((value shr VEXL) and 1).toInt()
 	val ops     get() = ((value shr OPS)).toInt().let(::AutoOps)
 
 	companion object {
@@ -126,8 +115,11 @@ value class AutoEnc(val value: Long) {
 		private const val O16     = 24 // 1
 		private const val A32     = 25 // 1
 		private const val OPENC   = 26 // 3  RMV RVM MRV MVR VMR
-		private const val PSEUDO  = 29 // 6  0..31. 0 = not present, must subtract 1 to get real value
-		private const val OPS     = 35 // 22
+		private const val PSEUDO  = 29 // 6  0..32. 0 = not present, must subtract 1 to get real value
+		private const val VEX     = 35 // 1
+		private const val VEXW    = 36 // 1
+		private const val VEXL    = 37 // 1
+		private const val OPS     = 38 // 22
 	}
 
 	override fun toString() = buildString {
@@ -141,6 +133,9 @@ value class AutoEnc(val value: Long) {
 		add("a32", a32)
 		add("opEnc", opEnc)
 		add("pseudo", pseudo)
+		add("vex", vex)
+		add("vexw", vexw)
+		add("vexl", vexl)
 		add("r1", ops.r1)
 		add("r2", ops.r2)
 		add("r3", ops.r3)

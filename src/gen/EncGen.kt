@@ -11,20 +11,27 @@ object EncGen {
 
 	val zeroOperandOpcodes = genZeroOperandOpcodes()
 
+	val autoEncs = genAutoEncs()
 
 
-	fun genAutoEncs() {
+
+	/*
+	Encoding generation
+	 */
+
+
+
+	fun printAutoEncs() {
 		println("val autoEncs = arrayOf<LongArray>(")
 		for(mnemonic in Mnemonic.entries) {
-			val group = groups[mnemonic]
-			val encs = group?.encs?.map(::genAutoEnc)?.filter(AutoEnc::isNotNull)
-			if(encs.isNullOrEmpty()) {
+			val encs = autoEncs[mnemonic.ordinal]
+			if(encs.isEmpty()) {
 				println("\tLongArray(0),")
 				continue
 			}
 			print("\tlongArrayOf(")
 			for((i, enc) in encs.withIndex())
-				print("${enc.value}L${if(i != encs.lastIndex) ", " else ""}")
+				print("${enc}L${if(i != encs.lastIndex) ", " else ""}")
 			println("), ")
 		}
 		println(")")
@@ -32,8 +39,23 @@ object EncGen {
 
 
 
-	fun genAutoEnc(enc: ParsedEnc): AutoEnc {
-		if(enc.ops.isEmpty()) return AutoEnc()
+	private fun genAutoEncs(): Array<LongArray> {
+		val empty = LongArray(0)
+		val array = Array<LongArray>(Mnemonic.entries.size) { empty }
+		for(mnemonic in Mnemonic.entries) {
+			val group = groups[mnemonic] ?: continue
+			val encs = group.encs.map(::genAutoEnc).filter(AutoEnc::isNotNull)
+			if(encs.isEmpty()) continue
+			array[mnemonic.ordinal] = LongArray(encs.size) { encs[it].value }
+		}
+		return array
+	}
+
+
+
+	private fun genAutoEnc(enc: ParsedEnc): AutoEnc {
+		if(enc.ops.isEmpty() || enc.prefix == Prefix.P9B)
+			return AutoEnc()
 
 		var width = 0
 		var vsib = 0
@@ -76,6 +98,9 @@ object EncGen {
 			enc.a32,
 			enc.opEnc.ordinal,
 			if(enc.pseudo == -1) 0 else enc.pseudo + 1,
+			if(enc.vex) 1 else 0,
+			enc.vexw.value,
+			enc.vexl.value,
 			autoOps.value,
 		)
 	}

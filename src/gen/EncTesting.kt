@@ -150,9 +150,12 @@ object EncTesting {
 
 
 	private val ignoredMnemonics = setOf(
+		// Pseudo mnemonics
+		Mnemonic.DLLCALL, Mnemonic.RETURN,
 		// Custom mnemonics
 		Mnemonic.CALLF, Mnemonic.JMPF, Mnemonic.SYSRETQ, Mnemonic.PUSHW,
 		Mnemonic.POPW, Mnemonic.ENTERW, Mnemonic.LEAVEW, Mnemonic.SYSEXITQ,
+		// Future encodings not yet supported by NASM
 		Mnemonic.AOR, Mnemonic.AXOR,
 		// NASM gives MEM, INTEL gives M8
 		Mnemonic.PREFETCHW, Mnemonic.CLDEMOTE, Mnemonic.CLWB, Mnemonic.CLFLUSHOPT, Mnemonic.CLFLUSH,
@@ -210,6 +213,7 @@ object EncTesting {
 		}
 		for(i in 0 ..< 4)
 			System.err.println("        ${nasmBytes[test.pos + test.size + i].hex8}")
+		error("Testing failed")
 	}
 
 
@@ -263,16 +267,11 @@ object EncTesting {
 			println(NodeStrings.string(test.node))
 			if(eyreBytes.size < test.pos + test.size)
 				error("Out of bounds")
-			for(i in 0 ..< test.size) {
-				if(nasmBytes[test.pos + i] != eyreBytes[test.pos + i]) {
+			for(i in 0 ..< test.size)
+				if(nasmBytes[test.pos + i] != eyreBytes[test.pos + i])
 					printDebug(test, nasmBytes, eyreBytes)
-					return
-				}
-			}
-			if(nasmBytes[test.pos + test.size] != 0.toByte()) {
+			if(nasmBytes[test.pos + test.size] != 0.toByte())
 				printDebug(test, nasmBytes, eyreBytes)
-				return
-			}
 		}
 	}
 

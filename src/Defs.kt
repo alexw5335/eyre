@@ -182,8 +182,8 @@ enum class Reg(val type: OpType, val index : Int) {
 enum class Prefix(val avxValue: Int, val value: Int, val string: String?, val avxString: String) {
 	NONE(0, 0, null, "NP"),
 	P66(1, 0x66, "66", "66"),
-	PF2(3, 0xF2, "F2", "F2"),
 	PF3(2, 0xF3, "F3", "F3"),
+	PF2(3, 0xF2, "F2", "F2"),
 	P9B(0, 0x9B, "9B", "9B");
 }
 
