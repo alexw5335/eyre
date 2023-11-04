@@ -1,9 +1,5 @@
 package eyre
 
-/*
-import eyre.util.IntList
-import eyre.util.NativeWriter
-
 class Linker(private val context: Context) {
 
 
@@ -15,27 +11,24 @@ class Linker(private val context: Context) {
 
 	private var currentSecPos = 0
 
-	private fun err(srcPos: SrcPos?, message: String): Nothing =
-		context.err(srcPos, message)
-
 
 
 	fun link() {
 		writeHeaders()
 
-		section(Section.TEXT, 0) {
+		section(context.textSec, 0) {
 			if(context.textWriter.isNotEmpty)
 				writer.bytes(context.textWriter)
 		}
 
-		section(Section.BSS, context.bssSize) { }
+		section(context.bssSec, context.bssSize) { }
 
-		section(Section.DATA, 0) {
+		section(context.dataSec, 0) {
 			if(context.dataWriter.isNotEmpty)
 				writer.bytes(context.dataWriter)
 		}
 
-		section(Section.RDATA, 0) {
+		section(context.rdataSec, 0) {
 			if(context.rdataWriter.isNotEmpty)
 				writer.bytes(context.rdataWriter)
 
@@ -54,15 +47,14 @@ class Linker(private val context: Context) {
 		//	if(symbol is PosSymbol)
 		//		context.debugDirectives += DebugDirective(symbol.qualifiedName, symbol.pos, symbol.section)
 		//}
-
-		if(context.debugDirectives.isNotEmpty())
-			writeSymbolTable()
+		//if(context.debugDirectives.isNotEmpty())
+		//	writeSymbolTable()
 
 		for(reloc in context.linkRelocs)
 			reloc.writeRelocation()
 
 		if(context.entryPoint != null)
-			writer.i32(entryPointPos, context.entryPoint!!.address)
+			writer.i32(entryPointPos, context.addr(context.entryPoint!!))
 
 		writer.i32(imageSizePos, currentSecRva)
 		writer.i32(numSectionsPos, numSections)
@@ -70,15 +62,33 @@ class Linker(private val context: Context) {
 
 
 
-	private fun writeAbsRelocs(startRva: Int, writer: NativeWriter) {
-		val pages = HashMap<Int, IntList>()
+	private fun writeRelocations() {
+		for(reloc in context.linkRelocs) {
+			try {
+				var value = resolveImm(reloc.node)
+				if(reloc.rel)
+					value -= context.addr(reloc.pos) + reloc.width.bytes + reloc.offset
+				writer.at(context.pos(reloc.pos)) {
+					writer.writeWidth(reloc.width, value)
+				}
+			} catch(e: EyreError) {
+				val node = reloc.node as? TopNode ?: context.internalErr()
+				if(e.srcPos.isNull) e.srcPos = node.srcPos
+			}
+		}
+	}
+
+
+
+	private fun writeAbsRelocs(startRva: Int, writer: BinWriter) {
+		val pages = HashMap<Int, ArrayList<Int>>()
 
 		for(reloc in context.absRelocs) {
 			val value = resolveImm(reloc.node)
-			val rva = context.getAddr(reloc.sec) + reloc.pos
+			val rva = context.addr(reloc.pos)
 			val pageRva = (rva shr 12) shl 12
-			pages.getOrPut(pageRva) { IntList() }.add(rva - pageRva)
-			writer.i64(context.getPos(reloc.sec) + reloc.pos, value + imageBase)
+			pages.getOrPut(pageRva, ::ArrayList).add(rva - pageRva)
+			writer.i64(context.pos(reloc.pos), value + imageBase)
 		}
 
 		val startPos = writer.pos
@@ -104,7 +114,7 @@ class Linker(private val context: Context) {
 
 
 	private fun writeSymbolTable() {
-		val symTableStart = currentSecPos
+		/*val symTableStart = currentSecPos
 		writer.seek(currentSecPos)
 
 		val names = ArrayList<Pair<Int, String>>()
@@ -143,6 +153,7 @@ class Linker(private val context: Context) {
 		writer.align(fileAlignment)
 		writer.i32(symbolTablePosPos, symTableStart)
 		writer.i32(numSymbolsPos, context.debugDirectives.size)
+		*/
 	}
 
 
@@ -151,7 +162,7 @@ class Linker(private val context: Context) {
 	 * - [startRva]: The RVA of the start of the import data directory, relative to the image start
 	 * - [startPos]: The pos of the start of the import data directory, relative to the section start
 	 */
-	private fun writeImports(startRva: Int, startPos: Int, writer: NativeWriter) {
+	private fun writeImports(startRva: Int, startPos: Int, writer: BinWriter) {
 		val dlls = context.dllImports.values
 
 		val idtsRva  = startRva
@@ -181,7 +192,7 @@ class Linker(private val context: Context) {
 				writer.i16(0)
 				writer.asciiNT(import.name.string)
 				writer.align2()
-				import.pos = iatPos + importIndex * 8 - idtsPos + startPos
+				import.pos = import.pos.withDisp(iatPos + importIndex * 8 - idtsPos + startPos)
 			}
 
 			writer.i32(idtPos, iltPos - offset)
@@ -239,8 +250,8 @@ class Linker(private val context: Context) {
 		writer.i32(16)         // numDataDirectories
 
 		// Make sure that the file alignment allows for 16 data directories and at least 4 section headers
-		if(fileAlignment - writer.pos < 16 * 8 + 4 * 40)
-			context.err(null, "Invalid file alignment")
+		if(fileAlignment - writer.pos < 16*8 + 4*40)
+			context.internalErr("Invalid file alignment")
 
 		writer.pos = fileAlignment
 		currentSecPos = fileAlignment
@@ -250,9 +261,8 @@ class Linker(private val context: Context) {
 
 
 	private inline fun section(sec: Section, uninitSize: Int, block: () -> Unit) {
-		context.setAddr(sec, currentSecRva)
-		context.setPos(sec, currentSecPos)
-		context.setIndex(sec, numSections)
+		sec.addr = currentSecRva
+		sec.pos = currentSecPos
 
 		block()
 
@@ -264,7 +274,7 @@ class Linker(private val context: Context) {
 			return
 
 		if(numSections == 4)
-			context.err(null, "Maximum of four sections allowed")
+			context.internalErr("Maximum of four sections allowed")
 
 		writer.at(sectionHeadersPos + numSections++ * 40) {
 			writer.ascii64(sec.name)
@@ -273,7 +283,7 @@ class Linker(private val context: Context) {
 			writer.i32(rawSize)
 			writer.i32(currentSecPos)
 			writer.zero(12)
-			writer.i32(sec.flags)
+			writer.i32(sec.flags.toInt())
 		}
 
 		currentSecPos += rawSize
@@ -288,27 +298,7 @@ class Linker(private val context: Context) {
 
 
 
-	private val PosSym.address get() = context.getAddr(section) + pos
-
-
-
 	private fun resolveImmRec(node: Node, regValid: Boolean): Long {
-		if(node is SymNode) {
-			val symbol = node.sym ?:
-			context.err(node.srcPos, "Unresolved symbol (this should never happen here)")
-
-			if(symbol is PosSym)
-				return symbol.address.toLong()
-
-			if(symbol is IntSym)
-				return symbol.intValue
-
-			context.err(node.srcPos, "Invalid symbol: $symbol")
-		}
-
-		if(node is ReflectNode)
-			return (node.intSupplier ?: err(node.srcPos, "Ref node is not of type int")).invoke()
-
 		if(node is IntNode)
 			return node.value
 
@@ -318,7 +308,7 @@ class Linker(private val context: Context) {
 		if(node is BinNode)
 			return node.calc(regValid, ::resolveImmRec)
 
-		context.err(node.srcPos, "Invalid immediate node (this should never happen here")
+		context.err(SrcPos(), "Invalid immediate node (this should never happen here")
 	}
 
 
@@ -331,18 +321,18 @@ class Linker(private val context: Context) {
 
 	private fun Reloc.writeRelocation() {
 		val value = if(rel)
-			resolveImm(node) - (context.getAddr(sec) + pos + width.bytes + offset)
+			resolveImm(node) - (context.addr(pos) + width.bytes + offset)
 		else
 			resolveImm(node)
 
-		writer.at(context.getPos(sec) + pos) {
+		writer.at(context.pos(pos)) {
 			writer.writeWidth(width, value)
 		}
 	}
 
 
 }
-*/
+
 
 
 private const val imageBase = 0x400000L

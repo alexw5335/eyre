@@ -109,7 +109,6 @@ class Compiler(private val context: Context) {
 		val code = context.textWriter.copy()
 		buildDir.resolve("code.bin").writeBytes(code)
 
-	/*
 		// Linking
 		Linker(context).link()
 		if(checkErrors()) {
@@ -119,7 +118,7 @@ class Compiler(private val context: Context) {
 			NodePrinter(context, CompilerStage.LINK).print()
 		}
 
-		Files.write(buildDir.resolve("test.exe"), context.linkWriter.getTrimmedBytes())*/
+		Files.write(buildDir.resolve("test.exe"), context.linkWriter.copy())
 	}
 
 

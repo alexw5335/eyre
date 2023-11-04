@@ -365,7 +365,7 @@ class DllDef(val name: Name, val exports: Set<Name>)
  * Does not represent a section in a binary file. A section's index is not its place in
  * a resulting binary file.
  */
-class Section(val index: Int, val name: String) {
+class Section(val index: Int, val name: String, val flags: UInt) {
 	var pos = 0
 	var addr = 0
 	val present get() = addr != 0
@@ -395,6 +395,7 @@ value class Pos(val value: Long) {
 	constructor() : this(Long.MAX_VALUE)
 	val secIndex get() = (value shr 32).toInt()
 	val disp get() = value.toInt()
+	fun withDisp(disp: Int) = Pos((value and 0xFFFFFFFFL) or disp.toLong())
 	override fun toString() = "$secIndex:$disp"
 	val isNull get() = value == Long.MAX_VALUE
 	val isNotNull get() = value != Long.MAX_VALUE

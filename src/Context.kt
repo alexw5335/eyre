@@ -15,10 +15,10 @@ class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 	val linkWriter = BinWriter()
 	val bssSize = 0
 	val sections  = ArrayList<Section>()
-	val textSec = Section(0, ".text").also(sections::add)
-	val dataSec = Section(1, ".data").also(sections::add)
-	val rdataSec = Section(2, ".rdata").also(sections::add)
-	val bssSec = Section(3, ".bss").also(sections::add)
+	val textSec  = Section(0, ".text", 0x60_00_00_20U).also(sections::add)
+	val dataSec  = Section(1, ".data", 0xC0_00_00_40U).also(sections::add)
+	val rdataSec = Section(2, ".rdata", 0x40_00_00_40U).also(sections::add)
+	val bssSec   = Section(3, ".bss", 0xC0_00_00_80U).also(sections::add)
 	val dllImports = HashMap<Name, DllImports>()
 	val dllDefs = HashMap<Name, DllDef>()
 
@@ -30,6 +30,13 @@ class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 		loadDllDef("gdi32", DefaultDllDefs.gdi32)
 		loadDllDef("msvcrt", DefaultDllDefs.msvcrt)
 	}
+
+
+
+	fun pos(pos: Pos) = sections[pos.secIndex].pos + pos.disp
+	fun addr(pos: Pos) = sections[pos.secIndex].addr + pos.disp
+	fun pos(sym: PosSym) = pos(sym.pos)
+	fun addr(sym: PosSym) = addr(sym.pos)
 
 
 
