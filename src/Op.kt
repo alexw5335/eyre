@@ -99,7 +99,7 @@ enum class Op(
 
 		val regOps = setOf(
 			R8, R16, R32, R64, MM, X, Y, DX, CL, AL, AX, EAX, RAX,
-			FS, GS, SEG, CR, DR, ONE, ST, ST0, A, R, RM, XM, YM,
+			FS, GS, SEG, CR, DR, ST, ST0, A, R, RM, XM, YM,
 			MMM, RM8, RM16, RM32, RM64, MMM64, XM8, XM16, XM32,
 			XM64, XM128, YM8, YM16, YM32, YM64, YM128, YM256,
 		)

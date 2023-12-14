@@ -33,13 +33,6 @@ class Context(val srcFiles: List<SrcFile>, val buildDir: Path) {
 
 
 
-	fun pos(pos: Pos) = sections[pos.secIndex].pos + pos.disp
-	fun addr(pos: Pos) = sections[pos.secIndex].addr + pos.disp
-	fun pos(sym: PosSym) = pos(sym.pos)
-	fun addr(sym: PosSym) = addr(sym.pos)
-
-
-
 	/*
 	Errors
 	 */

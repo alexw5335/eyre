@@ -54,7 +54,7 @@ Symbols
 
 class DllImport(name: Name) : PosSym {
 	override val place = Place(Scope.NULL, name)
-	override var pos = Pos()
+	override var pos = Pos.NULL
 	override var resolved = false
 }
 
@@ -116,7 +116,7 @@ class Label(
 	override val place: Place
 ) : TopNode, PosSym {
 	override var resolved = false
-	override var pos = Pos()
+	override var pos = Pos.NULL
 }
 
 
@@ -127,9 +127,10 @@ class Proc(
 	override val thisScope: Scope,
 ) : TopNode, ScopedSym, PosSym, SizedSym {
 	override var resolved = false
-	override var pos = Pos()
+	override var pos = Pos.NULL
 	override var size = 0
 }
+
 
 class InsNode(
 	override val srcPos: SrcPos,
@@ -139,7 +140,7 @@ class InsNode(
 	val op3: OpNode = OpNode.NONE,
 	val op4: OpNode = OpNode.NONE
 ) : TopNode, AnonSym, PosSym, SizedSym {
-	override var pos = Pos()
+	override var pos = Pos.NULL
 	override var size = 0
 
 	val r1 get() = op1.reg

@@ -209,8 +209,7 @@ class Parser(private val context: Context) {
 
 		if(token is Name && token in Name.widths) {
 			width = Name.widths[token]!!
-			pos++
-			token = tokens[pos]
+			token = tokens[++pos]
 		}
 
 		if(token == SymToken.LBRACKET) {

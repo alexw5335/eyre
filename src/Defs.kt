@@ -365,11 +365,25 @@ class DllDef(val name: Name, val exports: Set<Name>)
  * Does not represent a section in a binary file. A section's index is not its place in
  * a resulting binary file.
  */
-class Section(val index: Int, val name: String, val flags: UInt) {
+data class Section(val index: Int, val name: String, val flags: UInt) {
 	var pos = 0
 	var addr = 0
 	val present get() = addr != 0
 	override fun toString() = name
+	companion object {
+		val NULL = Section(0, "", 0U)
+	}
+}
+
+
+
+class Pos(var sec: Section, var disp: Int) {
+	val addr get() = sec.addr + disp
+	val pos get() = sec.pos + disp
+	override fun toString() = "$sec:$disp"
+	companion object {
+		val NULL = Pos(Section.NULL, 0)
+	}
 }
 
 
@@ -383,22 +397,6 @@ value class Place(val value: Long) {
 	val scope get() = Scope[scopeId]
 	val name get() = Name[nameId]
 	override fun toString() = if(scope.isNull) name.toString() else "$scope.$name"
-	val isNull get() = value == 0L
-	val isNotNull get() = value != 0L
-}
-
-
-
-@JvmInline
-value class Pos(val value: Long) {
-	constructor(sec: Section, disp: Int) : this((sec.index.toLong() shl 32) or disp.toLong())
-	constructor() : this(Long.MAX_VALUE)
-	val secIndex get() = (value shr 32).toInt()
-	val disp get() = value.toInt()
-	fun withDisp(disp: Int) = Pos((value and 0xFFFFFFFFL) or disp.toLong())
-	override fun toString() = "$secIndex:$disp"
-	val isNull get() = value == Long.MAX_VALUE
-	val isNotNull get() = value != Long.MAX_VALUE
 }
 
 
@@ -409,6 +407,7 @@ value class SrcPos(val value: Int) {
 	constructor() : this(Int.MAX_VALUE)
 	val line get() = value and 0xFFFF
 	val file get() = value shr 16
+
 	override fun toString() = "$file:$line"
 	val isNull get() = value == Int.MAX_VALUE
 	val isNotNull get() = value != Int.MAX_VALUE

@@ -9,8 +9,6 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 
 	private var indent = 0
 
-	private var prevLine = 0
-
 
 
 	private fun lineNumLength(file: SrcFile): Int {
@@ -29,9 +27,6 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 		lineNumLength = context.srcFiles.maxOf(::lineNumLength)
 
 		Files.newBufferedWriter(context.buildDir.resolve("nodes.txt")).use {
-			//it.appendLine("Position/size format: SECTION:POS:IMAGE_POS:IMAGE_ADDRESS, SIZE")
-			//it.appendLine()
-
 			for(srcFile in context.srcFiles) {
 				indent = 0
 				it.appendLine(srcFile.relPath.toString())
@@ -55,16 +50,15 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 
 	private fun Appendable.appendPosInfo(sym: PosSym) {
 		if(stage < CompilerStage.ASSEMBLE) return
-		val sec = context.sections[sym.pos.secIndex]
 		append(" --- ")
-		append(sec.toString())
+		append(sym.pos.sec.toString())
 		append(' ')
 		append(sym.pos.disp.hex)
 		if(stage >= CompilerStage.LINK) {
 			append(' ')
-			append((sec.pos + sym.pos.disp).hex)
+			append(sym.pos.pos.hex)
 			append(' ')
-			append((sec.addr + sym.pos.disp).hex)
+			append(sym.pos.addr.hex)
 		}
 		if(sym is SizedSym) {
 			append("|")
@@ -160,14 +154,13 @@ class NodePrinter(private val context: Context, private val stage: CompilerStage
 				indent++
 			}
 
-
 			is InsNode -> {
 				append(node.mnemonic.toString())
 				appendPosInfo(node)
 
 				if(stage >= CompilerStage.ASSEMBLE) {
 					append(" --- ")
-					if(node.pos.secIndex != context.textSec.index)
+					if(node.pos.sec != context.textSec)
 						context.internalErr("Invalid section")
 					if(stage >= CompilerStage.LINK) {
 						for(i in 0 ..< node.size) {

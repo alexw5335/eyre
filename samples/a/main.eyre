@@ -1,1 +1,5 @@
-fadd st0, st1
+namespace eyre
+
+proc main {
+	ret
+}

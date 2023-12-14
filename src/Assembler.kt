@@ -32,10 +32,10 @@ class Assembler(private val context: Context) {
 				try {
 					when(node) {
 						is InsNode     -> assembleIns(node)
-						//is Label     -> handleLabel(node)
-						//is Proc      -> handleProc(node)
+						is Label       -> handleLabel(node)
+						is Proc        -> handleProc(node)
 						//is Directive -> handleDirective(node, index, srcFile.nodes)
-						//is ScopeEnd  -> handleScopeEnd(node, index, srcFile.nodes)
+						is ScopeEnd  -> handleScopeEnd(node)
 						//is Var       -> handleVar(node)
 						else         -> Unit
 					}
@@ -92,6 +92,31 @@ class Assembler(private val context: Context) {
 	Nodes
 	 */
 
+
+
+	private fun handleLabel(symbol: PosSym) {
+		symbol.pos = Pos(symbol.pos.sec, writer.pos)
+		if(symbol.name == Name.MAIN) {
+			if(context.entryPoint != null)
+				error("Redeclaration of entry point")
+			context.entryPoint = symbol
+		}
+	}
+
+
+
+	private fun handleScopeEnd(node: ScopeEnd) {
+		if(node.sym !is Proc)
+			return
+
+		node.sym.size = writer.pos - node.sym.pos.disp
+	}
+
+
+
+	private fun handleProc(node: Proc) {
+		handleLabel(node)
+	}
 
 
 

@@ -21,6 +21,12 @@ object EncGen {
 
 
 
+	fun genAutoEncsFile() {
+
+	}
+
+
+
 	fun printAutoEncs() {
 		println("val autoEncs = arrayOf<LongArray>(")
 		for(mnemonic in Mnemonic.entries) {

@@ -54,7 +54,7 @@ class Linker(private val context: Context) {
 			reloc.writeRelocation()
 
 		if(context.entryPoint != null)
-			writer.i32(entryPointPos, context.addr(context.entryPoint!!))
+			writer.i32(entryPointPos, context.entryPoint!!.pos.addr)
 
 		writer.i32(imageSizePos, currentSecRva)
 		writer.i32(numSectionsPos, numSections)
@@ -67,8 +67,8 @@ class Linker(private val context: Context) {
 			try {
 				var value = resolveImm(reloc.node)
 				if(reloc.rel)
-					value -= context.addr(reloc.pos) + reloc.width.bytes + reloc.offset
-				writer.at(context.pos(reloc.pos)) {
+					value -= reloc.pos.addr + reloc.width.bytes + reloc.offset
+				writer.at(reloc.pos.pos) {
 					writer.writeWidth(reloc.width, value)
 				}
 			} catch(e: EyreError) {
@@ -85,10 +85,10 @@ class Linker(private val context: Context) {
 
 		for(reloc in context.absRelocs) {
 			val value = resolveImm(reloc.node)
-			val rva = context.addr(reloc.pos)
+			val rva = reloc.pos.addr
 			val pageRva = (rva shr 12) shl 12
 			pages.getOrPut(pageRva, ::ArrayList).add(rva - pageRva)
-			writer.i64(context.pos(reloc.pos), value + imageBase)
+			writer.i64(reloc.pos.pos, value + imageBase)
 		}
 
 		val startPos = writer.pos
@@ -192,7 +192,7 @@ class Linker(private val context: Context) {
 				writer.i16(0)
 				writer.asciiNT(import.name.string)
 				writer.align2()
-				import.pos = import.pos.withDisp(iatPos + importIndex * 8 - idtsPos + startPos)
+				import.pos = Pos(import.pos.sec, iatPos + importIndex * 8 - idtsPos + startPos)
 			}
 
 			writer.i32(idtPos, iltPos - offset)
@@ -321,11 +321,11 @@ class Linker(private val context: Context) {
 
 	private fun Reloc.writeRelocation() {
 		val value = if(rel)
-			resolveImm(node) - (context.addr(pos) + width.bytes + offset)
+			resolveImm(node) - (pos.addr + width.bytes + offset)
 		else
 			resolveImm(node)
 
-		writer.at(context.pos(pos)) {
+		writer.at(pos.pos) {
 			writer.writeWidth(width, value)
 		}
 	}
