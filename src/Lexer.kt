@@ -2,121 +2,110 @@ package eyre
 
 import java.nio.file.Files
 
-class Lexer(val context: Context) {
+class Lexer(private val context: Context) {
 
 
-	private lateinit var srcFile: SrcFile
+	private var pos = 0
+
+	private var lineCount = 0
+
+	private lateinit var file: SrcFile
 
 	private var chars = CharArray(0)
 
 	private var size = 0
 
-	private var lineCount = 0
-
-	private var pos = 0
-
 	private var stringBuilder = StringBuilder()
 
-	private val Char.isIdentifierPart get() = isLetterOrDigit() || this == '_'
-
-	private var hasError = false
 
 
+	fun lex(file: SrcFile) {
+		this.pos = 0
+		this.lineCount = 0
+		this.file = file
 
-	fun lex(srcFile: SrcFile) {
-		pos = 0
-		lineCount = 1
-
-		this.srcFile = srcFile
-		size = Files.size(srcFile.path).toInt() + 1
+		size = Files.size(file.path).toInt() + 1
 		if(chars.size <= size)
 			chars = CharArray(size * 2)
-		Files.newBufferedReader(srcFile.path).use {
-			it.read(chars, 0, size)
-		}
+		Files.newBufferedReader(file.path).use { it.read(chars, 0, size) }
 		chars[size] = Char(0)
 
 		try {
-			while(!srcFile.invalid) {
+			while(true) {
 				val char = chars[pos++]
 				if(char.code == 0) break
 				charMap[char.code]!!()
 			}
 		} catch(_: EyreError) {
-			srcFile.invalid = true
+			file.invalid = true
 		}
 
-		srcFile.lineCount = lineCount
-		add(SymToken.NEWLINE)
+		file.lineCount = lineCount
+		add(TokenType.NEWLINE)
 	}
 
 
 
-	private fun add(token: Token) = srcFile.tokens.add(token)
+	/*
+	Util
+	 */
 
 
 
-	private fun addAdv(symbol: Token) {
-		add(symbol)
+	private fun err(message: String): Nothing = context.err(message, SrcPos(file, lineCount))
+
+	private val Char.isNamePart get() = isLetterOrDigit() || this == '_'
+
+	private fun add(type: TokenType, value: Int) {
+		file.tokens.add(Token(type, value))
+	}
+
+	private fun add(symbol: TokenType) {
+		file.tokens.add(Token(symbol, 0))
+	}
+
+	private fun addAdv(symbol: TokenType) {
+		file.tokens.add(Token(symbol, 0))
 		pos++
 	}
 
 
 
-	private fun err(message: String): Nothing =
-		context.err(SrcPos(srcFile, lineCount), message)
+	/*
+	Lexing
+	 */
 
 
 
 	private fun onNewline() {
-		add(SymToken.NEWLINE)
+		add(TokenType.NEWLINE)
 		lineCount++
 	}
 
 
 
-	private val Char.escape get() = when(this) {
-		't'  -> '\t'
-		'n'  -> '\n'
-		'\\' -> '\\'
-		'r'  -> '\r'
-		'b'  -> '\b'
-		'"'  -> '"'
-		'\'' -> '\''
-		'0'  -> Char(0)
-		else -> err("Invalid escape char: $this")
-	}
-
-
-
-	private fun resolveDoubleApostrophe() {
-		stringBuilder.clear()
-
-		while(!hasError) {
-			when(val char = chars[pos++]) {
-				Char(0) -> err("Unterminated string literal")
-				'\n'    -> err("Newline not allowed in string literal")
-				'"'     -> break
-				'\\'    -> stringBuilder.append(chars[pos++].escape)
-				else    -> stringBuilder.append(char)
-			}
+	private fun name() {
+		pos--
+		val startPos = pos
+		while(true) {
+			val char = chars[pos]
+			if(!char.isNamePart) break
+			pos++
 		}
-
-		add(StringToken(stringBuilder.toString()))
+		val name = Name.add(String(chars, startPos, pos - startPos))
+		add(TokenType.NAME, name.id)
 	}
 
 
 
-	private fun resolveSingleApostrophe() {
-		var char = chars[pos++]
-
-		if(char == '\\')
-			char = chars[pos++].escape
-
-		add(CharToken(char))
-
-		if(chars[pos++] != '\'')
-			err("Unterminated character literal")
+	private fun number() {
+		pos--
+		var size = 0
+		while(chars[pos + size].isNamePart) size++
+		val string = String(chars, pos, size)
+		val value = string.toIntOrNull(10) ?: err("Malformed integer: $string")
+		add(TokenType.INT, value)
+		pos += size
 	}
 
 
@@ -128,7 +117,7 @@ class Lexer(val context: Context) {
 		}
 
 		if(chars[pos] != '*') {
-			add(SymToken.SLASH)
+			add(TokenType.SLASH)
 			return
 		}
 
@@ -154,85 +143,56 @@ class Lexer(val context: Context) {
 
 
 
-	private fun number(radix: Int) {
-		val start = pos
+	private val Char.escape get() = when(this) {
+		't'  -> '\t'
+		'n'  -> '\n'
+		'\\' -> '\\'
+		'r'  -> '\r'
+		'b'  -> '\b'
+		'"'  -> '"'
+		'\'' -> '\''
+		'0'  -> Char(0)
+		else -> err("Invalid escape char: $this")
+	}
 
-		var hasDotOrExponent = false
 
-		while(true) {
-			when(chars[pos]) {
-				'.',
-				'e' -> { pos++; hasDotOrExponent = true }
-				'_',
-				in '0'..'9',
-				in 'A'..'Z',
-				in 'a'..'z' -> pos++
-				else -> break
+
+	private fun resolveDoubleApostrophe() {
+		stringBuilder.clear()
+
+		while(pos < size) {
+			when(val char = chars[pos++]) {
+				Char(0) -> err("Unterminated string literal")
+				'\n'    -> err("Newline not allowed in string literal")
+				'"'     -> break
+				'\\'    -> stringBuilder.append(chars[pos++].escape)
+				else    -> stringBuilder.append(char)
 			}
 		}
 
-		val string = String(chars, start, pos - start)
-
-		if(string.last() == 'f' || string.last() == 'F' && radix != 16) {
-			if(radix != 10)
-				err("Malformed float")
-
-			add(FloatToken(string.toFloatOrNull()?.toDouble() ?: 0.0.also { err("Malformed float") }))
-		} else if(hasDotOrExponent) {
-			if(radix != 10)
-				err("Malformed float")
-			add(FloatToken(string.toDoubleOrNull() ?: 0.0.also { err("Malformed float") }))
-		} else {
-			add(IntToken(string.toLongOrNull(radix) ?: 0L.also { err("Malformed integer") }))
-		}
+		add(TokenType.STRING, context.strings.size)
+		context.strings.add(stringBuilder.toString())
 	}
 
 
 
-	private fun zero() {
-		when(val next = chars[pos++]) {
-			'b', 'B'    -> number(2)
-			'o', 'O'    -> number(8)
-			'd', 'D'    -> number(10)
-			'x', 'X'    -> number(16)
-			'f', 'F'    -> add(FloatToken(0.0))
-			'.'         -> { pos -= 2; number(10) }
-			in '0'..'9' -> number(10)
-			in 'a'..'z',
-			in 'A'..'Z' -> err("Invalid number character: $next")
-			else        -> { pos -= 2; number(10) }
-		}
+	private fun resolveSingleApostrophe() {
+		var char = chars[pos++]
+
+		if(char == '\\')
+			char = chars[pos++].escape
+
+		add(TokenType.CHAR, char.code)
+
+		if(chars[pos++] != '\'')
+			err("Unterminated character literal")
 	}
 
 
 
-	private fun digit() {
-		pos--
-		number(10)
-	}
-
-
-
-	private fun idStart() {
-		pos--
-
-		val startPos = pos
-
-		while(true) {
-			val char = chars[pos]
-			if(!char.isIdentifierPart) break
-			pos++
-		}
-
-		val name = Name.add(String(chars, startPos, pos - startPos))
-
-		Name.regs[name]?.let {
-			add(RegToken(it))
-			return
-		}
-
-		add(name)
-	}
+	/*
+	Char map
+	 */
 
 
 
@@ -243,7 +203,6 @@ class Lexer(val context: Context) {
 		private operator fun<T> Array<T>.set(char: Char, value: T) = set(char.code, value)
 
 		init {
-
 			// Whitespace
 			charMap['\n'] = Lexer::onNewline
 			charMap[' ']  = { }
@@ -251,77 +210,76 @@ class Lexer(val context: Context) {
 			charMap['\r'] = { }
 
 			// Single symbols
-			charMap['('] = { add(SymToken.LPAREN) }
-			charMap[')'] = { add(SymToken.RPAREN) }
-			charMap['+'] = { add(SymToken.PLUS) }
-			charMap['-'] = { add(SymToken.MINUS) }
-			charMap['*'] = { add(SymToken.STAR) }
-			charMap['['] = { add(SymToken.LBRACKET) }
-			charMap[']'] = { add(SymToken.RBRACKET) }
-			charMap['{'] = { add(SymToken.LBRACE) }
-			charMap['}'] = { add(SymToken.RBRACE) }
-			charMap['.'] = { add(SymToken.PERIOD) }
-			charMap[';'] = { add(SymToken.SEMI) }
-			charMap['^'] = { add(SymToken.CARET) }
-			charMap['~'] = { add(SymToken.TILDE) }
-			charMap[','] = { add(SymToken.COMMA) }
-			charMap['?'] = { add(SymToken.QUESTION) }
-			charMap['#'] = { add(SymToken.HASH) }
+			charMap['('] = { add(TokenType.LPAREN) }
+			charMap[')'] = { add(TokenType.RPAREN) }
+			charMap['+'] = { add(TokenType.PLUS) }
+			charMap['-'] = { add(TokenType.MINUS) }
+			charMap['*'] = { add(TokenType.STAR) }
+			charMap['['] = { add(TokenType.LBRACK) }
+			charMap[']'] = { add(TokenType.RBRACK) }
+			charMap['{'] = { add(TokenType.LBRACE) }
+			charMap['}'] = { add(TokenType.RBRACE) }
+			charMap['.'] = { add(TokenType.DOT) }
+			charMap[';'] = { add(TokenType.SEMI) }
+			charMap['^'] = { add(TokenType.CARET) }
+			charMap['~'] = { add(TokenType.TILDE) }
+			charMap[','] = { add(TokenType.COMMA) }
+			charMap['?'] = { add(TokenType.QUEST) }
+			charMap['#'] = { add(TokenType.HASH) }
+			charMap['@'] = { add(TokenType.AT) }
 
 			// Compound symbols
 			charMap['&'] = { when(chars[pos]) {
-				'&'  -> addAdv(SymToken.LAND)
-				else -> add(SymToken.AMP)
+				'&'  -> addAdv(TokenType.LAND)
+				else -> add(TokenType.AMP)
 			}}
 			charMap['|'] = { when(chars[pos]) {
-				'|'  -> addAdv(SymToken.LOR)
-				else -> add(SymToken.PIPE)
+				'|'  -> addAdv(TokenType.LOR)
+				else -> add(TokenType.PIPE)
 			}}
 			charMap[':'] = { when(chars[pos]) {
-				':'  -> addAdv(SymToken.REF)
-				else -> add(SymToken.COLON)
+				':'  -> addAdv(TokenType.REF)
+				else -> add(TokenType.COLON)
 			}}
 			charMap['<'] = { when(chars[pos]) {
-				'<'  -> addAdv(SymToken.SHL)
-				'='  -> addAdv(SymToken.LTE)
-				else -> add(SymToken.LT)
+				'<'  -> addAdv(TokenType.SHL)
+				'='  -> addAdv(TokenType.LTE)
+				else -> add(TokenType.LT)
 			}}
 			charMap['='] = { when(chars[pos]) {
-				'='  -> addAdv(SymToken.EQ)
-				else -> add(SymToken.SET)
+				'='  -> addAdv(TokenType.EQ)
+				else -> add(TokenType.SET)
 			}}
 			charMap['!'] = { when(chars[pos]) {
-				'='  -> addAdv(SymToken.INEQ)
-				else -> SymToken.BANG
+				'='  -> addAdv(TokenType.NEQ)
+				else -> TokenType.BANG
 			}}
 			charMap['>'] = { when(chars[pos]) {
 				'>' -> when(chars[++pos]) {
-					'>'  -> addAdv(SymToken.SAR)
-					else -> add(SymToken.SHR)
+					'>'  -> addAdv(TokenType.SAR)
+					else -> add(TokenType.SHR)
 				}
-				'='  -> addAdv(SymToken.GTE)
-				else -> add(SymToken.GT)
+				'='  -> addAdv(TokenType.GTE)
+				else -> add(TokenType.GT)
 			}}
 
 			// Complex symbols
-			charMap['"']  = Lexer::resolveDoubleApostrophe
+			charMap['"'] = Lexer::resolveDoubleApostrophe
 			charMap['\''] = Lexer::resolveSingleApostrophe
-			charMap['/']  = Lexer::resolveSlash
+			charMap['/'] = Lexer::resolveSlash
 
-			// Identifiers
-			charMap['_']  = Lexer::idStart
-			for(i in 65..90)  charMap[i] = Lexer::idStart
-			for(i in 97..122) charMap[i] = Lexer::idStart
+			// Names
+			charMap['_'] = Lexer::name
+			for(i in 65..90) charMap[i] = Lexer::name
+			for(i in 97..122) charMap[i] = Lexer::name
 
-			// Number literals
-			charMap['0']  = Lexer::zero
-			for(i in 49..57)  charMap[i] = Lexer::digit
-
-			// Invalid chars
+			// Numbers
+			for(i in 49..57) charMap[i] = Lexer::number
 			for(i in charMap.indices)
 				if(charMap[i] == null)
 					charMap[i] = { err("Invalid char code: $i") }
 		}
+
 	}
 
 

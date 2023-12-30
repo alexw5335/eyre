@@ -1,5 +1,0 @@
-namespace eyre
-
-proc main {
-	ret
-}

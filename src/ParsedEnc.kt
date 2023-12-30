@@ -1,6 +1,4 @@
-package eyre.gen
-
-import eyre.*
+package eyre
 
 data class ParsedEnc(
 	val mnemonic : Mnemonic,
