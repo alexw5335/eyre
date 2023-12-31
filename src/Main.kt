@@ -1,6 +1,7 @@
 package eyre
 
+import java.nio.file.Paths
+
 fun main() {
-	//Compiler.compile(Paths.get("samples"))
-	EncParser("res/encs.txt").parse()
+	Compiler.compile(Paths.get("samples"))
 }

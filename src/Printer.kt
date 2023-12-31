@@ -70,6 +70,10 @@ class Printer(private val context: Context) {
 
 
 
+	private var indent = 0
+
+
+
 	fun writeNodes() {
 		Files.newBufferedWriter(context.buildDir.resolve("nodes.txt")).use {
 			for(srcFile in context.files) {
@@ -88,6 +92,14 @@ class Printer(private val context: Context) {
 
 
 
+	private fun BufferedWriter.appendChild(node: Node) {
+		indent++
+		appendNode(node)
+		indent--
+	}
+
+
+
 	private fun BufferedWriter.appendNodes(nodes: List<Node>) {
 		for(n in nodes) {
 			if(n.srcPos == null) context.internalErr("Missing src pos line: $n")
@@ -99,10 +111,42 @@ class Printer(private val context: Context) {
 
 
 
-	private fun BufferedWriter.appendNode(node: Node) { when(node) {
-		is NameNode -> append(node.value.string)
-		else -> append(node::class.simpleName)
-	}}
+	private fun BufferedWriter.appendNode(node: Node) {
+		for(i in 0 ..< indent) append("    ")
+
+		when(node) {
+			is RegNode -> {
+				append(node.value.string)
+			}
+
+			is NameNode -> {
+				append(node.value.string)
+			}
+
+			is IntNode -> {
+				append("INT ")
+				append(node.value.toString())
+			}
+
+			is UnNode -> {
+				append("UNARY ${node.op.string}")
+				appendChild(node.child)
+			}
+
+			is BinNode -> {
+				append("BINARY ${node.op.string}")
+				appendChild(node.left)
+				appendChild(node.right)
+			}
+
+			is LabelNode -> {
+				append("LABEL ")
+				append(node.name.string)
+			}
+
+			else -> append(node::class.simpleName)
+		}
+	}
 
 
 }

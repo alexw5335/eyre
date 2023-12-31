@@ -4,6 +4,7 @@ package eyre
 
 data class Token(val type: TokenType, val value: Int = 0) {
 	val nameValue get() = Name[value]
+	val regValue get() = Reg.entries[value]
 	fun stringValue(context: Context) = context.strings[value]
 }
 
@@ -14,6 +15,8 @@ enum class TokenType(
 	val binOp: BinOp? = null,
 	val unOp: UnOp? = null
 ) {
+	// value is reg ordinal
+	REG("reg"),
 	// value is intern id
 	NAME("name"),
 	// value is index into string table

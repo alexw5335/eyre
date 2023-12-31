@@ -30,5 +30,12 @@ class Name(id: Int, val string: String) : Intern(id) {
 	override fun toString() = string
 	companion object : Interner<String, Name>() {
 		override val creator = ::Name
+		val regs = Reg.entries.associateBy { add(it.string) }
+		val mnemonics = Mnemonic.entries.associateBy { add(it.string) }
+		val widths = Width.entries.associateBy { add(it.string) }
+		val MAIN = add("main")
+		val PROC = add("proc")
+		val STRUCT = add("struct")
+		val ENUM = add("enum")
 	}
 }

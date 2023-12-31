@@ -18,8 +18,10 @@ class Parser(private val context: Context) {
 
 
 
-	private fun err(message: String, srcPos: SrcPos? = srcPos()): Nothing =
+	private fun err(srcPos: SrcPos?, message: String): Nothing =
 		context.err(message, srcPos)
+
+	private fun err(message: String): Nothing = err(srcPos(), message)
 
 	private fun name(): Name {
 		val token = tokens[pos++]
@@ -80,7 +82,24 @@ class Parser(private val context: Context) {
 
 
 	private fun parseName(name: Name) {
-		parseExpr().add()
+		if(tokens[pos + 1].type == TokenType.COLON) {
+			parseLabel()
+			return
+		}
+
+		when(name) {
+			in Name.mnemonics -> parseIns(Name.mnemonics[name]!!)
+		}
+	}
+
+
+
+	private fun parseLabel() {
+		val srcPos = srcPos()
+		val name = name()
+		pos += 2
+		val node = LabelNode(name).add()
+		node.srcPos = srcPos
 	}
 
 
@@ -90,12 +109,15 @@ class Parser(private val context: Context) {
 		val srcPos = srcPos()
 
 		return when(token.type) {
-			TokenType.NAME   -> NameNode(token.nameValue)
+			TokenType.NAME   -> if(token.nameValue in Name.regs)
+				RegNode(Name.regs[token.nameValue]!!)
+			else
+				NameNode(token.nameValue)
 			TokenType.INT    -> IntNode(token.value)
 			TokenType.STRING -> StringNode(token.stringValue(context))
 			TokenType.CHAR   -> IntNode(token.value)
 			TokenType.LPAREN -> parseExpr().also { expect(TokenType.RPAREN) }
-			else             -> UnNode(token.type.unOp ?: err("Invalid atom: $token", srcPos), parseAtom())
+			else             -> UnNode(token.type.unOp ?: err(srcPos, "Invalid atom: $token"), parseAtom())
 		}.also { it.srcPos = srcPos }
 	}
 
@@ -111,9 +133,74 @@ class Parser(private val context: Context) {
 			pos++
 			val expression = parseExpr(op.precedence + 1)
 			left = BinNode(op, left, expression)
+			left.srcPos = left.left.srcPos
 		}
 
 		return left
+	}
+
+
+
+	private fun parseOperand(): OpNode {
+		var token = tokens[pos]
+		var width = Width.NONE
+
+		if(token.type == TokenType.NAME && token.nameValue in Name.widths) {
+			width = Name.widths[token.nameValue]!!
+			token = tokens[++pos]
+		}
+
+		if(token.type == TokenType.LBRACK) {
+			pos++
+			val value = parseExpr()
+			expect(TokenType.RBRACK)
+			return OpNode.mem(width, value)
+		}
+
+		if(tokens[pos].type == TokenType.REG) {
+			if(width != Width.NONE)
+				err("Width specifier not allowed for register operands")
+			return OpNode.reg(tokens[pos++].regValue)
+		}
+
+		return OpNode.imm(width, parseExpr())
+	}
+
+
+
+	private fun parseIns(mnemonic: Mnemonic) {
+		val srcPos = srcPos()
+		pos++
+
+		var op1 = OpNode.NONE
+		var op2 = OpNode.NONE
+		var op3 = OpNode.NONE
+		var op4 = OpNode.NONE
+
+		fun commaOrNewline(): Boolean {
+			if(atNewline) return false
+			if(tokens[pos++].type != TokenType.COMMA)
+				err(srcPos, "Expecting newline or comma")
+			return true
+		}
+
+		if(!atNewline) {
+			op1 = parseOperand()
+			if(commaOrNewline()) {
+				op2 = parseOperand()
+				if(commaOrNewline()) {
+					op3 = parseOperand()
+					if(commaOrNewline()) {
+						op4 = parseOperand()
+						expectNewline()
+					}
+				}
+			}
+		}
+
+		val node = InsNode(mnemonic, op1, op2, op3, op4).add()
+		node.srcPos = srcPos
+		node.add()
 	}
 
 

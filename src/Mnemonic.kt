@@ -1945,8 +1945,4 @@ enum class Mnemonic {
 
 	val isPseudo get() = this == DLLCALL || this == RETURN
 
-	companion object {
-		val map = values().associateBy { it.name }
-	}
-
 }

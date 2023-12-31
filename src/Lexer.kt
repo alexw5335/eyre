@@ -87,13 +87,19 @@ class Lexer(private val context: Context) {
 	private fun name() {
 		pos--
 		val startPos = pos
+
 		while(true) {
 			val char = chars[pos]
 			if(!char.isNamePart) break
 			pos++
 		}
+
 		val name = Name.add(String(chars, startPos, pos - startPos))
-		add(TokenType.NAME, name.id)
+
+		if(name in Name.regs)
+			add(TokenType.REG, Name.regs[name]!!.ordinal)
+		else
+			add(TokenType.NAME, name.id)
 	}
 
 
