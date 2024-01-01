@@ -18,3 +18,13 @@ class SrcPos(val file: SrcFile, val line: Int)
 
 
 class EyreError(val srcPos: SrcPos?, override val message: String) : Exception()
+
+
+
+enum class EyreStage {
+	LEX,
+	PARSE,
+	RESOLVE,
+	ASSEMBLE,
+	LINK;
+}

@@ -4,6 +4,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.*
+import kotlin.system.exitProcess
 
 class Compiler(private val context: Context) {
 
@@ -27,6 +28,24 @@ class Compiler(private val context: Context) {
 
 
 
+	private fun checkErrors(): Boolean {
+		if(context.errors.isNotEmpty()) {
+			for(e in context.errors) {
+				if(e.srcPos != null)
+					System.err.println("${e.srcPos.file.relPath}:${e.srcPos.line} -- ${e.message}")
+				for(s in e.stackTrace)
+					if("err" !in s.methodName && "Err" !in s.methodName)
+						System.err.println("\t$s")
+				System.err.println()
+			}
+			System.err.println("Compiler encountered errors")
+			return true
+		}
+		return false
+	}
+
+
+
 	fun compile() {
 		context.buildDir.createDirectories()
 		Files
@@ -35,13 +54,25 @@ class Compiler(private val context: Context) {
 			.filter { !it.isDirectory() }
 			.forEach { it.deleteIfExists() }
 
-		val printer = Printer(context)
+		// Lexing
 		val lexer = Lexer(context)
-		for(file in context.files) lexer.lex(file)
-		printer.writeTokens()
+		for(s in context.files)
+			if(!s.invalid)
+				lexer.lex(s)
+		Printer(context, EyreStage.LEX).writeTokens()
+		checkErrors()
+
+		// Parsing
 		val parser = Parser(context)
-		for(file in context.files) parser.parse(file)
-		printer.writeNodes()
+		for(s in context.files)
+			if(!s.invalid)
+				parser.parse(s)
+		if(checkErrors()) {
+			Printer(context, EyreStage.PARSE).writeNodes()
+			exitProcess(1)
+		}
+
+		Printer(context, EyreStage.PARSE).writeNodes()
 	}
 
 

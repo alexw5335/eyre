@@ -3,7 +3,7 @@ package eyre
 import java.io.BufferedWriter
 import java.nio.file.Files
 
-class Printer(private val context: Context) {
+class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 	private fun BufferedWriter.appendLineNumber(lineNumber: Int) {
@@ -51,6 +51,7 @@ class Printer(private val context: Context) {
 			appendLineNumber(lineNumber)
 
 			when(t.type) {
+				TokenType.REG     -> append("REG     ${t.regValue}")
 				TokenType.NAME    -> append("NAME    ${t.nameValue}")
 				TokenType.STRING  -> append("STRING  \"${t.stringValue(context)}\"")
 				TokenType.INT     -> append("INT     ${t.value}")
@@ -83,7 +84,8 @@ class Printer(private val context: Context) {
 					it.append(" (empty)")
 				} else {
 					it.append(":\n")
-					it.appendNodes(srcFile.nodes)
+					for(node in srcFile.nodes)
+						it.appendNode(node)
 					it.append("\n\n\n")
 				}
 			}
@@ -100,52 +102,68 @@ class Printer(private val context: Context) {
 
 
 
-	private fun BufferedWriter.appendNodes(nodes: List<Node>) {
-		for(n in nodes) {
-			if(n.srcPos == null) context.internalErr("Missing src pos line: $n")
-			appendLineNumber(n.srcPos!!.line)
-			appendNode(n)
-			appendLine()
-		}
-	}
-
-
-
 	private fun BufferedWriter.appendNode(node: Node) {
-		for(i in 0 ..< indent) append("    ")
+		if(node is ScopeEndNode) {
+			indent--
+			return
+		}
+
+		appendLineNumber(node.srcPos?.line ?: context.internalErr("Missing src pos line: $node"))
+
+		for(i in 0 ..< indent)
+			append("    ")
 
 		when(node) {
-			is RegNode -> {
-				append(node.value.string)
+			is OpNode -> {
+				if(node.type == OpType.MEM) {
+					appendLine("${node.width.opString}ptr")
+					appendChild(node.child)
+				} else if(node.type == OpType.IMM) {
+					appendLine("${node.width.opString}imm")
+					appendChild(node.child)
+				} else {
+					appendLine(node.reg.string)
+				}
 			}
 
-			is NameNode -> {
-				append(node.value.string)
-			}
+			is InsNode -> {
+				appendLine(node.mnemonic.string)
 
-			is IntNode -> {
-				append("INT ")
-				append(node.value.toString())
+				if(node.count > 0) {
+					appendChild(node.op1)
+					if(node.count > 1) {
+						appendChild(node.op2)
+						if(node.count > 2) {
+							appendChild(node.op3)
+							if(node.count > 3) {
+								appendChild(node.op4)
+							}
+						}
+					}
+				}
 			}
 
 			is UnNode -> {
-				append("UNARY ${node.op.string}")
+				appendLine("UNARY ${node.op.string}")
 				appendChild(node.child)
 			}
 
 			is BinNode -> {
-				append("BINARY ${node.op.string}")
+				appendLine("BINARY ${node.op.string}")
 				appendChild(node.left)
 				appendChild(node.right)
 			}
 
-			is LabelNode -> {
-				append("LABEL ")
-				append(node.name.string)
-			}
-
-			else -> append(node::class.simpleName)
+			is RegNode   -> appendLine(node.value.string)
+			is NameNode  -> appendLine(node.value.string)
+			is IntNode   -> appendLine("INT ${node.value}")
+			is LabelNode -> appendLine("LABEL ${node.qualifiedName}")
+			is ProcNode  -> appendLine("PROC ${node.qualifiedName}")
+			else         -> append(node::class.simpleName)
 		}
+
+		if(node is ScopedSym)
+			indent++
 	}
 
 

@@ -1,8 +1,31 @@
 package eyre
 
+
+// Super classes
+
+
+
 abstract class Node {
 	var srcPos: SrcPos? = null
 }
+
+interface Symbol {
+	val place: Place
+	val name get() = place.name
+	val qualifiedName get() = place.toString()
+}
+
+interface ScopedSym : Symbol {
+	val scope: Place get() = place
+}
+
+
+
+// Simple nodes
+
+
+
+object NullNode : Node()
 
 class NameNode(val value: Name) : Node()
 
@@ -15,10 +38,6 @@ class RegNode(val value: Reg) : Node()
 class UnNode(val op: UnOp, val child: Node) : Node()
 
 class BinNode(val op: BinOp, val left: Node, val right: Node) : Node()
-
-class LabelNode(val name: Name) : Node()
-
-object NullNode : Node()
 
 class OpNode(
 	val type: OpType,
@@ -34,10 +53,31 @@ class OpNode(
 	}
 }
 
+
+
+// Symbol nodes
+
+
+
+class NamespaceNode(override val place: Place) : Node()
+class LabelNode(override val place: Place) : Node(), Symbol
+
+class ScopeEndNode(val symbol: Node) : Node()
+
+class ProcNode(override val place: Place) : Node(), ScopedSym
+
 class InsNode(
 	val mnemonic: Mnemonic,
 	val op1: OpNode,
 	val op2: OpNode,
 	val op3: OpNode,
 	val op4: OpNode
-) : Node()
+) : Node() {
+	val count = when {
+		op1 == OpNode.NONE -> 0
+		op2 == OpNode.NONE -> 1
+		op3 == OpNode.NONE -> 2
+		op4 == OpNode.NONE -> 3
+		else -> 4
+	}
+}

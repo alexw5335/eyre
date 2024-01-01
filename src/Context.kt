@@ -9,6 +9,8 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val strings = ArrayList<String>()
 
+	val symTable = HashMap<PlaceKey, Symbol>()
+
 
 
 	fun internalErr(message: String? = "no reason given"): Nothing =
