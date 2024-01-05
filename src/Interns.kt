@@ -6,66 +6,32 @@ import java.util.HashMap
 
 
 
-object SymbolTable {
+class SymbolTable {
 
-	private class Node {
-		var sym: Symbol? = null
-		var next: Node? = null
-	}
+	private data class Key(val parent: Int, val name: Int)
 
 	private val list = ArrayList<Symbol>()
-	private var nodes = Array(4096) { Node() }
+	private val map = HashMap<Key, Symbol>()
+	val root = RootSym().also(::add)
 
-	fun add(sym: Symbol): Boolean {
-		val parent = sym.place.parent
-		val name = sym.place.name
+
+	fun add(sym: Symbol): Symbol? {
+		val key = Key(sym.place.parent, sym.place.name)
+		map[key]?.let { return it }
 		sym.place.id = list.size
 		list.add(sym)
-		var node = nodes[(parent * 31 + name) % nodes.size]
-		while(true) {
-			val sym2 = node.sym ?: break
-			if(sym2.place.parent == parent && sym2.place.name == name)
-				return false
-			if(node.next != null) {
-				node = node.next!!
-			} else {
-				node.next = Node()
-				node = node.next!!
-				break
-			}
-		}
-		node.sym = sym
-		return true
+		map[key] = sym
+		return null
 	}
 
-	fun getPlace(id: Int) = list[id].place
-
-	fun get(parent: Int, name: Int): Symbol? {
-		var node = nodes[(parent * 31 + name) % nodes.size]
-		while(true) {
-			val sym = node.sym ?: return null
-			if(sym.place.parent == parent && sym.place.name == name) return sym
-			node = node.next ?: return null
-		}
-	}
+	fun get(parent: Int, name: Int) = map[Key(parent, name)]
+	fun get(index: Int) = list[index]
 
 }
 
 
 
-class Place(val parent: Int, val name: Int, var id: Int = 0) {
-	private fun append(builder: StringBuilder) {
-		if(parent != 0) {
-			SymbolTable.getPlace(parent).append(builder)
-			builder.append('.')
-		}
-
-		if(name != 0)
-			builder.append(Names[name].string)
-	}
-
-	override fun toString() = buildString(::append)
-}
+class Place(val parent: Int, val name: Int, var id: Int = 0)
 
 
 

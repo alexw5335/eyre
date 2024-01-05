@@ -9,7 +9,7 @@ class Parser(private val context: Context) {
 
 	private var lineCount = 0
 	private var pos = 0
-	private var currentScope = Place.NULL
+	private var currentScope: Symbol = context.symTable.root
 
 
 
@@ -45,7 +45,7 @@ class Parser(private val context: Context) {
 
 	private fun srcPos() = SrcPos(srcFile, lineCount)
 
-	private fun place(name: Name) = currentScope.child(name)
+	private fun place(name: Name) = Place(currentScope.place.id, name.id)
 
 
 
@@ -69,7 +69,7 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseScope(scope: Place) {
+	private fun parseScope(scope: Symbol) {
 		val prevScope = currentScope
 		currentScope = scope
 

@@ -9,7 +9,20 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val strings = ArrayList<String>()
 
-	val symTable = HashMap<PlaceKey, Symbol>()
+	val symTable = SymbolTable()
+
+
+
+	fun qualifiedName(sym: Symbol) = buildString {
+		fun rec(sym2: Symbol) {
+			if(sym2.parent != 0) {
+				rec(symTable.get(sym2.parent))
+				append('.')
+			}
+			append(sym.name)
+		}
+		rec(sym)
+	}
 
 
 

@@ -11,12 +11,12 @@ abstract class Node {
 
 interface Symbol {
 	val place: Place
-	val name get() = place.name
-	val qualifiedName get() = place.toString()
+	val parent get() = place.parent
+	val name get() = Names[place.name]
 }
 
 interface ScopedSym : Symbol {
-	val scope: Place get() = place
+	val scope: Int get() = place.id
 }
 
 
@@ -59,12 +59,17 @@ class OpNode(
 
 
 
-class NamespaceNode(override val place: Place) : Node()
+class RootSym : Symbol {
+	override val place = Place(0, 0, 0)
+}
+
+class NamespaceNode(override val place: Place) : Node(), Symbol
+
 class LabelNode(override val place: Place) : Node(), Symbol
 
-class ScopeEndNode(val symbol: Node) : Node()
-
 class ProcNode(override val place: Place) : Node(), ScopedSym
+
+class ScopeEndNode(val symbol: Node) : Node()
 
 class InsNode(
 	val mnemonic: Mnemonic,
