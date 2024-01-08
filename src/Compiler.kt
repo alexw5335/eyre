@@ -72,7 +72,15 @@ class Compiler(private val context: Context) {
 			exitProcess(1)
 		}
 
-		Printer(context, EyreStage.PARSE).writeNodes()
+		// Resolving
+		val resolver = Resolver(context)
+		resolver.resolve()
+		if(checkErrors()) {
+			Printer(context, EyreStage.RESOLVE).writeNodes()
+			exitProcess(1)
+		}
+
+		Printer(context, EyreStage.RESOLVE).writeNodes()
 	}
 
 

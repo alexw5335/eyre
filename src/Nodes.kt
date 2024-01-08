@@ -10,13 +10,17 @@ abstract class Node {
 }
 
 interface Symbol {
-	val place: Place
-	val parent get() = place.parent
-	val name get() = Names[place.name]
+	val parent: Symbol
+	val name: Name
+	var resolved: Boolean get() = false; set(_) { }
 }
 
 interface ScopedSym : Symbol {
-	val scope: Int get() = place.id
+	val scope: Symbol get() = this
+}
+
+interface IntSym : Symbol {
+	val intValue: Int
 }
 
 
@@ -27,7 +31,7 @@ interface ScopedSym : Symbol {
 
 object NullNode : Node()
 
-class NameNode(val value: Name) : Node()
+class NameNode(val value: Name, var symbol: Symbol? = null) : Node()
 
 class IntNode(val value: Int) : Node()
 
@@ -55,21 +59,59 @@ class OpNode(
 
 
 
+fun UnNode.calc(function: (Node) -> Int) = op.calc(function(child))
+
+fun BinNode.calc(function: (Node) -> Int) = op.calc(function(left), function(right))
+
+
+
 // Symbol nodes
 
 
 
-class RootSym : Symbol {
-	override val place = Place(0, 0, 0)
+class EnumNode(
+	override val parent: Symbol,
+	override val name: Name,
+	val entries: ArrayList<EnumEntryNode> = ArrayList()
+) : Node(), ScopedSym
+
+class EnumEntryNode(
+	override val parent: EnumNode,
+	override val name: Name
+) : Node(), IntSym {
+	override var intValue = 0
 }
 
-class NamespaceNode(override val place: Place) : Node(), Symbol
+class RootSym : Symbol {
+	override val parent = this
+	override val name = Names.NONE
+}
 
-class LabelNode(override val place: Place) : Node(), Symbol
+class NamespaceNode(
+	override val parent: Symbol,
+	override val name: Name
+) : Node(), ScopedSym
 
-class ProcNode(override val place: Place) : Node(), ScopedSym
+class LabelNode(
+	override val parent: Symbol,
+	override val name: Name
+) : Node(), Symbol
 
-class ScopeEndNode(val symbol: Node) : Node()
+class ProcNode(
+	override val parent: Symbol,
+	override val name: Name
+) : Node(), ScopedSym
+
+class ConstNode(
+	override val parent: Symbol,
+	override val name: Name,
+	val valueNode: Node
+) : Node(), Symbol, IntSym {
+	override var intValue = 0
+	override var resolved = false
+}
+
+class ScopeEndNode(val origin: Node) : Node()
 
 class InsNode(
 	val mnemonic: Mnemonic,

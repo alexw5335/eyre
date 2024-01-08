@@ -4,10 +4,9 @@ class Parser(private val context: Context) {
 
 
 	private lateinit var srcFile: SrcFile
-	private val nodes get() = srcFile.nodes
 	private val tokens get() = srcFile.tokens
 
-	private var lineCount = 0
+	private var lineCount = 1
 	private var pos = 0
 	private var currentScope: Symbol = context.symTable.root
 
@@ -36,6 +35,8 @@ class Parser(private val context: Context) {
 			err("Expecting $type, found: ${tokens[pos-1].type}")
 	}
 
+	private fun expectNewline() = expect(TokenType.NEWLINE)
+
 	private val atNewline get() = tokens[pos].type == TokenType.NEWLINE
 
 	private fun<T : Node> T.add(): T {
@@ -43,9 +44,13 @@ class Parser(private val context: Context) {
 		return this
 	}
 
-	private fun srcPos() = SrcPos(srcFile, lineCount)
+	private fun<T> T.addSym(): T where T : Node, T : Symbol {
+		srcFile.nodes.add(this)
+		context.symTable.add(this)
+		return this
+	}
 
-	private fun place(name: Name) = Place(currentScope.place.id, name.id)
+	private fun srcPos() = SrcPos(srcFile, lineCount)
 
 
 
@@ -61,7 +66,7 @@ class Parser(private val context: Context) {
 		this.pos = 0
 
 		try {
-			parseScope(Place.NULL)
+			parseScope(context.symTable.root)
 		} catch(_: EyreError) {
 			srcFile.invalid = true
 		}
@@ -96,9 +101,26 @@ class Parser(private val context: Context) {
 		}
 
 		when(name) {
-			in Name.mnemonics -> parseIns()
-			Name.PROC -> parseProc()
+			in Names.mnemonics -> parseIns()
+			Names.PROC         -> parseProc()
+			Names.NAMESPACE    -> parseNamespace()
+			Names.CONST        -> parseConst()
+			Names.ENUM         -> parseEnum()
+			else               -> err("Invalid token: $name")
 		}
+	}
+
+
+
+	private fun parseConst() {
+		val srcPos = srcPos()
+		pos++
+		val name = name()
+		expect(TokenType.SET)
+		val valueNode = parseExpr()
+		val const = ConstNode(currentScope, name, valueNode).addSym()
+		const.srcPos = srcPos
+		expectNewline()
 	}
 
 
@@ -106,9 +128,42 @@ class Parser(private val context: Context) {
 	private fun parseLabel() {
 		val srcPos = srcPos()
 		val name = name()
-		pos += 2
-		val node = LabelNode(place(name)).add()
-		node.srcPos = srcPos
+		pos++
+		val label = LabelNode(currentScope, name).addSym()
+		label.srcPos = srcPos
+		expectNewline()
+	}
+
+
+
+	private fun parseEnum() {
+		val srcPos = srcPos()
+		pos++
+		val name = name()
+		val enum = EnumNode(currentScope, name).add()
+		enum.srcPos = srcPos
+		expect(TokenType.LBRACE)
+
+		while(tokens[pos].type != TokenType.RBRACE) {
+			val entrySrcPos = srcPos()
+			val entryName = name()
+			val entry = EnumEntryNode(enum, entryName)
+			entry.srcPos = entrySrcPos
+			context.symTable.add(entry)
+		}
+	}
+
+
+
+	private fun parseNamespace() {
+		val srcPos = srcPos()
+		pos++
+		val name = name()
+		val namespace = NamespaceNode(currentScope, name).add()
+		namespace.srcPos = srcPos
+		expectNewline()
+		parseScope(namespace)
+		ScopeEndNode(namespace).add()
 	}
 
 
@@ -117,7 +172,7 @@ class Parser(private val context: Context) {
 		val srcPos = srcPos()
 		pos++
 		val name = name()
-		val proc = ProcNode(place(name)).add()
+		val proc = ProcNode(currentScope, name).addSym()
 		proc.srcPos = srcPos
 		expect(TokenType.LBRACE)
 		parseScope(proc.scope)
@@ -132,8 +187,8 @@ class Parser(private val context: Context) {
 		val srcPos = srcPos()
 
 		return when(token.type) {
-			TokenType.NAME   -> if(token.nameValue in Name.regs)
-				RegNode(Name.regs[token.nameValue]!!)
+			TokenType.NAME   -> if(token.nameValue in Names.regs)
+				RegNode(Names.regs[token.nameValue]!!)
 			else
 				NameNode(token.nameValue)
 			TokenType.REG    -> RegNode(token.regValue)
@@ -170,8 +225,8 @@ class Parser(private val context: Context) {
 		var token = tokens[pos]
 		var width = Width.NONE
 
-		if(token.type == TokenType.NAME && token.nameValue in Name.widths) {
-			width = Name.widths[token.nameValue]!!
+		if(token.type == TokenType.NAME && token.nameValue in Names.widths) {
+			width = Names.widths[token.nameValue]!!
 			token = tokens[++pos]
 		}
 
@@ -207,7 +262,7 @@ class Parser(private val context: Context) {
 
 	private fun parseIns() {
 		val srcPos = srcPos()
-		val mnemonic = Name.mnemonics[tokens[pos++].nameValue]!!
+		val mnemonic = Names.mnemonics[tokens[pos++].nameValue]!!
 
 		var op1 = OpNode.NONE
 		var op2 = OpNode.NONE
@@ -237,6 +292,7 @@ class Parser(private val context: Context) {
 
 		val node = InsNode(mnemonic, op1, op2, op3, op4).add()
 		node.srcPos = srcPos
+		expectNewline()
 	}
 
 

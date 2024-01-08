@@ -3,7 +3,7 @@ package eyre
 
 
 data class Token(val type: TokenType, val value: Int = 0) {
-	val nameValue get() = Name[value]
+	val nameValue get() = Names[value]
 	val regValue get() = Reg.entries[value]
 	fun stringValue(context: Context) = context.strings[value]
 }

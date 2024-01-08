@@ -13,16 +13,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 
 
-	fun qualifiedName(sym: Symbol) = buildString {
-		fun rec(sym2: Symbol) {
-			if(sym2.parent != 0) {
-				rec(symTable.get(sym2.parent))
-				append('.')
-			}
-			append(sym.name)
-		}
-		rec(sym)
-	}
+	// Errors
 
 
 
@@ -32,5 +23,20 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 	fun err(message: String, srcPos: SrcPos? = null): Nothing =
 		throw EyreError(srcPos, message).also(errors::add)
 
+
+
+	// Names
+
+
+
+	fun appendQualifiedName(builder: StringBuilder, sym: Symbol) {
+		if(sym.parent !is RootSym) {
+			appendQualifiedName(builder, sym.parent)
+			builder.append('.')
+		}
+		builder.append(sym.name)
+	}
+
+	fun qualifiedName(sym: Symbol) = buildString { appendQualifiedName(this, sym) }
 
 }

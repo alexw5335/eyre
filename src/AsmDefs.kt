@@ -14,7 +14,6 @@ enum class Width(val bytes: Int) {
 	YWORD(32),
 	ZWORD(64);
 
-	fun memNotEqual(other: Width) = this != NONE && this != other
 	val immWidth get() = if(this > DWORD) DWORD else this
 	val immLength = bytes.coerceAtMost(4)
 	val string = name.lowercase()

@@ -102,9 +102,15 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 
+	private fun shouldIndent(node: Node) = when(node) {
+		is ProcNode -> true
+		else -> false
+	}
+
 	private fun BufferedWriter.appendNode(node: Node) {
 		if(node is ScopeEndNode) {
-			indent--
+			if(shouldIndent(node.origin))
+				indent--
 			return
 		}
 
@@ -154,15 +160,32 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 				appendChild(node.right)
 			}
 
-			is RegNode   -> appendLine(node.value.string)
-			is NameNode  -> appendLine(node.value.string)
-			is IntNode   -> appendLine("INT ${node.value}")
-			is LabelNode -> appendLine("LABEL ${node.qualifiedName}")
-			is ProcNode  -> appendLine("PROC ${node.qualifiedName}")
-			else         -> append(node::class.simpleName)
+			is ConstNode -> {
+				appendLine("CONST ${context.qualifiedName(node)}")
+				appendChild(node.valueNode)
+			}
+
+			is EnumEntryNode -> {
+				appendLine(context.qualifiedName(node))
+			}
+
+			is EnumNode -> {
+				appendLine("ENUM ${context.qualifiedName(node)}")
+				for(child in node.entries)
+					appendChild(child)
+			}
+
+			is ProcNode      -> appendLine("PROC ${context.qualifiedName(node)}")
+			is RegNode       -> appendLine(node.value.string)
+			is NameNode      -> appendLine(node.value.string)
+			is IntNode       -> appendLine("INT ${node.value}")
+			is LabelNode     -> appendLine("LABEL ${context.qualifiedName(node)}")
+
+			is NamespaceNode -> appendLine("NAMESPACE ${context.qualifiedName(node)}")
+			else             -> appendLine(node::class.simpleName)
 		}
 
-		if(node is ScopedSym)
+		if(shouldIndent(node))
 			indent++
 	}
 

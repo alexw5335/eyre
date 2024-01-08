@@ -1,3 +1,14 @@
+namespace eyre
+
+const C1 = 2
+const C2 = C1 * 2 + 4
+
+enum MyEnum {
+	A
+	B
+	C
+}
+
 proc testing {
 	myLabel:
 	mov rcx, rdx
