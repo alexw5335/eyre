@@ -6,7 +6,6 @@ class Parser(private val context: Context) {
 	private lateinit var srcFile: SrcFile
 	private val tokens get() = srcFile.tokens
 
-	private var lineCount = 1
 	private var pos = 0
 	private var currentScope: Symbol = context.symTable.root
 
@@ -18,10 +17,15 @@ class Parser(private val context: Context) {
 
 
 
+	private fun Token.asName() = if(type != TokenType.NAME)
+		err(srcPos(), "Expecting name, found: $type")
+	else
+		nameValue
+
 	private fun err(srcPos: SrcPos?, message: String): Nothing =
 		context.err(message, srcPos)
 
-	private fun err(message: String): Nothing = err(srcPos(), message)
+	private fun err(message: String): Nothing = err(tokens[pos].srcPos(), message)
 
 	private fun name(): Name {
 		val token = tokens[pos++]
@@ -35,9 +39,12 @@ class Parser(private val context: Context) {
 			err("Expecting $type, found: ${tokens[pos-1].type}")
 	}
 
-	private fun expectNewline() = expect(TokenType.NEWLINE)
+	private fun expectNewline() {
+		if(!atNewline)
+			err("Expecting newline")
+	}
 
-	private val atNewline get() = tokens[pos].type == TokenType.NEWLINE
+	private val atNewline get() = tokens[pos].line != tokens[pos - 1].line
 
 	private fun<T : Node> T.add(): T {
 		srcFile.nodes.add(this)
@@ -50,7 +57,7 @@ class Parser(private val context: Context) {
 		return this
 	}
 
-	private fun srcPos() = SrcPos(srcFile, lineCount)
+	private fun Token.srcPos() = SrcPos(srcFile, line)
 
 
 
@@ -62,7 +69,6 @@ class Parser(private val context: Context) {
 
 	fun parse(srcFile: SrcFile) {
 		this.srcFile = srcFile
-		this.lineCount = 1
 		this.pos = 0
 
 		try {
@@ -81,11 +87,11 @@ class Parser(private val context: Context) {
 		while(pos < tokens.size) {
 			val token = tokens[pos]
 			when(token.type) {
-				TokenType.NAME    -> parseName(token.nameValue)
-				TokenType.NEWLINE -> { pos++; lineCount++; }
-				TokenType.RBRACE  -> return
-				TokenType.SEMI    -> pos++
-				else              -> err("Invalid token: ${token.type}")
+				TokenType.NAME   -> parseKeyword(token.nameValue)
+				TokenType.RBRACE -> return
+				TokenType.SEMI   -> pos++
+				TokenType.EOF    -> break
+				else             -> err("Invalid token: ${token.type}")
 			}
 		}
 
@@ -94,97 +100,81 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseName(name: Name) {
+	private fun parseKeyword(keyword: Name) {
+		val srcPos = tokens[pos].srcPos()
+
 		if(tokens[pos + 1].type == TokenType.COLON) {
-			parseLabel()
+			pos++
+			val label = LabelNode(currentScope, keyword).addSym()
+			label.srcPos = srcPos
+			expectNewline()
 			return
 		}
 
-		when(name) {
-			in Names.mnemonics -> parseIns()
-			Names.PROC         -> parseProc()
-			Names.NAMESPACE    -> parseNamespace()
-			Names.CONST        -> parseConst()
-			Names.ENUM         -> parseEnum()
-			else               -> err("Invalid token: $name")
+		pos++
+
+		when(keyword) {
+			in Names.mnemonics -> {
+				parseIns(srcPos, Names.mnemonics[keyword]!!)
+			}
+
+			Names.PROC -> {
+				val proc = ProcNode(currentScope, name()).addSym()
+				proc.srcPos = srcPos
+				expect(TokenType.LBRACE)
+				parseScope(proc.scope)
+				expect(TokenType.RBRACE)
+				ScopeEndNode(proc).add()
+			}
+
+			Names.NAMESPACE -> {
+				val namespace = NamespaceNode(currentScope, name()).add()
+				namespace.srcPos = srcPos
+				expectNewline()
+				parseScope(namespace)
+				ScopeEndNode(namespace).add()
+			}
+
+			Names.CONST -> {
+				val name = name()
+				expect(TokenType.SET)
+				val valueNode = parseExpr()
+				val const = ConstNode(currentScope, name, valueNode).addSym()
+				const.srcPos = srcPos
+				expectNewline()
+			}
+
+			Names.ENUM -> {
+				val enum = EnumNode(currentScope, name()).add()
+				enum.srcPos = srcPos
+				expect(TokenType.LBRACE)
+
+				while(tokens[pos].type != TokenType.RBRACE) {
+					val entrySrcPos = tokens[pos].srcPos()
+					val entryName = name()
+
+					val valueNode = if(tokens[pos].type == TokenType.SET) {
+						pos++; parseExpr()
+					} else
+						null
+
+					val entry = EnumEntryNode(enum, entryName, valueNode)
+					entry.srcPos = entrySrcPos
+					context.symTable.add(entry)
+					enum.entries.add(entry)
+					expectNewline()
+				}
+			}
+
+			else -> err("Invalid token: $keyword")
 		}
-	}
-
-
-
-	private fun parseConst() {
-		val srcPos = srcPos()
-		pos++
-		val name = name()
-		expect(TokenType.SET)
-		val valueNode = parseExpr()
-		val const = ConstNode(currentScope, name, valueNode).addSym()
-		const.srcPos = srcPos
-		expectNewline()
-	}
-
-
-
-	private fun parseLabel() {
-		val srcPos = srcPos()
-		val name = name()
-		pos++
-		val label = LabelNode(currentScope, name).addSym()
-		label.srcPos = srcPos
-		expectNewline()
-	}
-
-
-
-	private fun parseEnum() {
-		val srcPos = srcPos()
-		pos++
-		val name = name()
-		val enum = EnumNode(currentScope, name).add()
-		enum.srcPos = srcPos
-		expect(TokenType.LBRACE)
-
-		while(tokens[pos].type != TokenType.RBRACE) {
-			val entrySrcPos = srcPos()
-			val entryName = name()
-			val entry = EnumEntryNode(enum, entryName)
-			entry.srcPos = entrySrcPos
-			context.symTable.add(entry)
-		}
-	}
-
-
-
-	private fun parseNamespace() {
-		val srcPos = srcPos()
-		pos++
-		val name = name()
-		val namespace = NamespaceNode(currentScope, name).add()
-		namespace.srcPos = srcPos
-		expectNewline()
-		parseScope(namespace)
-		ScopeEndNode(namespace).add()
-	}
-
-
-
-	private fun parseProc() {
-		val srcPos = srcPos()
-		pos++
-		val name = name()
-		val proc = ProcNode(currentScope, name).addSym()
-		proc.srcPos = srcPos
-		expect(TokenType.LBRACE)
-		parseScope(proc.scope)
-		expect(TokenType.RBRACE)
-		ScopeEndNode(proc).add()
 	}
 
 
 
 	private fun parseAtom(): Node {
 		val token = tokens[pos++]
-		val srcPos = srcPos()
+		val srcPos = token.srcPos()
 
 		return when(token.type) {
 			TokenType.NAME   -> if(token.nameValue in Names.regs)
@@ -221,9 +211,9 @@ class Parser(private val context: Context) {
 
 
 	private fun parseOperand(): OpNode {
-		val srcPos = srcPos()
 		var token = tokens[pos]
 		var width = Width.NONE
+		val srcPos = token.srcPos()
 
 		if(token.type == TokenType.NAME && token.nameValue in Names.widths) {
 			width = Names.widths[token.nameValue]!!
@@ -260,14 +250,11 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseIns() {
-		val srcPos = srcPos()
-		val mnemonic = Names.mnemonics[tokens[pos++].nameValue]!!
-
-		var op1 = OpNode.NONE
-		var op2 = OpNode.NONE
-		var op3 = OpNode.NONE
-		var op4 = OpNode.NONE
+	private fun parseIns(srcPos: SrcPos, mnemonic: Mnemonic) {
+		var op1: OpNode? = null
+		var op2: OpNode? = null
+		var op3: OpNode? = null
+		var op4: OpNode? = null
 
 		fun commaOrNewline(): Boolean {
 			if(atNewline) return false
@@ -284,7 +271,7 @@ class Parser(private val context: Context) {
 					op3 = parseOperand()
 					if(commaOrNewline()) {
 						op4 = parseOperand()
-						expect(TokenType.NEWLINE)
+						expectNewline()
 					}
 				}
 			}

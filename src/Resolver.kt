@@ -36,12 +36,10 @@ class Resolver(private val context: Context) {
 	private fun resolveNodesInFile(file: SrcFile) {
 		if(file.resolved)
 			return
-		if(file.resolving)
-			err(null, "Cyclic compile-time file dependency")
 		file.resolving = true
 		visit(file, ::resolveNode)
-		file.resolved = true
 		file.resolving = false
+		file.resolved = true
 	}
 
 
@@ -52,21 +50,22 @@ class Resolver(private val context: Context) {
 
 
 
-	private fun resolveName(name: Name): Symbol {
+	private fun resolveName(srcPos: SrcPos?, name: Name): Symbol {
 		for(i in scopeStack.indices.reversed()) {
 			val scope = scopeStack[i]
 			context.symTable.get(scope, name)?.let { return it }
 		}
 
-		err(null, "Unresolved symbol: $name")
+		err(srcPos, "Unresolved symbol: $name")
 	}
 
 
 
-	private fun resolveNodeFile(node: Node) {
-		if(node.srcPos == null)
-			err(null, "Missing SrcPos: $node")
-		resolveNodesInFile(node.srcPos!!.file)
+	private fun resolveNodeFile(srcNode: Node, node: Node) {
+		val file = node.srcPos?.file ?: context.internalErr()
+		if(file.resolving)
+			err(srcNode.srcPos, "Cyclic resolution")
+		resolveNodesInFile(file)
 	}
 
 
@@ -77,7 +76,7 @@ class Resolver(private val context: Context) {
 				err(node.srcPos, "Unresolved symbol")
 			if(!sym.resolved)
 				if(sym is Node)
-					resolveNodeFile(sym)
+					resolveNodeFile(node, sym)
 				else
 					context.internalErr()
 			if(sym is IntSym)
@@ -100,7 +99,7 @@ class Resolver(private val context: Context) {
 		is NamespaceNode -> pushScope(node.scope)
 		is ProcNode      -> pushScope(node.scope)
 		is ScopeEndNode  -> popScope()
-		is NameNode      -> node.symbol = resolveName(node.value)
+		is NameNode      -> node.symbol = resolveName(node.srcPos, node.value)
 		is UnNode        -> resolveNode(node.child)
 
 		is BinNode -> {
@@ -112,6 +111,27 @@ class Resolver(private val context: Context) {
 			resolveNode(node.valueNode)
 			node.intValue = resolveInt(node.valueNode)
 			node.resolved = true
+		}
+
+		is EnumNode -> {
+			pushScope(node.scope)
+
+			var current = 0
+			for(entry in node.entries) {
+				entry.intValue = if(entry.valueNode != null) {
+					resolveNode(entry.valueNode)
+					resolveInt(entry.valueNode)
+				} else {
+					current
+				}
+
+				current = entry.intValue + 1
+				entry.resolved = true
+			}
+
+			node.resolved = true
+
+			popScope()
 		}
 
 		is RegNode, is StringNode, is IntNode, is LabelNode -> Unit

@@ -2,7 +2,7 @@ package eyre
 
 
 
-data class Token(val type: TokenType, val value: Int = 0) {
+data class Token(val type: TokenType, val value: Int, val line: Int) {
 	val nameValue get() = Names[value]
 	val regValue get() = Reg.entries[value]
 	fun stringValue(context: Context) = context.strings[value]
@@ -26,7 +26,7 @@ enum class TokenType(
 	// value is 32-bit integer
 	CHAR("char"),
 	// Symbols, no value
-	NEWLINE ("\\n"),
+	EOF     ("EOF"),
 	LPAREN  ("("),
 	RPAREN  (")"),
 	PLUS    ("+", BinOp.ADD, UnOp.POS),

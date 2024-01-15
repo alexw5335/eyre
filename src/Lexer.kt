@@ -21,7 +21,7 @@ class Lexer(private val context: Context) {
 
 	fun lex(file: SrcFile) {
 		this.pos = 0
-		this.lineCount = 0
+		this.lineCount = 1
 		this.file = file
 
 		size = Files.size(file.path).toInt() + 1
@@ -41,7 +41,8 @@ class Lexer(private val context: Context) {
 		}
 
 		file.lineCount = lineCount
-		add(TokenType.NEWLINE)
+		lineCount++
+		add(TokenType.EOF)
 	}
 
 
@@ -57,15 +58,15 @@ class Lexer(private val context: Context) {
 	private val Char.isNamePart get() = isLetterOrDigit() || this == '_'
 
 	private fun add(type: TokenType, value: Int) {
-		file.tokens.add(Token(type, value))
+		file.tokens.add(Token(type, value, lineCount))
 	}
 
 	private fun add(symbol: TokenType) {
-		file.tokens.add(Token(symbol, 0))
+		file.tokens.add(Token(symbol, 0, lineCount))
 	}
 
 	private fun addAdv(symbol: TokenType) {
-		file.tokens.add(Token(symbol, 0))
+		file.tokens.add(Token(symbol, 0, lineCount))
 		pos++
 	}
 
@@ -78,7 +79,6 @@ class Lexer(private val context: Context) {
 
 
 	private fun onNewline() {
-		add(TokenType.NEWLINE)
 		lineCount++
 	}
 

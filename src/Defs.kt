@@ -7,7 +7,6 @@ import java.nio.file.Path
 class SrcFile(val index: Int, val path: Path, val relPath: Path) {
 	val tokens = ArrayList<Token>()
 	val nodes = ArrayList<Node>()
-	val newlines = BitList()
 	var lineCount = 0
 	var invalid = false
 	var resolved = false

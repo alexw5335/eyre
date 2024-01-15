@@ -48,14 +48,7 @@ class OpNode(
 	val width: Width,
 	val reg: Reg,
 	val child: Node
-) : Node() {
-	companion object {
-		val NONE = OpNode(OpType.NONE, Width.NONE, Reg.NONE, NullNode)
-		fun reg(reg: Reg) = OpNode(reg.type, reg.width, reg, NullNode)
-		fun mem(width: Width, child: Node) = OpNode(OpType.MEM, width, Reg.NONE, NullNode)
-		fun imm(width: Width, child: Node) = OpNode(OpType.IMM, width, Reg.NONE, NullNode)
-	}
-}
+) : Node()
 
 
 
@@ -69,6 +62,11 @@ fun BinNode.calc(function: (Node) -> Int) = op.calc(function(left), function(rig
 
 
 
+class StructNode(
+	override val parent: Symbol,
+	override val name: Name,
+) : Node(), ScopedSym
+
 class EnumNode(
 	override val parent: Symbol,
 	override val name: Name,
@@ -77,9 +75,11 @@ class EnumNode(
 
 class EnumEntryNode(
 	override val parent: EnumNode,
-	override val name: Name
+	override val name: Name,
+	val valueNode: Node? = null
 ) : Node(), IntSym {
 	override var intValue = 0
+	override var resolved = false
 }
 
 class RootSym : Symbol {
@@ -115,16 +115,16 @@ class ScopeEndNode(val origin: Node) : Node()
 
 class InsNode(
 	val mnemonic: Mnemonic,
-	val op1: OpNode,
-	val op2: OpNode,
-	val op3: OpNode,
-	val op4: OpNode
+	val op1: OpNode?,
+	val op2: OpNode?,
+	val op3: OpNode?,
+	val op4: OpNode?
 ) : Node() {
 	val count = when {
-		op1 == OpNode.NONE -> 0
-		op2 == OpNode.NONE -> 1
-		op3 == OpNode.NONE -> 2
-		op4 == OpNode.NONE -> 3
-		else -> 4
+		op1 == null -> 0
+		op2 == null -> 1
+		op3 == null -> 2
+		op4 == null -> 3
+		else        -> 4
 	}
 }

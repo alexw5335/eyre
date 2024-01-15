@@ -6,6 +6,10 @@ import java.nio.file.Files
 class Printer(private val context: Context, private val stage: EyreStage) {
 
 
+	private val atResolve = stage >= EyreStage.RESOLVE
+
+
+
 	private fun BufferedWriter.appendLineNumber(lineNumber: Int) {
 		var count = 0
 		var mutable = lineNumber
@@ -41,14 +45,8 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 	private fun BufferedWriter.appendTokens(tokens: List<Token>) {
-		var lineNumber = 1
 		for(t in tokens) {
-			if(t.type == TokenType.NEWLINE) {
-				lineNumber++
-				continue
-			}
-
-			appendLineNumber(lineNumber)
+			appendLineNumber(t.line)
 
 			when(t.type) {
 				TokenType.REG     -> append("REG     ${t.regValue}")
@@ -134,39 +132,37 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 			is InsNode -> {
 				appendLine(node.mnemonic.string)
-
-				if(node.count > 0) {
-					appendChild(node.op1)
-					if(node.count > 1) {
-						appendChild(node.op2)
-						if(node.count > 2) {
-							appendChild(node.op3)
-							if(node.count > 3) {
-								appendChild(node.op4)
-							}
-						}
-					}
-				}
+				node.op1?.let { appendChild(it) }
+				node.op2?.let { appendChild(it) }
+				node.op3?.let { appendChild(it) }
+				node.op4?.let { appendChild(it) }
 			}
 
 			is UnNode -> {
-				appendLine("UNARY ${node.op.string}")
+				appendLine(node.op.string)
 				appendChild(node.child)
 			}
 
 			is BinNode -> {
-				appendLine("BINARY ${node.op.string}")
+				appendLine(node.op.string)
 				appendChild(node.left)
 				appendChild(node.right)
 			}
 
 			is ConstNode -> {
-				appendLine("CONST ${context.qualifiedName(node)}")
+				append("CONST ${context.qualifiedName(node)}")
+				if(atResolve)
+					append(" (value = ${node.intValue})")
+				appendLine()
 				appendChild(node.valueNode)
 			}
 
 			is EnumEntryNode -> {
-				appendLine(context.qualifiedName(node))
+				append(context.qualifiedName(node))
+				if(atResolve)
+					append(" (value = ${node.intValue})")
+				appendLine()
+				node.valueNode?.let { appendChild(it) }
 			}
 
 			is EnumNode -> {

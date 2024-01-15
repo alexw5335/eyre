@@ -29,19 +29,24 @@ class Compiler(private val context: Context) {
 
 
 	private fun checkErrors(): Boolean {
-		if(context.errors.isNotEmpty()) {
-			for(e in context.errors) {
-				if(e.srcPos != null)
-					System.err.println("${e.srcPos.file.relPath}:${e.srcPos.line} -- ${e.message}")
-				for(s in e.stackTrace)
-					if("err" !in s.methodName && "Err" !in s.methodName)
-						System.err.println("\t$s")
-				System.err.println()
-			}
-			System.err.println("Compiler encountered errors")
-			return true
+		if(context.errors.isEmpty())
+			return false
+
+		for(e in context.errors) {
+			if(e.srcPos != null)
+				System.err.println("${e.srcPos.file.relPath}:${e.srcPos.line} -- ${e.message}")
+			else
+				System.err.println(e.message)
+
+			for(s in e.stackTrace)
+				if("err" !in s.methodName && "Err" !in s.methodName)
+					System.err.println("\t$s")
+
+			System.err.println()
 		}
-		return false
+
+		System.err.println("Compiler encountered errors")
+		return true
 	}
 
 
