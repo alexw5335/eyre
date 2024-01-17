@@ -28,9 +28,23 @@ class Compiler(private val context: Context) {
 
 
 
-	private fun checkErrors(): Boolean {
+	private fun checkOutput(stage: EyreStage) {
+		val printer = Printer(context, stage)
+
+		printer.writeTokens()
+		if(stage >= EyreStage.PARSE)
+			printer.writeNodes()
+		if(stage >= EyreStage.PARSE)
+			printer.writeSymbols()
+	}
+
+
+
+	private fun checkErrors(stage: EyreStage): Boolean {
 		if(context.errors.isEmpty())
 			return false
+
+		checkOutput(stage)
 
 		for(e in context.errors) {
 			if(e.srcPos != null)
@@ -59,33 +73,35 @@ class Compiler(private val context: Context) {
 			.filter { !it.isDirectory() }
 			.forEach { it.deleteIfExists() }
 
+		context.symTable.add(Types.BYTE)
+		context.symTable.add(Types.WORD)
+		context.symTable.add(Types.DWORD)
+		context.symTable.add(Types.QWORD)
+
 		// Lexing
 		val lexer = Lexer(context)
 		for(s in context.files)
 			if(!s.invalid)
 				lexer.lex(s)
-		Printer(context, EyreStage.LEX).writeTokens()
-		checkErrors()
+		if(checkErrors(EyreStage.LEX))
+			exitProcess(1)
 
 		// Parsing
 		val parser = Parser(context)
 		for(s in context.files)
 			if(!s.invalid)
 				parser.parse(s)
-		if(checkErrors()) {
-			Printer(context, EyreStage.PARSE).writeNodes()
+		if(checkErrors(EyreStage.PARSE))
 			exitProcess(1)
-		}
+
 
 		// Resolving
 		val resolver = Resolver(context)
 		resolver.resolve()
-		if(checkErrors()) {
-			Printer(context, EyreStage.RESOLVE).writeNodes()
+		if(checkErrors(EyreStage.RESOLVE))
 			exitProcess(1)
-		}
 
-		Printer(context, EyreStage.RESOLVE).writeNodes()
+		checkOutput(EyreStage.ASSEMBLE)
 	}
 
 

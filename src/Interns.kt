@@ -8,14 +8,15 @@ import java.util.HashMap
 class SymbolTable {
 
 	private data class Key(val parent: Symbol, val name: Name)
-
+	val list = ArrayList<Symbol>()
 	private val map = HashMap<Key, Symbol>()
-	val root = RootSym().also(::add)
+	init { add(RootSym) }
 
 	fun add(sym: Symbol): Symbol? {
 		val key = Key(sym.parent, sym.name)
 		map[key]?.let { return it }
 		map[key] = sym
+		list += sym
 		return null
 	}
 
@@ -52,6 +53,11 @@ object Names {
 	val PROC      = get("proc")
 	val STRUCT    = get("struct")
 	val ENUM      = get("enum")
+	val TYPEDEF   = get("typedef")
 	val CONST     = get("const")
+	val BYTE      = get("byte")
+	val WORD      = get("word")
+	val DWORD     = get("dword")
+	val QWORD     = get("qword")
 
 }

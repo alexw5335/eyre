@@ -64,6 +64,23 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 	/*
+	Symbols
+	 */
+
+
+
+	fun writeSymbols() {
+		Files.newBufferedWriter(context.buildDir.resolve("symbols.txt")).use {
+			for(sym in context.symTable.list)
+				if(sym != RootSym)
+					it.appendLine("${sym::class.simpleName}  --  ${sym.fullName}")
+		}
+
+	}
+
+
+
+	/*
 	Nodes
 	 */
 
@@ -104,6 +121,23 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 		is ProcNode -> true
 		else -> false
 	}
+
+
+
+	private val Symbol.fullName get() = context.qualifiedName(this)
+
+	private fun BufferedWriter.printType(type: Type) {
+		if(type is ArrayType) {
+			printType(type.base)
+			append('[')
+			append(type.count.toString())
+			append(']')
+		} else {
+			append(type.fullName)
+		}
+	}
+
+
 
 	private fun BufferedWriter.appendNode(node: Node) {
 		if(node is ScopeEndNode) {
@@ -171,10 +205,50 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 					appendChild(child)
 			}
 
+			is TypedefNode -> {
+				append("TYPEDEF ${node.fullName}")
+				if(atResolve) {
+					append(" (type = ")
+					printType(node.type)
+					append(')')
+				}
+				appendLine()
+				appendChild(node.typeNode)
+			}
+
+			is DotNode -> {
+				appendLine(".")
+				appendChild(node.left)
+				appendChild(node.right)
+			}
+
+			is ArrayNode -> {
+				appendLine("[]")
+				appendChild(node.left)
+				appendChild(node.right)
+			}
+
+			is MemberNode -> {
+				append(node.fullName)
+				if(atResolve) {
+					append(" (type = ")
+					printType(node.type)
+					append(')')
+				}
+				appendLine()
+				appendChild(node.typeNode)
+			}
+
+			is StructNode -> {
+				appendLine("STRUCT ${node.fullName}")
+				for(member in node.members)
+					appendChild(member)
+			}
+
 			is ProcNode      -> appendLine("PROC ${context.qualifiedName(node)}")
 			is RegNode       -> appendLine(node.value.string)
 			is NameNode      -> appendLine(node.value.string)
-			is IntNode       -> appendLine("INT ${node.value}")
+			is IntNode       -> appendLine("${node.value}")
 			is LabelNode     -> appendLine("LABEL ${context.qualifiedName(node)}")
 
 			is NamespaceNode -> appendLine("NAMESPACE ${context.qualifiedName(node)}")

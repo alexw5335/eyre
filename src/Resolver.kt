@@ -10,7 +10,7 @@ class Resolver(private val context: Context) {
 
 
 	fun resolve() {
-		pushScope(context.symTable.root)
+		pushScope(RootSym)
 		context.files.forEach(::resolveNodesInFile)
 		popScope()
 	}
@@ -37,6 +37,7 @@ class Resolver(private val context: Context) {
 		if(file.resolved)
 			return
 		file.resolving = true
+		visit(file, ::resolveNodeType)
 		visit(file, ::resolveNode)
 		file.resolving = false
 		file.resolved = true
@@ -95,6 +96,31 @@ class Resolver(private val context: Context) {
 
 
 
+	private fun resolveType(node: Node): Type {
+		if(node is ArrayNode) {
+			return ArrayType(resolveType(node.left))
+		} else if(node is NameNode) {
+			val sym = resolveName(node.srcPos, node.value)
+			if(sym !is Type) err(node.srcPos, "Expected type, found: $sym")
+			return sym
+		} else {
+			err(node.srcPos, "Invalid type node: $node")
+		}
+	}
+
+
+
+	private fun resolveNodeType(node: Node) { when(node) {
+		is NamespaceNode -> pushScope(node.scope)
+		is ProcNode      -> pushScope(node.scope)
+		is ScopeEndNode  -> popScope()
+		is TypedefNode   -> node.type = resolveType(node.typeNode)
+		is StructNode    -> for(member in node.members) member.type = resolveType(member.typeNode)
+		else             -> return
+	}}
+
+
+
 	private fun resolveNode(node: Node) { when(node) {
 		is NamespaceNode -> pushScope(node.scope)
 		is ProcNode      -> pushScope(node.scope)
@@ -111,6 +137,10 @@ class Resolver(private val context: Context) {
 			resolveNode(node.valueNode)
 			node.intValue = resolveInt(node.valueNode)
 			node.resolved = true
+		}
+
+		is TypedefNode -> {
+
 		}
 
 		is EnumNode -> {

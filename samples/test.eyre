@@ -1,5 +1,6 @@
-enum MyEnum {
-	A = 1000
-	B = C
-	C
+namespace eyre
+
+struct Vec2 {
+	byte[10][10] x
+	byte y
 }
