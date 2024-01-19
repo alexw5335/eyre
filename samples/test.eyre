@@ -1,6 +1,10 @@
 namespace eyre
 
-struct Vec2 {
-	byte[10][10] x
-	byte y
+
+struct A {
+	dword a
+	dword b
 }
+
+
+var a: A = { 1, { 1, 2 } }

@@ -75,7 +75,6 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 				if(sym != RootSym)
 					it.appendLine("${sym::class.simpleName}  --  ${sym.fullName}")
 		}
-
 	}
 
 
@@ -124,7 +123,11 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 
-	private val Symbol.fullName get() = context.qualifiedName(this)
+	private val Symbol.fullName: String get() = if(name.isNull)
+		"_"
+	else
+		context.qualifiedName(this)
+
 
 	private fun BufferedWriter.printType(type: Type) {
 		if(type is ArrayType) {
@@ -228,21 +231,39 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 				appendChild(node.right)
 			}
 
+			is RefNode -> {
+				appendLine("::")
+				appendChild(node.left)
+				appendChild(node.right)
+			}
+
 			is MemberNode -> {
 				append(node.fullName)
 				if(atResolve) {
 					append(" (type = ")
 					printType(node.type)
-					append(')')
+					append(", offset = ${node.structOffset})")
 				}
 				appendLine()
 				appendChild(node.typeNode)
 			}
 
 			is StructNode -> {
-				appendLine("STRUCT ${node.fullName}")
+				append("STRUCT ${node.fullName} (size = ${node.size}")
+				if(node.parent is StructNode)
+					append(", offset = ${node.structOffset}")
+				appendLine(")")
 				for(member in node.members)
 					appendChild(member)
+			}
+
+			is TypeNode -> {
+				append(node.names.joinToString(separator = "."))
+				for(size in node.arraySizes)
+					append("[]")
+				appendLine()
+				for(size in node.arraySizes)
+					appendChild(size)
 			}
 
 			is ProcNode      -> appendLine("PROC ${context.qualifiedName(node)}")

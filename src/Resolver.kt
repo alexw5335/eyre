@@ -1,6 +1,7 @@
 package eyre
 
 import java.util.Stack
+import kotlin.math.max
 
 class Resolver(private val context: Context) {
 
@@ -51,12 +52,27 @@ class Resolver(private val context: Context) {
 
 
 
-	private fun resolveName(srcPos: SrcPos?, name: Name): Symbol {
-		for(i in scopeStack.indices.reversed()) {
-			val scope = scopeStack[i]
-			context.symTable.get(scope, name)?.let { return it }
+	private fun resolveNames(srcPos: SrcPos?, names: List<Name>): Symbol {
+		var sym = resolveName(srcPos, names[0])
+		for(i in 1 ..< names.size) {
+			if(sym !is ScopedSym) err(srcPos, "Invalid receiver: $sym")
+			sym = resolveName(srcPos, sym.scope, names[i])
 		}
+		return sym
+	}
 
+
+
+	private fun resolveName(srcPos: SrcPos?, scope: Symbol, name: Name): Symbol {
+		return context.symTable.get(scope, name)
+			?: err(srcPos, "Unresolved symbol: $name")
+	}
+
+
+
+	private fun resolveName(srcPos: SrcPos?, name: Name): Symbol {
+		for(i in scopeStack.indices.reversed())
+			context.symTable.get(scopeStack[i], name)?.let { return it }
 		err(srcPos, "Unresolved symbol: $name")
 	}
 
@@ -82,30 +98,74 @@ class Resolver(private val context: Context) {
 					context.internalErr()
 			if(sym is IntSym)
 				return sym.intValue
-			err(node.srcPos, "Invalid int node: $node")
+			err(node.srcPos, "Invalid int node: $node, $sym")
 		}
 
 		return when(node) {
 			is IntNode  -> node.value
 			is UnNode   -> node.calc(::resolveInt)
 			is BinNode  -> node.calc(::resolveInt)
-			is NameNode -> sym(node.symbol)
+			is NameNode -> sym(node.sym)
+			is DotNode  -> sym(node.sym)
+			is RefNode  -> {
+				if(!node.receiver!!.resolved)
+					resolveNodeFile(node, node.receiver!! as Node)
+				node.intSupplier?.invoke() ?: err(node.srcPos, "Invalid int node: $node")
+			}
 			else        -> err(node.srcPos, "Invalid int node: $node")
 		}
 	}
 
 
 
-	private fun resolveType(node: Node): Type {
-		if(node is ArrayNode) {
-			return ArrayType(resolveType(node.left))
-		} else if(node is NameNode) {
-			val sym = resolveName(node.srcPos, node.value)
-			if(sym !is Type) err(node.srcPos, "Expected type, found: $sym")
-			return sym
-		} else {
-			err(node.srcPos, "Invalid type node: $node")
+	private fun resolveDotNode(node: DotNode): Symbol {
+		val receiver = resolveSymNode(node.left)
+		if(receiver !is ScopedSym)
+			err(node.left.srcPos, "Invalid receiver: $receiver")
+		if(node.right !is NameNode)
+			err(node.right.srcPos, "Invalid name node: ${node.right}")
+		val sym = resolveName(node.srcPos, receiver, node.right.value)
+		node.sym = sym
+		return sym
+	}
+
+
+
+	private fun resolveSymNode(node: Node): Symbol = when(node) {
+		is NameNode -> resolveName(node.srcPos, node.value).also { node.sym = it }
+		is DotNode  -> resolveDotNode(node)
+		else        -> err(node.srcPos, "Invalid receiver node: $node")
+	}
+
+
+
+	private fun resolveRefNode(node: RefNode) {
+		val right = (node.right as? NameNode)?.value
+			?: err(node.right.srcPos, "Invalid reference node: ${node.right}")
+
+		val receiver = resolveSymNode(node.left)
+		node.receiver = receiver
+
+		fun invalid(): Nothing = err(node.srcPos, "Invalid reference")
+
+		when(receiver) {
+			is EnumNode -> when(right) {
+				Names.COUNT -> node.intSupplier = { receiver.entries.size }
+				else -> invalid()
+			}
+			else -> invalid()
 		}
+	}
+
+
+
+	private fun resolveType(node: TypeNode): Type {
+		var type = resolveNames(node.srcPos, node.names) as? Type
+			?: err(node.srcPos, "Invalid type")
+		for(i in node.arraySizes.indices)
+			type = ArrayType(type)
+		node.type = type
+		return type
 	}
 
 
@@ -115,9 +175,22 @@ class Resolver(private val context: Context) {
 		is ProcNode      -> pushScope(node.scope)
 		is ScopeEndNode  -> popScope()
 		is TypedefNode   -> node.type = resolveType(node.typeNode)
-		is StructNode    -> for(member in node.members) member.type = resolveType(member.typeNode)
+		is MemberNode    -> node.type = resolveType(node.typeNode)
+		is StructNode    -> node.members.forEach(::resolveNodeType)
 		else             -> return
 	}}
+
+
+
+	private fun resolveTypeNode(node: TypeNode) {
+		var type = node.type
+		for(i in node.arraySizes.size - 1 downTo 0) {
+			val array = type as ArrayType
+			resolveNode(node.arraySizes[i])
+			array.count = resolveInt(node.arraySizes[i])
+			type = array.base
+		}
+	}
 
 
 
@@ -125,8 +198,13 @@ class Resolver(private val context: Context) {
 		is NamespaceNode -> pushScope(node.scope)
 		is ProcNode      -> pushScope(node.scope)
 		is ScopeEndNode  -> popScope()
-		is NameNode      -> node.symbol = resolveName(node.srcPos, node.value)
+		is NameNode      -> node.sym = resolveName(node.srcPos, node.value)
 		is UnNode        -> resolveNode(node.child)
+		is DotNode       -> resolveDotNode(node)
+		is RefNode       -> resolveRefNode(node)
+		is TypedefNode   -> resolveTypeNode(node.typeNode)
+		is StructNode    -> resolveStruct(node)
+		is MemberNode    -> resolveTypeNode(node.typeNode)
 
 		is BinNode -> {
 			resolveNode(node.left)
@@ -137,10 +215,6 @@ class Resolver(private val context: Context) {
 			resolveNode(node.valueNode)
 			node.intValue = resolveInt(node.valueNode)
 			node.resolved = true
-		}
-
-		is TypedefNode -> {
-
 		}
 
 		is EnumNode -> {
@@ -165,9 +239,38 @@ class Resolver(private val context: Context) {
 		}
 
 		is RegNode, is StringNode, is IntNode, is LabelNode -> Unit
-
 		NullNode -> context.internalErr("Encountered NullNode")
 	}}
+
+
+
+	private fun resolveStruct(struct: StructNode) {
+		struct.members.forEach(::resolveNode)
+
+		var structSize = 0
+		var structAlignment = 0
+
+		for((index, member) in struct.members.withIndex()) {
+			val type = when(member) { is StructNode -> member; is MemberNode -> member.type }
+			member.structIndex = index
+
+			if(struct.isUnion) {
+				member.structOffset = 0
+				structSize = max(structSize, type.size)
+			} else {
+				member.structOffset = structSize
+				structSize = (structSize + type.alignment - 1) and -type.alignment
+				structSize += type.size
+			}
+
+			if(structAlignment < 8 && type.alignment > structAlignment)
+				structAlignment = type.alignment
+		}
+
+		structSize = (structSize + structAlignment - 1) and -structAlignment
+		struct.size = structSize
+		struct.alignment = structAlignment
+	}
 
 
 }

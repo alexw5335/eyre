@@ -7,6 +7,13 @@ data class Token(val type: TokenType, val value: Int, val line: Int) {
 	val nameValue get() = Names[value]
 	val regValue get() = Reg.entries[value]
 	fun stringValue(context: Context) = context.strings[value]
+
+
+	override fun toString() = if(type == TokenType.NAME)
+		"Token(NAME (${nameValue.string}), value=$value, line=$line)"
+	else
+		"Token($type, value=$value, line=$line)"
+
 }
 
 

@@ -40,25 +40,26 @@ class Compiler(private val context: Context) {
 
 
 
+	private fun printError(error: EyreError) {
+		if(error.srcPos != null)
+			System.err.println("${error.srcPos.file.relPath}:${error.srcPos.line} -- ${error.message}")
+		else
+			System.err.println(error.message)
+
+		for(s in error.stackTrace)
+			if("err" !in s.methodName && "Err" !in s.methodName)
+				System.err.println("\t$s")
+
+		System.err.println()
+	}
+
+
+
 	private fun checkErrors(stage: EyreStage): Boolean {
 		if(context.errors.isEmpty())
 			return false
-
 		checkOutput(stage)
-
-		for(e in context.errors) {
-			if(e.srcPos != null)
-				System.err.println("${e.srcPos.file.relPath}:${e.srcPos.line} -- ${e.message}")
-			else
-				System.err.println(e.message)
-
-			for(s in e.stackTrace)
-				if("err" !in s.methodName && "Err" !in s.methodName)
-					System.err.println("\t$s")
-
-			System.err.println()
-		}
-
+		context.errors.forEach(::printError)
 		System.err.println("Compiler encountered errors")
 		return true
 	}
@@ -66,6 +67,19 @@ class Compiler(private val context: Context) {
 
 
 	fun compile() {
+		try {
+			compileInternal()
+		} catch(e: Exception) {
+			System.err.println("An unhandled internal compiler exception occurred:\n")
+			e.printStackTrace()
+			System.err.println("\nHandled compiler errors:\n")
+			context.errors.forEach(::printError)
+		}
+	}
+
+
+
+	private fun compileInternal() {
 		context.buildDir.createDirectories()
 		Files
 			.list(context.buildDir)

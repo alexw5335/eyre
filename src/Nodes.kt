@@ -13,14 +13,33 @@ interface Symbol {
 	val parent: Symbol
 	val name: Name
 	var resolved: Boolean get() = false; set(_) { }
+	val isAnon get() = name.id == 0
 }
 
 interface ScopedSym : Symbol {
 	val scope: Symbol get() = this
 }
 
+interface SizedSym : Symbol {
+	val size: Int
+}
+
+interface TypedSym : SizedSym {
+	val type: Type
+	override val size get() = type.size
+}
+
 interface IntSym : Symbol {
 	val intValue: Int
+}
+
+interface SymNode : Node {
+	var sym: Symbol?
+}
+
+sealed interface StructChild : Node, SizedSym {
+	var structIndex: Int
+	var structOffset: Int
 }
 
 
@@ -31,7 +50,7 @@ interface IntSym : Symbol {
 
 object NullNode : Node { override val srcPos = null }
 
-class NameNode(override val srcPos: SrcPos?, val value: Name, var symbol: Symbol? = null) : Node
+class NameNode(override val srcPos: SrcPos?, val value: Name, override var sym: Symbol? = null) : SymNode
 
 class IntNode(override val srcPos: SrcPos?, val value: Int) : Node
 
@@ -72,24 +91,34 @@ class ArrayNode(
 class DotNode(
 	override val srcPos: SrcPos?,
 	val left: Node,
-	val right: Node
-) : Node
+	val right: Node,
+	override var sym: Symbol? = null
+) : SymNode
 
 class MemberNode(
 	override val srcPos: SrcPos?,
 	override val parent: StructNode,
 	override val name: Name,
-	val typeNode: Node
-) : Node, Symbol {
-	var type: Type = NullType
+	val typeNode: TypeNode
+) : StructChild, Symbol, TypedSym {
+	override var type: Type = NullType
+	override var resolved = false
+	override var structIndex = 0
+	override var structOffset = 0
 }
 
 class StructNode(
 	override val srcPos: SrcPos?,
 	override val parent: Symbol,
 	override val name: Name,
-) : Node, ScopedSym {
-	val members = ArrayList<MemberNode>()
+	val isUnion: Boolean,
+) : StructChild, ScopedSym, Type {
+	val members = ArrayList<StructChild>()
+	override var resolved = false
+	override var structIndex = 0
+	override var structOffset = 0
+	override var size = 0
+	override var alignment = 0
 }
 
 class EnumNode(
@@ -97,6 +126,7 @@ class EnumNode(
 	override val parent: Symbol,
 	override val name: Name
 ) : Node, ScopedSym {
+	override var resolved = false
 	val entries = ArrayList<EnumEntryNode>()
 }
 
@@ -168,10 +198,32 @@ class TypedefNode(
 	override val srcPos: SrcPos?,
 	override val parent: Symbol,
 	override val name: Name,
-	var typeNode: Node
+	var typeNode: TypeNode
 ) : Node, Type {
 	var type: Type = NullType
 	override val size get() = type.size
+	override val alignment get() = type.alignment
+}
+
+
+
+class TypeNode(
+	override val srcPos: SrcPos?,
+	val names: List<Name>,
+	val arraySizes: List<Node>
+) : Node {
+	var type: Type? = null
+}
+
+
+
+class RefNode(
+	override val srcPos: SrcPos?,
+	val left: Node,
+	val right: Node
+) : Node {
+	var receiver: Symbol? = null
+	var intSupplier: (() -> Int)? = null
 }
 
 
@@ -180,27 +232,28 @@ class TypedefNode(
 
 
 
-interface Type : Symbol {
-	val size: Int
+interface Type : SizedSym {
+	val alignment: Int
 }
 
 object NullType : Type {
 	override val parent = RootSym
-	override val name = Names.NULL
+	override val name = Names.NONE
 	override val size = 0
+	override val alignment = 0
 }
 
 class IntType(override val name: Name, override val size: Int) : Type {
 	override val parent = RootSym
+	override val alignment = size
 }
 
 class ArrayType(val base: Type, var count: Int = 0): Type {
 	override val name = base.name
 	override val parent = base.parent
 	override val size get() = count * base.size
+	override val alignment get() = base.alignment
 }
-
-
 
 object Types {
 	val BYTE = IntType(Names.BYTE, 1)

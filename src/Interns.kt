@@ -27,6 +27,8 @@ class SymbolTable {
 
 
 class Name(val id: Int, val string: String) {
+	val isNull get() = id == 0
+	val isNotNull get() = id != 0
 	override fun equals(other: Any?) = this === other
 	override fun hashCode() = id
 	override fun toString() = string
@@ -52,6 +54,7 @@ object Names {
 	val NAMESPACE = get("namespace")
 	val PROC      = get("proc")
 	val STRUCT    = get("struct")
+	val UNION     = get("union")
 	val ENUM      = get("enum")
 	val TYPEDEF   = get("typedef")
 	val CONST     = get("const")
@@ -59,5 +62,7 @@ object Names {
 	val WORD      = get("word")
 	val DWORD     = get("dword")
 	val QWORD     = get("qword")
+	val COUNT     = get("count")
+	val SIZE      = get("size")
 
 }
