@@ -59,3 +59,14 @@ enum class EyreStage {
 	ASSEMBLE,
 	LINK;
 }
+
+
+
+/**
+ * Location of a variable in memory.
+ */
+enum class VarLoc {
+	REG,
+	STACK,
+	EXE;
+}

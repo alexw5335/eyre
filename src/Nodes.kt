@@ -87,6 +87,7 @@ class VarNode(
 	var type: Type? = null
 	var size = 0
 	override var pos = Pos.NULL
+	var loc = VarLoc.EXE
 }
 
 class ArrayNode(
