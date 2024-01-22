@@ -27,6 +27,9 @@ enum class BinOp(val precedence: Int, val string: String?) {
 	LOR (2, "||"),
 	SET (1, "=");
 
+	val leftRegValid get() = this == ADD || this == SUB
+	val rightRegValid get() = this == ADD
+
 	fun calc(a: Int, b: Int): Int = when(this) {
 		ARR -> 0
 		DOT  -> 0
@@ -87,6 +90,8 @@ enum class UnOp(val string: String) {
 	NEG("-",),
 	NOT("~"),
 	LNOT("!");
+
+	val regValid get() = this == POS
 
 	fun calc(value: Int): Int = when(this) {
 		POS  -> value

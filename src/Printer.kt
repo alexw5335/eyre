@@ -21,6 +21,19 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 	/*
+	Misc.
+	 */
+
+
+
+	fun writeText() {
+		Files.write(context.buildDir.resolve("code.bin"), context.textWriter.copy())
+	}
+
+
+
+
+	/*
 	Tokens
 	 */
 
@@ -238,21 +251,17 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 			}
 
 			is MemberNode -> {
-				append(node.fullName)
-				if(atResolve) {
-					append(" (type = ")
-					printType(node.type)
-					append(", offset = ${node.structOffset})")
-				}
-				appendLine()
-				appendChild(node.typeNode)
+				append("${node.fullName} (type = ")
+				printType(node.type)
+				appendLine(", offset = ${node.offset})")
+				if(node.typeNode != null)
+					appendChild(node.typeNode)
+				else
+					appendChild(node.struct!!)
 			}
 
 			is StructNode -> {
-				append("STRUCT ${node.fullName} (size = ${node.size}")
-				if(node.parent is StructNode)
-					append(", offset = ${node.structOffset}")
-				appendLine(")")
+				appendLine("STRUCT ${node.fullName} (size = ${node.size})")
 				for(member in node.members)
 					appendChild(member)
 			}
@@ -266,12 +275,23 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 					appendChild(size)
 			}
 
+			is InitNode -> {
+				appendLine("INITIALISER")
+				for(element in node.elements)
+					appendChild(element)
+			}
+
+			is VarNode -> {
+				appendLine("VAR ${node.fullName}")
+				appendChild(node.typeNode)
+				node.valueNode?.let { appendChild(it) }
+			}
+
 			is ProcNode      -> appendLine("PROC ${context.qualifiedName(node)}")
 			is RegNode       -> appendLine(node.value.string)
 			is NameNode      -> appendLine(node.value.string)
 			is IntNode       -> appendLine("${node.value}")
 			is LabelNode     -> appendLine("LABEL ${context.qualifiedName(node)}")
-
 			is NamespaceNode -> appendLine("NAMESPACE ${context.qualifiedName(node)}")
 			else             -> appendLine(node::class.simpleName)
 		}

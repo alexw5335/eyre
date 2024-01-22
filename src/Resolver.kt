@@ -148,9 +148,16 @@ class Resolver(private val context: Context) {
 
 		fun invalid(): Nothing = err(node.srcPos, "Invalid reference")
 
-		when(receiver) {
-			is EnumNode -> when(right) {
-				Names.COUNT -> node.intSupplier = { receiver.entries.size }
+		when(right) {
+			Names.COUNT -> when(receiver) {
+				is EnumNode -> node.intSupplier = { receiver.entries.size }
+				else -> invalid()
+			}
+			Names.SIZE -> when(receiver) {
+				is StructNode -> node.intSupplier = { receiver.size }
+				is VarNode -> node.intSupplier = { receiver.size }
+				is EnumNode -> node.intSupplier = { receiver.size }
+				is TypedefNode -> node.intSupplier = { receiver.size }
 				else -> invalid()
 			}
 			else -> invalid()
@@ -175,9 +182,26 @@ class Resolver(private val context: Context) {
 		is ProcNode      -> pushScope(node.scope)
 		is ScopeEndNode  -> popScope()
 		is TypedefNode   -> node.type = resolveType(node.typeNode)
-		is MemberNode    -> node.type = resolveType(node.typeNode)
-		is StructNode    -> node.members.forEach(::resolveNodeType)
-		else             -> return
+
+		is VarNode -> {
+			node.type = resolveType(node.typeNode)
+			node.size = node.type!!.size
+		}
+
+		is StructNode -> {
+			for(member in node.members) {
+				if(member.struct != null) {
+					resolveNodeType(member.struct)
+					member.type = member.struct
+				} else if(member.typeNode != null) {
+					member.type = resolveType(member.typeNode)
+				} else {
+					context.internalErr()
+				}
+			}
+		}
+
+		else -> return
 	}}
 
 
@@ -204,7 +228,22 @@ class Resolver(private val context: Context) {
 		is RefNode       -> resolveRefNode(node)
 		is TypedefNode   -> resolveTypeNode(node.typeNode)
 		is StructNode    -> resolveStruct(node)
-		is MemberNode    -> resolveTypeNode(node.typeNode)
+		is EnumNode      -> resolveEnum(node)
+
+		is InsNode -> {
+			if(node.mnemonic == Mnemonic.DLLCALL) return
+			node.op1?.let(::resolveNode)
+			node.op2?.let(::resolveNode)
+			node.op3?.let(::resolveNode)
+			node.op4?.let(::resolveNode)
+		}
+
+		is VarNode -> {
+			resolveTypeNode(node.typeNode)
+			node.valueNode?.let(::resolveNode)
+		}
+
+		is InitNode -> node.elements.forEach(::resolveNode)
 
 		is BinNode -> {
 			resolveNode(node.left)
@@ -217,48 +256,67 @@ class Resolver(private val context: Context) {
 			node.resolved = true
 		}
 
-		is EnumNode -> {
-			pushScope(node.scope)
-
-			var current = 0
-			for(entry in node.entries) {
-				entry.intValue = if(entry.valueNode != null) {
-					resolveNode(entry.valueNode)
-					resolveInt(entry.valueNode)
-				} else {
-					current
-				}
-
-				current = entry.intValue + 1
-				entry.resolved = true
-			}
-
-			node.resolved = true
-
-			popScope()
-		}
-
 		is RegNode, is StringNode, is IntNode, is LabelNode -> Unit
 		NullNode -> context.internalErr("Encountered NullNode")
+		else -> context.internalErr("Unhandled node: $node")
 	}}
 
 
 
+	private fun resolveEnum(enum: EnumNode) {
+		pushScope(enum.scope)
+
+		var current = 0
+		var max = 0
+
+		for(entry in enum.entries) {
+			entry.intValue = if(entry.valueNode != null) {
+				resolveNode(entry.valueNode)
+				resolveInt(entry.valueNode)
+			} else {
+				current
+			}
+
+			max = max.coerceAtLeast(entry.intValue)
+
+			current = entry.intValue + 1
+			entry.resolved = true
+		}
+
+		enum.resolved = true
+
+		enum.size = when {
+			max >= Short.MAX_VALUE -> 4
+			max >= Byte.MAX_VALUE -> 2
+			else -> 1
+		}
+
+		enum.alignment = enum.size
+
+		popScope()
+	}
+
+
+
 	private fun resolveStruct(struct: StructNode) {
-		struct.members.forEach(::resolveNode)
+		for(member in struct.members)
+			if(member.typeNode != null)
+				resolveTypeNode(member.typeNode)
+			else
+				resolveStruct(member.struct!!)
 
 		var structSize = 0
 		var structAlignment = 0
 
 		for((index, member) in struct.members.withIndex()) {
-			val type = when(member) { is StructNode -> member; is MemberNode -> member.type }
-			member.structIndex = index
+			val type = member.type
+			member.index = index
 
 			if(struct.isUnion) {
-				member.structOffset = 0
+				member.offset = 0
 				structSize = max(structSize, type.size)
 			} else {
-				member.structOffset = structSize
+				member.offset = structSize
 				structSize = (structSize + type.alignment - 1) and -type.alignment
 				structSize += type.size
 			}

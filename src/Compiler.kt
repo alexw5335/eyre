@@ -36,6 +36,8 @@ class Compiler(private val context: Context) {
 			printer.writeNodes()
 		if(stage >= EyreStage.PARSE)
 			printer.writeSymbols()
+		if(stage >= EyreStage.ASSEMBLE)
+			printer.writeText()
 	}
 
 
@@ -91,31 +93,25 @@ class Compiler(private val context: Context) {
 		context.symTable.add(Types.WORD)
 		context.symTable.add(Types.DWORD)
 		context.symTable.add(Types.QWORD)
+		context.symTable.add(Names["int"], Types.DWORD)
 
-		// Lexing
-		val lexer = Lexer(context)
-		for(s in context.files)
-			if(!s.invalid)
-				lexer.lex(s)
+		Lexer(context).lex()
 		if(checkErrors(EyreStage.LEX))
 			exitProcess(1)
 
-		// Parsing
-		val parser = Parser(context)
-		for(s in context.files)
-			if(!s.invalid)
-				parser.parse(s)
+		Parser(context).parse()
 		if(checkErrors(EyreStage.PARSE))
 			exitProcess(1)
 
-
-		// Resolving
-		val resolver = Resolver(context)
-		resolver.resolve()
+		Resolver(context).resolve()
 		if(checkErrors(EyreStage.RESOLVE))
 			exitProcess(1)
 
-		checkOutput(EyreStage.ASSEMBLE)
+		Assembler(context).assemble()
+		if(checkErrors(EyreStage.ASSEMBLE))
+			exitProcess(1)
+
+		checkOutput(EyreStage.LINK)
 	}
 
 

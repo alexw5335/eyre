@@ -72,7 +72,15 @@ class Parser(private val context: Context) {
 
 
 
-	fun parse(srcFile: SrcFile) {
+	fun parse() {
+		for(s in context.files)
+			if(!s.invalid)
+				parse(s)
+	}
+
+
+
+	private fun parse(srcFile: SrcFile) {
 		this.srcFile = srcFile
 		this.pos = 0
 
@@ -161,6 +169,18 @@ class Parser(private val context: Context) {
 				expectNewline()
 			}
 
+			Names.VAR -> {
+				val name = name()
+				expect(TokenType.COLON)
+				val typeNode = parseType()
+				val valueNode: Node? = if(tokens[pos].type == TokenType.SET) {
+					pos++
+					parseExpr()
+				} else
+					null
+				VarNode(srcPos, currentScope, name, typeNode, valueNode).addSym()
+			}
+
 			Names.ENUM -> {
 				val enum = EnumNode(srcPos, currentScope, name()).addSym()
 				expect(TokenType.LBRACE)
@@ -194,18 +214,18 @@ class Parser(private val context: Context) {
 
 
 	private fun parseStruct(srcPos: SrcPos, name: Name, isUnion: Boolean, parent: StructNode?): StructNode {
-		val isAnon = name.isNull
-		if(isAnon && parent == null)
-			err(srcPos, "Anonymous struct not allowed here")
-
 		val struct = StructNode(srcPos, parent ?: currentScope, name, isUnion)
+		val scope: Symbol
 
-		if(parent == null)
+		if(parent != null) {
+			val member = MemberNode(struct.srcPos, parent, struct.name, null, struct)
+			parent.members.add(member)
+			scope = parent
+		} else {
+			if(name.isNull)
+				err(srcPos, "Top-level struct cannot be anonymous")
 			struct.addSym()
-		else {
-			if(!isAnon)
-				context.symTable.add(struct)
-			parent.members.add(struct)
+			scope = struct
 		}
 
 		expect(TokenType.LBRACE)
@@ -225,8 +245,7 @@ class Parser(private val context: Context) {
 
 			val typeNode = parseType()
 			val memberName = name()
-			val scope = if(isAnon) parent!! else struct
-			val member = MemberNode(first.srcPos(), scope, memberName, typeNode)
+			val member = MemberNode(first.srcPos(), scope, memberName, typeNode, null)
 			context.symTable.add(member)
 			struct.members.add(member)
 			expectNewline()
@@ -244,6 +263,16 @@ class Parser(private val context: Context) {
 		val srcPos = token.srcPos()
 
 		return when(token.type) {
+			TokenType.LBRACE -> {
+				val elements = ArrayList<Node>()
+				while(tokens[pos].type != TokenType.RBRACE) {
+					elements.add(parseExpr())
+					if(tokens[pos].type == TokenType.COMMA)
+						pos++
+				}
+				pos++
+				InitNode(srcPos, elements)
+			}
 			TokenType.NAME -> when(token.nameValue) {
 				in Names.regs -> RegNode(srcPos, Names.regs[token.nameValue]!!)
 				else          -> NameNode(srcPos, token.nameValue)

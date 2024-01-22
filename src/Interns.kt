@@ -12,13 +12,17 @@ class SymbolTable {
 	private val map = HashMap<Key, Symbol>()
 	init { add(RootSym) }
 
-	fun add(sym: Symbol): Symbol? {
-		val key = Key(sym.parent, sym.name)
+	fun add(parent: Symbol, name: Name, sym: Symbol): Symbol? {
+		val key = Key(parent, name)
 		map[key]?.let { return it }
 		map[key] = sym
 		list += sym
 		return null
 	}
+
+	fun add(sym: Symbol) = add(sym.parent, sym.name, sym)
+
+	fun add(name: Name, sym: Symbol) = add(sym.parent, name, sym)
 
 	fun get(parent: Symbol, name: Name) = map[Key(parent, name)]
 
@@ -49,7 +53,7 @@ object Names {
 	val mnemonics = Mnemonic.entries.associateBy { get(it.string) }
 	val widths = Width.entries.associateBy { get(it.string) }
 
-	val NULL      = get("null")
+	val VAR       = get("var")
 	val MAIN      = get("main")
 	val NAMESPACE = get("namespace")
 	val PROC      = get("proc")

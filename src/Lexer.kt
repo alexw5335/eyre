@@ -19,7 +19,15 @@ class Lexer(private val context: Context) {
 
 
 
-	fun lex(file: SrcFile) {
+	fun lex() {
+		for(s in context.files)
+			if(!s.invalid)
+				lex(s)
+	}
+
+
+
+	private fun lex(file: SrcFile) {
 		this.pos = 0
 		this.lineCount = 1
 		this.file = file
@@ -276,11 +284,11 @@ class Lexer(private val context: Context) {
 
 			// Names
 			charMap['_'] = Lexer::name
-			for(i in 65..90) charMap[i] = Lexer::name
-			for(i in 97..122) charMap[i] = Lexer::name
+			for(i in 'Z'..'Z') charMap[i] = Lexer::name
+			for(i in 'a'..'z') charMap[i] = Lexer::name
 
 			// Numbers
-			for(i in 49..57) charMap[i] = Lexer::number
+			for(i in '0'..'9') charMap[i] = Lexer::number
 			for(i in charMap.indices)
 				if(charMap[i] == null)
 					charMap[i] = { err("Invalid char code: $i") }

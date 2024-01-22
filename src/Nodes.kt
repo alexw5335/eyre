@@ -5,7 +5,7 @@ package eyre
 
 
 
-interface Node {
+sealed interface Node {
 	val srcPos: SrcPos?
 }
 
@@ -37,9 +37,8 @@ interface SymNode : Node {
 	var sym: Symbol?
 }
 
-sealed interface StructChild : Node, SizedSym {
-	var structIndex: Int
-	var structOffset: Int
+interface PosSym : Symbol {
+	var pos: Pos
 }
 
 
@@ -78,9 +77,17 @@ fun BinNode.calc(function: (Node) -> Int) = op.calc(function(left), function(rig
 
 
 
-// Symbol nodes
-
-
+class VarNode(
+	override val srcPos: SrcPos?,
+	override val parent: Symbol,
+	override val name: Name,
+	val typeNode: TypeNode,
+	val valueNode: Node?
+) : Node, PosSym {
+	var type: Type? = null
+	var size = 0
+	override var pos = Pos.NULL
+}
 
 class ArrayNode(
 	override val srcPos: SrcPos?,
@@ -99,12 +106,13 @@ class MemberNode(
 	override val srcPos: SrcPos?,
 	override val parent: StructNode,
 	override val name: Name,
-	val typeNode: TypeNode
-) : StructChild, Symbol, TypedSym {
+	val typeNode: TypeNode?,
+	val struct: StructNode?
+) : Node, TypedSym {
 	override var type: Type = NullType
 	override var resolved = false
-	override var structIndex = 0
-	override var structOffset = 0
+	var index = 0
+	var offset = 0
 }
 
 class StructNode(
@@ -112,22 +120,24 @@ class StructNode(
 	override val parent: Symbol,
 	override val name: Name,
 	val isUnion: Boolean,
-) : StructChild, ScopedSym, Type {
-	val members = ArrayList<StructChild>()
+) : Node, ScopedSym, PosSym, Type {
+	val members = ArrayList<MemberNode>()
 	override var resolved = false
-	override var structIndex = 0
-	override var structOffset = 0
 	override var size = 0
 	override var alignment = 0
+	override var pos = Pos.NULL
 }
 
 class EnumNode(
 	override val srcPos: SrcPos?,
 	override val parent: Symbol,
 	override val name: Name
-) : Node, ScopedSym {
+) : Node, ScopedSym, Type {
 	override var resolved = false
 	val entries = ArrayList<EnumEntryNode>()
+	val count get() = entries.size
+	override var size = 0
+	override var alignment = 0
 }
 
 class EnumEntryNode(
@@ -154,14 +164,16 @@ class NamespaceNode(
 class LabelNode(
 	override val srcPos: SrcPos?,
 	override val parent: Symbol,
-	override val name: Name
-) : Node, Symbol
+	override val name: Name,
+	override var pos: Pos = Pos.NULL
+) : Node, PosSym
 
 class ProcNode(
 	override val srcPos: SrcPos?,
 	override val parent: Symbol,
-	override val name: Name
-) : Node, ScopedSym
+	override val name: Name,
+	override var pos: Pos = Pos.NULL
+) : Node, PosSym, ScopedSym
 
 class ConstNode(
 	override val srcPos: SrcPos?,
@@ -198,14 +210,12 @@ class TypedefNode(
 	override val srcPos: SrcPos?,
 	override val parent: Symbol,
 	override val name: Name,
-	var typeNode: TypeNode
-) : Node, Type {
+	var typeNode: TypeNode,
 	var type: Type = NullType
+) : Node, Type {
 	override val size get() = type.size
 	override val alignment get() = type.alignment
 }
-
-
 
 class TypeNode(
 	override val srcPos: SrcPos?,
@@ -215,8 +225,6 @@ class TypeNode(
 	var type: Type? = null
 }
 
-
-
 class RefNode(
 	override val srcPos: SrcPos?,
 	val left: Node,
@@ -225,6 +233,11 @@ class RefNode(
 	var receiver: Symbol? = null
 	var intSupplier: (() -> Int)? = null
 }
+
+class InitNode(
+	override val srcPos: SrcPos?,
+	val elements: List<Node>
+) : Node
 
 
 

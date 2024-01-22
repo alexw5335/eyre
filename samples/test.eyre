@@ -1,10 +1,16 @@
 namespace eyre
 
-
-struct A {
-	dword a
-	dword b
+struct Test {
+	word a
+	word b
 }
 
+struct MyStruct {
+	byte x
+	byte y
+	Test t
+}
 
-var a: A = { 1, { 1, 2 } }
+var b: byte[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, }
+
+var a: MyStruct = { 1, 2, { 3, 4 } }
