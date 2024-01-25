@@ -62,7 +62,6 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 			appendLineNumber(t.line)
 
 			when(t.type) {
-				TokenType.REG     -> append("REG     ${t.regValue}")
 				TokenType.NAME    -> append("NAME    ${t.nameValue}")
 				TokenType.STRING  -> append("STRING  \"${t.stringValue(context)}\"")
 				TokenType.INT     -> append("INT     ${t.value}")
@@ -130,8 +129,8 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 	private fun shouldIndent(node: Node) = when(node) {
-		is ProcNode -> true
-		else -> false
+		is FunNode -> true
+		else       -> false
 	}
 
 
@@ -168,26 +167,6 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 			append("    ")
 
 		when(node) {
-			is OpNode -> {
-				if(node.type == OpType.MEM) {
-					appendLine("${node.width.opString}ptr")
-					appendChild(node.child)
-				} else if(node.type == OpType.IMM) {
-					appendLine("${node.width.opString}imm")
-					appendChild(node.child)
-				} else {
-					appendLine(node.reg.string)
-				}
-			}
-
-			is InsNode -> {
-				appendLine(node.mnemonic.string)
-				node.op1?.let { appendChild(it) }
-				node.op2?.let { appendChild(it) }
-				node.op3?.let { appendChild(it) }
-				node.op4?.let { appendChild(it) }
-			}
-
 			is UnNode -> {
 				appendLine(node.op.string)
 				appendChild(node.child)
@@ -281,14 +260,30 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 					appendChild(element)
 			}
 
+			is CallNode -> {
+				appendLine("()")
+				appendChild(node.left)
+				for(element in node.elements)
+					appendChild(element)
+			}
+
 			is VarNode -> {
 				appendLine("VAR ${node.fullName}")
 				appendChild(node.typeNode)
 				node.valueNode?.let { appendChild(it) }
 			}
 
-			is ProcNode      -> appendLine("PROC ${context.qualifiedName(node)}")
-			is RegNode       -> appendLine(node.value.string)
+			is ParamNode -> {
+				appendLine("PARAM ${node.fullName}")
+				appendChild(node.typeNode)
+			}
+
+			is FunNode -> {
+				appendLine("FUN ${node.fullName}")
+				for(param in node.params)
+					appendChild(param)
+			}
+
 			is NameNode      -> appendLine(node.value.string)
 			is IntNode       -> appendLine("${node.value}")
 			is LabelNode     -> appendLine("LABEL ${context.qualifiedName(node)}")

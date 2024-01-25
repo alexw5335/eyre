@@ -10,7 +10,10 @@ class SymbolTable {
 	private data class Key(val parent: Symbol, val name: Name)
 	val list = ArrayList<Symbol>()
 	private val map = HashMap<Key, Symbol>()
-	init { add(RootSym) }
+
+	init {
+		add(RootSym)
+	}
 
 	fun add(parent: Symbol, name: Name, sym: Symbol): Symbol? {
 		val key = Key(parent, name)
@@ -47,16 +50,10 @@ object Names {
 	operator fun get(id: Int) = list[id]
 	operator fun get(key: String) = map.getOrPut(key) { Name(count++, key).also(list::add) }
 
-	val NONE = get("")
-
-	val regs = Reg.entries.associateBy { get(it.string) }
-	val mnemonics = Mnemonic.entries.associateBy { get(it.string) }
-	val widths = Width.entries.associateBy { get(it.string) }
-
+	val NONE      = get("")
 	val VAR       = get("var")
-	val MAIN      = get("main")
 	val NAMESPACE = get("namespace")
-	val PROC      = get("proc")
+	val FUN       = get("fun")
 	val STRUCT    = get("struct")
 	val UNION     = get("union")
 	val ENUM      = get("enum")

@@ -62,11 +62,13 @@ enum class EyreStage {
 
 
 
-/**
- * Location of a variable in memory.
- */
-enum class VarLoc {
-	REG,
-	STACK,
-	EXE;
+class Mem {
+	var type = Type.GLOBAL
+	var pos = 0
+	var reg = 0
+	enum class Type {
+		GLOBAL,
+		STACK,
+		REGISTER
+	}
 }

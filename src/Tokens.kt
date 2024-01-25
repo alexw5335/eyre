@@ -5,9 +5,7 @@ package eyre
 data class Token(val type: TokenType, val value: Int, val line: Int) {
 	val isSym get() = type >= TokenType.EOF
 	val nameValue get() = Names[value]
-	val regValue get() = Reg.entries[value]
 	fun stringValue(context: Context) = context.strings[value]
-
 
 	override fun toString() = if(type == TokenType.NAME)
 		"Token(NAME (${nameValue.string}), value=$value, line=$line)"
@@ -23,8 +21,6 @@ enum class TokenType(
 	val binOp: BinOp? = null,
 	val unOp: UnOp? = null
 ) {
-	// value is reg ordinal
-	REG("reg"),
 	// value is intern id
 	NAME("name"),
 	// value is index into string table
@@ -37,7 +33,7 @@ enum class TokenType(
 	// Symbols, no value
 	// Note: Token::isSym depends on this enum's ordering
 	EOF     ("EOF"),
-	LPAREN  ("("),
+	LPAREN  ("(", BinOp.INV),
 	RPAREN  (")"),
 	PLUS    ("+", BinOp.ADD, UnOp.POS),
 	MINUS   ("-", BinOp.SUB, UnOp.NEG),

@@ -55,8 +55,7 @@ class Resolver(private val context: Context) {
 	private fun resolveNames(srcPos: SrcPos?, names: List<Name>): Symbol {
 		var sym = resolveName(srcPos, names[0])
 		for(i in 1 ..< names.size) {
-			if(sym !is ScopedSym) err(srcPos, "Invalid receiver: $sym")
-			sym = resolveName(srcPos, sym.scope, names[i])
+			sym = resolveName(srcPos, sym, names[i])
 		}
 		return sym
 	}
@@ -120,8 +119,6 @@ class Resolver(private val context: Context) {
 
 	private fun resolveDotNode(node: DotNode): Symbol {
 		val receiver = resolveSymNode(node.left)
-		if(receiver !is ScopedSym)
-			err(node.left.srcPos, "Invalid receiver: $receiver")
 		if(node.right !is NameNode)
 			err(node.right.srcPos, "Invalid name node: ${node.right}")
 		val sym = resolveName(node.srcPos, receiver, node.right.value)
@@ -178,10 +175,15 @@ class Resolver(private val context: Context) {
 
 
 	private fun resolveNodeType(node: Node) { when(node) {
-		is NamespaceNode -> pushScope(node.scope)
-		is ProcNode      -> pushScope(node.scope)
+		is NamespaceNode -> pushScope(node)
 		is ScopeEndNode  -> popScope()
 		is TypedefNode   -> node.type = resolveType(node.typeNode)
+
+		is FunNode -> {
+			pushScope(node)
+			for(param in node.params)
+				param.type = resolveType(param.typeNode)
+		}
 
 		is VarNode -> {
 			node.type = resolveType(node.typeNode)
@@ -219,8 +221,7 @@ class Resolver(private val context: Context) {
 
 
 	private fun resolveNode(node: Node) { when(node) {
-		is NamespaceNode -> pushScope(node.scope)
-		is ProcNode      -> pushScope(node.scope)
+		is NamespaceNode -> pushScope(node)
 		is ScopeEndNode  -> popScope()
 		is NameNode      -> node.sym = resolveName(node.srcPos, node.value)
 		is UnNode        -> resolveNode(node.child)
@@ -230,12 +231,10 @@ class Resolver(private val context: Context) {
 		is StructNode    -> resolveStruct(node)
 		is EnumNode      -> resolveEnum(node)
 
-		is InsNode -> {
-			if(node.mnemonic == Mnemonic.DLLCALL) return
-			node.op1?.let(::resolveNode)
-			node.op2?.let(::resolveNode)
-			node.op3?.let(::resolveNode)
-			node.op4?.let(::resolveNode)
+		is FunNode -> {
+			pushScope(node)
+			for(param in node.params)
+				resolveTypeNode(param.typeNode)
 		}
 
 		is VarNode -> {
@@ -244,6 +243,7 @@ class Resolver(private val context: Context) {
 		}
 
 		is InitNode -> node.elements.forEach(::resolveNode)
+		is CallNode -> node.elements.forEach(::resolveNode)
 
 		is BinNode -> {
 			resolveNode(node.left)
@@ -256,15 +256,17 @@ class Resolver(private val context: Context) {
 			node.resolved = true
 		}
 
-		is RegNode, is StringNode, is IntNode, is LabelNode -> Unit
-		NullNode -> context.internalErr("Encountered NullNode")
-		else -> context.internalErr("Unhandled node: $node")
+		is StringNode,
+		is LabelNode,
+		is IntNode  -> Unit
+		NullNode    -> context.internalErr("Encountered NullNode")
+		else        -> context.internalErr("Unhandled node: $node")
 	}}
 
 
 
 	private fun resolveEnum(enum: EnumNode) {
-		pushScope(enum.scope)
+		pushScope(enum)
 
 		var current = 0
 		var max = 0
