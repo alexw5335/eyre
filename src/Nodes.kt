@@ -65,6 +65,11 @@ fun BinNode.calc(function: (Node) -> Int) = op.calc(function(left), function(rig
 
 
 
+class InsNode(
+	override val srcPos: SrcPos?,
+	val ins: Instruction,
+) : Node
+
 class VarNode(
 	override val srcPos: SrcPos?,
 	override val parent: Symbol,

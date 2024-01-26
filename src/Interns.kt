@@ -50,6 +50,10 @@ object Names {
 	operator fun get(id: Int) = list[id]
 	operator fun get(key: String) = map.getOrPut(key) { Name(count++, key).also(list::add) }
 
+	val widths = Width.entries.associateBy { get(it.string) }
+	val regs = Reg.entries.associateBy { get(it.string) }
+	val mnemonics = Mnemonic.entries.associateBy { get(it.string) }
+
 	val NONE      = get("")
 	val VAR       = get("var")
 	val NAMESPACE = get("namespace")

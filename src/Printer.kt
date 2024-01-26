@@ -66,6 +66,7 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 				TokenType.STRING  -> append("STRING  \"${t.stringValue(context)}\"")
 				TokenType.INT     -> append("INT     ${t.value}")
 				TokenType.CHAR    -> append("CHAR    \'${t.value.toChar()}\'")
+				TokenType.REG     -> append("REG     ${t.regVal}")
 				else              -> append(t.type.name)
 			}
 
@@ -139,6 +140,7 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 		"_"
 	else
 		context.qualifiedName(this)
+
 
 
 	private fun BufferedWriter.printType(type: Type) {

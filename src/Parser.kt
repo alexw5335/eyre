@@ -117,6 +117,49 @@ class Parser(private val context: Context) {
 
 
 
+
+	private fun parseOperand(ins: Instruction) {
+		if(tokens[pos].type == TokenType.NAME && tokens[pos].nameValue in Names.widths) {
+			ins.width = Names.widths[tokens[pos].nameValue]!!
+			pos++
+		}
+
+		if(tokens[pos].type == TokenType.REG) {
+			if(ins.r1 == Reg.NONE)
+				ins.r1 = tokens[pos].regVal
+			if(ins.r2 == Reg.NONE)
+				ins.r2 = tokens[pos].regVal
+			else
+				err(tokens[pos].srcPos(), "Too many registers")
+			pos++
+		} else if(tokens[pos].type == TokenType.LBRACK) {
+			while(true) {
+				if(tokens[pos].type == TokenType.REG) {
+					if(tokens[pos + 1].type == TokenType.STAR) {
+						if(tokens[pos + 2].type != TokenType.INT || ins.index != Reg.NONE)
+							err(tokens[pos + 2].srcPos(), "Invalid memory operand")
+						ins.index = tokens[pos].regVal
+						ins.scale = tokens[pos + 2].value
+					} else {
+						if(ins.base != Reg.NONE)
+							err(tokens[pos].srcPos(), "Invalid memory operand")
+						ins.base = tokens[pos].regVal
+					}
+				} else {
+					if(ins.disp != NullNode)
+						err(tokens[pos].srcPos(), "Invalid memory operand")
+					ins.disp = parseExpr()
+				}
+			}
+		} else {
+			if(ins.imm != NullNode)
+				err(tokens[pos].srcPos(), "Invalid immediate")
+			ins.imm = parseExpr()
+		}
+	}
+
+
+
 	private fun parseKeyword(keywordToken: Token) {
 		val keyword = keywordToken.nameValue
 		val srcPos = keywordToken.srcPos()
@@ -129,6 +172,25 @@ class Parser(private val context: Context) {
 		}
 
 		pos++
+
+		if(keyword in Names.mnemonics) {
+			val ins = Instruction()
+			ins.mnemonic = Names.mnemonics[keyword]!!
+
+			while(true) {
+				parseOperand(ins)
+				if(tokens[pos].type == TokenType.RBRACK) {
+					pos++
+					break
+				} else if(tokens[pos].type == TokenType.COMMA) {
+					pos++
+				} else {
+					err(tokens[pos].srcPos(), "Expecting comma")
+				}
+			}
+
+			return
+		}
 
 		when(keyword) {
 			Names.STRUCT -> parseStruct(srcPos, name(), false, null)

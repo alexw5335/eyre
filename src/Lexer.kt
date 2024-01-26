@@ -103,6 +103,8 @@ class Lexer(private val context: Context) {
 		}
 
 		val name = Names[String(chars, startPos, pos - startPos)]
+		if(name in Names.regs)
+			add(TokenType.REG, Names.regs[name]!!.ordinal)
 		add(TokenType.NAME, name.id)
 	}
 

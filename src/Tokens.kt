@@ -3,6 +3,7 @@ package eyre
 
 
 data class Token(val type: TokenType, val value: Int, val line: Int) {
+	val regVal get() = Reg.entries[value]
 	val isSym get() = type >= TokenType.EOF
 	val nameValue get() = Names[value]
 	fun stringValue(context: Context) = context.strings[value]
@@ -29,6 +30,8 @@ enum class TokenType(
 	INT("int"),
 	// value is 32-bit integer
 	CHAR("char"),
+	// value is Reg enum ordinal
+	REG("reg"),
 
 	// Symbols, no value
 	// Note: Token::isSym depends on this enum's ordering

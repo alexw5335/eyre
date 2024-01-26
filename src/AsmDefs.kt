@@ -1,54 +1,36 @@
 package eyre
 
-import kotlin.math.absoluteValue
-
 
 
 enum class Mnemonic {
+	NONE,
 	MOV,
 	PUSH,
 	POP,
 	ADD,
 	SUB,
 	LEAVE,
-	RET,
+	RET;
+
+	val string = name.lowercase()
+
 }
 
-sealed interface Operand
 
-data object NullOperand : Operand
 
-enum class RegOperand : Operand {
-	RAX, RCX, RDX, RBX,
-	RSP, RBP, RSI, RDI,
-	R8, R9, R10, R11,
-	R12, R13, R14, R15;
+class Instruction {
+	var mnemonic = Mnemonic.NONE
+	var width = Width.NONE
+	var base = Reg.NONE
+	var index = Reg.NONE
+	var scale = 0
+	var r1 = Reg.NONE
+	var r2 = Reg.NONE
+	var disp: Node = NullNode
+	var imm: Node = NullNode
 }
 
-data class StackOperand(val width: Width, val offset: Int) : Operand {
-	override fun toString() = if(offset < 0)
-		"$width [RBP - ${offset.absoluteValue}]"
-	else
-		"$width [RBP + ${offset.absoluteValue}"
-}
 
-data class GlobalOperand(val width: Width, val pos: Int) : Operand
-
-data class IntOperand(val value: Int) : Operand {
-	override fun toString() = "$value"
-}
-
-data class Instruction(
-	val mnemonic: Mnemonic,
-	val op1: Operand,
-	val op2: Operand
-) {
-	override fun toString() = when {
-		op1 == NullOperand -> "$mnemonic"
-		op2 == NullOperand -> "$mnemonic $op1"
-		else -> "$mnemonic $op1, $op2"
-	}
-}
 
 enum class Width(val bytes: Int) {
 
