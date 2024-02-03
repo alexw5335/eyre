@@ -1,22 +1,28 @@
 package eyre
 
-import java.io.BufferedWriter
 import java.nio.file.Files
 
-class Printer(private val context: Context, private val stage: EyreStage) {
+class Printer(private val context: Context) {
 
 
-	private val atResolve = stage >= EyreStage.RESOLVE
+	/*
+	Util
+	 */
 
 
 
-	private fun BufferedWriter.appendLineNumber(lineNumber: Int) {
+	private fun StringBuilder.appendLineNumber(lineNumber: Int) {
 		var count = 0
 		var mutable = lineNumber
 		while(mutable != 0) { mutable /= 10; count++ }
-		append(lineNumber.toString())
+		append(lineNumber)
 		for(i in 0 ..< 8 - count) append(' ')
 	}
+
+
+
+	private fun write(path: String, builder: StringBuilder.() -> Unit) =
+		Files.writeString(context.buildDir.resolve(path), buildString(builder))
 
 
 
@@ -26,10 +32,11 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 
-	fun writeText() {
-		Files.write(context.buildDir.resolve("code.bin"), context.textWriter.copy())
+	fun writeDisasm() {
+		val path = context.buildDir.resolve("code.bin")
+		Files.write(path, context.textWriter.copy())
+		Util.run("ndisasm", "-b64", path.toString())
 	}
-
 
 
 
@@ -40,16 +47,16 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 	fun writeTokens() {
-		Files.newBufferedWriter(context.buildDir.resolve("tokens.txt")).use {
+		write("tokens.txt") {
 			for(srcFile in context.files) {
-				it.append(srcFile.relPath.toString())
+				append(srcFile.relPath.toString())
 
 				if(srcFile.tokens.isEmpty()) {
-					it.append(" (empty)")
+					append(" (empty)")
 				} else {
-					it.append(":\n")
-					it.appendTokens(srcFile.tokens)
-					it.append("\n\n\n")
+					append(":\n")
+					appendTokens(srcFile.tokens)
+					append("\n\n\n")
 				}
 			}
 		}
@@ -57,20 +64,18 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 
-	private fun BufferedWriter.appendTokens(tokens: List<Token>) {
+	private fun StringBuilder.appendTokens(tokens: List<Token>) {
 		for(t in tokens) {
 			appendLineNumber(t.line)
 
 			when(t.type) {
-				TokenType.NAME    -> append("NAME    ${t.nameValue}")
-				TokenType.STRING  -> append("STRING  \"${t.stringValue(context)}\"")
-				TokenType.INT     -> append("INT     ${t.value}")
-				TokenType.CHAR    -> append("CHAR    \'${t.value.toChar()}\'")
-				TokenType.REG     -> append("REG     ${t.regVal}")
-				else              -> append(t.type.name)
+				TokenType.NAME    -> appendLine("NAME    ${t.nameValue}")
+				TokenType.STRING  -> appendLine("STRING  \"${t.stringValue}\"")
+				TokenType.INT     -> appendLine("INT     ${t.intValue}")
+				TokenType.CHAR    -> appendLine("CHAR    \'${t.intValue.toChar()}\'")
+				TokenType.REG     -> appendLine("REG     ${t.regValue}")
+				else              -> appendLine(t.type.name)
 			}
-
-			appendLine()
 		}
 	}
 
@@ -82,11 +87,17 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 
+	private val Sym.fullName: String get() = if(name.isNull)
+		"_"
+	else
+		context.qualifiedName(this)
+
+
+
 	fun writeSymbols() {
-		Files.newBufferedWriter(context.buildDir.resolve("symbols.txt")).use {
+		write("symbols.txt") {
 			for(sym in context.symTable.list)
-				if(sym != RootSym)
-					it.appendLine("${sym::class.simpleName}  --  ${sym.fullName}")
+				appendLine("${sym::class.simpleName}  --  ${sym.fullName}")
 		}
 	}
 
@@ -103,17 +114,17 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 	fun writeNodes() {
-		Files.newBufferedWriter(context.buildDir.resolve("nodes.txt")).use {
+		write("nodes.txt") {
 			for(srcFile in context.files) {
-				it.append(srcFile.relPath.toString())
+				append(srcFile.relPath.toString())
 
 				if(srcFile.nodes.isEmpty()) {
-					it.append(" (empty)")
+					append(" (empty)")
 				} else {
-					it.append(":\n")
+					append(":\n")
 					for(node in srcFile.nodes)
-						it.appendNode(node)
-					it.append("\n\n\n")
+						appendNode(node)
+					append("\n\n\n")
 				}
 			}
 		}
@@ -121,7 +132,7 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 
-	private fun BufferedWriter.appendChild(node: Node) {
+	private fun StringBuilder.appendChild(node: Node) {
 		indent++
 		appendNode(node)
 		indent--
@@ -129,46 +140,39 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 
 
 
-	private fun shouldIndent(node: Node) = when(node) {
-		is FunNode -> true
-		else       -> false
-	}
-
-
-
-	private val Symbol.fullName: String get() = if(name.isNull)
-		"_"
-	else
-		context.qualifiedName(this)
-
-
-
-	private fun BufferedWriter.printType(type: Type) {
-		if(type is ArrayType) {
-			printType(type.base)
-			append('[')
-			append(type.count.toString())
-			append(']')
-		} else {
-			append(type.fullName)
-		}
-	}
-
-
-
-	private fun BufferedWriter.appendNode(node: Node) {
-		if(node is ScopeEndNode) {
-			if(shouldIndent(node.origin))
-				indent--
-			return
-		}
-
-		appendLineNumber(node.srcPos?.line ?: context.internalErr("Missing src pos line: $node"))
-
-		for(i in 0 ..< indent)
-			append("    ")
+	private fun StringBuilder.appendNode(node: Node) {
+		appendLineNumber(node.srcPos?.line ?: context.internalErr())
+		for(i in 0 ..< indent) append("    ")
 
 		when(node) {
+			is RegNode  -> appendLine(node.value)
+			is NameNode -> appendLine(node.value.string)
+			is IntNode  -> appendLine("${node.value}")
+
+			is OpNode -> {
+				when(node.type) {
+					OpType.IMM -> {
+						appendLine("IMM")
+						appendChild(node.child!!)
+					}
+					OpType.MEM -> {
+						if(node.width != Width.NONE)
+							appendLine("${node.width} MEM")
+						else
+							appendLine("MEM")
+						appendChild(node.child!!)
+					}
+					else -> appendLine(node.reg)
+				}
+			}
+
+			is InsNode -> {
+				appendLine(node.mnemonic)
+				node.op1?.let { appendChild(it) }
+				node.op2?.let { appendChild(it) }
+				node.op3?.let { appendChild(it) }
+			}
+
 			is UnNode -> {
 				appendLine(node.op.string)
 				appendChild(node.child)
@@ -180,121 +184,15 @@ class Printer(private val context: Context, private val stage: EyreStage) {
 				appendChild(node.right)
 			}
 
-			is ConstNode -> {
-				append("CONST ${context.qualifiedName(node)}")
-				if(atResolve)
-					append(" (value = ${node.intValue})")
-				appendLine()
-				appendChild(node.valueNode)
+			is ProcNode -> {
+				appendLine("PROC ${node.sym.fullName}")
+				indent++
+				node.children.forEach { appendNode(it) }
+				indent--
 			}
 
-			is EnumEntryNode -> {
-				append(context.qualifiedName(node))
-				if(atResolve)
-					append(" (value = ${node.intValue})")
-				appendLine()
-				node.valueNode?.let { appendChild(it) }
-			}
-
-			is EnumNode -> {
-				appendLine("ENUM ${context.qualifiedName(node)}")
-				for(child in node.entries)
-					appendChild(child)
-			}
-
-			is TypedefNode -> {
-				append("TYPEDEF ${node.fullName}")
-				if(atResolve) {
-					append(" (type = ")
-					printType(node.type)
-					append(')')
-				}
-				appendLine()
-				appendChild(node.typeNode)
-			}
-
-			is DotNode -> {
-				appendLine(".")
-				appendChild(node.left)
-				appendChild(node.right)
-			}
-
-			is ArrayNode -> {
-				appendLine("[]")
-				appendChild(node.left)
-				appendChild(node.right)
-			}
-
-			is RefNode -> {
-				appendLine("::")
-				appendChild(node.left)
-				appendChild(node.right)
-			}
-
-			is MemberNode -> {
-				append("${node.fullName} (type = ")
-				printType(node.type)
-				appendLine(", offset = ${node.offset})")
-				if(node.typeNode != null)
-					appendChild(node.typeNode)
-				else
-					appendChild(node.struct!!)
-			}
-
-			is StructNode -> {
-				appendLine("STRUCT ${node.fullName} (size = ${node.size})")
-				for(member in node.members)
-					appendChild(member)
-			}
-
-			is TypeNode -> {
-				append(node.names.joinToString(separator = "."))
-				for(size in node.arraySizes)
-					append("[]")
-				appendLine()
-				for(size in node.arraySizes)
-					appendChild(size)
-			}
-
-			is InitNode -> {
-				appendLine("INITIALISER")
-				for(element in node.elements)
-					appendChild(element)
-			}
-
-			is CallNode -> {
-				appendLine("()")
-				appendChild(node.left)
-				for(element in node.elements)
-					appendChild(element)
-			}
-
-			is VarNode -> {
-				appendLine("VAR ${node.fullName}")
-				appendChild(node.typeNode)
-				node.valueNode?.let { appendChild(it) }
-			}
-
-			is ParamNode -> {
-				appendLine("PARAM ${node.fullName}")
-				appendChild(node.typeNode)
-			}
-
-			is FunNode -> {
-				appendLine("FUN ${node.fullName}")
-				for(param in node.params)
-					appendChild(param)
-			}
-
-			is NameNode      -> appendLine(node.value.string)
-			is IntNode       -> appendLine("${node.value}")
-			is LabelNode     -> appendLine("LABEL ${context.qualifiedName(node)}")
-			is NamespaceNode -> appendLine("NAMESPACE ${context.qualifiedName(node)}")
-			else             -> appendLine(node::class.simpleName)
+			else -> appendLine(node::class.simpleName)
 		}
-
-		if(shouldIndent(node))
-			indent++
 	}
 
 

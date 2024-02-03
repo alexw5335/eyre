@@ -3,11 +3,9 @@ package eyre
 class Parser(private val context: Context) {
 
 
-	private lateinit var srcFile: SrcFile
-	private val tokens get() = srcFile.tokens
-
+	private lateinit var file: SrcFile
+	private lateinit var tokens: List<Token>
 	private var pos = 0
-	private var currentScope: Symbol = RootSym
 
 
 
@@ -21,20 +19,10 @@ class Parser(private val context: Context) {
 		if(tokens[pos].type == TokenType.COMMA) pos++
 	}
 
-	private fun Token.asName() = if(type != TokenType.NAME)
-		err(srcPos(), "Expecting name, found: $type")
-	else
-		nameValue
-
 	private fun err(srcPos: SrcPos?, message: String): Nothing =
-		context.err(message, srcPos)
+		context.err(srcPos, message)
 
 	private fun err(message: String): Nothing = err(tokens[pos].srcPos(), message)
-
-	private fun potentialName() = if(tokens[pos].type == TokenType.NAME)
-		tokens[pos++].nameValue
-	else
-		Names.NONE
 
 	private fun name(): Name {
 		val token = tokens[pos++]
@@ -55,19 +43,12 @@ class Parser(private val context: Context) {
 
 	private val atNewline get() = tokens[pos].line != tokens[pos - 1].line
 
-	private fun<T : Node> T.add(): T {
-		srcFile.nodes.add(this)
-		return this
-	}
-
-	private fun<T> T.addSym(): T where T : Node, T : Symbol {
-		srcFile.nodes.add(this)
+	private fun<T : Sym> T.add(): T {
 		context.symTable.add(this)
 		return this
 	}
 
-	private fun Token.srcPos() = SrcPos(srcFile, line)
-
+	private fun Token.srcPos() = SrcPos(file, line)
 
 
 	/*
@@ -84,210 +65,72 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parse(srcFile: SrcFile) {
-		this.srcFile = srcFile
+	private fun parse(file: SrcFile) {
+		this.file = file
+		this.tokens = file.tokens
 		this.pos = 0
 
 		try {
-			parseScope(RootSym)
+			parseScope(null, file.nodes)
 		} catch(_: EyreError) {
-			srcFile.invalid = true
+			file.invalid = true
 		}
 	}
 
 
 
-	private fun parseScope(scope: Symbol) {
-		val prevScope = currentScope
-		currentScope = scope
-
+	private fun parseScope(scope: Sym?, nodes: ArrayList<Node>) {
 		while(pos < tokens.size) {
 			val token = tokens[pos]
 			when(token.type) {
-				TokenType.NAME   -> parseKeyword(token)
+				TokenType.NAME   -> parseKeyword(token, scope, nodes)
 				TokenType.RBRACE -> return
 				TokenType.SEMI   -> pos++
 				TokenType.EOF    -> break
 				else             -> err("Invalid token: ${token.type}")
 			}
 		}
-
-		currentScope = prevScope
 	}
 
 
 
-
-	private fun parseOperand(ins: Instruction) {
-		if(tokens[pos].type == TokenType.NAME && tokens[pos].nameValue in Names.widths) {
-			ins.width = Names.widths[tokens[pos].nameValue]!!
-			pos++
-		}
-
-		if(tokens[pos].type == TokenType.REG) {
-			if(ins.r1 == Reg.NONE)
-				ins.r1 = tokens[pos].regVal
-			if(ins.r2 == Reg.NONE)
-				ins.r2 = tokens[pos].regVal
-			else
-				err(tokens[pos].srcPos(), "Too many registers")
-			pos++
-		} else if(tokens[pos].type == TokenType.LBRACK) {
-			while(true) {
-				if(tokens[pos].type == TokenType.REG) {
-					if(tokens[pos + 1].type == TokenType.STAR) {
-						if(tokens[pos + 2].type != TokenType.INT || ins.index != Reg.NONE)
-							err(tokens[pos + 2].srcPos(), "Invalid memory operand")
-						ins.index = tokens[pos].regVal
-						ins.scale = tokens[pos + 2].value
-					} else {
-						if(ins.base != Reg.NONE)
-							err(tokens[pos].srcPos(), "Invalid memory operand")
-						ins.base = tokens[pos].regVal
-					}
-				} else {
-					if(ins.disp != NullNode)
-						err(tokens[pos].srcPos(), "Invalid memory operand")
-					ins.disp = parseExpr()
-				}
-			}
-		} else {
-			if(ins.imm != NullNode)
-				err(tokens[pos].srcPos(), "Invalid immediate")
-			ins.imm = parseExpr()
-		}
-	}
-
-
-
-	private fun parseKeyword(keywordToken: Token) {
+	private fun parseKeyword(keywordToken: Token, scope: Sym?, nodes: ArrayList<Node>) {
 		val keyword = keywordToken.nameValue
 		val srcPos = keywordToken.srcPos()
 
+		fun<T : Node> T.add(): T {
+			nodes.add(this)
+			return this
+		}
+
 		if(tokens[pos + 1].type == TokenType.COLON) {
 			pos++
-			LabelNode(srcPos, currentScope, keyword).addSym()
+			LabelNode(srcPos, LabelSym(SymBase(scope, keyword)).add()).add()
 			expectNewline()
 			return
 		}
 
 		pos++
 
-		if(keyword in Names.mnemonics) {
-			val ins = Instruction()
-			ins.mnemonic = Names.mnemonics[keyword]!!
-
-			while(true) {
-				parseOperand(ins)
-				if(tokens[pos].type == TokenType.RBRACK) {
-					pos++
-					break
-				} else if(tokens[pos].type == TokenType.COMMA) {
-					pos++
-				} else {
-					err(tokens[pos].srcPos(), "Expecting comma")
-				}
-			}
-
-			return
-		}
-
 		when(keyword) {
-			Names.STRUCT -> parseStruct(srcPos, name(), false, null)
-			Names.UNION  -> parseStruct(srcPos, name(), true, null)
+			in Name.mnemonics -> parseIns(srcPos, Name.mnemonics[keyword]!!).add()
 
-			Names.FUN -> {
-				val funNode = FunNode(srcPos, currentScope, name()).addSym()
-				expect(TokenType.LPAREN)
-				while(tokens[pos].type != TokenType.RPAREN) {
-					val paramSrcPos = tokens[pos].srcPos()
-					val paramName = name()
-					expect(TokenType.COLON)
-					val paramType = parseType()
-					skipComma()
-					val param = ParamNode(paramSrcPos, funNode, paramName, paramType)
-					context.symTable.add(param)
-					funNode.params.add(param)
-				}
-				pos++
+			Name.PROC -> {
+				val name = name()
 				expect(TokenType.LBRACE)
-				parseScope(funNode)
+				val sym = ProcSym(SymBase(scope, name)).add()
+				val children = ArrayList<Node>()
+				parseScope(sym, children)
 				expect(TokenType.RBRACE)
-				ScopeEndNode(funNode).add()
+				ProcNode(srcPos, sym, children).add()
 			}
 
-			Names.NAMESPACE -> {
-				var namespace = NamespaceNode(srcPos, currentScope, name())
-				context.symTable.add(namespace)
-				while(tokens[pos].type == TokenType.DOT) {
-					pos++
-					namespace = NamespaceNode(srcPos, namespace, name())
-					context.symTable.add(namespace)
-				}
-				namespace.add()
-				expectNewline()
-				parseScope(namespace)
-				ScopeEndNode(namespace).add()
-			}
-
-			Names.CONST -> {
-				val name = name()
-				expect(TokenType.SET)
-				val valueNode = parseExpr()
-				ConstNode(srcPos, currentScope, name, valueNode).addSym()
-				expectNewline()
-			}
-
-			Names.TYPEDEF -> {
+			Name.TYPEDEF -> {
 				val name = name()
 				expect(TokenType.SET)
 				val typeNode = parseType()
-				TypedefNode(srcPos, currentScope, name, typeNode).addSym()
+				TypedefNode(srcPos, TypedefSym(SymBase(scope, name)).add(), typeNode).add()
 				expectNewline()
-			}
-
-			Names.VAR -> {
-				val name = name()
-				expect(TokenType.COLON)
-				val typeNode = parseType()
-				val valueNode: Node? = if(tokens[pos].type == TokenType.SET) {
-					pos++
-					parseExpr()
-				} else
-					null
-				val varNode = VarNode(srcPos, currentScope, name, typeNode, valueNode).addSym()
-				if(currentScope is FunNode) {
-					varNode.mem.type = Mem.Type.STACK
-					(currentScope as FunNode).locals.add(varNode)
-				} else {
-					varNode.mem.type = Mem.Type.GLOBAL
-				}
-			}
-
-			Names.ENUM -> {
-				val enum = EnumNode(srcPos, currentScope, name()).addSym()
-				expect(TokenType.LBRACE)
-
-				while(true) {
-					if(tokens[pos].type == TokenType.RBRACE)
-						break
-					val nameToken = tokens[pos++]
-					val entryName = nameToken.asName()
-
-					val valueNode = if(tokens[pos].type == TokenType.SET) {
-						pos++
-						parseExpr()
-					} else
-						null
-
-					val entry = EnumEntryNode(nameToken.srcPos(), enum, entryName, valueNode)
-					context.symTable.add(entry)
-					enum.entries.add(entry)
-
-					if(tokens[pos].type == TokenType.COMMA)
-						pos++
-				}
-				pos++
 			}
 
 			else -> {
@@ -299,47 +142,63 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseStruct(srcPos: SrcPos, name: Name, isUnion: Boolean, parent: StructNode?): StructNode {
-		val struct = StructNode(srcPos, parent ?: currentScope, name, isUnion)
-		val scope: Symbol
+	/*
+	Expression parsing
+	 */
 
-		if(parent != null) {
-			val member = MemberNode(struct.srcPos, parent, struct.name, null, struct)
-			parent.members.add(member)
-			scope = parent
+
+
+	private fun parseOperand(): OpNode {
+		val token = tokens[pos]
+		val srcPos = token.srcPos()
+
+		return if(token.type == TokenType.NAME && token.nameValue in Name.widths) {
+			pos++
+			expect(TokenType.LBRACK)
+			val child = parseExpr()
+			expect(TokenType.RBRACK)
+			OpNode(srcPos, OpType.MEM, Name.widths[token.nameValue]!!, child, Reg.NONE)
+		} else if(token.type == TokenType.LBRACK) {
+			pos++
+			val child = parseExpr()
+			expect(TokenType.RBRACK)
+			OpNode(srcPos, OpType.MEM, Width.NONE, child, Reg.NONE)
+		} else if(token.type == TokenType.REG) {
+			pos++
+			val reg = token.regValue
+			OpNode(srcPos, reg.type, reg.width, null, reg)
 		} else {
-			if(name.isNull)
-				err(srcPos, "Top-level struct cannot be anonymous")
-			struct.addSym()
-			scope = struct
+			OpNode(srcPos, OpType.IMM, Width.NONE, parseExpr(), Reg.NONE)
+		}
+	}
+
+
+
+	private fun parseIns(srcPos: SrcPos, mnemonic: Mnemonic): InsNode {
+		var op1: OpNode? = null
+		var op2: OpNode? = null
+		var op3: OpNode? = null
+
+		fun commaOrNewline(): Boolean {
+			if(atNewline) return false
+			if(tokens[pos++].type != TokenType.COMMA)
+				err(srcPos, "Expecting newline or comma")
+			return true
 		}
 
-		expect(TokenType.LBRACE)
-
-		while(tokens[pos].type != TokenType.RBRACE) {
-			val first = tokens[pos]
-
-			if(first.type == TokenType.NAME) {
-				when(val n = first.nameValue) {
-					Names.UNION, Names.STRUCT -> {
-						pos++
-						parseStruct(first.srcPos(), potentialName(), n == Names.UNION, struct)
-						continue
-					}
+		if(!atNewline) {
+			op1 = parseOperand()
+			if(commaOrNewline()) {
+				op2 = parseOperand()
+				if(commaOrNewline()) {
+					op3 = parseOperand()
+					expectNewline()
 				}
 			}
-
-			val typeNode = parseType()
-			val memberName = name()
-			val member = MemberNode(first.srcPos(), scope, memberName, typeNode, null)
-			context.symTable.add(member)
-			struct.members.add(member)
-			expectNewline()
 		}
 
-		pos++
-
-		return struct
+		expectNewline()
+		return InsNode(srcPos, mnemonic, op1, op2, op3)
 	}
 
 
@@ -360,10 +219,11 @@ class Parser(private val context: Context) {
 				InitNode(srcPos, elements)
 			}
 
+			TokenType.REG    -> RegNode(srcPos, token.regValue)
 			TokenType.NAME   -> NameNode(srcPos, token.nameValue)
-			TokenType.INT    -> IntNode(srcPos, token.value)
-			TokenType.STRING -> StringNode(srcPos, token.stringValue(context))
-			TokenType.CHAR   -> IntNode(srcPos, token.value)
+			TokenType.INT    -> IntNode(srcPos, token.intValue)
+			TokenType.STRING -> StringNode(srcPos, token.stringValue)
+			TokenType.CHAR   -> IntNode(srcPos, token.intValue)
 			TokenType.LPAREN -> parseExpr().also { expect(TokenType.RPAREN) }
 			else             -> UnNode(srcPos, token.type.unOp ?: err(srcPos, "Invalid atom: $token"), parseAtom())
 		}

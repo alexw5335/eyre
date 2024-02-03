@@ -2,17 +2,27 @@ package eyre
 
 
 
-data class Token(val type: TokenType, val value: Int, val line: Int) {
-	val regVal get() = Reg.entries[value]
+data class Token(
+	val type: TokenType,
+	val line: Int,
+	val intValue: Long = 0L,
+	val stringValue: String = "",
+	val nameValue: Name = Name.NONE,
+	val regValue: Reg = Reg.NONE,
+) {
 	val isSym get() = type >= TokenType.EOF
-	val nameValue get() = Names[value]
-	fun stringValue(context: Context) = context.strings[value]
-
-	override fun toString() = if(type == TokenType.NAME)
-		"Token(NAME (${nameValue.string}), value=$value, line=$line)"
-	else
-		"Token($type, value=$value, line=$line)"
-
+	override fun toString() = buildString {
+		append("Token(line $line, ")
+		when(type) {
+			TokenType.NAME   -> append("name = $nameValue")
+			TokenType.STRING -> append("string = $stringValue")
+			TokenType.INT    -> append("int = $intValue")
+			TokenType.CHAR   -> append("char = ${Char(intValue.toInt())}")
+			TokenType.REG    -> append("reg = $regValue")
+			else             -> append("sym = ${type.string}")
+		}
+		append(')')
+	}
 }
 
 
@@ -22,19 +32,11 @@ enum class TokenType(
 	val binOp: BinOp? = null,
 	val unOp: UnOp? = null
 ) {
-	// value is intern id
-	NAME("name"),
-	// value is index into string table
-	STRING("string"),
-	// value is 32-bit integer
-	INT("int"),
-	// value is 32-bit integer
-	CHAR("char"),
-	// value is Reg enum ordinal
-	REG("reg"),
-
-	// Symbols, no value
-	// Note: Token::isSym depends on this enum's ordering
+	NAME    ("name"),
+	STRING  ("string"),
+	INT     ("int"),
+	CHAR    ("char"),
+	REG     ("reg"),
 	EOF     ("EOF"),
 	LPAREN  ("(", BinOp.INV),
 	RPAREN  (")"),

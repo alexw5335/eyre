@@ -7,13 +7,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val errors = ArrayList<EyreError>()
 
-	val strings = ArrayList<String>()
-
-	val symTable = SymbolTable()
-
-	val linkRelocs = ArrayList<Reloc>()
-
-	val absRelocs = ArrayList<Reloc>()
+	val symTable = SymTable()
 
 	val textWriter = BinWriter()
 
@@ -35,6 +29,10 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val bssSec   = Section(3, ".bss", 0xC0_00_00_80U).also(sections::add)
 
+	val linkRelocs = ArrayList<Reloc>()
+
+	val absRelocs = ArrayList<Reloc>()
+
 
 
 	// Errors
@@ -44,8 +42,11 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 	fun internalErr(message: String? = "no reason given"): Nothing =
 		error("Internal compiler error: $message")
 
-	fun err(message: String, srcPos: SrcPos? = null): Nothing =
-		throw EyreError(srcPos, message).also(errors::add)
+	fun err(srcPos: SrcPos?, message: String): Nothing {
+		val error = EyreError(srcPos, message)
+		errors.add(error)
+		throw error
+	}
 
 
 
@@ -53,14 +54,14 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 
 
-	private fun appendQualifiedName(builder: StringBuilder, sym: Symbol) {
-		if(sym.parent !is RootSym) {
-			appendQualifiedName(builder, sym.parent)
+	private fun appendQualifiedName(builder: StringBuilder, sym: Sym) {
+		sym.parent?.let {
+			appendQualifiedName(builder, it)
 			builder.append('.')
 		}
 		builder.append(sym.name)
 	}
 
-	fun qualifiedName(sym: Symbol) = buildString { appendQualifiedName(this, sym) }
+	fun qualifiedName(sym: Sym) = buildString { appendQualifiedName(this, sym) }
 
 }

@@ -61,20 +61,20 @@ class Lexer(private val context: Context) {
 
 
 
-	private fun err(message: String): Nothing = context.err(message, SrcPos(file, lineCount))
+	private fun err(message: String): Nothing = context.err(SrcPos(file, lineCount), message)
 
 	private val Char.isNamePart get() = isLetterOrDigit() || this == '_'
 
-	private fun add(type: TokenType, value: Int) {
-		file.tokens.add(Token(type, value, lineCount))
+	private fun add(token: Token) {
+		file.tokens.add(token)
 	}
 
 	private fun add(symbol: TokenType) {
-		file.tokens.add(Token(symbol, 0, lineCount))
+		file.tokens.add(Token(symbol, lineCount))
 	}
 
 	private fun addAdv(symbol: TokenType) {
-		file.tokens.add(Token(symbol, 0, lineCount))
+		file.tokens.add(Token(symbol, lineCount))
 		pos++
 	}
 
@@ -102,10 +102,12 @@ class Lexer(private val context: Context) {
 			pos++
 		}
 
-		val name = Names[String(chars, startPos, pos - startPos)]
-		if(name in Names.regs)
-			add(TokenType.REG, Names.regs[name]!!.ordinal)
-		add(TokenType.NAME, name.id)
+		val name = Name[String(chars, startPos, pos - startPos)]
+
+		if(name in Name.regs)
+			add(Token(TokenType.REG, lineCount, regValue = Name.regs[name]!!))
+		else
+			add(Token(TokenType.NAME, lineCount, nameValue = name))
 	}
 
 
@@ -115,8 +117,8 @@ class Lexer(private val context: Context) {
 		var size = 0
 		while(chars[pos + size].isNamePart) size++
 		val string = String(chars, pos, size)
-		val value = string.toIntOrNull(10) ?: err("Malformed integer: $string")
-		add(TokenType.INT, value)
+		val value = string.toLongOrNull(10) ?: err("Malformed integer: $string")
+		add(Token(TokenType.INT, lineCount, intValue = value))
 		pos += size
 	}
 
@@ -182,8 +184,7 @@ class Lexer(private val context: Context) {
 			}
 		}
 
-		add(TokenType.STRING, context.strings.size)
-		context.strings.add(stringBuilder.toString())
+		add(Token(TokenType.STRING, lineCount, stringValue = stringBuilder.toString()))
 	}
 
 
@@ -194,7 +195,7 @@ class Lexer(private val context: Context) {
 		if(char == '\\')
 			char = chars[pos++].escape
 
-		add(TokenType.CHAR, char.code)
+		add(Token(TokenType.CHAR, lineCount, intValue = char.code.toLong()))
 
 		if(chars[pos++] != '\'')
 			err("Unterminated character literal")
