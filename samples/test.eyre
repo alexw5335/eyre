@@ -1,4 +1,1 @@
-imul rax
-imul dword [rax]
-imul rax, r12
-imul rax, r13, 12
+ret

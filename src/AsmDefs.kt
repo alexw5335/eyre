@@ -6,6 +6,7 @@ enum class Ops(val multi: Pair<Ops, Ops>? = null) {
 	NONE,
 	R,
 	M,
+	O,
 	I8,  // INT I8
 	I32, // PUSH I32
 	REL8,
@@ -16,17 +17,13 @@ enum class Ops(val multi: Pair<Ops, Ops>? = null) {
 	R_I,
 	M_I,
 	RM_CL,
+	O_I,    // MOV
 	R_RM8,  // MOVSX, MOVZX
 	R_RM16, // MOVSX, MOVZX
 	R_RM32, // MOVSXD
 	R_RM_I, // IMUL
 	R_MEM,  // LEA
 	RM_I8,
-	RM_ONE,
-	A_I8, // IN
-	A_DX, // IN
-	I8_A, // OUT
-	DX_A, // OUT
 
 	RM(R to M),
 	RM_R(R_R to M_R),
@@ -36,11 +33,11 @@ enum class Ops(val multi: Pair<Ops, Ops>? = null) {
 
 
 
-enum class Prefix {
-	NONE,
-	P66,
-	PF3,
-	PF2
+enum class Prefix(val value: Int) {
+	NONE(0),
+	P66(0x66),
+	PF3(0xF3),
+	PF2(0xF2)
 }
 
 
@@ -54,21 +51,31 @@ enum class Escape {
 
 
 
-class Enc(
+data class Enc(
 	val prefix : Prefix,
 	val escape : Escape,
 	val opcode : Int,
 	val ext    : Int,
 	val mask   : Int,
 	val ops    : Ops,
-	val opreg  : Boolean,
 	val rw     : Int,
 	val o16    : Int,
 )
 
 
 
-class EncGroup(val mnemonic: Mnemonic, val encs: ArrayList<Enc>)
+class EncGroup(val mnemonic: Mnemonic) {
+	val encs = ArrayList<Enc>()
+	var ops = 0
+
+	fun add(enc: Enc) {
+		if(enc.ops !in this) encs.add(enc)
+		ops = ops or (1 shl enc.ops.ordinal)
+	}
+
+	operator fun contains(ops: Ops) = (this.ops and (1 shl ops.ordinal)) != 0
+	operator fun get(ops: Ops) = encs[(this.ops and ((1 shl ops.ordinal) - 1)).countOneBits()]
+}
 
 
 

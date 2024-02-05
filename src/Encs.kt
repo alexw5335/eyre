@@ -11,9 +11,20 @@ object Encs {
 
 	private val opsMap = Ops.entries.associateBy { it.name }
 
+	private val missingMnemonics = LinkedHashSet<String>()
+
 	private val groups = HashMap<Mnemonic, EncGroup>()
 
-	private val missingMnemonics = LinkedHashSet<String>()
+	private val zeroOpcodes = IntArray(Mnemonic.entries.size)
+
+	init {
+		parse()
+		createZeroOpcodes()
+	}
+
+	operator fun get(mnemonic: Mnemonic) = groups[mnemonic]
+
+	fun getZeroOpcode(mnemonic: Mnemonic) = zeroOpcodes[mnemonic.ordinal]
 
 
 
@@ -34,7 +45,7 @@ object Encs {
 
 
 
-	fun parse() {
+	private fun parse() {
 		while(pos < encsString.length) {
 			when(encsString[pos]) {
 				'\n' -> { pos++; lineCount++ }
@@ -43,7 +54,35 @@ object Encs {
 			}
 		}
 
+		for(g in groups.values)
+			g.encs.sortBy { it.ops }
+
 		missingMnemonics.forEach(::println)
+	}
+
+
+
+
+	private fun createZeroOpcodes() {
+		for(g in groups.values) {
+			for(enc in g.encs) {
+				if(enc.ops != Ops.NONE) continue
+				var value = enc.opcode
+				value = when(enc.prefix) {
+					Prefix.NONE -> value
+					Prefix.P66 -> (value shl 8) or 0x66
+					Prefix.PF3 -> (value shl 8) or 0xF3
+					Prefix.PF2 -> (value shl 8) or 0xF2
+				}
+				value = when(enc.escape) {
+					Escape.NONE -> value
+					Escape.E0F -> (value shl 8) or 0x0F
+					Escape.E38 -> (value shl 16) or 0x380F
+					Escape.E3A -> (value shl 16) or 0x3A0F
+				}
+				zeroOpcodes[g.mnemonic.ordinal] = value
+			}
+		}
 	}
 
 
@@ -56,7 +95,6 @@ object Encs {
 		var mask = 0
 		var rw = 0
 		var o16 = 0
-		var opreg = false
 		var ops = Ops.NONE
 		var mnemonicString = ""
 
@@ -95,7 +133,6 @@ object Encs {
 				in opsMap -> ops = opsMap[part]!!
 				"RW"    -> rw = 1
 				"O16"   -> o16 = 1
-				"OPREG" -> opreg = true
 				else    -> error("Invalid part: $part")
 			}
 		}
@@ -103,12 +140,13 @@ object Encs {
 		fun add(opcode: Int, mnemonicString: String, ops: Ops) {
 			val mnemonic = mnemonicMap[mnemonicString]
 			if(mnemonic == null) { missingMnemonics += mnemonicString; return }
-			val group = groups.getOrPut(mnemonic) { EncGroup(mnemonic, ArrayList()) }
+			val group = groups.getOrPut(mnemonic) { EncGroup(mnemonic) }
 			if(ops.multi != null) {
 				add(opcode, mnemonicString, ops.multi.first)
 				add(opcode, mnemonicString, ops.multi.second)
 			} else {
-				group.encs.add(Enc(prefix, escape, opcode, ext, mask, ops, opreg, rw, o16))
+				if(ops !in group)
+					group.add(Enc(prefix, escape, opcode, ext, mask, ops, rw, o16))
 			}
 		}
 
@@ -174,11 +212,11 @@ private const val encsString = """
 3A    CMP  R_RM   1111
 
 FF/6   PUSH  RM   1010
-50     PUSH  R    1010  OPREG
+50     PUSH  O    1010
 68     PUSH  I32
 
 8F/0   POP  RM  1010
-58     POP  R   1010  OPREG
+58     POP  O   1010
 
 63     MOVSXD  R_RM32  1100
 0F BE  MOVSX   R_RM8   1110
@@ -198,10 +236,11 @@ F6/0  TEST  RM_I  1111
 84    TEST  R_RM  1111
 
 86  XCHG  R_RM  1111
+86  XCHG  RM_R  1111
 
 88  MOV  RM_R   1111
 8A  MOV  R_RM   1111
-B0  MOV  R_I    1111  OPREG
+B0  MOV  O_I    1111
 C6  MOV  RM_I   1111
 
 8D  LEA  R_MEM  1110
@@ -252,28 +291,20 @@ AF  SCASD
 AF  SCASQ  RW
 
 C0/0  ROL  RM_I8   1111
-D0/0  ROL  RM_ONE  1111
 D2/0  ROL  RM_CL   1111
 C0/1  ROR  RM_I8   1111
-D0/1  ROR  RM_ONE  1111
 D2/1  ROR  RM_CL   1111
 C0/2  RCL  RM_I8   1111
-D0/2  RCL  RM_ONE  1111
 D2/2  RCL  RM_CL   1111
 C0/3  RCR  RM_I8   1111
-D0/3  RCR  RM_ONE  1111
 D2/3  RCR  RM_CL   1111
 C0/4  SAL  RM_I8   1111
-D0/4  SAL  RM_ONE  1111
 D2/4  SAL  RM_CL   1111
 C0/4  SHL  RM_I8   1111
-D0/4  SHL  RM_ONE  1111
 D2/4  SHL  RM_CL   1111
 C0/5  SHR  RM_I8   1111
-D0/5  SHR  RM_ONE  1111
 D2/5  SHR  RM_CL   1111
 C0/7  SAR  RM_I8   1111
-D0/7  SAR  RM_ONE  1111
 D2/7  SAR  RM_CL   1111
 
 C3  RET
@@ -341,7 +372,7 @@ F3 0F B8  POPCNT  R_RM  1110
 F3 0F BC  TZCNT  R_RM  1110
 F3 0F BD  LZCNT  R_RM  1110
 
-0F C8  BSWAP  R  1100  OPREG
+0F C8  BSWAP  O  1100
 
 0F 38 F0  MOVBE  R_M  1110
 0F 38 F1  MOVBE  M_R  1110
