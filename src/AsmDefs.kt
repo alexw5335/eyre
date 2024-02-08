@@ -2,83 +2,6 @@ package eyre
 
 
 
-enum class Ops(val multi: Pair<Ops, Ops>? = null) {
-	NONE,
-	R,
-	M,
-	O,
-	I8,  // INT I8
-	I32, // PUSH I32
-	REL8,
-	REL32,
-	R_R,
-	M_R,
-	R_M,
-	R_I,
-	M_I,
-	RM_CL,
-	O_I,    // MOV
-	R_RM8,  // MOVSX, MOVZX
-	R_RM16, // MOVSX, MOVZX
-	R_RM32, // MOVSXD
-	R_RM_I, // IMUL
-	R_MEM,  // LEA
-	RM_I8,
-
-	RM(R to M),
-	RM_R(R_R to M_R),
-	R_RM(R_R to R_M),
-	RM_I(R_I to M_I);
-}
-
-
-
-enum class Prefix(val value: Int) {
-	NONE(0),
-	P66(0x66),
-	PF3(0xF3),
-	PF2(0xF2)
-}
-
-
-
-enum class Escape {
-	NONE,
-	E0F,
-	E38,
-	E3A,
-}
-
-
-
-data class Enc(
-	val prefix : Prefix,
-	val escape : Escape,
-	val opcode : Int,
-	val ext    : Int,
-	val mask   : Int,
-	val ops    : Ops,
-	val rw     : Int,
-	val o16    : Int,
-)
-
-
-
-class EncGroup(val mnemonic: Mnemonic) {
-	val encs = ArrayList<Enc>()
-	var ops = 0
-
-	fun add(enc: Enc) {
-		if(enc.ops !in this) encs.add(enc)
-		ops = ops or (1 shl enc.ops.ordinal)
-	}
-
-	operator fun contains(ops: Ops) = (this.ops and (1 shl ops.ordinal)) != 0
-	operator fun get(ops: Ops) = encs[(this.ops and ((1 shl ops.ordinal) - 1)).countOneBits()]
-}
-
-
-
 enum class Mnemonic {
 	NONE,
 	ADD,
@@ -131,9 +54,7 @@ enum class Mnemonic {
 	LEA,
 	NOP,
 	WAIT,
-	FWAIT,
 	INT1,
-	ICEBP,
 	SAHF,
 	LAHF,
 	CBW,

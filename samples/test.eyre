@@ -1,1 +1,8 @@
-ret
+namespace eyre
+
+proc main {
+	sub rsp, 40
+	lea rcx, [main]
+	dllcall msvcrt.printf
+	dllcall Kernel32.ExitProcess
+}

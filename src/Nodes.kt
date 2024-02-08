@@ -35,6 +35,48 @@ fun BinNode.calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long = o
 
 
 
+class EnumEntryNode(
+	override val srcPos: SrcPos?,
+	val sym: EnumEntrySym,
+	val value: Node?
+) : Node
+
+
+
+class EnumNode(
+	override val srcPos: SrcPos?,
+	val sym: EnumSym,
+	val entries: List<EnumEntryNode>
+) : Node
+
+
+
+class StructNode(
+	override val srcPos: SrcPos?,
+	val sym: StructSym,
+	val members: List<MemberNode>
+) : Node
+
+
+
+class MemberNode(
+	override val srcPos: SrcPos?,
+	val sym: MemberSym,
+	val typeNode: TypeNode?,
+	val struct: StructNode?
+) : Node
+
+
+
+class DllCallNode(
+	override val srcPos: SrcPos?,
+	val dllName: Name,
+	val name: Name,
+	var sym: DllImportSym? = null
+) : Node
+
+
+
 class InsNode(
 	override val srcPos: SrcPos?,
 	val mnemonic: Mnemonic,
@@ -72,8 +114,17 @@ class LabelNode(
 class ProcNode(
 	override val srcPos: SrcPos,
 	val sym: ProcSym,
-	val children: ArrayList<Node> = ArrayList()
+	val children: List<Node>
 ) : Node
+
+
+class NamespaceNode(
+	override val srcPos: SrcPos?,
+	val sym: NamespaceSym,
+	val children: List<Node>
+) : Node
+
+
 
 class TypeNode(
 	override val srcPos: SrcPos?,

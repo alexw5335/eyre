@@ -26,6 +26,8 @@ class Compiler(private val context: Context) {
 		}
 	}
 
+
+
 	fun compile() {
 		try {
 			compileInternal()
@@ -63,7 +65,13 @@ class Compiler(private val context: Context) {
 		if(checkErrors(EyreStage.ASSEMBLE))
 			exitProcess(1)
 
-		checkOutput(EyreStage.ASSEMBLE)
+		Linker(context).link()
+		if(checkErrors(EyreStage.LINK))
+			exitProcess(1)
+
+		checkOutput(EyreStage.LINK)
+		val exePath = context.buildDir.resolve("a.exe")
+		Files.write(exePath, context.linkWriter.copy())
 	}
 
 

@@ -34,7 +34,7 @@ class Printer(private val context: Context) {
 
 	fun writeDisasm() {
 		val path = context.buildDir.resolve("code.bin")
-		Files.write(path, context.textWriter.copy())
+		Files.write(path, context.linkWriter.copy(context.textSec.pos, context.textSec.size))
 		Util.run("ndisasm", "-b64", path.toString())
 	}
 
@@ -140,6 +140,13 @@ class Printer(private val context: Context) {
 
 
 
+	private fun StringBuilder.appendChildren(nodes: List<Node>) {
+		indent++
+		for(node in nodes) appendNode(node)
+		indent--
+	}
+
+
 	private fun StringBuilder.appendNode(node: Node) {
 		appendLineNumber(node.srcPos?.line ?: context.internalErr())
 		for(i in 0 ..< indent) append("    ")
@@ -186,10 +193,18 @@ class Printer(private val context: Context) {
 
 			is ProcNode -> {
 				appendLine("PROC ${node.sym.fullName}")
-				indent++
-				node.children.forEach { appendNode(it) }
-				indent--
+				appendChildren(node.children)
 			}
+
+			is NamespaceNode -> {
+				appendLine("NAMESPACE ${node.sym.fullName}")
+				appendChildren(node.children)
+			}
+
+			is DllCallNode -> if(node.dllName.isNotNull)
+				appendLine("DLLCALL ${node.dllName}.${node.name}")
+			else
+				appendLine("DLLCALL ${node.name}")
 
 			else -> appendLine(node::class.simpleName)
 		}

@@ -15,6 +15,16 @@ class Parser(private val context: Context) {
 
 
 
+	private fun potentialName() = if(tokens[pos].type == TokenType.NAME)
+		tokens[pos++].nameValue
+	else
+		Name.NONE
+
+	private fun Token.asName() = if(type != TokenType.NAME)
+		err(srcPos(), "Expecting name, found: $type")
+	else
+		nameValue
+
 	private fun skipComma() {
 		if(tokens[pos].type == TokenType.COMMA) pos++
 	}
@@ -79,6 +89,14 @@ class Parser(private val context: Context) {
 
 
 
+	private fun parseScope(scope: Sym?): List<Node> {
+		val list = ArrayList<Node>()
+		parseScope(scope, list)
+		return list
+	}
+
+
+
 	private fun parseScope(scope: Sym?, nodes: ArrayList<Node>) {
 		while(pos < tokens.size) {
 			val token = tokens[pos]
@@ -115,12 +133,63 @@ class Parser(private val context: Context) {
 		when(keyword) {
 			in Name.mnemonics -> parseIns(srcPos, Name.mnemonics[keyword]!!).add()
 
+			Name.CONST -> {
+			}
+
+			Name.ENUM -> {
+				val enumSym = EnumSym(SymBase(scope, name())).add()
+				val entries = ArrayList<EnumEntryNode>()
+				expect(TokenType.LBRACE)
+
+				while(true) {
+					if(tokens[pos].type == TokenType.RBRACE)
+						break
+					val nameToken = tokens[pos++]
+					val entryName = nameToken.asName()
+
+					val value = if(tokens[pos].type == TokenType.SET) {
+						pos++
+						parseExpr()
+					} else
+						null
+
+					val entrySym = EnumEntrySym(SymBase(enumSym, entryName)).add()
+					enumSym.entries.add(entrySym)
+					val entryNode = EnumEntryNode(nameToken.srcPos(), entrySym, value)
+					entries.add(entryNode)
+
+					if(tokens[pos].type == TokenType.COMMA)
+						pos++
+				}
+				pos++
+			}
+
+			Name.DLLCALL -> {
+				val first = name()
+				if(tokens[pos].type == TokenType.DOT) {
+					pos++
+					DllCallNode(srcPos, first, name()).add()
+				} else
+					DllCallNode(srcPos, Name.NONE, first).add()
+			}
+
+			Name.NAMESPACE -> {
+				var namespace = NamespaceSym(SymBase(scope, name())).add()
+				while(tokens[pos].type == TokenType.DOT) {
+					pos++
+					namespace = NamespaceSym(SymBase(namespace, name())).add()
+				}
+				val hasBraces = if(tokens[pos].type == TokenType.LBRACE) { pos++; true } else false
+				val children = parseScope(namespace)
+				if(hasBraces) expect(TokenType.RBRACE)
+				NamespaceNode(srcPos, namespace, children).add()
+			}
+
 			Name.PROC -> {
 				val name = name()
 				expect(TokenType.LBRACE)
 				val sym = ProcSym(SymBase(scope, name)).add()
-				val children = ArrayList<Node>()
-				parseScope(sym, children)
+				val children = parseScope(sym)
 				expect(TokenType.RBRACE)
 				ProcNode(srcPos, sym, children).add()
 			}

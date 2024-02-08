@@ -19,8 +19,10 @@ class Name(val id: Int, val string: String) {
 		operator fun get(key: String) = map.getOrPut(key) { Name(count++, key) }
 
 		val NONE      = get("")
+		val MAIN      = get("main")
 		val VAR       = get("var")
 		val NAMESPACE = get("namespace")
+		val DLLCALL   = get("dllcall")
 		val FUN       = get("fun")
 		val STRUCT    = get("struct")
 		val UNION     = get("union")

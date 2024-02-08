@@ -9,6 +9,8 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val symTable = SymTable()
 
+	val dllImports = HashMap<Name, DllImport>()
+
 	val textWriter = BinWriter()
 
 	val dataWriter = BinWriter()
@@ -32,6 +34,8 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 	val linkRelocs = ArrayList<Reloc>()
 
 	val absRelocs = ArrayList<Reloc>()
+
+	var entryPoint: PosSym? = null
 
 
 
@@ -63,5 +67,20 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 	}
 
 	fun qualifiedName(sym: Sym) = buildString { appendQualifiedName(this, sym) }
+
+
+
+	// misc.
+
+
+
+	fun getDllImport(dllName: Name, name: Name): DllImportSym {
+		if(dllName == Name.NONE)
+			err(null, "Not yet implemented")
+		return dllImports
+			.getOrPut(dllName) { DllImport(dllName) }
+			.imports.getOrPut(name) { DllImportSym(name) }
+	}
+
 
 }

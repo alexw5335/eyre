@@ -283,7 +283,7 @@ class Lexer(private val context: Context) {
 
 			// Names
 			charMap['_'] = Lexer::name
-			for(i in 'Z'..'Z') charMap[i] = Lexer::name
+			for(i in 'A'..'Z') charMap[i] = Lexer::name
 			for(i in 'a'..'z') charMap[i] = Lexer::name
 
 			// Numbers
