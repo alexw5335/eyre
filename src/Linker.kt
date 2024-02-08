@@ -168,7 +168,7 @@ class Linker(private val context: Context) {
 			val idtPos = idtsPos + dllIndex * 20
 			val dllNamePos = writer.pos
 
-			writer.ascii(dll.name.string)
+			writer.ascii(dll.name)
 			writer.ascii(".dll")
 			writer.i8(0)
 			writer.align(8)
@@ -178,13 +178,16 @@ class Linker(private val context: Context) {
 			val iatPos = writer.pos
 			writer.zero(dll.imports.size * 8 + 8)
 
-			for((importIndex, import) in dll.imports.values.withIndex()) {
+			var importIndex = 0
+			for((importName, importPos) in dll.imports) {
 				writer.i32(iltPos + importIndex * 8, writer.pos - offset)
 				writer.i32(iatPos + importIndex * 8, writer.pos - offset)
 				writer.i16(0)
-				writer.asciiNT(import.name.string)
+				writer.asciiNT(importName)
 				writer.align2()
-				import.pos = Pos(context.rdataSec, iatPos + importIndex * 8 - idtsPos + startPos)
+				importPos.sec = context.rdataSec
+				importPos.disp = iatPos + importIndex * 8 - idtsPos + startPos
+				importIndex++
 			}
 
 			writer.i32(idtPos, iltPos - offset)
@@ -240,10 +243,11 @@ class Linker(private val context: Context) {
 		}
 
 		return when(node) {
+			is StringNode  -> return node.litPos!!.addr.toLong()
 			is IntNode     -> node.value
 			is UnNode      -> node.calc(regValid, ::resolveImmRec)
 			is BinNode     -> node.calc(regValid, ::resolveImmRec)
-			is DllCallNode -> node.sym!!.pos.addr.toLong()
+			is DllCallNode -> node.importPos!!.addr.toLong()
 			is NameNode    -> sym(node.sym)
 			else           -> context.err(node.srcPos, "Invalid immediate node: $node")
 		}

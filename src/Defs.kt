@@ -4,8 +4,8 @@ import java.nio.file.Path
 
 
 
-data class DllImport(val name: Name) {
-	val imports = HashMap<Name, DllImportSym>()
+data class DllImport(val name: String) {
+	val imports = HashMap<String, Pos>()
 }
 
 
@@ -27,7 +27,7 @@ data class Section(val index: Int, val name: String, val flags: UInt) {
 	companion object { val NULL = Section(0, "", 0U) }
 }
 
-data class Pos(val sec: Section, val disp: Int) {
+data class Pos(var sec: Section, var disp: Int) {
 	val addr get() = sec.addr + disp
 	val pos get() = sec.pos + disp
 	companion object {

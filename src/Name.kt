@@ -18,6 +18,7 @@ class Name(val id: Int, val string: String) {
 		operator fun get(id: Int) = list[id]
 		operator fun get(key: String) = map.getOrPut(key) { Name(count++, key) }
 
+		val STRING    = get("string")
 		val NONE      = get("")
 		val MAIN      = get("main")
 		val VAR       = get("var")

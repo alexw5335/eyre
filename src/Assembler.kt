@@ -14,6 +14,7 @@ class Assembler(private val context: Context) {
 
 
 	fun assemble() {
+		writeStringLiterals()
 		for(file in context.files) {
 			this.file = file
 			file.nodes.forEach(::handleNode)
@@ -22,12 +23,38 @@ class Assembler(private val context: Context) {
 
 
 
+	private inline fun sectioned(sec: Section, writer: BinWriter, block: () -> Unit) {
+		val prevSec = this.section
+		val prevWriter = this.writer
+		this.section = sec
+		this.writer = writer
+		block()
+		this.section = prevSec
+		this.writer = prevWriter
+	}
+
+
+
+	private fun writeStringLiterals() {
+		sectioned(context.dataSec, context.dataWriter) {
+			for(node in context.stringLiterals) {
+				writer.align(8)
+				node.litPos = Pos(section, writer.pos)
+				writer.asciiNT(node.value)
+			}
+		}
+	}
+
+
+
 	private fun handleNode(node: Node) {
 		try {
 			when(node) {
+				is VarNode -> handleVarNode(node)
+				is LabelNode -> node.pos = Pos(section, writer.pos)
 				is NamespaceNode -> node.children.forEach(::handleNode)
 				is ProcNode -> {
-					node.sym.pos = Pos(section, writer.pos)
+					node.pos = Pos(section, writer.pos)
 					node.children.forEach(::handleNode)
 				}
 				is DllCallNode -> handleDllCall(node)
@@ -35,6 +62,58 @@ class Assembler(private val context: Context) {
 			}
 		} catch(e: EyreError) {
 			file.invalid = true
+		}
+	}
+
+
+
+	private fun handleVarNode(varNode: VarNode) {
+		sectioned(context.dataSec, context.dataWriter) {
+			writer.align(8)
+			varNode.pos = Pos(section, writer.pos)
+			writeInitialiser(varNode.type, 0, varNode.valueNode!!)
+			writer.pos += varNode.type.size
+		}
+	}
+
+
+
+	private fun writeInitialiser(type: Type, offset: Int, node: Node) {
+		if(node is InitNode) {
+			if(type is StructNode) {
+				if(node.elements.size > type.members.size)
+					err(node.srcPos, "Too many initialiser elements")
+				for(i in node.elements.indices) {
+					val member = type.members[i]
+					writeInitialiser(member.type, offset + member.offset, node.elements[i])
+				}
+			} else if(type is ArrayType) {
+				if(node.elements.size > type.count)
+					err(node.srcPos, "Too many initialiser elements. Found: ${node.elements.size}, expected: < ${type.count}")
+				for(i in node.elements.indices)
+					writeInitialiser(type.baseType, offset + type.baseType.size * i, node.elements[i])
+			} else {
+				err(node.srcPos, "Invalid initialiser type: ${type.name}")
+			}
+		} else {
+			if(type is IntType) {
+				val value = resolveRec(node, false)
+				val width = when(type.size) {
+					1 -> Width.BYTE
+					2 -> Width.WORD
+					4 -> Width.DWORD
+					else -> err(node.srcPos, "Invalid initialiser size: ${type.size}")
+				}
+				writer.at(writer.pos + offset) {
+					writer.writeWidth(width, value)
+				}
+			} else if(type is StringType) {
+				if(node !is StringNode) err(node.srcPos, "Invalid initialiser")
+				writer.ascii(node.value)
+				writer.i8(0)
+			} else {
+				err(node.srcPos, "Invalid initialiser")
+			}
 		}
 	}
 
@@ -79,14 +158,14 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun resolveRec(node: Node, regValid: Boolean): Long {
+		fun posSym() {
+			if(relocs++ == 0 && !regValid)
+				err(node.srcPos, "First relocation (absolute or relative) must be positive and absolute")
+		}
+
 		fun sym(sym: Sym?): Long {
 			if(sym == null) err(node.srcPos, "Unresolved symbol")
-			if(sym is ConstSym) return sym.value
-			if(sym is PosSym) {
-				if(relocs++ == 0 && !regValid)
-					err(node.srcPos, "First relocation (absolute or relative) must be positive and absolute")
-				return 0
-			}
+			if(sym is PosSym) { posSym(); return 0 }
 			err(node.srcPos, "Invalid node")
 		}
 
@@ -101,6 +180,7 @@ class Assembler(private val context: Context) {
 			index = reg
 		}
 
+		if(node is StringNode) { posSym(); return 0 }
 		if(node is OpNode)   return resolveRec(node.child!!, regValid)
 		if(node is IntNode)  return node.value
 		if(node is UnNode)   return node.calc(regValid, ::resolveRec)
@@ -409,11 +489,10 @@ class Assembler(private val context: Context) {
 
 
 	private fun handleDllCall(node: DllCallNode) {
-		val sym = context.getDllImport(node.dllName, node.name)
+		node.importPos = context.getDllImport(node.dllName.string, node.name.string)
 		word(0b00_010_101_11111111)
 		addLinkReloc(Width.DWORD, node, 0, true)
 		dword(0)
-		node.sym = sym
 	}
 
 

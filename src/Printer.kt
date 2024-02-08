@@ -72,7 +72,7 @@ class Printer(private val context: Context) {
 				TokenType.NAME    -> appendLine("NAME    ${t.nameValue}")
 				TokenType.STRING  -> appendLine("STRING  \"${t.stringValue}\"")
 				TokenType.INT     -> appendLine("INT     ${t.intValue}")
-				TokenType.CHAR    -> appendLine("CHAR    \'${t.intValue.toChar()}\'")
+				TokenType.CHAR    -> appendLine("CHAR    ${t.intValue}")
 				TokenType.REG     -> appendLine("REG     ${t.regValue}")
 				else              -> appendLine(t.type.name)
 			}
@@ -147,6 +147,19 @@ class Printer(private val context: Context) {
 	}
 
 
+
+	private fun StringBuilder.printType(type: Type) {
+		if(type is ArrayType) {
+			printType(type.baseType)
+			append('[')
+			append(type.count.toString())
+			append(']')
+		} else {
+			append(type.fullName)
+		}
+	}
+
+
 	private fun StringBuilder.appendNode(node: Node) {
 		appendLineNumber(node.srcPos?.line ?: context.internalErr())
 		for(i in 0 ..< indent) append("    ")
@@ -192,12 +205,12 @@ class Printer(private val context: Context) {
 			}
 
 			is ProcNode -> {
-				appendLine("PROC ${node.sym.fullName}")
+				appendLine("PROC ${node.fullName}")
 				appendChildren(node.children)
 			}
 
 			is NamespaceNode -> {
-				appendLine("NAMESPACE ${node.sym.fullName}")
+				appendLine("NAMESPACE ${node.fullName}")
 				appendChildren(node.children)
 			}
 
@@ -205,6 +218,95 @@ class Printer(private val context: Context) {
 				appendLine("DLLCALL ${node.dllName}.${node.name}")
 			else
 				appendLine("DLLCALL ${node.name}")
+
+			is ConstNode -> {
+				appendLine("CONST ${node.fullName} (value = ${node.intValue})")
+				node.valueNode?.let { appendChild(it) }
+			}
+
+			is EnumEntryNode -> {
+				appendLine("${node.fullName} = ${node.intValue}")
+				node.valueNode?.let { appendChild(it) }
+			}
+
+			is EnumNode -> {
+				appendLine("ENUM ${node.fullName}")
+				for(child in node.entries)
+					appendChild(child)
+			}
+
+			is TypedefNode -> {
+				append("TYPEDEF ${node.fullName}")
+				append(" (type = ")
+				printType(node.type)
+				append(')')
+				appendLine()
+				node.typeNode?.let { appendChild(it) }
+			}
+
+			is DotNode -> {
+				appendLine(".")
+				appendChild(node.left)
+				appendChild(node.right)
+			}
+
+			is ArrayNode -> {
+				appendLine("[]")
+				appendChild(node.left)
+				appendChild(node.right)
+			}
+
+			is RefNode -> {
+				appendLine("::")
+				appendChild(node.left)
+				appendChild(node.right)
+			}
+
+			is MemberNode -> {
+				append("${node.fullName} (type = ")
+				printType(node.type)
+				appendLine(", offset = ${node.offset})")
+				if(node.typeNode != null)
+					appendChild(node.typeNode)
+				else
+					appendChild(node.struct!!)
+			}
+
+			is StructNode -> {
+				appendLine("STRUCT ${node.fullName} (size = ${node.size})")
+				for(member in node.members)
+					appendChild(member)
+			}
+
+			is TypeNode -> {
+				append(node.names.joinToString(separator = "."))
+				for(size in node.arraySizes)
+					append("[]")
+				appendLine()
+				for(size in node.arraySizes)
+					appendChild(size)
+			}
+
+			is InitNode -> {
+				appendLine("INITIALISER")
+				for(element in node.elements)
+					appendChild(element)
+			}
+
+			is CallNode -> {
+				appendLine("()")
+				appendChild(node.left)
+				for(element in node.elements)
+					appendChild(element)
+			}
+
+			is VarNode -> {
+				appendLine("VAR ${node.fullName}")
+				node.typeNode?.let { appendChild(it) }
+				node.valueNode?.let { appendChild(it) }
+			}
+
+			is LabelNode -> appendLine("LABEL ${context.qualifiedName(node)}")
 
 			else -> appendLine(node::class.simpleName)
 		}

@@ -49,6 +49,11 @@ class Compiler(private val context: Context) {
 			.filter { !it.isDirectory() }
 			.forEach { it.deleteIfExists() }
 
+		context.symTable.add(Types.BYTE)
+		context.symTable.add(Types.WORD)
+		context.symTable.add(Types.DWORD)
+		context.symTable.add(Types.QWORD)
+
 		Lexer(context).lex()
 		if(checkErrors(EyreStage.LEX))
 			exitProcess(1)

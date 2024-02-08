@@ -9,7 +9,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val symTable = SymTable()
 
-	val dllImports = HashMap<Name, DllImport>()
+	val dllImports = HashMap<String, DllImport>()
 
 	val textWriter = BinWriter()
 
@@ -36,6 +36,8 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 	val absRelocs = ArrayList<Reloc>()
 
 	var entryPoint: PosSym? = null
+
+	val stringLiterals = ArrayList<StringNode>()
 
 
 
@@ -74,13 +76,19 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 
 
-	fun getDllImport(dllName: Name, name: Name): DllImportSym {
-		if(dllName == Name.NONE)
-			err(null, "Not yet implemented")
-		return dllImports
-			.getOrPut(dllName) { DllImport(dllName) }
-			.imports.getOrPut(name) { DllImportSym(name) }
+	fun getDllImport(dllName: String, name: String): Pos? {
+		val dllName2 = dllName.ifEmpty { defsMap[name] ?: return null }
+		return dllImports.getOrPut(dllName2) { DllImport(dllName2) }.imports.getOrPut(name) { Pos(rdataSec, 0) }
 	}
+
+
+
+	private val defsMap = mapOf(
+		"printf" to "msvcrt",
+		"ExitProcess" to "Kernel32",
+		"LoadLibraryA" to "Kernel32",
+		"GetProcAddress" to "Kernel32"
+	)
 
 
 }
