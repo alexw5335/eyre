@@ -68,11 +68,17 @@ class Assembler(private val context: Context) {
 
 
 	private fun handleVarNode(varNode: VarNode) {
-		sectioned(context.dataSec, context.dataWriter) {
-			writer.align(8)
-			varNode.pos = Pos(section, writer.pos)
-			writeInitialiser(varNode.type, 0, varNode.valueNode!!)
-			writer.pos += varNode.type.size
+		if(varNode.valueNode == null) {
+			context.bssSize = context.bssSize.align(varNode.type.alignment)
+			varNode.pos = Pos(context.bssSec, context.bssSize)
+			context.bssSize += varNode.size
+		} else {
+			sectioned(context.dataSec, context.dataWriter) {
+				writer.align(8)
+				varNode.pos = Pos(section, writer.pos)
+				writeInitialiser(varNode.type, 0, varNode.valueNode!!)
+				writer.pos += varNode.type.size
+			}
 		}
 	}
 
@@ -214,6 +220,9 @@ class Assembler(private val context: Context) {
 			}
 			return 0
 		}
+
+		if(node is RefNode)
+			return node.intSupplier?.invoke() ?: err(node.srcPos, "Invalid ref node")
 
 		err(node.srcPos, "Invalid node: $node")
 	}
@@ -425,7 +434,7 @@ class Assembler(private val context: Context) {
 	private fun encode1M(opcode: Int, mask: Int, ext: Int, op1: OpNode, immWidth: Width) {
 		val width = op1.width.ordinal - 1
 		resolveMem(op1)
-		checkWidth(mask, width)
+		if(mask.countOneBits() != 1) checkWidth(mask, width)
 		writeO16(mask, width)
 		writeRex(mask, width, Reg.NONE, index, base)
 		writeOpcode(opcode, mask, width)

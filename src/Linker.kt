@@ -243,6 +243,7 @@ class Linker(private val context: Context) {
 		}
 
 		return when(node) {
+			is RefNode     -> node.intSupplier?.invoke() ?: context.err(node.srcPos, "Invalid ref node")
 			is StringNode  -> return node.litPos!!.addr.toLong()
 			is IntNode     -> node.value
 			is UnNode      -> node.calc(regValid, ::resolveImmRec)

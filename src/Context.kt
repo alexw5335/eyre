@@ -19,7 +19,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val linkWriter = BinWriter()
 
-	val bssSize = 0
+	var bssSize = 0
 
 	val sections = ArrayList<Section>()
 
@@ -85,6 +85,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	private val defsMap = mapOf(
 		"printf" to "msvcrt",
+		"malloc" to "msvcrt",
 		"ExitProcess" to "Kernel32",
 		"LoadLibraryA" to "Kernel32",
 		"GetProcAddress" to "Kernel32"

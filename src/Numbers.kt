@@ -2,6 +2,12 @@ package eyre
 
 
 
+fun Int.align(alignment: Int) = (this + alignment - 1) and -alignment
+
+fun Long.align(alignment: Int) = (this + alignment - 1) and -alignment.toLong()
+
+
+
 fun BinWriter.writeWidth(width: Width, value: Int): Boolean {
 	if(value !in width) return false
 

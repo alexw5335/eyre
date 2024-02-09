@@ -147,7 +147,6 @@ class Parser(private val context: Context) {
 				VarNode(Base(srcPos, scope, name), typeNode, valueNode).addNodeSym()
 			}
 
-
 			Name.ENUM -> {
 				val enum = EnumNode(Base(srcPos, scope, name())).addNodeSym()
 				expect(TokenType.LBRACE)
