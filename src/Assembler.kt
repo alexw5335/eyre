@@ -56,6 +56,7 @@ class Assembler(private val context: Context) {
 				is ProcNode -> {
 					node.pos = Pos(section, writer.pos)
 					node.children.forEach(::handleNode)
+					node.size = writer.pos - node.pos.disp
 				}
 				is DllCallNode -> handleDllCall(node)
 				is InsNode -> assembleIns(node)
@@ -76,7 +77,7 @@ class Assembler(private val context: Context) {
 			sectioned(context.dataSec, context.dataWriter) {
 				writer.align(8)
 				varNode.pos = Pos(section, writer.pos)
-				writeInitialiser(varNode.type, 0, varNode.valueNode!!)
+				writeInitialiser(varNode.type, 0, varNode.valueNode)
 				writer.pos += varNode.type.size
 			}
 		}
@@ -171,7 +172,7 @@ class Assembler(private val context: Context) {
 
 		fun sym(sym: Sym?): Long {
 			if(sym == null) err(node.srcPos, "Unresolved symbol")
-			if(sym is PosSym) { posSym(); return 0 }
+			if(sym is PosSym || sym is PosRefSym) { posSym(); return 0 }
 			err(node.srcPos, "Invalid node")
 		}
 
@@ -192,6 +193,7 @@ class Assembler(private val context: Context) {
 		if(node is UnNode)   return node.calc(regValid, ::resolveRec)
 		if(node is NameNode) return sym(node.sym)
 		if(node is DotNode)  return sym(node.sym)
+		if(node is ArrayNode) return sym(node.sym)
 
 		if(node is BinNode) {
 			if(node.op == BinOp.MUL) {

@@ -57,6 +57,7 @@ data object NullType : Type, AnonSym {
 	override var alignment = 0
 }
 
+class PosRefSym(val receiver: PosSym, val offsetSupplier: () -> Int) : AnonSym
 
 
 data object NullNode : Node { override val base = Base.NULL }
@@ -188,7 +189,8 @@ class LabelNode(
 
 class ProcNode(
 	override val base: Base,
-	val children: ArrayList<Node> = ArrayList<Node>()
+	val children: ArrayList<Node> = ArrayList<Node>(),
+	var size: Int = 0
 ) : Node, PosSym
 
 class NamespaceNode(
@@ -220,7 +222,8 @@ class InitNode(
 class ArrayNode(
 	override val base: Base,
 	val left: Node,
-	val right: Node
+	val right: Node,
+	var sym: Sym? = null
 ) : Node
 
 class DotNode(

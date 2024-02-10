@@ -1,5 +1,6 @@
 package eyre
 
+import java.lang.reflect.Member
 import java.util.*
 import kotlin.math.max
 
@@ -122,13 +123,13 @@ class Resolver(private val context: Context) {
 		}
 
 		is VarNode -> {
-			if(node.typeNode != null)
+			if(node.typeNode != null) {
 				node.type = resolveType(node.typeNode)
-			else if(node.valueNode is StringNode)
+			} else if(node.valueNode is StringNode) {
 				node.type = StringType(node.valueNode.value.length)
-			else
+			} else {
 				err(node.srcPos, "Cannot infer variable type")
-			node.size = node.type.size
+			}
 		}
 
 		is StructNode -> {
@@ -179,6 +180,7 @@ class Resolver(private val context: Context) {
 		is NameNode      -> node.sym = resolveName(node.srcPos, node.value)
 		is UnNode        -> resolveNode(node.child)
 		is DotNode       -> resolveDotNode(node)
+		is ArrayNode     -> resolveArrayNode(node)
 		is RefNode       -> resolveRefNode(node)
 		is TypedefNode   -> resolveTypeNode(node.typeNode!!)
 		is StructNode    -> resolveStruct(node)
@@ -186,6 +188,13 @@ class Resolver(private val context: Context) {
 		is VarNode -> {
 			node.typeNode?.let(::resolveTypeNode)
 			node.valueNode?.let(::resolveNode)
+			if(node.type is StringType) {
+				if(node.valueNode !is StringNode)
+					err(node.srcPos, "Invalid string")
+				node.size = node.valueNode.value.length
+			} else {
+				node.size = node.type.size
+			}
 		}
 		is InitNode -> node.elements.forEach(::resolveNode)
 		is CallNode -> node.elements.forEach(::resolveNode)
@@ -255,20 +264,58 @@ class Resolver(private val context: Context) {
 	}
 
 
-	private fun resolveDotNode(node: DotNode): Sym {
-		val receiver = resolveSymNode(node.left)
-		if(node.right !is NameNode)
-			err(node.right.srcPos, "Invalid name node: ${node.right}")
-		val sym = resolveName(node.srcPos, receiver, node.right.value)
+
+	private fun resolveArrayNode(node: ArrayNode): Sym {
+		val receiver = resolveSymNode(node.left) as? VarNode ?: err(node.srcPos, "Invalid receiver")
+		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
+		val count = resolveInt(node.right)
+		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
+		val sym = PosRefSym(receiver) { count.toInt() * type.baseType.size }
 		node.sym = sym
 		return sym
 	}
 
 
+
+	private fun resolveDotNode(node: DotNode): Sym {
+		val receiver = resolveSymNode(node.left)
+		if(node.right !is NameNode)
+			err(node.right.srcPos, "Invalid name node: ${node.right}")
+
+		fun invalidReceiver(): Nothing = err(node.srcPos, "Invalid receiver")
+		fun member(receiver: Sym): Sym {
+			if(receiver !is TypedSym) invalidReceiver()
+			if(receiver.type !is StructNode) err(node.srcPos, "Invalid receiver")
+			val member = resolveName(node.srcPos, receiver.type, node.right.value)
+			if(member !is MemberNode) context.internalErr()
+			val sym = PosRefSym(receiver) { member.offset }
+			node.sym = sym
+			return sym
+		}
+
+		if(receiver is VarNode) {
+			if(receiver.type !is StructNode) err(node.srcPos, "Invalid receiver")
+			val member = resolveName(node.srcPos, receiver.type, node.right.value)
+			if(member !is MemberNode) context.internalErr()
+			val sym = PosRefSym(receiver) { member.offset }
+			node.sym = sym
+			return sym
+		} else if(receiver is PosRefSym) {
+			val reciever2 = receiver.
+			if(receiver.receiver.type !is StructNode) invalidReceiver()
+		} else {
+			val sym = resolveName(node.srcPos, receiver, node.right.value).also { node.sym = it }
+			node.sym = sym
+			return sym
+		}
+	}
+
+
 	private fun resolveSymNode(node: Node): Sym = when(node) {
-		is NameNode -> resolveName(node.srcPos, node.value).also { node.sym = it }
-		is DotNode  -> resolveDotNode(node)
-		else        -> err(node.srcPos, "Invalid receiver node: $node")
+		is NameNode  -> resolveName(node.srcPos, node.value).also { node.sym = it }
+		is DotNode   -> resolveDotNode(node)
+		is ArrayNode -> resolveArrayNode(node)
+		else         -> err(node.srcPos, "Invalid receiver node: $node")
 	}
 
 	private fun resolveRefNode(node: RefNode) {

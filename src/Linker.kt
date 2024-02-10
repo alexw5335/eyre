@@ -239,6 +239,7 @@ class Linker(private val context: Context) {
 			if(sym == null) context.err(node.srcPos, "Unresolved symbol")
 			if(sym is PosSym) return sym.pos.addr.toLong()
 			if(sym is IntSym) return sym.intValue
+			if(sym is PosRefSym) return sym.receiver.pos.addr.toLong() + sym.offsetSupplier()
 			context.err(node.srcPos, "Invalid symbol")
 		}
 
@@ -250,6 +251,8 @@ class Linker(private val context: Context) {
 			is BinNode     -> node.calc(regValid, ::resolveImmRec)
 			is DllCallNode -> node.importPos!!.addr.toLong()
 			is NameNode    -> sym(node.sym)
+			is DotNode     -> sym(node.sym)
+			is ArrayNode   -> sym(node.sym)
 			else           -> context.err(node.srcPos, "Invalid immediate node: $node")
 		}
 	}
