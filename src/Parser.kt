@@ -372,7 +372,16 @@ class Parser(private val context: Context) {
 			pos++
 		}
 
-		if(tokens[pos].type != TokenType.LBRACK)
+		val arraySizes = ArrayList<Node>()
+
+		while(true) {
+			when(tokens[pos].type) {
+				TokenType.STAR -> { }
+				TokenType.LBRACK -> { }
+				else -> break
+			}
+		}
+/*		if(tokens[pos].type != TokenType.LBRACK)
 			return TypeNode(Base(srcPos), names, emptyList())
 
 		val arraySizes = ArrayList<Node>()
@@ -383,7 +392,7 @@ class Parser(private val context: Context) {
 			expect(TokenType.RBRACK)
 		} while(tokens[pos].type == TokenType.LBRACK)
 
-		return TypeNode(Base(srcPos), names, arraySizes)
+		return TypeNode(Base(srcPos), names, arraySizes)*/
 	}
 
 

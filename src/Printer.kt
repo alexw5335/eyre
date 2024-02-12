@@ -301,7 +301,7 @@ class Printer(private val context: Context) {
 			}
 
 			is VarNode -> {
-				appendLine("VAR ${node.fullName} (pos = ${node.pos.addr.hexFull})")
+				appendLine("VAR ${node.fullName} (pos = ${node.addr.hexFull})")
 				node.typeNode?.let { appendChild(it) }
 				node.valueNode?.let { appendChild(it) }
 			}

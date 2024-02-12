@@ -51,12 +51,16 @@ class Assembler(private val context: Context) {
 		try {
 			when(node) {
 				is VarNode -> handleVarNode(node)
-				is LabelNode -> node.pos = Pos(section, writer.pos)
+				is LabelNode -> {
+					node.sec = section
+					node.disp = writer.pos
+				}
 				is NamespaceNode -> node.children.forEach(::handleNode)
 				is ProcNode -> {
-					node.pos = Pos(section, writer.pos)
+					node.sec = section
+					node.disp = writer.pos
 					node.children.forEach(::handleNode)
-					node.size = writer.pos - node.pos.disp
+					node.size = writer.pos - node.disp
 				}
 				is DllCallNode -> handleDllCall(node)
 				is InsNode -> assembleIns(node)
@@ -68,17 +72,19 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun handleVarNode(varNode: VarNode) {
-		if(varNode.valueNode == null) {
-			context.bssSize = context.bssSize.align(varNode.type.alignment)
-			varNode.pos = Pos(context.bssSec, context.bssSize)
-			context.bssSize += varNode.size
+	private fun handleVarNode(node: VarNode) {
+		if(node.valueNode == null) {
+			context.bssSize = context.bssSize.align(node.type.alignment)
+			node.sec = context.bssSec
+			node.disp = context.bssSize
+			context.bssSize += node.size
 		} else {
 			sectioned(context.dataSec, context.dataWriter) {
 				writer.align(8)
-				varNode.pos = Pos(section, writer.pos)
-				writeInitialiser(varNode.type, 0, varNode.valueNode)
-				writer.pos += varNode.type.size
+				node.sec = section
+				node.disp = writer.pos
+				writeInitialiser(node.type, 0, node.valueNode)
+				writer.pos += node.type.size
 			}
 		}
 	}
@@ -172,7 +178,7 @@ class Assembler(private val context: Context) {
 
 		fun sym(sym: Sym?): Long {
 			if(sym == null) err(node.srcPos, "Unresolved symbol")
-			if(sym is PosSym || sym is PosRefSym) { posSym(); return 0 }
+			if(sym is PosSym) { posSym(); return 0 }
 			err(node.srcPos, "Invalid node")
 		}
 
@@ -661,7 +667,11 @@ class Assembler(private val context: Context) {
 
 
 	private fun assemble2(mnemonic: Mnemonic, op1: OpNode, op2: OpNode) { when(mnemonic) {
-		Mnemonic.IMUL -> encode2RRM(0xAF0F, 0b1111, op1.reg, op2, Width.NONE)
+		Mnemonic.IMUL ->
+			if(op2.type == OpType.IMM)
+				encode2RR(0x69, 0b1110, op1.reg, op1.reg).imm(op2, op1.width)
+			else
+				encode2RRM(0xAF0F, 0b1110, op1.reg, op2, Width.NONE)
 
 		Mnemonic.ADD -> encodeADD(0x00, 0, op1, op2)
 		Mnemonic.OR  -> encodeADD(0x08, 1, op1, op2)

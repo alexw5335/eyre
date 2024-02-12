@@ -270,7 +270,7 @@ class Resolver(private val context: Context) {
 		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
 		val count = resolveInt(node.right)
 		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
-		val sym = PosRefSym(receiver) { count.toInt() * type.baseType.size }
+		val sym = PosRefSym(receiver, type.baseType) { count.toInt() * type.baseType.size }
 		node.sym = sym
 		return sym
 	}
@@ -283,26 +283,14 @@ class Resolver(private val context: Context) {
 			err(node.right.srcPos, "Invalid name node: ${node.right}")
 
 		fun invalidReceiver(): Nothing = err(node.srcPos, "Invalid receiver")
-		fun member(receiver: Sym): Sym {
-			if(receiver !is TypedSym) invalidReceiver()
-			if(receiver.type !is StructNode) err(node.srcPos, "Invalid receiver")
-			val member = resolveName(node.srcPos, receiver.type, node.right.value)
-			if(member !is MemberNode) context.internalErr()
-			val sym = PosRefSym(receiver) { member.offset }
-			node.sym = sym
-			return sym
-		}
 
-		if(receiver is VarNode) {
-			if(receiver.type !is StructNode) err(node.srcPos, "Invalid receiver")
+		if(receiver is TypedSym && receiver is PosSym) {
+			if(receiver.type !is StructNode) invalidReceiver()
 			val member = resolveName(node.srcPos, receiver.type, node.right.value)
 			if(member !is MemberNode) context.internalErr()
-			val sym = PosRefSym(receiver) { member.offset }
+			val sym = PosRefSym(receiver, receiver.type) { member.offset }
 			node.sym = sym
 			return sym
-		} else if(receiver is PosRefSym) {
-			val reciever2 = receiver.
-			if(receiver.receiver.type !is StructNode) invalidReceiver()
 		} else {
 			val sym = resolveName(node.srcPos, receiver, node.right.value).also { node.sym = it }
 			node.sym = sym

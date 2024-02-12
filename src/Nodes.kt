@@ -8,7 +8,8 @@ class Base(
 	val name: Name = Name.NONE
 ) {
 	var resolved = false
-	var pos: Pos = Pos.NULL
+	var sec: Section = Section.NULL
+	var disp: Int = 0
 	companion object { val NULL = Base() }
 }
 
@@ -36,7 +37,14 @@ interface IntSym : Sym {
 }
 
 interface PosSym : Sym {
-	var pos: Pos get() = base.pos; set(value) { base.pos = value }
+	val sec: Section
+	val disp: Int
+	val addr get() = sec.addr + disp
+}
+
+interface MutPosSym : PosSym {
+	override var sec: Section get() = base.sec; set(value) { base.sec = value }
+	override var disp: Int get() = base.disp; set(value) { base.disp = value }
 }
 
 interface SizedSym : Sym {
@@ -48,7 +56,7 @@ interface Type : SizedSym {
 }
 
 interface TypedSym : Sym {
-	var type: Type
+	val type: Type
 }
 
 /** Indicates that a type has not yet been resolved. */
@@ -57,7 +65,14 @@ data object NullType : Type, AnonSym {
 	override var alignment = 0
 }
 
-class PosRefSym(val receiver: PosSym, val offsetSupplier: () -> Int) : AnonSym
+class PosRefSym(
+	val receiver: PosSym,
+	override val type: Type,
+	val offsetSupplier: () -> Int
+) : AnonSym, PosSym, TypedSym {
+	override val sec get() = receiver.sec
+	override val disp get() = receiver.disp + offsetSupplier()
+}
 
 
 data object NullNode : Node { override val base = Base.NULL }
@@ -114,7 +129,7 @@ class StructNode(
 	override var size: Int = 0,
 	override var alignment: Int = 0,
 	val members: ArrayList<MemberNode> = ArrayList()
-) : Node, PosSym, Type
+) : Node, MutPosSym, Type
 
 class VarNode(
 	override val base: Base,
@@ -122,7 +137,7 @@ class VarNode(
 	val valueNode: Node?,
 	var type: Type = NullType,
 	var size: Int = 0
-) : Node, PosSym
+) : Node, MutPosSym
 
 
 class EnumEntryNode(
@@ -185,13 +200,13 @@ class TypedefNode(
 
 class LabelNode(
 	override val base: Base,
-) : Node, PosSym
+) : Node, MutPosSym
 
 class ProcNode(
 	override val base: Base,
 	val children: ArrayList<Node> = ArrayList<Node>(),
 	var size: Int = 0
-) : Node, PosSym
+) : Node, MutPosSym
 
 class NamespaceNode(
 	override val base: Base,
@@ -256,6 +271,12 @@ class IntType(name: Name, override val size: Int) : Type {
 class StringType(override var size: Int = 0) : Type {
 	override val base = Base(null, null, Name.STRING)
 	override var alignment = 8
+}
+
+class PointerType(val baseType: Type): Type {
+	override val base = Base()
+	override val size = 8
+	override val alignment = 8
 }
 
 class ArrayType(

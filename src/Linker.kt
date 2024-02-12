@@ -49,7 +49,7 @@ class Linker(private val context: Context) {
 		if(context.entryPoint == null)
 			context.err(null, "Missing main function")
 
-		writer.i32(entryPointPos, context.entryPoint!!.pos.addr)
+		writer.i32(entryPointPos, context.entryPoint!!.addr)
 		writer.i32(imageSizePos, currentSecRva)
 		writer.i32(numSectionsPos, numSections)
 	}
@@ -237,9 +237,8 @@ class Linker(private val context: Context) {
 	private fun resolveImmRec(node: Node, regValid: Boolean): Long {
 		fun sym(sym: Sym?): Long {
 			if(sym == null) context.err(node.srcPos, "Unresolved symbol")
-			if(sym is PosSym) return sym.pos.addr.toLong()
+			if(sym is PosSym) return sym.addr.toLong()
 			if(sym is IntSym) return sym.intValue
-			if(sym is PosRefSym) return sym.receiver.pos.addr.toLong() + sym.offsetSupplier()
 			context.err(node.srcPos, "Invalid symbol")
 		}
 

@@ -1,14 +1,102 @@
 namespace eyre
 
-struct Vector {
-	dword x
-	dword y
+struct InstanceCI {
+	dword type
+	qword pNext
+	dword flags
+	qword pAppInfo
+	dword layerCount
+	qword ppLayerNames
+	dword extensionCount
+	qword ppExtensionNames
 }
 
-var vectors: Vector[4]
+struct LayerProperties {
+	byte[256] name
+	dword     specVersion
+	dword     incrementalVersion
+	byte[256] description
+}
+
+var instanceCI: InstanceCI
+
+var vulkanDll: qword
+var getInstanceProcAddr: qword
+var enumerateInstanceVersion: qword
+var createInstance: qword
+var instanceVersion: dword
+var enumerateInstanceLayerProperties: qword
+var layerCount: dword
+var pLayers: qword
 
 proc main {
 	sub rsp, 40
-	lea rcx, [vectors[2].y]
+
+	lea rcx, ["vulkan-1.dll"]
+	dllcall LoadLibraryA
+	mov [vulkanDll], rax
+
+	lea rcx, ["Vulkan DLL: %p\n"]
+	mov rdx, [vulkanDll]
+	dllcall printf
+
+	mov rcx, [vulkanDll]
+	lea rdx, ["vkGetInstanceProcAddr"]
+	dllcall GetProcAddress
+	mov [getInstanceProcAddr], rax
+
+	lea rcx, ["vkGetInstanceProcAddr: %p\n"]
+	mov rdx, [getInstanceProcAddr]
+	dllcall printf
+
+	xor ecx, ecx
+	lea rdx, ["vkEnumerateInstanceVersion"]
+	call [getInstanceProcAddr]
+	mov [enumerateInstanceVersion], rax
+
+	lea rcx, ["vkEnumerateInstanceVersion: %p\n"]
+	mov rdx, [enumerateInstanceVersion]
+	dllcall printf
+
+	xor ecx, ecx
+	lea rdx, ["vkCreateInstance"]
+	call [getInstanceProcAddr]
+	mov [createInstance], rax
+
+	lea rcx, ["vkCreateInstance: %p\n"]
+	mov rdx, [createInstance]
+	dllcall printf
+
+	xor ecx, ecx
+	lea rdx, ["vkEnumerateInstanceLayerProperties"]
+	call [getInstanceProcAddr]
+	mov [enumerateInstanceLayerProperties], rax
+
+	lea rcx, ["vkEnumerateInstanceLayerProperties: %p\n"]
+	mov rdx, [enumerateInstanceLayerProperties]
+	dllcall printf
+
+	lea rcx, [layerCount]
+	xor edx, edx
+	call [enumerateInstanceLayerProperties]
+
+	lea rcx, ["layerCount: %d\n"]
+	mov edx, [layerCount]
+	dllcall printf
+
+	mov ecx, [layerCount]
+	imul ecx, LayerProperties::size
+	dllcall malloc
+	mov [pLayers], rax
+
+	lea rcx, [layerCount]
+	mov rdx, [pLayers]
+	call [enumerateInstanceLayerProperties]
+
+	mov rcx, [pLayers]
+	dllcall printf
+
+	lea rcx, ["FINISHED\n"]
+	dllcall printf
 	dllcall ExitProcess
 }
