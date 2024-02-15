@@ -280,11 +280,14 @@ class Printer(private val context: Context) {
 
 			is TypeNode -> {
 				append(node.names.joinToString(separator = "."))
-				for(size in node.arraySizes)
-					append("[]")
+				for(mod in node.mods) when(mod) {
+					is TypeNode.PointerMod -> append("*")
+					is TypeNode.ArrayMod -> append("[]")
+				}
 				appendLine()
-				for(size in node.arraySizes)
-					appendChild(size)
+				for(mod in node.mods)
+					if(mod is TypeNode.ArrayMod)
+						mod.sizeNode?.let { appendChild(it) }
 			}
 
 			is InitNode -> {
@@ -307,6 +310,14 @@ class Printer(private val context: Context) {
 			}
 
 			is LabelNode -> appendLine("LABEL ${context.qualifiedName(node)}")
+
+			is IfNode -> {
+				appendLine("IF")
+				appendChild(node.condition)
+				node.children.forEach { appendChild(it) }
+			}
+
+			is StringNode -> appendLine("\"${node.value.replace("\n", "\\n")}\"")
 
 			else -> appendLine(node::class.simpleName)
 		}

@@ -97,8 +97,12 @@ class Resolver(private val context: Context) {
 	private fun resolveType(node: TypeNode): Type {
 		var type = resolveNames(node.srcPos, node.names) as? Type
 			?: err(node.srcPos, "Invalid type")
-		for(i in node.arraySizes.indices)
-			type = ArrayType(type)
+		for(mod in node.mods) {
+			type = when(mod) {
+				is TypeNode.PointerMod -> PointerType(type)
+				is TypeNode.ArrayMod -> ArrayType(type)
+			}
+		}
 		node.type = type
 		return type
 	}
@@ -159,13 +163,25 @@ class Resolver(private val context: Context) {
 
 	private fun resolveTypeNode(node: TypeNode) {
 		var type = node.type
-		for(i in node.arraySizes.size - 1 downTo 0) {
-			val array = type as ArrayType
-			resolveNode(node.arraySizes[i])
-			val count = resolveInt(node.arraySizes[i])
-			if(!count.isImm32) err(node.srcPos, "Array size out of bounds: $count")
-			array.count = count.toInt()
-			type = array.baseType
+		for(i in node.mods.size - 1 downTo 0) {
+			when(val mod = node.mods[i]) {
+				is TypeNode.PointerMod -> type = (type as PointerType).baseType
+				is TypeNode.ArrayMod -> {
+					val array = type as ArrayType
+
+					if(mod.sizeNode == null) {
+						if(mod.inferredSize == -1)
+							err(node.srcPos, "Array size required")
+						array.count = mod.inferredSize
+					} else {
+						resolveNode(mod.sizeNode)
+						val count = resolveInt(mod.sizeNode)
+						if(!count.isImm32) err(node.srcPos, "Array size out of bounds: $count")
+						array.count = count.toInt()
+						type = array.baseType
+					}
+				}
+			}
 		}
 	}
 
@@ -177,14 +193,14 @@ class Resolver(private val context: Context) {
 			node.children.forEach(::resolveNode)
 			popScope()
 		}
-		is NameNode      -> node.sym = resolveName(node.srcPos, node.value)
-		is UnNode        -> resolveNode(node.child)
-		is DotNode       -> resolveDotNode(node)
-		is ArrayNode     -> resolveArrayNode(node)
-		is RefNode       -> resolveRefNode(node)
-		is TypedefNode   -> resolveTypeNode(node.typeNode!!)
-		is StructNode    -> resolveStruct(node)
-		is EnumNode      -> resolveEnum(node)
+		is NameNode -> node.sym = resolveName(node.srcPos, node.value)
+		is UnNode -> resolveNode(node.child)
+		is DotNode -> resolveDotNode(node)
+		is ArrayNode -> resolveArrayNode(node)
+		is RefNode -> resolveRefNode(node)
+		is TypedefNode -> resolveTypeNode(node.typeNode!!)
+		is StructNode -> resolveStruct(node)
+		is EnumNode -> resolveEnum(node)
 		is VarNode -> {
 			node.typeNode?.let(::resolveTypeNode)
 			node.valueNode?.let(::resolveNode)
@@ -207,12 +223,7 @@ class Resolver(private val context: Context) {
 			node.intValue = resolveInt(node.valueNode)
 			node.resolved = true
 		}
-		is OpNode -> {
-			if(node.child is StringNode)
-				context.stringLiterals.add(node.child)
-			else if(node.child != null)
-				resolveNode(node.child)
-		}
+		is OpNode -> node.child?.let(::resolveNode)
 		is ProcNode -> {
 			if(node.name == Name.MAIN)
 				context.entryPoint = node
@@ -220,15 +231,22 @@ class Resolver(private val context: Context) {
 			node.children.forEach(::resolveNode)
 			popScope()
 		}
-		is InsNode  -> {
+		is InsNode -> {
 			node.op1?.let(::resolveNode)
 			node.op2?.let(::resolveNode)
 			node.op3?.let(::resolveNode)
 		}
-		is StringNode,
+		is IfNode -> {
+			resolveNode(node.condition)
+			pushScope(node)
+			node.children.forEach(::resolveNode)
+			popScope()
+		}
+		is StringNode -> context.stringLiterals.add(node)
+		is RegNode,
 		is DllCallNode,
 		is LabelNode,
-		is IntNode  -> Unit
+		is IntNode -> Unit
 		else -> context.internalErr("Unhandled node: $node")
 	}}
 
@@ -259,7 +277,7 @@ class Resolver(private val context: Context) {
 					resolveNodeFile(node, node.receiver!! as Node)
 				node.intSupplier?.invoke() ?: err(node.srcPos, "Invalid int node: $node")
 			}
-			else        -> err(node.srcPos, "Invalid int node: $node")
+			else -> err(node.srcPos, "Invalid int node: $node")
 		}
 	}
 
@@ -385,8 +403,8 @@ class Resolver(private val context: Context) {
 				member.offset = 0
 				structSize = max(structSize, type.size)
 			} else {
-				member.offset = structSize
 				structSize = (structSize + type.alignment - 1) and -type.alignment
+				member.offset = structSize
 				structSize += type.size
 			}
 

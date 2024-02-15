@@ -6,6 +6,7 @@ class Parser(private val context: Context) {
 	private lateinit var file: SrcFile
 	private lateinit var tokens: List<Token>
 	private var pos = 0
+	private var anonCount = 0
 
 
 
@@ -85,6 +86,8 @@ class Parser(private val context: Context) {
 
 
 	private fun parseScope(scope: Sym?, nodes: ArrayList<Node>) {
+		val prevAnonCount = 0
+		anonCount = 0
 		while(pos < tokens.size) {
 			val token = tokens[pos]
 			when(token.type) {
@@ -95,6 +98,7 @@ class Parser(private val context: Context) {
 				else             -> err("Invalid token: ${token.type}")
 			}
 		}
+		anonCount = prevAnonCount
 	}
 
 
@@ -120,7 +124,7 @@ class Parser(private val context: Context) {
 		}
 
 		if(tokens[pos + 1].type == TokenType.COLON) {
-			pos++
+			pos += 2
 			LabelNode(Base(srcPos, scope, keyword)).addNodeSym()
 			expectNewline()
 			return
@@ -131,19 +135,40 @@ class Parser(private val context: Context) {
 		when(keyword) {
 			in Name.mnemonics -> parseIns(srcPos, Name.mnemonics[keyword]!!).addNode()
 
+			Name.IF -> {
+				val condition = parseExpr()
+				expect(TokenType.LBRACE)
+				val ifNode = IfNode(Base(srcPos, scope, Name.anon(anonCount)), condition).addNodeSym()
+				parseScope(ifNode, ifNode.children)
+				expect(TokenType.RBRACE)
+
+				while(true) {
+					//if(tokens[pos].type == TokenType)
+				}
+			}
+
 			Name.STRUCT -> parseStruct(srcPos, scope, name(), false).addNodeSym()
 			Name.UNION  -> parseStruct(srcPos, scope, name(), true).addNodeSym()
 
 			Name.VAR -> {
 				val name = name()
+
 				val typeNode = if(tokens[pos].type == TokenType.COLON) {
 					pos++
 					parseType()
 				} else null
+
 				val valueNode = if(tokens[pos].type == TokenType.SET) {
 					pos++
 					parseExpr()
 				} else null
+
+				if(valueNode is InitNode && typeNode != null && typeNode.mods.size == 1) {
+					val mod = typeNode.mods[0]
+					if(mod is TypeNode.ArrayMod && mod.sizeNode == null)
+						mod.inferredSize = valueNode.elements.size
+				}
+
 				VarNode(Base(srcPos, scope, name), typeNode, valueNode).addNodeSym()
 			}
 
@@ -372,27 +397,33 @@ class Parser(private val context: Context) {
 			pos++
 		}
 
-		val arraySizes = ArrayList<Node>()
+		if(atNewline)
+			return TypeNode(Base(srcPos), names, emptyList())
+
+		val mods = ArrayList<TypeNode.Mod>()
 
 		while(true) {
 			when(tokens[pos].type) {
-				TokenType.STAR -> { }
-				TokenType.LBRACK -> { }
+				TokenType.STAR -> {
+					pos++
+					mods += TypeNode.PointerMod
+				}
+				TokenType.LBRACK -> {
+					pos++
+					if(tokens[pos].type == TokenType.RBRACK) {
+						pos++
+						mods += TypeNode.ArrayMod(null)
+					} else {
+						val sizeNode = parseExpr()
+						expect(TokenType.RBRACK)
+						mods += TypeNode.ArrayMod(sizeNode)
+					}
+				}
 				else -> break
 			}
 		}
-/*		if(tokens[pos].type != TokenType.LBRACK)
-			return TypeNode(Base(srcPos), names, emptyList())
 
-		val arraySizes = ArrayList<Node>()
-
-		do {
-			pos++
-			arraySizes.add(parseExpr())
-			expect(TokenType.RBRACK)
-		} while(tokens[pos].type == TokenType.LBRACK)
-
-		return TypeNode(Base(srcPos), names, arraySizes)*/
+		return TypeNode(Base(srcPos), names, mods)
 	}
 
 

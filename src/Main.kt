@@ -3,5 +3,5 @@ package eyre
 import java.nio.file.Paths
 
 fun main() {
-	Compiler.compile(Paths.get("samples"))
+	Compiler.compileDir(Paths.get("samples"))
 }

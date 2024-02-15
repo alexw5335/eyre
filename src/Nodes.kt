@@ -33,7 +33,7 @@ interface AnonSym : Sym {
 }
 
 interface IntSym : Sym {
-	var intValue: Long
+	val intValue: Long
 }
 
 interface PosSym : Sym {
@@ -74,6 +74,8 @@ class PosRefSym(
 	override val disp get() = receiver.disp + offsetSupplier()
 }
 
+class StringLitSym : MutPosSym, AnonSym
+
 
 data object NullNode : Node { override val base = Base.NULL }
 
@@ -106,6 +108,16 @@ fun BinNode.calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long = o
 
 
 
+class IfNode(
+	override val base: Base,
+	val condition: Node?,
+	val children: ArrayList<Node> = ArrayList()
+) : Node, Sym {
+	var next: IfNode? = null
+}
+
+
+
 class ConstNode(
 	override val base: Base,
 	val valueNode: Node?,
@@ -121,7 +133,9 @@ class MemberNode(
 	override var type: Type = NullType,
 	var index: Int = 0,
 	var offset: Int = 0
-) : Node, TypedSym
+) : Node, TypedSym, IntSym {
+	override val intValue get() = offset.toLong()
+}
 
 class StructNode(
 	override val base: Base,
@@ -135,9 +149,9 @@ class VarNode(
 	override val base: Base,
 	val typeNode: TypeNode?,
 	val valueNode: Node?,
-	var type: Type = NullType,
+	override var type: Type = NullType,
 	var size: Int = 0
-) : Node, MutPosSym
+) : Node, MutPosSym, TypedSym
 
 
 class EnumEntryNode(
@@ -216,9 +230,13 @@ class NamespaceNode(
 class TypeNode(
 	override val base: Base,
 	val names: List<Name>,
-	val arraySizes: List<Node>,
+	val mods: List<Mod>,
 	var type: Type? = null
-) : Node
+) : Node {
+	sealed interface Mod
+	class ArrayMod(val sizeNode: Node?, var inferredSize: Int = -1) : Mod
+	data object PointerMod : Mod
+}
 
 class RefNode(
 	override val base: Base,

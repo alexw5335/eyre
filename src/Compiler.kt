@@ -10,20 +10,22 @@ class Compiler(private val context: Context) {
 
 
 	companion object {
-		fun compile(srcDir: Path) {
-			val buildDir = Paths.get("build")
 
-			val srcFiles = Files.walk(srcDir)
+		fun compileFile(path: Path) {
+			val srcFile = SrcFile(0, path, path.relativeTo(path))
+			Compiler(Context(Paths.get("build"), listOf(srcFile))).compile()
+		}
+
+		fun compileDir(path: Path) {
+			val srcFiles = Files.walk(path)
 				.toList()
 				.filter { it.extension == "eyre" }
-				.mapIndexed { i, p -> SrcFile(i, p, p.relativeTo(srcDir)) }
-
+				.mapIndexed { i, p -> SrcFile(i, p, p.relativeTo(path)) }
 			if(srcFiles.isEmpty())
 				error("No source files found")
-
-			val compiler = Compiler(Context(buildDir, srcFiles))
-			compiler.compile()
+			Compiler(Context(Paths.get("build"), srcFiles)).compile()
 		}
+
 	}
 
 

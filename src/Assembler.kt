@@ -62,12 +62,37 @@ class Assembler(private val context: Context) {
 					node.children.forEach(::handleNode)
 					node.size = writer.pos - node.disp
 				}
+				is IfNode -> handleIfNode(node)
 				is DllCallNode -> handleDllCall(node)
 				is InsNode -> assembleIns(node)
 			}
 		} catch(e: EyreError) {
 			file.invalid = true
 		}
+	}
+
+
+
+	/**
+	 *     80/7  CMP  RM_I   1111
+	 *     38    CMP  RM_R   1111
+	 *     3A    CMP  R_RM   1111
+	 */
+	private fun handleIfNode(node: IfNode) {
+		fun err(): Nothing = err(node.srcPos, "Invalid condition")
+		val condition = node.condition as? BinNode ?: err()
+		if(condition.op != BinOp.EQ) err()
+		val reg = (condition.left as? RegNode)?.value ?: err()
+		val value = (condition.right as? IntNode)?.value ?: err()
+		byte(0x81)
+		byte(0b11_111_000 or reg.value)
+		dword(value.toInt())
+		word(0x850F)
+		dword(0)
+		val start = writer.pos
+		for(child in node.children) handleNode(child)
+		val diff = writer.pos - start
+		writer.i32(start - 4, diff)
 	}
 
 
@@ -105,21 +130,22 @@ class Assembler(private val context: Context) {
 					err(node.srcPos, "Too many initialiser elements. Found: ${node.elements.size}, expected: < ${type.count}")
 				for(i in node.elements.indices)
 					writeInitialiser(type.baseType, offset + type.baseType.size * i, node.elements[i])
+			} else if(type is PointerType) {
+				for(i in node.elements.indices)
+					writeInitialiser(type.baseType, offset + type.baseType.size * i, node.elements[i])
 			} else {
 				err(node.srcPos, "Invalid initialiser type: ${type.name}")
 			}
 		} else {
 			if(type is IntType) {
-				val value = resolveRec(node, false)
 				val width = when(type.size) {
 					1 -> Width.BYTE
 					2 -> Width.WORD
 					4 -> Width.DWORD
+					8 -> Width.QWORD
 					else -> err(node.srcPos, "Invalid initialiser size: ${type.size}")
 				}
-				writer.at(writer.pos + offset) {
-					writer.writeWidth(width, value)
-				}
+				writer.at(writer.pos + offset) { imm64(node, width) }
 			} else if(type is StringType) {
 				if(node !is StringNode) err(node.srcPos, "Invalid initialiser")
 				writer.ascii(node.value)
@@ -172,13 +198,15 @@ class Assembler(private val context: Context) {
 
 	private fun resolveRec(node: Node, regValid: Boolean): Long {
 		fun posSym() {
-			if(relocs++ == 0 && !regValid)
-				err(node.srcPos, "First relocation (absolute or relative) must be positive and absolute")
+			relocs++
+			//if(relocs++ == 0 && !regValid)
+			//	err(node.srcPos, "First relocation (absolute or relative) must be positive and absolute")
 		}
 
 		fun sym(sym: Sym?): Long {
 			if(sym == null) err(node.srcPos, "Unresolved symbol")
 			if(sym is PosSym) { posSym(); return 0 }
+			if(sym is IntSym) return sym.intValue
 			err(node.srcPos, "Invalid node")
 		}
 
@@ -285,11 +313,12 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun Any.rel(node: Node, width: Width) {
+	private fun Any.rel(node: OpNode, width: Width) {
+		val child = node.child!!
 		relocs = 0
-		val value = resolveRec(node, false)
+		val value = resolveRec(child, false)
 		if(relocs != 0) {
-			addLinkReloc(width, node, 0, true)
+			addLinkReloc(width, child, 0, true)
 			writer.advance(width.bytes)
 		} else if(!writer.writeWidth(width, value)) {
 			err(node.srcPos, "Value out of range")
@@ -599,6 +628,13 @@ class Assembler(private val context: Context) {
 
 
 
+	/*
+
+
+	==  JE/JZ JNE/JNZ
+	!=  JNE/JNZ  JE/JZ
+	>
+	 */
 	private fun assemble1(mnemonic: Mnemonic, op1: OpNode) { when(mnemonic) {
 		Mnemonic.JO -> encodeJCC(0, op1)
 		Mnemonic.JNO -> encodeJCC(1, op1)

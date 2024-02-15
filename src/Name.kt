@@ -15,11 +15,20 @@ class Name(val id: Int, val string: String) {
 		private var count = 0
 		private val list = ArrayList<Name>()
 		private val map = HashMap<String, Name>()
+		private val anonList = ArrayList<Name>()
 		operator fun get(id: Int) = list[id]
 		operator fun get(key: String) = map.getOrPut(key) { Name(count++, key) }
 
-		val STRING    = get("string")
+		fun anon(index: Int) = if(anonList.size <= index)
+			get("${anonList.size}").also(anonList::add)
+		else
+			anonList[index]
+
 		val NONE      = get("")
+		val STRING    = get("string")
+		val IF        = get("if")
+		val WHILE     = get("while")
+		val FOR       = get("for")
 		val MAIN      = get("main")
 		val VAR       = get("var")
 		val NAMESPACE = get("namespace")

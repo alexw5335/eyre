@@ -252,6 +252,7 @@ class Linker(private val context: Context) {
 			is NameNode    -> sym(node.sym)
 			is DotNode     -> sym(node.sym)
 			is ArrayNode   -> sym(node.sym)
+			is RegNode     -> 0
 			else           -> context.err(node.srcPos, "Invalid immediate node: $node")
 		}
 	}
