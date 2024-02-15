@@ -32,12 +32,29 @@ enum class TokenType(
 	val binOp: BinOp? = null,
 	val unOp: UnOp? = null
 ) {
+
+	/*IF        ("if"),
+	ELIF      ("elif"),
+	ELSE      ("else"),
+	WHILE     ("while"),
+	FOR       ("for"),
+	VAR       ("var"),
+	NAMESPACE ("namespace"),
+	FUN       ("fun"),
+	STRUCT    ("struct"),
+	UNION     ("union"),
+	ENUM      ("enum"),
+	PROC      ("proc"),
+	TYPEDEF   ("typedef"),
+	CONST     ("const"),*/
+
 	NAME    ("name"),
 	STRING  ("string"),
 	INT     ("int"),
 	CHAR    ("char"),
 	REG     ("reg"),
-	EOF     ("EOF"),
+	EOF     ("eof"),
+
 	LPAREN  ("(", BinOp.INV),
 	RPAREN  (")"),
 	PLUS    ("+", BinOp.ADD, UnOp.POS),

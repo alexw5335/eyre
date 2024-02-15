@@ -56,6 +56,8 @@ class Parser(private val context: Context) {
 
 	private fun Token.srcPos() = SrcPos(file, line)
 
+	private fun anon() = Name.anon(anonCount++)
+
 
 	/*
 	Parsing
@@ -81,6 +83,14 @@ class Parser(private val context: Context) {
 		} catch(_: EyreError) {
 			file.invalid = true
 		}
+	}
+
+
+
+	private fun parseBracedScope(scope: ScopedNode) {
+		expect(TokenType.LBRACE)
+		parseScope(scope, scope.children)
+		expect(TokenType.RBRACE)
 	}
 
 
@@ -136,15 +146,22 @@ class Parser(private val context: Context) {
 			in Name.mnemonics -> parseIns(srcPos, Name.mnemonics[keyword]!!).addNode()
 
 			Name.IF -> {
-				val condition = parseExpr()
-				expect(TokenType.LBRACE)
-				val ifNode = IfNode(Base(srcPos, scope, Name.anon(anonCount)), condition).addNodeSym()
-				parseScope(ifNode, ifNode.children)
-				expect(TokenType.RBRACE)
+				val node = IfNode(Base(srcPos, scope, anon()), parseExpr(), false).addNode()
+				parseBracedScope(node)
+			}
 
-				while(true) {
-					//if(tokens[pos].type == TokenType)
-				}
+			Name.ELIF -> {
+				if(nodes.isEmpty() || nodes.last() !is IfNode)
+					err(srcPos, "Invalid elif statement")
+				val node = IfNode(Base(srcPos, scope, anon()), parseExpr(), true).addNode()
+				parseBracedScope(node)
+			}
+
+			Name.ELSE -> {
+				if(nodes.isEmpty() || nodes.last() !is IfNode)
+					err(srcPos, "Invalid else statement")
+				val node = ElseNode(Base(srcPos, scope, anon())).addNode()
+				parseBracedScope(node)
 			}
 
 			Name.STRUCT -> parseStruct(srcPos, scope, name(), false).addNodeSym()

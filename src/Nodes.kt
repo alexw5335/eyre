@@ -22,6 +22,10 @@ interface Node : NodeOrSym {
 	val srcPos get() = base.srcPos
 }
 
+interface ScopedNode : Node, Sym {
+	val children: ArrayList<Node>
+}
+
 interface Sym : NodeOrSym {
 	val parent get() = base.parent
 	val name get() = base.name
@@ -108,12 +112,18 @@ fun BinNode.calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long = o
 
 
 
+class ElseNode(
+	override val base: Base,
+	override val children: ArrayList<Node> = ArrayList()
+) : ScopedNode
+
 class IfNode(
 	override val base: Base,
-	val condition: Node?,
-	val children: ArrayList<Node> = ArrayList()
-) : Node, Sym {
-	var next: IfNode? = null
+	val condition: Node,
+	val isElif: Boolean,
+	override val children: ArrayList<Node> = ArrayList()
+) : ScopedNode {
+	var jmpPos = 0
 }
 
 
@@ -218,14 +228,14 @@ class LabelNode(
 
 class ProcNode(
 	override val base: Base,
-	val children: ArrayList<Node> = ArrayList<Node>(),
+	override val children: ArrayList<Node> = ArrayList<Node>(),
 	var size: Int = 0
-) : Node, MutPosSym
+) : ScopedNode, MutPosSym
 
 class NamespaceNode(
 	override val base: Base,
-	val children: ArrayList<Node> = ArrayList()
-) : Node, Sym
+	override val children: ArrayList<Node> = ArrayList()
+) : ScopedNode, Sym
 
 class TypeNode(
 	override val base: Base,

@@ -312,8 +312,13 @@ class Printer(private val context: Context) {
 			is LabelNode -> appendLine("LABEL ${context.qualifiedName(node)}")
 
 			is IfNode -> {
-				appendLine("IF")
+				appendLine(if(node.isElif) "ELIF" else "IF")
 				appendChild(node.condition)
+				node.children.forEach { appendChild(it) }
+			}
+
+			is ElseNode -> {
+				appendLine("ELSE")
 				node.children.forEach { appendChild(it) }
 			}
 

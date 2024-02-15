@@ -242,6 +242,11 @@ class Resolver(private val context: Context) {
 			node.children.forEach(::resolveNode)
 			popScope()
 		}
+		is ElseNode -> {
+			pushScope(node)
+			node.children.forEach(::resolveNode)
+			popScope()
+		}
 		is StringNode -> context.stringLiterals.add(node)
 		is RegNode,
 		is DllCallNode,

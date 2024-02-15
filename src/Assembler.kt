@@ -63,6 +63,7 @@ class Assembler(private val context: Context) {
 					node.size = writer.pos - node.disp
 				}
 				is IfNode -> handleIfNode(node)
+				is ElseNode -> { }
 				is DllCallNode -> handleDllCall(node)
 				is InsNode -> assembleIns(node)
 			}
@@ -73,13 +74,29 @@ class Assembler(private val context: Context) {
 
 
 
+	private fun handleElseNode(node: ElseNode) {
+
+	}
+
+
+
 	/**
+	 *     E9    JMP   REL32
+	 *
 	 *     80/7  CMP  RM_I   1111
 	 *     38    CMP  RM_R   1111
 	 *     3A    CMP  R_RM   1111
 	 */
-	private fun handleIfNode(node: IfNode) {
+	private fun handleIfNode(parentIf: IfNode?, node: IfNode) {
 		fun err(): Nothing = err(node.srcPos, "Invalid condition")
+
+		val elifPos = writer.pos
+
+		if(node.isElif) {
+			writer.i8(0xE9)
+			writer.i32(0)
+		}
+
 		val condition = node.condition as? BinNode ?: err()
 		if(condition.op != BinOp.EQ) err()
 		val reg = (condition.left as? RegNode)?.value ?: err()
@@ -93,6 +110,7 @@ class Assembler(private val context: Context) {
 		for(child in node.children) handleNode(child)
 		val diff = writer.pos - start
 		writer.i32(start - 4, diff)
+
 	}
 
 

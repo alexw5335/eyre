@@ -27,6 +27,8 @@ class Name(val id: Int, val string: String) {
 		val NONE      = get("")
 		val STRING    = get("string")
 		val IF        = get("if")
+		val ELIF      = get("elif")
+		val ELSE      = get("else")
 		val WHILE     = get("while")
 		val FOR       = get("for")
 		val MAIN      = get("main")
