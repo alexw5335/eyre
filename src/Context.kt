@@ -33,11 +33,13 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val linkRelocs = ArrayList<Reloc>()
 
-	val absRelocs = ArrayList<Reloc>()
+	val absRelocs = ArrayList<AbsReloc>()
+
+	val ripRelocs = ArrayList<RipReloc>()
 
 	var entryPoint: PosSym? = null
 
-	val stringLiterals = ArrayList<StringNode>()
+	val stringLiterals = ArrayList<StringLitSym>()
 
 
 

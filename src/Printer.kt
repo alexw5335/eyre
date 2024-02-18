@@ -161,6 +161,11 @@ class Printer(private val context: Context) {
 
 
 	private fun StringBuilder.appendNode(node: Node) {
+		if(node is ScopeEndNode) {
+			if(node.sym !is NamespaceNode) indent--
+			return
+		}
+
 		appendLineNumber(node.srcPos?.line ?: context.internalErr())
 		for(i in 0 ..< indent) append("    ")
 
@@ -168,7 +173,8 @@ class Printer(private val context: Context) {
 			is RegNode  -> appendLine(node.value)
 			is NameNode -> appendLine(node.value.string)
 			is IntNode  -> appendLine("${node.value}")
-
+			is DllImportNode -> appendLine("DLLIMPORT ${node.dllName}.${node.name}")
+			
 			is OpNode -> {
 				when(node.type) {
 					OpType.IMM -> {
@@ -206,12 +212,11 @@ class Printer(private val context: Context) {
 
 			is ProcNode -> {
 				appendLine("PROC ${node.fullName}")
-				appendChildren(node.children)
+				indent++
 			}
 
 			is NamespaceNode -> {
 				appendLine("NAMESPACE ${node.fullName}")
-				appendChildren(node.children)
 			}
 
 			is DllCallNode -> if(node.dllName.isNotNull)
@@ -312,14 +317,18 @@ class Printer(private val context: Context) {
 			is LabelNode -> appendLine("LABEL ${context.qualifiedName(node)}")
 
 			is IfNode -> {
-				appendLine(if(node.isElif) "ELIF" else "IF")
-				appendChild(node.condition)
-				node.children.forEach { appendChild(it) }
-			}
-
-			is ElseNode -> {
-				appendLine("ELSE")
-				node.children.forEach { appendChild(it) }
+				if(node.condition == null) {
+					appendLine("ELSE")
+					indent++
+				} else if(node.parentIf == null) {
+					appendLine("IF")
+					appendChild(node.condition)
+					indent++
+				} else {
+					appendLine("ELIF")
+					appendChild(node.condition)
+					indent++
+				}
 			}
 
 			is StringNode -> appendLine("\"${node.value.replace("\n", "\\n")}\"")

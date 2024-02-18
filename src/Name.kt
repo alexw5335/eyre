@@ -25,6 +25,7 @@ class Name(val id: Int, val string: String) {
 			anonList[index]
 
 		val NONE      = get("")
+		val DLLIMPORT = get("dllimport")
 		val STRING    = get("string")
 		val IF        = get("if")
 		val ELIF      = get("elif")

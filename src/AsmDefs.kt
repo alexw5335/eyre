@@ -216,6 +216,16 @@ enum class Width(val bytes: Int) {
 	val max: Long = if(bytes > 8) 0 else (1L shl ((bytes shl 3) - 1)) - 1
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
+
+	companion object {
+		fun fromBytes(bytes: Int) = when(bytes) {
+			1    -> BYTE
+			2    -> WORD
+			4    -> DWORD
+			8    -> QWORD
+			else -> null
+		}
+	}
 }
 
 
@@ -264,5 +274,22 @@ enum class Reg(val type: OpType, val index : Int) {
 	val width = type.width
 	val noRex8 = type == OpType.R8 && (name == "AH" || name == "BH" || name == "CH" || name == "DH")
 	val rex8 = type == OpType.R8 && (name == "SPL" || name == "BPL" || name == "SIL" || name == "DIL")
+	val widthOrdinal = width.ordinal - 1
+
+	companion object {
+		val byteRegs = arrayOf(AL, CL, DL, BL, AH, CH, DH, BH, R8B, R9B, R10B, R11B, R12B, R13B, R14B, R15B)
+		val wordRegs = arrayOf(AX, CX, DX, BX, SP, BP, SI, DI, R8W, R9W, R10W, R11W, R12W, R13W, R14W, R15W)
+		val dwordRegs = arrayOf(EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI, R8D, R9D, R10D, R11D, R12D, R13D, R14D, R15D)
+		val qwordRegs = arrayOf(RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15)
+		val gpRegs = arrayOf(byteRegs, wordRegs, dwordRegs, qwordRegs)
+		val aRegs = arrayOf(AL, AX, EAX, RAX)
+		val cRegs = arrayOf(CL, CX, ECX, RCX)
+		val dRegs = arrayOf(DL, DX, EDX, RDX)
+		val r8Regs = arrayOf(R8B, R8W, R8D, R8)
+		val r9Regs = arrayOf(R9B, R9W, R9D, R9)
+		val argRegs = arrayOf(cRegs, dRegs, r8Regs, r9Regs)
+		val arg64Regs = arrayOf(RCX, RDX, R8, R9)
+		val argIndexes = intArrayOf(1, 2, 8, 9)
+	}
 
 }

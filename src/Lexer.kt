@@ -27,7 +27,7 @@ class Lexer(private val context: Context) {
 
 
 
-	private fun lex(file: SrcFile) {
+	fun lex(file: SrcFile) {
 		this.pos = 0
 		this.lineCount = 1
 		this.file = file

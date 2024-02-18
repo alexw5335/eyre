@@ -22,10 +22,6 @@ interface Node : NodeOrSym {
 	val srcPos get() = base.srcPos
 }
 
-interface ScopedNode : Node, Sym {
-	val children: ArrayList<Node>
-}
-
 interface Sym : NodeOrSym {
 	val parent get() = base.parent
 	val name get() = base.name
@@ -78,18 +74,21 @@ class PosRefSym(
 	override val disp get() = receiver.disp + offsetSupplier()
 }
 
-class StringLitSym : MutPosSym, AnonSym
+class StringLitSym(val value: String) : AnonSym, MutPosSym
+
 
 
 data object NullNode : Node { override val base = Base.NULL }
 
+interface SymNode : Node { val sym: Sym? }
+
 class RegNode(override val base: Base, val value: Reg) : Node
 
-class NameNode(override val base: Base, val value: Name, var sym: Sym? = null) : Node
+class NameNode(override val base: Base, val value: Name, override var sym: Sym? = null) : SymNode
 
 class IntNode(override val base: Base, val value: Long) : Node
 
-class StringNode(override val base: Base, val value: String, var litPos: Pos? = null) : Node
+class StringNode(override val base: Base, val value: String, var litSym: StringLitSym? = null) : Node
 
 class UnNode(override val base: Base, val op: UnOp, val child: Node) : Node
 
@@ -112,20 +111,15 @@ fun BinNode.calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long = o
 
 
 
-class ElseNode(
-	override val base: Base,
-	override val children: ArrayList<Node> = ArrayList()
-) : ScopedNode
-
 class IfNode(
 	override val base: Base,
-	val condition: Node,
-	val isElif: Boolean,
-	override val children: ArrayList<Node> = ArrayList()
-) : ScopedNode {
-	var jmpPos = 0
+	val condition: Node?,
+	val parentIf: IfNode?
+) : Node, Sym {
+	var startJmpPos = 0
+	var endJmpPos = 0
+	var next: IfNode? = null
 }
-
 
 
 class ConstNode(
@@ -222,20 +216,13 @@ class TypedefNode(
 	override val alignment get() = type.alignment
 }
 
-class LabelNode(
-	override val base: Base,
-) : Node, MutPosSym
+class ScopeEndNode(override val base: Base, val sym: Sym) : Node
 
-class ProcNode(
-	override val base: Base,
-	override val children: ArrayList<Node> = ArrayList<Node>(),
-	var size: Int = 0
-) : ScopedNode, MutPosSym
+class LabelNode(override val base: Base) : Node, MutPosSym
 
-class NamespaceNode(
-	override val base: Base,
-	override val children: ArrayList<Node> = ArrayList()
-) : ScopedNode, Sym
+class ProcNode(override val base: Base, var size: Int = 0) : Node, MutPosSym
+
+class NamespaceNode(override val base: Base) : Node, Sym
 
 class TypeNode(
 	override val base: Base,
@@ -266,15 +253,24 @@ class ArrayNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node,
-	var sym: Sym? = null
-) : Node
+	override var sym: Sym? = null
+) : SymNode
 
 class DotNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node,
-	var sym: Sym? = null
-) : Node
+	override var sym: Sym? = null
+) : SymNode
+
+class DllImportNode(
+	override val base: Base,
+	val dllName: Name,
+	val pos: Pos
+) : Node, PosSym {
+	override val disp get() = pos.disp
+	override val sec get() = pos.sec
+}
 
 class CallNode(
 	override val base: Base,
@@ -291,7 +287,7 @@ Types
 
 
 
-class IntType(name: Name, override val size: Int) : Type {
+class IntType(name: Name, override val size: Int, val signed: Boolean) : Type {
 	override val base = Base(null, null, name)
 	override val alignment = size
 }
@@ -316,9 +312,17 @@ class ArrayType(
 	override val alignment get() = baseType.alignment
 }
 
-object Types {
-	val BYTE = IntType(Name.BYTE, 1)
-	val WORD = IntType(Name.WORD, 2)
-	val DWORD = IntType(Name.DWORD, 4)
-	val QWORD = IntType(Name.QWORD, 8)
+object IntTypes {
+	val BYTE  = IntType(Name.BYTE, 1, true)
+	val WORD  = IntType(Name.WORD, 2, true)
+	val DWORD = IntType(Name.DWORD, 4, true)
+	val QWORD = IntType(Name.QWORD, 8, true)
+	val I8    = IntType(Name["i8"], 1, true)
+	val I16   = IntType(Name["i16"], 2, true)
+	val I32   = IntType(Name["i32"], 4, true)
+	val I64   = IntType(Name["i64"], 8, true)
+	val U8    = IntType(Name["u8"], 1, false)
+	val U16   = IntType(Name["u16"], 2, false)
+	val U32   = IntType(Name["u32"], 4, false)
+	val U64   = IntType(Name["u64"], 8, false)
 }

@@ -5,8 +5,10 @@ class Parser(private val context: Context) {
 
 	private lateinit var file: SrcFile
 	private lateinit var tokens: List<Token>
+	private lateinit var nodes: ArrayList<Node>
 	private var pos = 0
 	private var anonCount = 0
+	private var scope: Sym? = null
 
 
 
@@ -15,6 +17,22 @@ class Parser(private val context: Context) {
 	 */
 
 
+
+	private fun<T : Node> T.addNode(): T {
+		nodes.add(this)
+		return this
+	}
+
+	private fun<T : Sym> T.addSym(): T {
+		context.symTable.add(this)
+		return this
+	}
+
+	private fun<T> T.addNodeSym(): T where T : Node, T : Sym {
+		nodes.add(this)
+		context.symTable.add(this)
+		return this
+	}
 
 	private fun potentialName() = if(tokens[pos].type == TokenType.NAME)
 		tokens[pos++].nameValue
@@ -59,6 +77,7 @@ class Parser(private val context: Context) {
 	private fun anon() = Name.anon(anonCount++)
 
 
+
 	/*
 	Parsing
 	 */
@@ -73,13 +92,14 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parse(file: SrcFile) {
+	fun parse(file: SrcFile) {
 		this.file = file
 		this.tokens = file.tokens
+		this.nodes = file.nodes
 		this.pos = 0
 
 		try {
-			parseScope(null, file.nodes)
+			parseScope(null)
 		} catch(_: EyreError) {
 			file.invalid = true
 		}
@@ -87,51 +107,40 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseBracedScope(scope: ScopedNode) {
+	private fun parseBracedScope(scope: Sym) {
 		expect(TokenType.LBRACE)
-		parseScope(scope, scope.children)
+		parseScope(scope)
 		expect(TokenType.RBRACE)
 	}
 
 
 
-	private fun parseScope(scope: Sym?, nodes: ArrayList<Node>) {
-		val prevAnonCount = 0
-		anonCount = 0
+	private fun parseScope(scope: Sym?) {
+		val prevScope = this.scope
+		this.scope = scope
+
 		while(pos < tokens.size) {
 			val token = tokens[pos]
 			when(token.type) {
-				TokenType.NAME   -> parseKeyword(token, scope, nodes)
-				TokenType.RBRACE -> return
+				TokenType.NAME   -> parseKeyword(token)
+				TokenType.RBRACE -> break
 				TokenType.SEMI   -> pos++
 				TokenType.EOF    -> break
 				else             -> err("Invalid token: ${token.type}")
 			}
 		}
-		anonCount = prevAnonCount
+
+		this.scope = prevScope
+
+		if(scope != null)
+			ScopeEndNode(Base(tokens[pos].srcPos()), scope).addNode()
 	}
 
 
 
-	private fun parseKeyword(keywordToken: Token, scope: Sym?, nodes: ArrayList<Node>) {
+	private fun parseKeyword(keywordToken: Token) {
 		val keyword = keywordToken.nameValue
 		val srcPos = keywordToken.srcPos()
-
-		fun<T : Node> T.addNode(): T {
-			nodes.add(this)
-			return this
-		}
-
-		fun<T : Sym> T.addSym(): T {
-			context.symTable.add(this)
-			return this
-		}
-
-		fun<T> T.addNodeSym(): T where T : Node, T : Sym {
-			nodes.add(this)
-			context.symTable.add(this)
-			return this
-		}
 
 		if(tokens[pos + 1].type == TokenType.COLON) {
 			pos += 2
@@ -145,23 +154,37 @@ class Parser(private val context: Context) {
 		when(keyword) {
 			in Name.mnemonics -> parseIns(srcPos, Name.mnemonics[keyword]!!).addNode()
 
+			Name.DLLIMPORT -> {
+				val dllName = name()
+				expect(TokenType.DOT)
+				val name = name()
+				expectNewline()
+				val pos = context.getDllImport(dllName.string, name.string)
+				DllImportNode(Base(srcPos, scope, name), dllName, pos!!).addNodeSym()
+			}
+
 			Name.IF -> {
-				val node = IfNode(Base(srcPos, scope, anon()), parseExpr(), false).addNode()
-				parseBracedScope(node)
-			}
+				var parent = IfNode(Base(srcPos, scope, anon()), parseExpr(), null).addNode()
+				parseBracedScope(parent)
 
-			Name.ELIF -> {
-				if(nodes.isEmpty() || nodes.last() !is IfNode)
-					err(srcPos, "Invalid elif statement")
-				val node = IfNode(Base(srcPos, scope, anon()), parseExpr(), true).addNode()
-				parseBracedScope(node)
-			}
-
-			Name.ELSE -> {
-				if(nodes.isEmpty() || nodes.last() !is IfNode)
-					err(srcPos, "Invalid else statement")
-				val node = ElseNode(Base(srcPos, scope, anon())).addNode()
-				parseBracedScope(node)
+				while(true) {
+					if(tokens[pos].type != TokenType.NAME)
+						break
+					else if(tokens[pos].nameValue == Name.ELIF) {
+						pos++
+						val next = IfNode(Base(srcPos, scope, anon()), parseExpr(), parent).addNode()
+						parseBracedScope(next)
+						parent.next = next
+						parent = next
+					} else if(tokens[pos].nameValue == Name.ELSE) {
+						pos++
+						val next = IfNode(Base(srcPos, scope, anon()), null, parent).addNode()
+						parent.next = next
+						parseBracedScope(next)
+						break
+					} else
+						break
+				}
 			}
 
 			Name.STRUCT -> parseStruct(srcPos, scope, name(), false).addNodeSym()
@@ -230,17 +253,15 @@ class Parser(private val context: Context) {
 					namespace = NamespaceNode(Base(srcPos, namespace, name())).addSym()
 				}
 				namespace.addNode()
-				val hasBraces = if(tokens[pos].type == TokenType.LBRACE) { pos++; true } else false
-				parseScope(namespace, namespace.children)
-				if(hasBraces) expect(TokenType.RBRACE)
+				expectNewline()
+				parseScope(namespace)
+				ScopeEndNode(Base(tokens[pos].srcPos()), namespace).addNode()
 			}
 
 			Name.PROC -> {
 				val name = name()
-				expect(TokenType.LBRACE)
 				val proc = ProcNode(Base(srcPos, scope, name)).addNodeSym()
-				parseScope(proc, proc.children)
-				expect(TokenType.RBRACE)
+				parseBracedScope(proc)
 			}
 
 			Name.CONST -> {
@@ -259,9 +280,17 @@ class Parser(private val context: Context) {
 				TypedefNode(Base(srcPos, scope, name), typeNode).addNodeSym()
 				expectNewline()
 			}
+
+			else -> {
+				pos--
+				when(val expr = parseExpr()) {
+					is CallNode,
+					is BinNode -> expr.addNode()
+					else -> err(expr.srcPos, "Invalid node: $expr")
+				}
+			}
 		}
 	}
-
 
 
 
@@ -312,12 +341,6 @@ class Parser(private val context: Context) {
 
 		return struct
 	}
-
-
-
-	/*
-	Expression parsing
-	 */
 
 
 
@@ -376,34 +399,6 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseAtom(): Node {
-		val token = tokens[pos++]
-		val srcPos = token.srcPos()
-
-		return when(token.type) {
-			TokenType.LBRACE -> {
-				val elements = ArrayList<Node>()
-				while(tokens[pos].type != TokenType.RBRACE) {
-					elements.add(parseExpr())
-					if(tokens[pos].type == TokenType.COMMA)
-						pos++
-				}
-				pos++
-				InitNode(Base(srcPos), elements)
-			}
-
-			TokenType.REG    -> RegNode(Base(srcPos), token.regValue)
-			TokenType.NAME   -> NameNode(Base(srcPos), token.nameValue)
-			TokenType.INT    -> IntNode(Base(srcPos), token.intValue)
-			TokenType.STRING -> StringNode(Base(srcPos), token.stringValue)
-			TokenType.CHAR   -> IntNode(Base(srcPos), token.intValue)
-			TokenType.LPAREN -> parseExpr().also { expect(TokenType.RPAREN) }
-			else             -> UnNode(Base(srcPos), token.type.unOp ?: err(srcPos, "Invalid atom: $token"), parseAtom())
-		}
-	}
-
-
-
 	private fun parseType(): TypeNode {
 		val srcPos = tokens[pos].srcPos()
 		val names = ArrayList<Name>()
@@ -445,8 +440,55 @@ class Parser(private val context: Context) {
 
 
 
+	/*
+	Expression parsing
+
+	-vec.y    (-vec).y   -(vec.y)
+
+
+
+	 */
+
+
+
+	private fun parseAtom(precedence: Int = 0): Node {
+		val token = tokens[pos++]
+		val srcPos = token.srcPos()
+		val base = Base(srcPos)
+
+		return when(token.type) {
+			TokenType.LBRACE -> {
+				val elements = ArrayList<Node>()
+				while(tokens[pos].type != TokenType.RBRACE) {
+					elements.add(parseExpr())
+					if(tokens[pos].type == TokenType.COMMA)
+						pos++
+				}
+				pos++
+				InitNode(Base(srcPos), elements)
+			}
+
+			TokenType.REG    -> RegNode(base, token.regValue)
+			TokenType.NAME   -> NameNode(base, token.nameValue)
+			TokenType.INT    -> IntNode(base, token.intValue)
+			TokenType.STRING -> StringNode(base, token.stringValue)
+			TokenType.CHAR   -> IntNode(base, token.intValue)
+			TokenType.LPAREN -> parseExpr().also { expect(TokenType.RPAREN) }
+			else -> {
+				val op = token.type.unOp ?: err(srcPos, "Invalid atom: $token")
+				if(op.precedence < precedence) {
+
+				}
+				val child = parseExpr(op.precedence)
+				UnNode(base, op, child)
+			}
+		}
+	}
+
+
+
 	private fun parseExpr(precedence: Int = 0, requireTerminator: Boolean = true): Node {
-		var left = parseAtom()
+		var left = parseAtom(precedence)
 
 		while(true) {
 			val token = tokens[pos]

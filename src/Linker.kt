@@ -46,6 +46,11 @@ class Linker(private val context: Context) {
 		for(reloc in context.linkRelocs)
 			reloc.write()
 
+		for(reloc in context.ripRelocs) {
+			val value = reloc.sym.addr - (reloc.pos.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
+			writer.i32(reloc.pos.pos, value)
+		}
+
 		if(context.entryPoint == null)
 			context.err(null, "Missing main function")
 
@@ -244,7 +249,7 @@ class Linker(private val context: Context) {
 
 		return when(node) {
 			is RefNode     -> node.intSupplier?.invoke() ?: context.err(node.srcPos, "Invalid ref node")
-			is StringNode  -> return node.litPos!!.addr.toLong()
+			is StringNode  -> return node.litSym!!.addr.toLong()
 			is IntNode     -> node.value
 			is UnNode      -> node.calc(regValid, ::resolveImmRec)
 			is BinNode     -> node.calc(regValid, ::resolveImmRec)
@@ -252,6 +257,7 @@ class Linker(private val context: Context) {
 			is NameNode    -> sym(node.sym)
 			is DotNode     -> sym(node.sym)
 			is ArrayNode   -> sym(node.sym)
+			is OpNode      -> resolveImmRec(node.child!!, regValid)
 			is RegNode     -> 0
 			else           -> context.err(node.srcPos, "Invalid immediate node: $node")
 		}
@@ -260,6 +266,11 @@ class Linker(private val context: Context) {
 	private fun resolveImm(node: Node) = resolveImmRec(node, true)
 
 	private fun Reloc.write() {
+		var value = when {
+			node != null -> resolveImm(node)
+			sym != null -> sym.addr
+			else -> error()
+		}
 		val value = if(rel)
 			resolveImm(node) - (pos.addr + width.bytes + offset)
 		else

@@ -4,10 +4,10 @@ package eyre
 
 enum class BinOp(val precedence: Int, val string: String?) {
 
-	INV (11, null),
-	ARR (10, null),
-	DOT (10, "."),
-	REF (9, "::"),
+	INV (12, null),
+	ARR (11, null),
+	DOT (11, "."),
+	REF (10, "::"),
 	MUL (8, "*"),
 	DIV (8, "/"),
 	ADD (7, "+"),
@@ -92,8 +92,11 @@ enum class UnOp(val string: String) {
 	POS("+"),
 	NEG("-",),
 	NOT("~"),
-	LNOT("!");
+	LNOT("!"),
+	ADDR("&"),
+	DEREF("*");
 
+	val precedence = 9
 	val regValid get() = this == POS
 
 	fun calc(value: Int): Int = when(this) {
@@ -101,6 +104,8 @@ enum class UnOp(val string: String) {
 		NEG  -> -value
 		NOT  -> value.inv()
 		LNOT -> if(value == 0) 1 else 0
+		ADDR -> 0
+		DEREF -> 0
 	}
 
 	fun calc(value: Long): Long = when(this) {
@@ -108,6 +113,8 @@ enum class UnOp(val string: String) {
 		NEG  -> -value
 		NOT  -> value.inv()
 		LNOT -> if(value == 0L) 1L else 0L
+		ADDR -> 0
+		DEREF -> 0
 	}
 
 }
