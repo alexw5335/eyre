@@ -5,8 +5,10 @@ class Parser(private val context: Context) {
 
 	private lateinit var file: SrcFile
 	private lateinit var tokens: List<Token>
+	private lateinit var nodes: ArrayList<Node>
 	private var pos = 0
 	private var anonCount = 0
+	private var scope: Sym? = null
 
 
 
@@ -15,6 +17,22 @@ class Parser(private val context: Context) {
 	 */
 
 
+
+	private fun<T : Node> T.addNode(): T {
+		nodes.add(this)
+		return this
+	}
+
+	private fun<T : Sym> T.addSym(): T {
+		context.symTable.add(this)
+		return this
+	}
+
+	private fun<T> T.addNodeSym(): T where T : Node, T : Sym {
+		nodes.add(this)
+		context.symTable.add(this)
+		return this
+	}
 
 	private fun potentialName() = if(tokens[pos].type == TokenType.NAME)
 		tokens[pos++].nameValue
@@ -76,10 +94,11 @@ class Parser(private val context: Context) {
 	private fun parse(file: SrcFile) {
 		this.file = file
 		this.tokens = file.tokens
+		this.nodes = file.nodes
 		this.pos = 0
 
 		try {
-			parseScope(null, file.nodes)
+			parseScope(null)
 		} catch(_: EyreError) {
 			file.invalid = true
 		}
@@ -87,33 +106,38 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseBracedScope(scope: ScopedNode) {
+	private fun parseBracedScope(scope: Sym) {
 		expect(TokenType.LBRACE)
-		parseScope(scope, scope.children)
+		parseScope(scope)
 		expect(TokenType.RBRACE)
 	}
 
 
 
-	private fun parseScope(scope: Sym?, nodes: ArrayList<Node>) {
-		val prevAnonCount = 0
-		anonCount = 0
+	private fun parseScope(scope: Sym?) {
+		val prevScope = this.scope
+		this.scope = scope
+
 		while(pos < tokens.size) {
 			val token = tokens[pos]
 			when(token.type) {
-				TokenType.NAME   -> parseKeyword(token, scope, nodes)
-				TokenType.RBRACE -> return
+				TokenType.NAME   -> parseKeyword(token)
+				TokenType.RBRACE -> break
 				TokenType.SEMI   -> pos++
 				TokenType.EOF    -> break
 				else             -> err("Invalid token: ${token.type}")
 			}
 		}
-		anonCount = prevAnonCount
+
+		this.scope = prevScope
+
+		if(scope != null)
+			ScopeEndNode(Base(tokens[pos].srcPos()), scope).addNode()
 	}
 
 
 
-	private fun parseKeyword(keywordToken: Token, scope: Sym?, nodes: ArrayList<Node>) {
+	private fun parseKeyword(keywordToken: Token) {
 		val keyword = keywordToken.nameValue
 		val srcPos = keywordToken.srcPos()
 
@@ -146,22 +170,27 @@ class Parser(private val context: Context) {
 			in Name.mnemonics -> parseIns(srcPos, Name.mnemonics[keyword]!!).addNode()
 
 			Name.IF -> {
-				val node = IfNode(Base(srcPos, scope, anon()), parseExpr(), false).addNode()
-				parseBracedScope(node)
-			}
+				var parent = IfNode(Base(srcPos, scope, anon()), parseExpr(), null).addNode()
+				parseBracedScope(parent)
 
-			Name.ELIF -> {
-				if(nodes.isEmpty() || nodes.last() !is IfNode)
-					err(srcPos, "Invalid elif statement")
-				val node = IfNode(Base(srcPos, scope, anon()), parseExpr(), true).addNode()
-				parseBracedScope(node)
-			}
-
-			Name.ELSE -> {
-				if(nodes.isEmpty() || nodes.last() !is IfNode)
-					err(srcPos, "Invalid else statement")
-				val node = ElseNode(Base(srcPos, scope, anon())).addNode()
-				parseBracedScope(node)
+				while(true) {
+					if(tokens[pos].type != TokenType.NAME)
+						break
+					else if(tokens[pos].nameValue == Name.ELIF) {
+						pos++
+						val next = IfNode(Base(srcPos, scope, anon()), parseExpr(), parent).addNode()
+						parseBracedScope(next)
+						parent.next = next
+						parent = next
+					} else if(tokens[pos].nameValue == Name.ELSE) {
+						pos++
+						val next = IfNode(Base(srcPos, scope, anon()), null, parent).addNode()
+						parent.next = next
+						parseBracedScope(next)
+						break
+					} else
+						break
+				}
 			}
 
 			Name.STRUCT -> parseStruct(srcPos, scope, name(), false).addNodeSym()
@@ -230,17 +259,15 @@ class Parser(private val context: Context) {
 					namespace = NamespaceNode(Base(srcPos, namespace, name())).addSym()
 				}
 				namespace.addNode()
-				val hasBraces = if(tokens[pos].type == TokenType.LBRACE) { pos++; true } else false
-				parseScope(namespace, namespace.children)
-				if(hasBraces) expect(TokenType.RBRACE)
+				expectNewline()
+				parseScope(namespace)
+				ScopeEndNode(Base(tokens[pos].srcPos()), namespace).addNode()
 			}
 
 			Name.PROC -> {
 				val name = name()
-				expect(TokenType.LBRACE)
 				val proc = ProcNode(Base(srcPos, scope, name)).addNodeSym()
-				parseScope(proc, proc.children)
-				expect(TokenType.RBRACE)
+				parseBracedScope(proc)
 			}
 
 			Name.CONST -> {

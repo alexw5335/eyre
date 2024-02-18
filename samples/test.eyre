@@ -163,12 +163,6 @@ proc main {
 	mov rcx, [pPhysicalDevices]
 	mov [physicalDevice], rcx
 
-	if rax == 0 {
-		lea rcx, ["ERROR: enumeratePhysicalDevicesFailed\n"]
-		dllcall printf
-		dllcall ExitProcess
-	}
-
 	lea rcx, ["FINISHED\n"]
 	dllcall printf
 	dllcall ExitProcess

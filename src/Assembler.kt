@@ -14,10 +14,37 @@ class Assembler(private val context: Context) {
 
 
 	fun assemble() {
-		writeStringLiterals()
+		sectioned(context.dataSec, context.dataWriter) {
+			for(node in context.stringLiterals) {
+				writer.align(8)
+				node.litPos = Pos(section, writer.pos)
+				writer.asciiNT(node.value)
+			}
+		}
+
 		for(file in context.files) {
 			this.file = file
-			file.nodes.forEach(::handleNode)
+			for((index, node) in file.nodes.withIndex()) {
+				try {
+					when(node) {
+						is VarNode -> handleVarNode(node)
+						is LabelNode -> {
+							node.sec = section
+							node.disp = writer.pos
+						}
+						is ProcNode -> {
+							node.sec = section
+							node.disp = writer.pos
+						}
+						is ScopeEndNode -> handleScopeEndNode(node)
+						is IfNode -> handleIfNode(node)
+						is DllCallNode -> handleDllCall(node)
+						is InsNode -> assembleIns(node)
+					}
+				} catch(e: EyreError) {
+					file.invalid = true
+				}
+			}
 		}
 	}
 
@@ -35,82 +62,71 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun writeStringLiterals() {
-		sectioned(context.dataSec, context.dataWriter) {
-			for(node in context.stringLiterals) {
-				writer.align(8)
-				node.litPos = Pos(section, writer.pos)
-				writer.asciiNT(node.value)
+	private fun handleScopeEndNode(node: ScopeEndNode) {
+		if(node.sym is ProcNode) {
+			node.sym.size = writer.pos - node.sym.disp
+		} else if(node.sym is IfNode) {
+			val ifNode = node.sym
+
+			if(ifNode.next != null) {
+				byte(0xE9)
+				ifNode.endJmpPos = writer.pos
+				dword(0)
+			} else if(ifNode.parentIf != null) {
+				var parent = ifNode.parentIf
+				while(parent != null) {
+					val diff = writer.pos - parent.endJmpPos - 4
+					writer.i32(parent.endJmpPos, diff)
+					parent = parent.parentIf
+				}
+			}
+
+			if(ifNode.condition != null) {
+				val diff = writer.pos - node.sym.startJmpPos - 4
+				writer.i32(node.sym.startJmpPos, diff)
 			}
 		}
 	}
 
 
 
-	private fun handleNode(node: Node) {
-		try {
-			when(node) {
-				is VarNode -> handleVarNode(node)
-				is LabelNode -> {
-					node.sec = section
-					node.disp = writer.pos
-				}
-				is NamespaceNode -> node.children.forEach(::handleNode)
-				is ProcNode -> {
-					node.sec = section
-					node.disp = writer.pos
-					node.children.forEach(::handleNode)
-					node.size = writer.pos - node.disp
-				}
-				is IfNode -> handleIfNode(node)
-				is ElseNode -> { }
-				is DllCallNode -> handleDllCall(node)
-				is InsNode -> assembleIns(node)
-			}
-		} catch(e: EyreError) {
-			file.invalid = true
-		}
-	}
-
-
-
-	private fun handleElseNode(node: ElseNode) {
-
-	}
-
-
-
-	/**
-	 *     E9    JMP   REL32
-	 *
-	 *     80/7  CMP  RM_I   1111
-	 *     38    CMP  RM_R   1111
-	 *     3A    CMP  R_RM   1111
-	 */
-	private fun handleIfNode(parentIf: IfNode?, node: IfNode) {
+	private fun handleIfNode(node: IfNode) {
 		fun err(): Nothing = err(node.srcPos, "Invalid condition")
 
-		val elifPos = writer.pos
-
-		if(node.isElif) {
-			writer.i8(0xE9)
-			writer.i32(0)
-		}
+		if(node.condition == null)
+			return
 
 		val condition = node.condition as? BinNode ?: err()
 		if(condition.op != BinOp.EQ) err()
+
+		/*
+		R_I
+		M_I
+		R_R
+		M_R
+		R_M
+
+		if rax == 10
+		if [rax] == 10
+		if rax == rcx
+		if [rax] == rax
+		if rax == [rax]
+
+		==
+		!=
+		>
+		<
+		>=
+		<=
+		 */
 		val reg = (condition.left as? RegNode)?.value ?: err()
 		val value = (condition.right as? IntNode)?.value ?: err()
 		byte(0x81)
 		byte(0b11_111_000 or reg.value)
 		dword(value.toInt())
 		word(0x850F)
+		node.startJmpPos = writer.pos
 		dword(0)
-		val start = writer.pos
-		for(child in node.children) handleNode(child)
-		val diff = writer.pos - start
-		writer.i32(start - 4, diff)
-
 	}
 
 

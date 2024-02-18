@@ -1,6 +1,5 @@
 package eyre
 
-import java.lang.reflect.Member
 import java.util.*
 import kotlin.math.max
 
@@ -110,33 +109,21 @@ class Resolver(private val context: Context) {
 
 
 	private fun resolveNodeType(node: Node) { when(node) {
-		is NamespaceNode -> {
-			pushScope(node)
-			node.children.forEach(::resolveNodeType)
-			popScope()
-		}
+		is ScopeEndNode -> popScope()
+		is NamespaceNode -> pushScope(node)
+		is IfNode -> pushScope(node)
+		is ProcNode -> pushScope(node)
+		is TypedefNode -> node.type = resolveType(node.typeNode ?: context.internalErr())
 
-		is ProcNode -> {
-			pushScope(node)
-			node.children.forEach(::resolveNodeType)
-			popScope()
-		}
-
-		is TypedefNode -> {
-			node.type = resolveType(node.typeNode ?: context.internalErr())
-		}
-
-		is VarNode -> {
-			if(node.typeNode != null) {
+		is VarNode ->
+			if(node.typeNode != null)
 				node.type = resolveType(node.typeNode)
-			} else if(node.valueNode is StringNode) {
+			else if(node.valueNode is StringNode)
 				node.type = StringType(node.valueNode.value.length)
-			} else {
+			else
 				err(node.srcPos, "Cannot infer variable type")
-			}
-		}
 
-		is StructNode -> {
+		is StructNode ->
 			for(member in node.members) {
 				if(member.struct != null) {
 					resolveNodeType(member.struct)
@@ -147,7 +134,6 @@ class Resolver(private val context: Context) {
 					context.internalErr()
 				}
 			}
-		}
 
 		else -> return
 	}}
@@ -188,11 +174,8 @@ class Resolver(private val context: Context) {
 
 
 	private fun resolveNode(node: Node) { when(node) {
-		is NamespaceNode -> {
-			pushScope(node)
-			node.children.forEach(::resolveNode)
-			popScope()
-		}
+		is ScopeEndNode -> popScope()
+		is NamespaceNode -> pushScope(node)
 		is NameNode -> node.sym = resolveName(node.srcPos, node.value)
 		is UnNode -> resolveNode(node.child)
 		is DotNode -> resolveDotNode(node)
@@ -228,8 +211,6 @@ class Resolver(private val context: Context) {
 			if(node.name == Name.MAIN)
 				context.entryPoint = node
 			pushScope(node)
-			node.children.forEach(::resolveNode)
-			popScope()
 		}
 		is InsNode -> {
 			node.op1?.let(::resolveNode)
@@ -237,15 +218,8 @@ class Resolver(private val context: Context) {
 			node.op3?.let(::resolveNode)
 		}
 		is IfNode -> {
-			resolveNode(node.condition)
+			node.condition?.let(::resolveNode)
 			pushScope(node)
-			node.children.forEach(::resolveNode)
-			popScope()
-		}
-		is ElseNode -> {
-			pushScope(node)
-			node.children.forEach(::resolveNode)
-			popScope()
 		}
 		is StringNode -> context.stringLiterals.add(node)
 		is RegNode,
