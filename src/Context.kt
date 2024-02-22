@@ -35,7 +35,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val absRelocs = ArrayList<AbsReloc>()
 
-	val ripRelocs = ArrayList<RipReloc>()
+	val ripRelocs = ArrayList<RelReloc>()
 
 	var entryPoint: PosSym? = null
 

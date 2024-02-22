@@ -2,6 +2,8 @@ package eyre
 
 
 
+fun Int.align16() = (this + 15) and -16
+
 fun Int.align(alignment: Int) = (this + alignment - 1) and -alignment
 
 fun Long.align(alignment: Int) = (this + alignment - 1) and -alignment.toLong()

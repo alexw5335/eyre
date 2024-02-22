@@ -35,7 +35,7 @@ data class Pos(var sec: Section, var disp: Int) {
 	}
 }
 
-class RipReloc(
+class RelReloc(
 	val srcPos: SrcPos?,
 	val pos: Pos,
 	val sym: PosSym,
@@ -48,10 +48,8 @@ class AbsReloc(
 )
 
 class Reloc(
-	val srcPos : SrcPos?,
 	val pos    : Pos,
-	val node   : Node?,
-	val sym    : PosSym?,
+	val node   : Node,
 	val width  : Width,
 	val offset : Int,
 	val rel    : Boolean

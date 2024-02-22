@@ -74,7 +74,11 @@ class PosRefSym(
 	override val disp get() = receiver.disp + offsetSupplier()
 }
 
-class StringLitSym(val value: String) : AnonSym, MutPosSym
+class StringLitSym(
+	val value: String
+) : Sym, MutPosSym {
+	override val base = Base()
+}
 
 
 
@@ -220,7 +224,14 @@ class ScopeEndNode(override val base: Base, val sym: Sym) : Node
 
 class LabelNode(override val base: Base) : Node, MutPosSym
 
-class ProcNode(override val base: Base, var size: Int = 0) : Node, MutPosSym
+class ProcNode(override val base: Base, var size: Int = 0) : Node, MutPosSym {
+	/** Stack space to allocate for local variables */
+	var localsSize = 0
+	/** Stack space to allocate for parameters of functions called within this function */
+	var paramsSize = 0
+	/** Stack space to allocate (if using RBP. If using RSP, add 8) */
+	val stackSize get() = (localsSize + paramsSize + 32).align16()
+}
 
 class NamespaceNode(override val base: Base) : Node, Sym
 
