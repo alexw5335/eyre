@@ -9,7 +9,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val symTable = SymTable()
 
-	val dllImports = HashMap<String, DllImport>()
+	val dlls = HashMap<Name, Dll>()
 
 	val textWriter = BinWriter()
 
@@ -23,13 +23,13 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val sections = ArrayList<Section>()
 
-	val textSec  = Section(0, ".text", 0x60_00_00_20U).also(sections::add)
+	val textSec  = Section(0, ".text", 0x60_00_00_20U, textWriter).also(sections::add)
 
-	val dataSec  = Section(1, ".data", 0xC0_00_00_40U).also(sections::add)
+	val dataSec  = Section(1, ".data", 0xC0_00_00_40U, dataWriter).also(sections::add)
 
-	val rdataSec = Section(2, ".rdata", 0x40_00_00_40U).also(sections::add)
+	val rdataSec = Section(2, ".rdata", 0x40_00_00_40U, rdataWriter).also(sections::add)
 
-	val bssSec   = Section(3, ".bss", 0xC0_00_00_80U).also(sections::add)
+	val bssSec   = Section(3, ".bss", 0xC0_00_00_80U, null).also(sections::add)
 
 	val linkRelocs = ArrayList<Reloc>()
 
@@ -37,18 +37,18 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val ripRelocs = ArrayList<RelReloc>()
 
-	var entryPoint: PosSym? = null
+	var entryPoint: Pos? = null
 
 	val stringLiterals = ArrayList<StringLitSym>()
 
 
 
-	// Errors
-
-
-
-	fun internalErr(message: String? = "no reason given"): Nothing =
-		error("Internal compiler error: $message")
+	fun getDllImport(dllName: Name, name: Name): DllImport {
+		return dlls
+			.getOrPut(dllName) { Dll(dllName) }
+			.imports
+			.getOrPut(name) { DllImport(name, rdataSec, 0) }
+	}
 
 	fun err(srcPos: SrcPos?, message: String): Nothing {
 		val error = EyreError(srcPos, message)
@@ -56,11 +56,8 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 		throw error
 	}
 
-
-
-	// Names
-
-
+	fun internalErr(message: String? = "no reason given"): Nothing =
+		error("Internal compiler error: $message")
 
 	private fun appendQualifiedName(builder: StringBuilder, sym: Sym) {
 		sym.parent?.let {
@@ -72,26 +69,6 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	fun qualifiedName(sym: Sym) = buildString { appendQualifiedName(this, sym) }
 
-
-
-	// misc.
-
-
-
-	fun getDllImport(dllName: String, name: String): Pos? {
-		val dllName2 = dllName.ifEmpty { defsMap[name] ?: return null }
-		return dllImports.getOrPut(dllName2) { DllImport(dllName2) }.imports.getOrPut(name) { Pos(rdataSec, 0) }
-	}
-
-
-
-	private val defsMap = mapOf(
-		"printf" to "msvcrt",
-		"malloc" to "msvcrt",
-		"ExitProcess" to "Kernel32",
-		"LoadLibraryA" to "Kernel32",
-		"GetProcAddress" to "Kernel32"
-	)
 
 
 }

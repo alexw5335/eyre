@@ -3,23 +3,22 @@ package eyre
 import java.util.*
 import kotlin.math.max
 
+/**
+ * The resolver has two stages:
+ * - Type resolution
+ * - Symbol resolution and constant calculation
+ */
 class Resolver(private val context: Context) {
 
 
 	private var scopeStack = Stack<Sym>()
-
-
-
-	fun resolve() {
-		context.files.forEach(::resolveNodesInFile)
-	}
 
 	private fun pushScope(scope: Sym) = scopeStack.push(scope)
 
 	private fun popScope() = scopeStack.pop()
 
 	private fun err(srcPos: SrcPos?, message: String): Nothing =
-		context.err(srcPos, message)
+		throw EyreError(srcPos, message)
 
 	private fun visit(file: SrcFile, block: (Node) -> Unit) {
 		for(node in file.nodes) {
@@ -27,6 +26,7 @@ class Resolver(private val context: Context) {
 				block(node)
 			} catch(e: EyreError) {
 				file.invalid = true
+				context.errors.add(e)
 				break
 			}
 		}
@@ -34,7 +34,7 @@ class Resolver(private val context: Context) {
 
 
 
-	private fun resolveNodesInFile(file: SrcFile) {
+	fun resolveFile(file: SrcFile) {
 		if(file.resolved) return
 		scopeStack.clear()
 		file.resolving = true
@@ -50,7 +50,7 @@ class Resolver(private val context: Context) {
 		val file = node.srcPos?.file ?: context.internalErr()
 		if(file.resolving)
 			err(srcNode.srcPos, "Cyclic resolution")
-		resolveNodesInFile(file)
+		resolveFile(file)
 	}
 
 
@@ -88,7 +88,7 @@ class Resolver(private val context: Context) {
 
 
 	/*
-	Type resolution
+	Type resolution (stage 1)
 	 */
 
 
@@ -109,11 +109,12 @@ class Resolver(private val context: Context) {
 
 
 	private fun resolveNodeType(node: Node) { when(node) {
-		is ScopeEndNode -> popScope()
+		is ScopeEndNode  -> popScope()
 		is NamespaceNode -> pushScope(node)
-		is IfNode -> pushScope(node)
-		is ProcNode -> pushScope(node)
-		is TypedefNode -> node.type = resolveType(node.typeNode ?: context.internalErr())
+		is IfNode        -> pushScope(node)
+		is ProcNode      -> pushScope(node)
+		is DoWhileNode   -> pushScope(node)
+		is ForNode       -> pushScope(node)
 
 		is VarNode ->
 			if(node.typeNode != null)
@@ -181,7 +182,6 @@ class Resolver(private val context: Context) {
 		is DotNode -> resolveDotNode(node)
 		is ArrayNode -> resolveArrayNode(node)
 		is RefNode -> resolveRefNode(node)
-		is TypedefNode -> resolveTypeNode(node.typeNode!!)
 		is StructNode -> resolveStruct(node)
 		is EnumNode -> resolveEnum(node)
 		is VarNode -> {
@@ -209,7 +209,6 @@ class Resolver(private val context: Context) {
 			node.intValue = resolveInt(node.valueNode)
 			node.resolved = true
 		}
-		is OpNode -> node.child?.let(::resolveNode)
 		is ProcNode -> {
 			if(node.name == Name.MAIN)
 				context.entryPoint = node
@@ -220,6 +219,14 @@ class Resolver(private val context: Context) {
 			node.op2?.let(::resolveNode)
 			node.op3?.let(::resolveNode)
 		}
+		is DoWhileNode -> {
+			pushScope(node)
+			resolveNode(node.condition)
+		}
+		is ForNode -> {
+			resolveNode(node.range)
+			pushScope(node)
+		}
 		is IfNode -> {
 			node.condition?.let(::resolveNode)
 			pushScope(node)
@@ -229,8 +236,8 @@ class Resolver(private val context: Context) {
 			node.litSym = sym
 			context.stringLiterals.add(sym)
 		}
+		is OpNode -> node.child?.let(::resolveNode)
 		is RegNode,
-		is DllCallNode,
 		is LabelNode,
 		is DllImportNode,
 		is IntNode -> Unit
@@ -244,10 +251,7 @@ class Resolver(private val context: Context) {
 			if(sym == null)
 				err(node.srcPos, "Unresolved symbol")
 			if(!sym.resolved)
-				if(sym is Node)
-					resolveNodeFile(node, sym)
-				else
-					context.internalErr()
+				resolveNodeFile(node, sym)
 			if(sym is IntSym)
 				return sym.intValue
 			err(node.srcPos, "Invalid int node: $node, $sym")
@@ -289,7 +293,7 @@ class Resolver(private val context: Context) {
 
 		fun invalidReceiver(): Nothing = err(node.srcPos, "Invalid receiver")
 
-		if(receiver is TypedSym && receiver is PosSym) {
+		if(receiver is TypedSym && receiver is Pos) {
 			if(receiver.type !is StructNode) invalidReceiver()
 			val member = resolveName(node.srcPos, receiver.type, node.right.value)
 			if(member !is MemberNode) context.internalErr()
@@ -329,7 +333,6 @@ class Resolver(private val context: Context) {
 				is StructNode  -> node.intSupplier = { receiver.size.toLong() }
 				is VarNode     -> node.intSupplier = { receiver.size.toLong() }
 				is EnumNode    -> node.intSupplier = { receiver.size.toLong() }
-				is TypedefNode -> node.intSupplier = { receiver.size.toLong() }
 				else -> invalid()
 			}
 			else -> invalid()

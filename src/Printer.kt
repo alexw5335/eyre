@@ -6,10 +6,29 @@ class Printer(private val context: Context) {
 
 
 	/*
+	Variables
+	 */
+
+
+
+	val tokensBuilder = StringBuilder()
+
+	val nodesBuilder = StringBuilder()
+
+	var indent = 0
+
+
+
+	/*
 	Util
 	 */
 
 
+
+	private val Sym.fullName: String get() = if(name.isNull)
+		"_"
+	else
+		context.qualifiedName(this)
 
 	private fun StringBuilder.appendLineNumber(lineNumber: Int) {
 		var count = 0
@@ -19,20 +38,20 @@ class Printer(private val context: Context) {
 		for(i in 0 ..< 8 - count) append(' ')
 	}
 
+	private val String.printable: String get() = replace("\n", "\\n")
 
+	private val Char.escape: String get() = when(this) {
+		'\n'    -> "\\n"
+		'\t'    -> "\\t"
+		'\r'    -> "\\r"
+		Char(0) -> "\\0"
+		else    -> toString()
+	}
 
-	private fun write(path: String, builder: StringBuilder.() -> Unit) =
-		Files.writeString(context.buildDir.resolve(path), buildString(builder))
+	fun write(path: String, builder: StringBuilder) =
+		Files.writeString(context.buildDir.resolve(path), builder.toString())
 
-
-
-	/*
-	Misc.
-	 */
-
-
-
-	fun writeDisasm() {
+	fun printDisasm() {
 		val path = context.buildDir.resolve("code.bin")
 		Files.write(path, context.linkWriter.copy(context.textSec.pos, context.textSec.size))
 		Util.run("ndisasm", "-b64", path.toString())
@@ -46,58 +65,29 @@ class Printer(private val context: Context) {
 
 
 
-	fun writeTokens() {
-		write("tokens.txt") {
-			for(srcFile in context.files) {
-				append(srcFile.relPath.toString())
+	fun appendTokens(srcFile: SrcFile, tokens: List<Token>) =
+		tokensBuilder.appendTokens(srcFile, tokens)
 
-				if(srcFile.tokens.isEmpty()) {
-					append(" (empty)")
-				} else {
-					append(":\n")
-					appendTokens(srcFile.tokens)
-					append("\n\n\n")
+	fun StringBuilder.appendTokens(srcFile: SrcFile, tokens: List<Token>) {
+		append(srcFile.name)
+
+		if(tokens.isEmpty()) {
+			append(" (empty)")
+		} else {
+			append(":\n")
+			for(token in tokens) {
+				appendLineNumber(token.line)
+
+				when(token.type) {
+					TokenType.NAME    -> appendLine(token.nameValue.string)
+					TokenType.STRING  -> appendLine("\"${token.stringValue.replace("\n", "\\n")}\"")
+					TokenType.INT     -> appendLine(token.intValue.toString())
+					TokenType.REG     -> appendLine(token.regValue.string)
+					TokenType.CHAR    -> appendLine(Char(token.intValue.toInt()).escape)
+					else              -> appendLine(token.type.string)
 				}
 			}
-		}
-	}
-
-
-
-	private fun StringBuilder.appendTokens(tokens: List<Token>) {
-		for(t in tokens) {
-			appendLineNumber(t.line)
-
-			when(t.type) {
-				TokenType.NAME    -> appendLine("NAME    ${t.nameValue}")
-				TokenType.STRING  -> appendLine("STRING  \"${t.stringValue}\"")
-				TokenType.INT     -> appendLine("INT     ${t.intValue}")
-				TokenType.CHAR    -> appendLine("CHAR    ${t.intValue}")
-				TokenType.REG     -> appendLine("REG     ${t.regValue}")
-				else              -> appendLine(t.type.name)
-			}
-		}
-	}
-
-
-
-	/*
-	Symbols
-	 */
-
-
-
-	private val Sym.fullName: String get() = if(name.isNull)
-		"_"
-	else
-		context.qualifiedName(this)
-
-
-
-	fun writeSymbols() {
-		write("symbols.txt") {
-			for(sym in context.symTable.list)
-				appendLine("${sym::class.simpleName}  --  ${sym.fullName}")
+			append("\n\n")
 		}
 	}
 
@@ -109,24 +99,21 @@ class Printer(private val context: Context) {
 
 
 
-	private var indent = 0
+	fun appendNodes(srcFile: SrcFile) =
+		nodesBuilder.appendNodes(srcFile)
 
 
 
-	fun writeNodes() {
-		write("nodes.txt") {
-			for(srcFile in context.files) {
-				append(srcFile.relPath.toString())
+	fun StringBuilder.appendNodes(srcFile: SrcFile) {
+		append(srcFile.name)
 
-				if(srcFile.nodes.isEmpty()) {
-					append(" (empty)")
-				} else {
-					append(":\n")
-					for(node in srcFile.nodes)
-						appendNode(node)
-					append("\n\n\n")
-				}
-			}
+		if(srcFile.nodes.isEmpty()) {
+			append(" (empty)")
+		} else {
+			append(":\n")
+			for(node in srcFile.nodes)
+				appendNode(node)
+			append("\n\n\n")
 		}
 	}
 
@@ -148,21 +135,10 @@ class Printer(private val context: Context) {
 
 
 
-	private fun StringBuilder.printType(type: Type) {
-		if(type is ArrayType) {
-			printType(type.baseType)
-			append('[')
-			append(type.count.toString())
-			append(']')
-		} else {
-			append(type.fullName)
-		}
-	}
-
-
-	private fun StringBuilder.appendNode(node: Node) {
+	fun StringBuilder.appendNode(node: Node) {
 		if(node is ScopeEndNode) {
-			if(node.sym !is NamespaceNode) indent--
+			if(node.sym !is NamespaceNode)
+				indent--
 			return
 		}
 
@@ -170,172 +146,149 @@ class Printer(private val context: Context) {
 		for(i in 0 ..< indent) append("    ")
 
 		when(node) {
-			is RegNode  -> appendLine(node.value)
-			is NameNode -> appendLine(node.value.string)
-			is IntNode  -> appendLine("${node.value}")
-			is DllImportNode -> appendLine("DLLIMPORT ${node.dllName}.${node.name}")
-			
-			is OpNode -> {
-				when(node.type) {
-					OpType.IMM -> {
-						appendLine("IMM")
-						appendChild(node.child!!)
-					}
-					OpType.MEM -> {
-						if(node.width != Width.NONE)
-							appendLine("${node.width} MEM")
-						else
-							appendLine("MEM")
-						appendChild(node.child!!)
-					}
-					else -> appendLine(node.reg)
-				}
-			}
+			is DllImportNode -> appendLine("DLLIMPORT ${node.dllName} ${node.import.name}")
 
 			is InsNode -> {
-				appendLine(node.mnemonic)
-				node.op1?.let { appendChild(it) }
-				node.op2?.let { appendChild(it) }
-				node.op3?.let { appendChild(it) }
-			}
-
-			is UnNode -> {
-				appendLine(node.op.string)
-				appendChild(node.child)
-			}
-
-			is BinNode -> {
-				appendLine(node.op.string)
-				appendChild(node.left)
-				appendChild(node.right)
+				append(node.mnemonic)
+				append(' ')
+				if(node.op1 != null) {
+					appendExpr(node.op1)
+					if(node.op2 != null) {
+						append(", ")
+						appendExpr(node.op2)
+						if(node.op3 != null) {
+							append(", ")
+							appendExpr(node.op3)
+						}
+					}
+				}
 			}
 
 			is ProcNode -> {
-				appendLine("PROC ${node.fullName}")
+				appendLine("proc ${node.fullName}")
 				indent++
 			}
-
-			is NamespaceNode -> {
-				appendLine("NAMESPACE ${node.fullName}")
-			}
-
-			is DllCallNode -> if(node.dllName.isNotNull)
-				appendLine("DLLCALL ${node.dllName}.${node.name}")
-			else
-				appendLine("DLLCALL ${node.name}")
-
-			is ConstNode -> {
-				appendLine("CONST ${node.fullName} (value = ${node.intValue})")
-				node.valueNode?.let { appendChild(it) }
-			}
-
-			is EnumEntryNode -> {
-				appendLine("${node.fullName} = ${node.intValue}")
-				node.valueNode?.let { appendChild(it) }
-			}
-
 			is EnumNode -> {
-				appendLine("ENUM ${node.fullName}")
-				for(child in node.entries)
-					appendChild(child)
+				appendLine("enum ${node.fullName}")
+				appendChildren(node.entries)
 			}
-
-			is TypedefNode -> {
-				append("TYPEDEF ${node.fullName}")
-				append(" (type = ")
-				printType(node.type)
-				append(')')
+			is EnumEntryNode -> {
+				append(node.name)
+				if(node.valueNode != null) {
+					append(" = ")
+					appendExpr(node.valueNode)
+				}
 				appendLine()
-				node.typeNode?.let { appendChild(it) }
 			}
-
-			is DotNode -> {
-				appendLine(".")
-				appendChild(node.left)
-				appendChild(node.right)
-			}
-
-			is ArrayNode -> {
-				appendLine("[]")
-				appendChild(node.left)
-				appendChild(node.right)
-			}
-
-			is RefNode -> {
-				appendLine("::")
-				appendChild(node.left)
-				appendChild(node.right)
-			}
-
 			is MemberNode -> {
-				append("${node.fullName} (type = ")
-				printType(node.type)
-				appendLine(", offset = ${node.offset})")
-				if(node.typeNode != null)
-					appendChild(node.typeNode)
-				else
-					appendChild(node.struct!!)
-			}
-
-			is StructNode -> {
-				appendLine("STRUCT ${node.fullName} (size = ${node.size})")
-				for(member in node.members)
-					appendChild(member)
-			}
-
-			is TypeNode -> {
-				append(node.names.joinToString(separator = "."))
-				for(mod in node.mods) when(mod) {
-					is TypeNode.PointerMod -> append("*")
-					is TypeNode.ArrayMod -> append("[]")
-				}
-				appendLine()
-				for(mod in node.mods)
-					if(mod is TypeNode.ArrayMod)
-						mod.sizeNode?.let { appendChild(it) }
-			}
-
-			is InitNode -> {
-				appendLine("INITIALISER")
-				for(element in node.elements)
-					appendChild(element)
-			}
-
-			is CallNode -> {
-				appendLine("()")
-				appendChild(node.left)
-				for(element in node.elements)
-					appendChild(element)
-			}
-
-			is VarNode -> {
-				appendLine("VAR ${node.fullName} (pos = ${node.addr.hexFull})")
-				node.typeNode?.let { appendChild(it) }
-				node.valueNode?.let { appendChild(it) }
-			}
-
-			is LabelNode -> appendLine("LABEL ${context.qualifiedName(node)}")
-
-			is IfNode -> {
-				if(node.condition == null) {
-					appendLine("ELSE")
-					indent++
-				} else if(node.parentIf == null) {
-					appendLine("IF")
-					appendChild(node.condition)
-					indent++
+				if(node.struct != null) {
+					appendLine("struct ${node.fullName}")
+					appendChildren(node.struct.members)
 				} else {
-					appendLine("ELIF")
-					appendChild(node.condition)
-					indent++
+					append("${node.name}: ")
+					appendExpr(node.typeNode!!)
+					appendLine()
 				}
 			}
-
-			is StringNode -> appendLine("\"${node.value.replace("\n", "\\n")}\"")
-
-			else -> appendLine(node::class.simpleName)
+			is StructNode -> {
+				appendLine("struct ${node.fullName}")
+				appendChildren(node.members)
+			}
+			is ForNode -> {
+				append("for(")
+				append(node.index.name)
+				append(", ")
+				appendExpr(node.range)
+				appendLine(')')
+				indent++
+			}
+			is NamespaceNode -> {
+				appendLine("namespace ${node.fullName}")
+				indent++
+			}
+			is IfNode -> {
+				if(node.condition != null) {
+					if(node.parentIf == null) append("if(") else append("elif(")
+					appendExpr(node.condition)
+					appendLine(')')
+				} else {
+					appendLine("else")
+				}
+				indent++
+			}
+			is CallNode -> { appendExpr(node); appendLine() }
+			is ArrayNode -> { appendExpr(node); appendLine() }
+			is DotNode -> { appendExpr(node); appendLine() }
 		}
 	}
+
+	fun StringBuilder.appendExpr(node: Node) { when(node) {
+		is RegNode -> append(node.value.string)
+		is IntNode -> append(node.value.toString())
+		is StringNode -> append("\"${node.value.printable}\"")
+		is UnNode -> { append(node.op.string); appendExpr(node.child) }
+		is DotNode -> { appendExpr(node.left); append('.'); appendExpr(node.right) }
+		is ArrayNode -> { appendExpr(node.left); append('['); appendExpr(node.right); append(']') }
+		is RefNode -> { appendExpr(node.left); append("::"); appendExpr(node.right) }
+		is NameNode -> append(node.value.string)
+
+		is TypeNode -> {
+			append(node.names.joinToString(separator = "."))
+			for(mod in node.mods) when(mod) {
+				is TypeNode.PointerMod -> append("*")
+				is TypeNode.ArrayMod -> {
+					append('[')
+					mod.sizeNode?.let { appendExpr(it) }
+					append(']')
+				}
+			}
+		}
+
+		is BinNode -> {
+			appendExpr(node.left)
+			append(' ')
+			append(node.op.string)
+			append(' ')
+			appendExpr(node.right)
+		}
+
+		is CallNode -> {
+			appendExpr(node.left)
+			append('(')
+			for(i in 0 ..< node.elements.size - 1) {
+				appendExpr(node.elements[i])
+				append(", ")
+			}
+			if(node.elements.isNotEmpty())
+				appendExpr(node.elements[0])
+			append(')')
+		}
+
+		is OpNode -> {
+			when(node.type) {
+				OpType.IMM -> {
+					if(node.width != Width.NONE) {
+						append(node.width.string)
+						append(' ')
+					}
+					appendExpr(node.child!!)
+				}
+				OpType.MEM -> {
+					if(node.width != Width.NONE) {
+						append(node.width.string)
+						append(' ')
+					}
+					append('[')
+					appendExpr(node.child!!)
+					append(']')
+				}
+				else -> append(node.reg.string)
+			}
+		}
+
+		else -> context.internalErr("Non-printable expression node: $node")
+	}}
+
 
 
 }

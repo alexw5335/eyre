@@ -11,53 +11,34 @@ class Assembler(private val context: Context) {
 
 	private lateinit var currentIns: InsNode
 
+	private var nodeIndex = 0
 
-
-	fun assemble() {
-		sectioned(context.dataSec, context.dataWriter) {
-			for(sym in context.stringLiterals) {
-				writer.align(8)
-				sym.sec = section
-				sym.disp = writer.pos
-				writer.asciiNT(sym.value)
-			}
-		}
-
-		for(file in context.files) {
-			this.file = file
-			for(node in file.nodes) {
-				try {
-					when(node) {
-						is VarNode -> handleVarNode(node)
-						is LabelNode -> {
-							node.sec = section
-							node.disp = writer.pos
-						}
-						is ProcNode -> {
-							node.sec = section
-							node.disp = writer.pos
-						}
-						is CallNode -> handleCallNode(node)
-						is ScopeEndNode -> handleScopeEndNode(node)
-						is IfNode -> handleIfNode(node)
-						is DllCallNode -> handleDllCall(node)
-						is InsNode -> assembleIns(node)
-						is BinNode -> assembleBinNode(node)
-					}
-				} catch(e: EyreError) {
-					file.invalid = true
-				}
-			}
-		}
-	}
+	private var currentProc: ProcNode? = null
 
 
 
-	private inline fun sectioned(sec: Section, writer: BinWriter, block: () -> Unit) {
+	/*
+	Util
+	 */
+
+
+
+	private fun err(node: Node, message: String): Nothing =
+		throw EyreError(node.srcPos, message)
+
+	private fun err(srcPos: SrcPos?, message: String): Nothing =
+		throw EyreError(srcPos, message)
+
+	private fun invalid(message: String = "Invalid encoding"): Nothing =
+		throw EyreError(currentIns.srcPos, message)
+
+
+
+	private inline fun sectioned(sec: Section, block: () -> Unit) {
 		val prevSec = this.section
 		val prevWriter = this.writer
 		this.section = sec
-		this.writer = writer
+		this.writer = sec.writer!!
 		block()
 		this.section = prevSec
 		this.writer = prevWriter
@@ -65,8 +46,97 @@ class Assembler(private val context: Context) {
 
 
 
+	/*
+	Assembly
+	 */
 
-	private fun assembleBinNode(binNode: BinNode) {
+
+
+	fun assemble() {
+		assembleStringLiterals()
+		for(file in context.files)
+			assemble(file)
+	}
+
+
+
+	fun assembleStringLiterals() {
+		sectioned(context.dataSec) {
+			for(sym in context.stringLiterals) {
+				writer.align(8)
+				sym.sec = section
+				sym.disp = writer.pos
+				writer.asciiNT(sym.value)
+			}
+		}
+	}
+
+
+
+	fun assemble(file: SrcFile) {
+		this.nodeIndex = 0
+		this.file = file
+
+		try {
+			assembleScope()
+		} catch(e: EyreError) {
+			context.errors.add(e)
+			file.invalid = true
+		}
+	}
+
+
+
+	private fun assembleScope() {
+		while(nodeIndex < file.nodes.size) {
+			when(val node = file.nodes[nodeIndex++]) {
+				is NamespaceNode -> assembleScope()
+				is ProcNode      -> handleProc(node)
+				is InsNode       -> assembleIns(node)
+				is DoWhileNode   -> handleDoWhile(node)
+				is ScopeEndNode  -> return
+				is DllImportNode -> { }
+				is VarNode       -> handleVarNode(node)
+				is CallNode      -> handleCallNode(node)
+				is IfNode        -> handleIfNode(node)
+				is BinNode       -> handleBinNode(node)
+				is ForNode       -> handleForNode(node)
+				else             -> err(node, "Invalid node: $node")
+			}
+		}
+	}
+
+
+
+	private fun handleProc(procNode: ProcNode) {
+		currentProc = procNode
+		procNode.paramsStackSize = if(procNode.mostParams < 4) 0 else procNode.mostParams * 8
+		procNode.stackSize = procNode.localsStackSize + procNode.paramsStackSize + procNode.regsStackSize + 4
+		val padding = 16 - procNode.stackSize % 16
+		procNode.stackSize = procNode.stackSize.align16()
+		procNode.paramsStackPos = padding + procNode.regsStackSize + procNode.localsStackSize
+		procNode.sec = section
+		procNode.disp = writer.pos
+
+		byte(0x55) // push rbp
+		i24(0xE58948) // mov rbp, rsp
+		if(procNode.stackSize.isImm8) {
+			i24(0xEC8348); byte(procNode.stackSize) // sub rsp, byte disp
+		} else {
+			i24(0xEC8148); dword(procNode.stackSize) // sub rsp, dword disp
+		}
+
+		assembleScope()
+
+		byte(0xC9) // leave
+		byte(0xC3) // ret
+
+		procNode.size = writer.pos - procNode.disp
+	}
+
+
+
+	private fun handleBinNode(binNode: BinNode) {
 		if(binNode.op != BinOp.SET)
 			err(binNode, "Invalid bin node")
 
@@ -92,104 +162,81 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun encodeMoveSymPtrToReg(srcPos: SrcPos?, dstIndex: Int, src: PosSym) {
-		val dst = Reg.qwordRegs[dstIndex]
-		word(0x8D48 or (dst.rex shl 2))
-		writeMemRip(srcPos, src, dst.value, Width.NONE)
+	private fun handleDoWhile(node: DoWhileNode) { }
+
+
+
+	/**
+	 * Assuming signed operands
+	 */
+	private fun conditionOpcode(srcPos: SrcPos?, op: BinOp): Int = when(op) {
+		BinOp.EQ  -> 0x5 // NE
+		BinOp.NEQ -> 0x4 // E
+		BinOp.GT  -> 0xE // LE/NG
+		BinOp.GTE -> 0xC // L/NGE
+		BinOp.LT  -> 0xD // GE/NL
+		BinOp.LTE -> 0xF // G/NLE
+		else -> err(srcPos, "Invalid condition: $op")
 	}
 
 
 
-	private fun encodeMoveImmToReg(dstIndex: Int, src: Long) {
-		val dstValue = dstIndex and 0b111
-		val dstRex = dstIndex shr 3
-		if(src == 0L) {
-			if(dstRex == 1) byte(0b0100_0101)
-			byte(0x31)
-			byte(0b11_000_000 or (dstValue shl 3) or dstValue)
-		} else {
-			byte(0x48 or (dstRex shl 2))
-			byte(0xB8 + dstValue)
-			writer.i64(src)
-		}
+	private fun handleForNode(node: ForNode) {
+
 	}
 
 
 
-	private fun encodeMoveRegToReg(srcPos: SrcPos?, dstIndex: Int, src: Reg) {
-		if(dstIndex == src.index) return
+	private fun handleIfNode(ifNode: IfNode) {
+		fun err(): Nothing = err(ifNode.srcPos, "Invalid condition")
 
-		val dstValue = dstIndex and 0b111
-		val dstRex = dstIndex shr 3
+		if(ifNode.condition != null) {
+			val condition = ifNode.condition as? BinNode ?: err()
 
-		if(src.type == OpType.R32) {
-			if(dstRex == 1 || src.rex == 1)
-				byte(0b0100_0000 or (dstRex shl 2) or src.rex)
-		} else if(src.type == OpType.R64) {
-			word(0x8848 or (dstRex shl 2))
-		} else {
-			err(srcPos, "Invalid register: $src")
-		}
-
-		byte(0b11_000_000 or (dstValue shl 3) or src.value)
-	}
-
-
-
-	private fun encodeMoveRaxToSym(srcPos: SrcPos?, src: VarNode) {
-		word(0x8848)
-		writeMemRip(srcPos, src, 0, Width.NONE)
-		when(src.type.size) {
-			1    -> byte(0x88)
-			2    -> word(0x8866)
-			4    -> byte(0x89)
-			8    -> word(0x8948)
-			else -> err(srcPos, "Invalid type size")
-		}
-		writeMemRip(srcPos, src, 0, Width.NONE)
-	}
-
-
-
-	private fun encodeMoveSymToReg(srcPos: SrcPos?, dstIndex: Int, src: VarNode) {
-		val type = src.type
-
-		if(type is StringType) {
-			encodeMoveSymPtrToReg(srcPos, dstIndex, src)
-			return
-		}
-
-		val signed = if(type is IntType) type.signed else false
-		val dst = Reg.qwordRegs[dstIndex]
-
-		when(type.size) {
-			// unsigned/signed: movzx/movsx rcx, byte [src]
-			1 -> {
-				byte(0x48 or (dst.rex shl 2))
-				if(signed) word(0xBE0F) else word(0xB60F)
-				writeMemRip(srcPos, src, dst.value, Width.NONE)
-			}
-			// unsigned/signed: movzx/movsx rcx, word [src]
-			2 -> {
-				byte(0x48 or (dst.rex shl 2))
-				if(signed) word(0xBF0F) else word(0xB70F)
-				writeMemRip(srcPos, src, dst.value, Width.NONE)
-			}
-			// unsigned: mov ecx, [src]; signed: movsxd rcx, [src]
-			4 -> if(!signed) {
-				if(dst.rex != 0) byte(0b0100_0100)
-				byte(0x8B)
-				writeMemRip(srcPos, src, dst.value, Width.NONE)
+			if(condition.left is RegNode) {
+				val left = condition.left.value
+				if(condition.right is RegNode) {
+					encode2RR(0x3A, 0b1111, left, condition.right.value)
+				} else if(condition.right is SymNode && condition.right.sym is Pos) {
+					context.internalErr()
+					/*val right = condition.right.sym
+					word(0x3B48 or (left.rex))
+					writeMemRip(condition.right.srcPos, condition.right.sym as Pos, left.value, Width.NONE)*/
+				} else {
+					byte(0x81)
+					byte(0b11_111_000 or left.value)
+					val value = resolveImm(condition.right)
+					if(!value.isImm32) err(condition.right, "Value out of range")
+					dword(value.toInt())
+				}
 			} else {
-				word(0x6348 or (dst.rex shl 2))
-				writeMemRip(srcPos, src, dst.value, Width.NONE)
+				err(ifNode, "Invalid condition")
 			}
-			// unsigned/signed: mov rcx, [src]
-			8 -> {
-				word(0x8B48 or (dst.rex shl 2))
-				writeMemRip(srcPos, src, dst.value, Width.NONE)
+
+			byte(0x0F)
+			byte(0x80 + conditionOpcode(condition.srcPos, condition.op))
+			ifNode.startJmpPos = writer.pos
+			dword(0)
+		}
+
+		assembleScope()
+
+		if(ifNode.next != null) {
+			byte(0xE9)
+			ifNode.endJmpPos = writer.pos
+			dword(0)
+		} else if(ifNode.parentIf != null) {
+			var parent = ifNode.parentIf
+			while(parent != null) {
+				val diff = writer.pos - parent.endJmpPos - 4
+				writer.i32(parent.endJmpPos, diff)
+				parent = parent.parentIf
 			}
-			else -> err(srcPos, "Invalid type size")
+		}
+
+		if(ifNode.condition != null) {
+			val diff = writer.pos - ifNode.startJmpPos - 4
+			writer.i32(ifNode.startJmpPos, diff)
 		}
 	}
 
@@ -197,7 +244,7 @@ class Assembler(private val context: Context) {
 
 	private fun handleCallNode(callNode: CallNode) {
 		for((i, n) in callNode.elements.withIndex()) {
-			val dstIndex = Reg.argIndexes[i]
+			val dstIndex = if(i < 4) Reg.argIndexes[i] else 0
 
 			if(n is RegNode) {
 				encodeMoveRegToReg(n.srcPos, dstIndex, n.value)
@@ -211,6 +258,9 @@ class Assembler(private val context: Context) {
 			} else {
 				encodeMoveImmToReg(dstIndex, resolveImm(n))
 			}
+
+			if(i >= 4)
+				encodeMoveRaxToStackRSP(32 + (i - 4) * 8)
 		}
 
 		val call = callNode.left as? SymNode ?: err(callNode.left.srcPos, "Invalid call node")
@@ -224,59 +274,11 @@ class Assembler(private val context: Context) {
 			writeMemRip(callNode.srcPos, sym, 2, Width.NONE)
 		} else if(sym is ProcNode) {
 			byte(0xE8)
-			context.ripRelocs.add(RelReloc(callNode.left.srcPos, Pos(section, writer.pos), sym, Width.NONE))
+			context.ripRelocs.add(RelReloc(callNode.left.srcPos, section, writer.pos, sym, Width.NONE))
 			dword(0)
 		} else {
 			err(callNode.left.srcPos, "Invalid function")
 		}
-	}
-
-
-
-	private fun handleScopeEndNode(node: ScopeEndNode) {
-		if(node.sym is ProcNode) {
-			node.sym.size = writer.pos - node.sym.disp
-		} else if(node.sym is IfNode) {
-			val ifNode = node.sym
-
-			if(ifNode.next != null) {
-				byte(0xE9)
-				ifNode.endJmpPos = writer.pos
-				dword(0)
-			} else if(ifNode.parentIf != null) {
-				var parent = ifNode.parentIf
-				while(parent != null) {
-					val diff = writer.pos - parent.endJmpPos - 4
-					writer.i32(parent.endJmpPos, diff)
-					parent = parent.parentIf
-				}
-			}
-
-			if(ifNode.condition != null) {
-				val diff = writer.pos - node.sym.startJmpPos - 4
-				writer.i32(node.sym.startJmpPos, diff)
-			}
-		}
-	}
-
-
-
-	private fun handleIfNode(node: IfNode) {
-		fun err(): Nothing = err(node.srcPos, "Invalid condition")
-
-		if(node.condition == null)
-			return
-
-		val condition = node.condition as? BinNode ?: err()
-		if(condition.op != BinOp.EQ) err()
-		val reg = (condition.left as? RegNode)?.value ?: err()
-		val value = (condition.right as? IntNode)?.value ?: err()
-		byte(0x81)
-		byte(0b11_111_000 or reg.value)
-		dword(value.toInt())
-		word(0x850F)
-		node.startJmpPos = writer.pos
-		dword(0)
 	}
 
 
@@ -288,7 +290,7 @@ class Assembler(private val context: Context) {
 			node.disp = context.bssSize
 			context.bssSize += node.size
 		} else {
-			sectioned(context.dataSec, context.dataWriter) {
+			sectioned(context.dataSec) {
 				writer.align(8)
 				node.sec = section
 				node.disp = writer.pos
@@ -342,22 +344,9 @@ class Assembler(private val context: Context) {
 
 
 
-	// Errors
-
-
-
-	private fun err(node: Node, message: String): Nothing =
-		context.err(node.srcPos, message)
-
-	private fun err(srcPos: SrcPos?, message: String): Nothing =
-		context.err(srcPos, message)
-
-	private fun invalid(message: String = "Invalid encoding"): Nothing =
-		context.err(currentIns.srcPos, message)
-
-
-
-	// Resolution
+	/*
+	Resolution
+	 */
 
 
 
@@ -370,7 +359,7 @@ class Assembler(private val context: Context) {
 
 
 	private fun addLinkReloc(width: Width, node: Node, offset: Int, rel: Boolean) =
-		context.linkRelocs.add(Reloc(Pos(section, writer.pos), node, width, offset, rel))
+		context.linkRelocs.add(Reloc(section, writer.pos, node, width, offset, rel))
 
 	private fun resolveMem(node: Node) {
 		base = Reg.NONE
@@ -394,7 +383,7 @@ class Assembler(private val context: Context) {
 
 		fun sym(sym: Sym?): Long {
 			if(sym == null) err(node.srcPos, "Unresolved symbol")
-			if(sym is PosSym) { posSym(); return 0 }
+			if(sym is Pos) { posSym(); return 0 }
 			if(sym is IntSym) return sym.intValue
 			err(node.srcPos, "Invalid node")
 		}
@@ -454,7 +443,9 @@ class Assembler(private val context: Context) {
 
 
 
-	// Encoding writing
+	/*
+	Encoding
+	 */
 
 
 
@@ -479,10 +470,7 @@ class Assembler(private val context: Context) {
 		val w = ((1 shl width) shr 3) and (mask shr 2)
 		val value = (w shl 3) or (r.rex shl 2) or (x.rex shl 1) or b.rex
 		if(value != 0 || r.rex8 || b.rex8)
-			if(r.noRex8 || b.noRex8)
-				invalid("REX prefix not allowed here")
-			else
-				byte(0x40 or value)
+			byte(0x40 or value)
 	}
 
 	/** Add one if width is not BYTE and if widths has BYTE set */
@@ -519,7 +507,7 @@ class Assembler(private val context: Context) {
 		if(relocs == 1) {
 			if(width != Width.QWORD)
 				err(node.srcPos, "Absolute relocations must occupy 64 bits")
-			context.absRelocs.add(AbsReloc(Pos(section, writer.pos), node))
+			context.absRelocs.add(AbsReloc(section, writer.pos, node))
 			writer.advance(8)
 		} else if(relocs != 0) {
 			addLinkReloc(width, node, 0, false)
@@ -540,11 +528,12 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun writeMemRip(srcPos: SrcPos?, sym: PosSym, reg: Int, immWidth: Width) {
+	private fun writeMemRip(srcPos: SrcPos?, sym: Pos, reg: Int, immWidth: Width) {
 		byte((reg shl 3) or 0b101)
 		context.ripRelocs.add(RelReloc(
 			srcPos,
-			Pos(section, writer.pos),
+			section,
+			writer.pos,
 			sym,
 			immWidth
 		))
@@ -649,7 +638,9 @@ class Assembler(private val context: Context) {
 
 
 
-	// Compound encodings
+	/*
+	Compound encoding
+	 */
 
 
 
@@ -733,16 +724,9 @@ class Assembler(private val context: Context) {
 
 
 
-	// Assembly
-
-
-
-	private fun handleDllCall(node: DllCallNode) {
-		node.importPos = context.getDllImport(node.dllName.string, node.name.string)
-		word(0b00_010_101_11111111)
-		addLinkReloc(Width.DWORD, node, 0, true)
-		dword(0)
-	}
+	/*
+	Assembly
+	 */
 
 
 
@@ -1056,6 +1040,136 @@ class Assembler(private val context: Context) {
 			encode1RM(0xC0, 0b1111, 0, op1, Width.BYTE).imm(op2, Width.BYTE)
 		} else {
 			invalid()
+		}
+	}
+
+
+
+	/*
+	Encoding utils
+	 */
+
+
+
+	private fun encodeMoveSymPtrToReg(srcPos: SrcPos?, dstIndex: Int, src: PosSym) {
+		val dst = Reg.qwordRegs[dstIndex]
+		word(0x8D48 or (dst.rex shl 2))
+		writeMemRip(srcPos, src, dst.value, Width.NONE)
+	}
+
+
+
+	private fun encodeMoveImmToReg(dstIndex: Int, src: Long) {
+		val dstValue = dstIndex and 0b111
+		val dstRex = dstIndex shr 3
+		if(src == 0L) {
+			if(dstRex == 1) byte(0b0100_0101)
+			byte(0x31)
+			byte(0b11_000_000 or (dstValue shl 3) or dstValue)
+		} else {
+			byte(0x48 or (dstRex))
+			byte(0xB8 + dstValue)
+			writer.i64(src)
+		}
+	}
+
+
+
+	private fun encodeMoveRegToReg(srcPos: SrcPos?, dstIndex: Int, src: Reg) {
+		if(dstIndex == src.index) return
+
+		val dstValue = dstIndex and 0b111
+		val dstRex = dstIndex shr 3
+
+		if(src.type == OpType.R32) {
+			if(dstRex == 1 || src.rex == 1)
+				byte(0b0100_0000 or (src.rex shl 2) or dstRex)
+		} else if(src.type == OpType.R64) {
+			word(0x8948 or (src.rex shl 2) or dstRex)
+		} else {
+			err(srcPos, "Invalid register: $src")
+		}
+
+		byte(0b11_000_000 or (src.value shl 3) or dstValue)
+	}
+
+
+
+	private fun encodeMoveRaxToStackRBP(disp: Int) {
+		// mov [rbp - disp], rax
+		word(0x8948)
+		byte(0b10_000_101)
+		dword(-disp)
+	}
+
+
+
+	private fun encodeMoveRaxToStackRSP(disp: Int) {
+		// mov [rsp + disp], rax
+		if(disp.isImm8) {
+			dword(0x24448948)
+			byte(disp)
+		} else {
+			dword(0x24848948)
+			dword(disp)
+		}
+	}
+
+
+	private fun encodeMoveRaxToSym(srcPos: SrcPos?, src: VarNode) {
+		word(0x8848)
+		writeMemRip(srcPos, src, 0, Width.NONE)
+		when(src.type.size) {
+			1    -> byte(0x88)
+			2    -> word(0x8866)
+			4    -> byte(0x89)
+			8    -> word(0x8948)
+			else -> err(srcPos, "Invalid type size")
+		}
+		writeMemRip(srcPos, src, 0, Width.NONE)
+	}
+
+
+
+	private fun encodeMoveSymToReg(srcPos: SrcPos?, dstIndex: Int, src: VarNode) {
+		val type = src.type
+
+		if(type is StringType) {
+			encodeMoveSymPtrToReg(srcPos, dstIndex, src)
+			return
+		}
+
+		val signed = if(type is IntType) type.signed else false
+		val dst = Reg.qwordRegs[dstIndex]
+
+		when(type.size) {
+			// unsigned/signed: movzx/movsx rcx, byte [src]
+			1 -> {
+				byte(0x48 or (dst.rex shl 2))
+				if(signed) word(0xBE0F) else word(0xB60F)
+				writeMemRip(srcPos, src, dst.value, Width.NONE)
+			}
+			// unsigned/signed: movzx/movsx rcx, word [src]
+			2 -> {
+				byte(0x48 or (dst.rex shl 2))
+				if(signed) word(0xBF0F) else word(0xB70F)
+				writeMemRip(srcPos, src, dst.value, Width.NONE)
+			}
+			// unsigned: mov ecx, [src]; signed: movsxd rcx, [src]
+			4 -> if(!signed) {
+				if(dst.rex != 0) byte(0b0100_0100)
+				byte(0x8B)
+				writeMemRip(srcPos, src, dst.value, Width.NONE)
+			} else {
+				word(0x6348 or (dst.rex shl 2))
+				writeMemRip(srcPos, src, dst.value, Width.NONE)
+			}
+			// unsigned/signed: mov rcx, [src]
+			8 -> {
+				word(0x8B48 or (dst.rex shl 2))
+				writeMemRip(srcPos, src, dst.value, Width.NONE)
+			}
+			else -> err(srcPos, "Invalid type size")
 		}
 	}
 

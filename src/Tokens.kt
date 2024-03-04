@@ -2,15 +2,14 @@ package eyre
 
 
 
-data class Token(
+class Token(
 	val type: TokenType,
 	val line: Int,
 	val intValue: Long = 0L,
 	val stringValue: String = "",
 	val nameValue: Name = Name.NONE,
-	val regValue: Reg = Reg.NONE,
+	val regValue: Reg = Reg.AL,
 ) {
-	val isSym get() = type >= TokenType.EOF
 	override fun toString() = buildString {
 		append("Token(line $line, ")
 		when(type) {
@@ -19,7 +18,7 @@ data class Token(
 			TokenType.INT    -> append("int = $intValue")
 			TokenType.CHAR   -> append("char = ${Char(intValue.toInt())}")
 			TokenType.REG    -> append("reg = $regValue")
-			else             -> append("sym = ${type.string}")
+			else             -> append(type.string)
 		}
 		append(')')
 	}
@@ -32,28 +31,29 @@ enum class TokenType(
 	val binOp: BinOp? = null,
 	val unOp: UnOp? = null
 ) {
+	FOR("for"),
+	DO("do"),
+	WHILE("while"),
+	IF("if"),
+	ELIF("elif"),
+	ELSE("else"),
+	VAR("var"),
+	NAMESPACE("namespace"),
+	FUN("fun"),
+	STRUCT("struct"),
+	UNION("union"),
+	ENUM("enum"),
+	PROC("proc"),
+	CONST("const"),
+	DLLIMPORT("dllimport"),
+	RETURN("return"),
 
-	/*IF        ("if"),
-	ELIF      ("elif"),
-	ELSE      ("else"),
-	WHILE     ("while"),
-	FOR       ("for"),
-	VAR       ("var"),
-	NAMESPACE ("namespace"),
-	FUN       ("fun"),
-	STRUCT    ("struct"),
-	UNION     ("union"),
-	ENUM      ("enum"),
-	PROC      ("proc"),
-	TYPEDEF   ("typedef"),
-	CONST     ("const"),*/
-
-	NAME    ("name"),
-	STRING  ("string"),
-	INT     ("int"),
-	CHAR    ("char"),
-	REG     ("reg"),
-	EOF     ("eof"),
+	NAME("name"),
+	STRING("string"),
+	INT("int"),
+	CHAR("char"),
+	REG("reg"),
+	EOF("eof"),
 
 	LPAREN  ("(", BinOp.INV),
 	RPAREN  (")"),
@@ -79,7 +79,7 @@ enum class TokenType(
 	LTE     ("<=", BinOp.LTE),
 	GTE     (">=", BinOp.GTE),
 	EQ      ("==", BinOp.EQ),
-	NEQ     ("!=", BinOp.INEQ),
+	NEQ     ("!=", BinOp.NEQ),
 	BANG    ("!", null, UnOp.LNOT),
 	QUEST   ("?"),
 	LBRACK  ("[", BinOp.ARR),
@@ -89,5 +89,11 @@ enum class TokenType(
 	HASH    ("#"),
 	DOT     (".", BinOp.DOT),
 	REF     ("::", BinOp.REF),
-	AT      ("@");
+	AT      ("@"),
+	TO      ("..", BinOp.TO),
+	UNTIL   ("..<", BinOp.UNTIL);
+
+	val isKeyword get() = this < NAME
+	val isSym get() = this > EOF
+
 }

@@ -1,29 +1,21 @@
 package eyre
 
-import java.nio.file.Files
-
 class Lexer(private val context: Context) {
 
 
-	private var pos = 0
+	var tokens = ArrayList<Token>(); private set
 
-	private var lineCount = 0
+	var lineCount = 0; private set
 
 	private lateinit var file: SrcFile
+
+	private var pos = 0
 
 	private var chars = CharArray(0)
 
 	private var size = 0
 
-	private var stringBuilder = StringBuilder()
-
-
-
-	fun lex() {
-		for(s in context.files)
-			if(!s.invalid)
-				lex(s)
-	}
+	private val stringBuilder = StringBuilder()
 
 
 
@@ -32,10 +24,10 @@ class Lexer(private val context: Context) {
 		this.lineCount = 1
 		this.file = file
 
-		size = Files.size(file.path).toInt() + 1
+		size = file.codeSize() + 1
 		if(chars.size <= size)
 			chars = CharArray(size * 2)
-		Files.newBufferedReader(file.path).use { it.read(chars, 0, size) }
+		file.readCode(chars)
 		chars[size] = Char(0)
 
 		try {
@@ -44,13 +36,13 @@ class Lexer(private val context: Context) {
 				if(char.code == 0) break
 				charMap[char.code]!!()
 			}
-		} catch(_: EyreError) {
+		} catch(error: EyreError) {
 			file.invalid = true
+			context.errors.add(error)
 		}
 
 		file.lineCount = lineCount
-		lineCount++
-		add(TokenType.EOF)
+		add(Token(TokenType.EOF, lineCount + 1))
 	}
 
 
@@ -61,20 +53,23 @@ class Lexer(private val context: Context) {
 
 
 
-	private fun err(message: String): Nothing = context.err(SrcPos(file, lineCount), message)
+	private fun err(message: String): Nothing {
+		throw EyreError(SrcPos(file, lineCount), message)
+	}
 
-	private val Char.isNamePart get() = isLetterOrDigit() || this == '_'
+	private val Char.isNamePart get() =
+		isLetterOrDigit() || this == '_'
 
 	private fun add(token: Token) {
-		file.tokens.add(token)
+		tokens.add(token)
 	}
 
 	private fun add(symbol: TokenType) {
-		file.tokens.add(Token(symbol, lineCount))
+		tokens.add(Token(symbol, lineCount))
 	}
 
 	private fun addAdv(symbol: TokenType) {
-		file.tokens.add(Token(symbol, lineCount))
+		tokens.add(Token(symbol, lineCount))
 		pos++
 	}
 
@@ -104,10 +99,13 @@ class Lexer(private val context: Context) {
 
 		val name = Name[String(chars, startPos, pos - startPos)]
 
-		if(name in Name.regs)
-			add(Token(TokenType.REG, lineCount, regValue = Name.regs[name]!!))
-		else
-			add(Token(TokenType.NAME, lineCount, nameValue = name))
+		when(name.type) {
+			Name.Type.NONE,
+			Name.Type.MNEMONIC,
+			Name.Type.WIDTH   -> add(Token(TokenType.NAME, lineCount, nameValue = name))
+			Name.Type.REG     -> add(Token(TokenType.REG, lineCount, regValue = name.reg))
+			Name.Type.KEYWORD -> add(name.keyword)
+		}
 	}
 
 
@@ -232,7 +230,6 @@ class Lexer(private val context: Context) {
 			charMap[']'] = { add(TokenType.RBRACK) }
 			charMap['{'] = { add(TokenType.LBRACE) }
 			charMap['}'] = { add(TokenType.RBRACE) }
-			charMap['.'] = { add(TokenType.DOT) }
 			charMap[';'] = { add(TokenType.SEMI) }
 			charMap['^'] = { add(TokenType.CARET) }
 			charMap['~'] = { add(TokenType.TILDE) }
@@ -275,6 +272,16 @@ class Lexer(private val context: Context) {
 				'='  -> addAdv(TokenType.GTE)
 				else -> add(TokenType.GT)
 			}}
+			charMap['.'] = { when(chars[pos]) {
+				'.' -> {
+					pos++
+					when(chars[pos]) {
+						'<' -> addAdv(TokenType.UNTIL)
+						else -> add(TokenType.TO)
+					}
+				}
+				else -> add(TokenType.DOT)
+			}}
 
 			// Complex symbols
 			charMap['"'] = Lexer::resolveDoubleApostrophe
@@ -294,7 +301,6 @@ class Lexer(private val context: Context) {
 		}
 
 	}
-
 
 
 }

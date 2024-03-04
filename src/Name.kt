@@ -5,6 +5,21 @@ import java.util.HashMap
 
 
 class Name(val id: Int, val string: String) {
+
+	enum class Type {
+		NONE,
+		MNEMONIC,
+		WIDTH,
+		REG,
+		KEYWORD
+	}
+
+	var type = Type.NONE
+	var mnemonic = Mnemonic.entries[0]
+	var width = Width.entries[0]
+	var reg = Reg.entries[0]
+	var keyword = TokenType.entries[0]
+
 	val isNull get() = id == 0
 	val isNotNull get() = id != 0
 	override fun equals(other: Any?) = this === other
@@ -15,42 +30,25 @@ class Name(val id: Int, val string: String) {
 		private var count = 0
 		private val list = ArrayList<Name>()
 		private val map = HashMap<String, Name>()
-		private val anonList = ArrayList<Name>()
 		operator fun get(id: Int) = list[id]
 		operator fun get(key: String) = map.getOrPut(key) { Name(count++, key) }
 
-		fun anon(index: Int) = if(anonList.size <= index)
-			get("${anonList.size}").also(anonList::add)
-		else
-			anonList[index]
+		val NONE = get("")
+		val MAIN = get("main")
+		val SIZE = get("size")
+		val COUNT = get("count")
 
-		val NONE      = get("")
-		val DLLIMPORT = get("dllimport")
-		val STRING    = get("string")
-		val IF        = get("if")
-		val ELIF      = get("elif")
-		val ELSE      = get("else")
-		val WHILE     = get("while")
-		val FOR       = get("for")
-		val MAIN      = get("main")
-		val VAR       = get("var")
-		val NAMESPACE = get("namespace")
-		val DLLCALL   = get("dllcall")
-		val FUN       = get("fun")
-		val STRUCT    = get("struct")
-		val UNION     = get("union")
-		val ENUM      = get("enum")
-		val PROC      = get("proc")
-		val TYPEDEF   = get("typedef")
-		val CONST     = get("const")
-		val BYTE      = get("byte")
-		val WORD      = get("word")
-		val DWORD     = get("dword")
-		val QWORD     = get("qword")
-		val COUNT     = get("count")
-		val SIZE      = get("size")
-		val widths    = Width.entries.associateBy { get(it.string) }
-		val regs      = Reg.entries.associateBy { get(it.string) }
-		val mnemonics = Mnemonic.entries.associateBy { get(it.string) }
+		init {
+			for(width in Width.entries)
+				get(width.string).let { it.type = Type.WIDTH; it.width = width }
+			for(reg in Reg.entries)
+				get(reg.string).let { it.type = Type.REG; it.reg = reg }
+			for(mnemonic in Mnemonic.entries)
+				get(mnemonic.string).let { it.type = Type.MNEMONIC; it.mnemonic = mnemonic }
+			for(keyword in TokenType.entries)
+				if(keyword.isKeyword)
+					get(keyword.string).let { it.type = Type.KEYWORD; it.keyword = keyword }
+		}
+
 	}
 }

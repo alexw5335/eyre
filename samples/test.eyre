@@ -1,115 +1,11 @@
+namespace eyre
+
 dllimport Kernel32.ExitProcess
-dllimport Kernel32.LoadLibraryA
-dllimport Kernel32.GetProcAddress
 dllimport msvcrt.printf
-dllimport msvcrt.malloc
-
-struct InstanceCI {
-	dword  type
-	qword  pNext
-	dword  flags
-	qword  pAppInfo
-	dword  layerCount
-	qword  ppLayerNames
-	dword  extensionCount
-	qword  ppExtensionNames
-}
-
-struct LayerProperties {
-	byte[256] name
-	dword     specVersion
-	dword     incrementalVersion
-	byte[256] description
-}
-
-enum SType {
-	APPLICATION_INFO
-	INSTANCE_CREATE_INFO
-	DEVICE_QUEUE_CREATE_INFO
-	DEVICE_CREATE_INFO
-	SUBMIT_INFO
-	MEMORY_ALLOCATE_INFO
-	MAPPED_MEMORY_RANGE
-	BIND_SPARSE_INFO
-	FENCE_CREATE_INFO
-	SEMAPHORE_CREATE_INFO
-	EVENT_CREATE_INFO
-}
-
-var layers: qword[] = { "VK_LAYER_KHRONOS_validation" }
-
-var instanceCI: InstanceCI = {
-	SType.INSTANCE_CREATE_INFO,
-	0,
-	0,
-	0,
-	1,
-	layers,
-	0,
-	0
-}
-
-var vulkanDll: qword
-var getInstanceProcAddr: qword
-var enumerateInstanceVersion: qword
-var createInstance: qword
-var instanceVersion: dword
-var enumerateInstanceLayerProperties: qword
-var layerCount: dword
-var pLayers: qword
-var instance: qword
-var enumeratePhysicalDevices: qword
-var physicalDeviceCount: dword
-var pPhysicalDevices: qword
-var physicalDevice: qword
 
 proc main {
-	sub rsp, 40
+	for(i, 0..10)
+		printf("COUNTER: %d\n", i)
 
-	vulkanDll = LoadLibraryA("vulkan-1.dll")
-	printf("vulkanDll: %p\n", vulkanDll)
-
-	getInstanceProcAddr = GetProcAddress(vulkanDll, "vkGetInstanceProcAddr")
-	printf("vkGetInstanceProcAddr: %p\n", getInstanceProcAddr)
-
-	enumerateInstanceVersion = getInstanceProcAddr(0, "vkEnumerateInstanceVersion")
-	printf("vkEnumerateInstanceVersion: %p\n", enumerateInstanceVersion)
-
-	createInstance = getInstanceProcAddr(0, "vkCreateInstance")
-	printf("vkCreateInstance: %p\n", createInstance)
-
-	enumerateInstanceLayerProperties = getInstanceProcAddr(0, "vkEnumerateInstanceLayerProperties")
-	printf("vkEnumerateInstanceLayerProperties: %p\n", enumerateInstanceLayerProperties)
-
-	enumerateInstanceLayerProperties(&layerCount, 0)
-	printf("layerCount: %d\n", layerCount)
-
-	mov ecx, [layerCount]
-	imul ecx, LayerProperties::size
-	pLayers = malloc()
-	printf("pLayers: %p\n", pLayers)
-
-	enumerateInstanceLayerProperties(&layerCount, pLayers)
-
-	createInstance(&instanceCI, 0, &instance)
-	printf("instance: %p\n", instance)
-
-	enumeratePhysicalDevices = getInstanceProcAddr(instance, "vkEnumeratePhysicalDevices")
-	printf("vkEnumeratePhysicalDevices: %p\n", enumeratePhysicalDevices)
-
-	enumeratePhysicalDevices(instance, &physicalDeviceCount, 0)
-	printf("physicalDeviceCount: %d\n", physicalDeviceCount)
-
-	mov ecx, [physicalDeviceCount]
-	shl rcx, 3
-	pPhysicalDevices = malloc()
-	enumeratePhysicalDevices(instance, &physicalDeviceCount, &pPhysicalDevices)
-
-	mov rax, [pPhysicalDevices]
-	mov [physicalDevice], rax
-	printf("Physical device: %p\n", physicalDevice)
-
-	printLayers()
-	printf("Finished\n")
 	ExitProcess()
 }

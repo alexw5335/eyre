@@ -6,27 +6,45 @@ import java.nio.file.Paths
 import kotlin.io.path.*
 import kotlin.system.exitProcess
 
-class Compiler(private val context: Context) {
+class Compiler(val context: Context) {
 
 
 	companion object {
-
-		fun compileFile(path: Path) {
-			val srcFile = SrcFile(0, path, path.relativeTo(path))
-			Compiler(Context(Paths.get("build"), listOf(srcFile))).compile()
-		}
-
-		fun compileDir(path: Path) {
-			val srcFiles = Files.walk(path)
+		fun createAtDir(dir: Path, buildPath: Path = Paths.get("build")): Compiler {
+			val files = Files
+				.walk(dir)
 				.toList()
 				.filter { it.extension == "eyre" }
-				.mapIndexed { i, p -> SrcFile(i, p, p.relativeTo(path)) }
-			if(srcFiles.isEmpty())
-				error("No source files found")
-			Compiler(Context(Paths.get("build"), srcFiles)).compile()
+				.map { ProjectSrcFile(it.relativeTo(dir).toString(), it) }
+			return Compiler(Context(buildPath, files))
 		}
-
 	}
+
+
+
+	/*
+	Variables
+	 */
+
+
+
+	val printer = Printer(context)
+
+	val lexer = Lexer(context)
+
+	val parser = Parser(context)
+
+	val resolver = Resolver(context)
+
+	val assembler = Assembler(context)
+
+	val linker = Linker(context)
+
+
+
+	/*
+	Compilation
+	 */
 
 
 
@@ -44,56 +62,39 @@ class Compiler(private val context: Context) {
 
 
 	private fun compileInternal() {
-		context.buildDir.createDirectories()
-		Files
-			.list(context.buildDir)
-			.toList()
-			.filter { !it.isDirectory() }
-			.forEach { it.deleteIfExists() }
+		IntTypes.ALL.forEach(context.symTable::add)
 
-		context.symTable.add(IntTypes.BYTE)
-		context.symTable.add(IntTypes.WORD)
-		context.symTable.add(IntTypes.DWORD)
-		context.symTable.add(IntTypes.QWORD)
-		context.symTable.add(IntTypes.I8)
-		context.symTable.add(IntTypes.I16)
-		context.symTable.add(IntTypes.I32)
-		context.symTable.add(IntTypes.I64)
-		context.symTable.add(IntTypes.U8)
-		context.symTable.add(IntTypes.U16)
-		context.symTable.add(IntTypes.U32)
-		context.symTable.add(IntTypes.U64)
+		for(file in context.files) {
+			lexer.lex(file)
+			printer.appendTokens(file, lexer.tokens)
+			if(!file.invalid) {
+				parser.parse(file, lexer.tokens)
+				printer.appendNodes(file)
+			}
+		}
+		checkErrors()
 
-		Lexer(context).lex()
-		if(checkErrors(EyreStage.LEX))
-			exitProcess(1)
-
-		Parser(context).parse()
-		if(checkErrors(EyreStage.PARSE))
-			exitProcess(1)
-
-		Resolver(context).resolve()
-		if(checkErrors(EyreStage.RESOLVE))
-			exitProcess(1)
-
-		Assembler(context).assemble()
-		if(checkErrors(EyreStage.ASSEMBLE))
-			exitProcess(1)
-
-		Linker(context).link()
-		if(checkErrors(EyreStage.LINK))
-			exitProcess(1)
-
-		checkOutput(EyreStage.LINK)
-		val exePath = context.buildDir.resolve("a.exe")
-		Files.write(exePath, context.linkWriter.copy())
+		for(file in context.files)
+			resolver.resolveFile(file)
+		checkErrors()
+		assembler.assemble()
+		checkErrors()
+		linker.link()
+		checkErrors()
+		writeOutput()
 	}
+
+
+
+	/*
+	Errors
+	 */
 
 
 
 	private fun printError(error: EyreError) {
 		if(error.srcPos != null)
-			System.err.println("${error.srcPos.file.relPath}:${error.srcPos.line} -- ${error.message}")
+			System.err.println("${error.srcPos.file.name}:${error.srcPos.line} -- ${error.message}")
 		else
 			System.err.println(error.message)
 
@@ -106,29 +107,34 @@ class Compiler(private val context: Context) {
 
 
 
-	private fun checkErrors(stage: EyreStage): Boolean {
+	private fun checkErrors() {
 		if(context.errors.isEmpty())
-			return false
-		checkOutput(stage)
+			return
+		writeOutput()
 		context.errors.forEach(::printError)
 		System.err.println("Compiler encountered errors")
-		return true
+		exitProcess(1)
 	}
 
 
 
-	private fun checkOutput(stage: EyreStage) {
-		val printer = Printer(context)
-		if(stage >= EyreStage.LEX)
-			printer.writeTokens()
-		if(stage >= EyreStage.PARSE)
-			printer.writeNodes()
-		if(stage >= EyreStage.PARSE)
-			printer.writeSymbols()
-		if(stage >= EyreStage.ASSEMBLE)
-			printer.writeDisasm()
-	}
+	private fun writeOutput() {
+		context.buildDir.createDirectories()
+		Files
+			.list(context.buildDir)
+			.toList()
+			.filter { !it.isDirectory() }
+			.forEach { it.deleteIfExists() }
 
+		printer.write("tokens.txt", printer.tokensBuilder)
+		printer.write("nodes.txt", printer.nodesBuilder)
+
+		if(context.linkWriter.isNotEmpty && context.errors.isEmpty()) {
+			val exePath = context.buildDir.resolve("a.exe")
+			Files.write(exePath, context.linkWriter.copy())
+			printer.printDisasm()
+		}
+	}
 
 
 }

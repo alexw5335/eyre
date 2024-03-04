@@ -1,7 +1,5 @@
 package eyre
 
-import java.util.function.Function
-
 class Linker(private val context: Context) {
 
 
@@ -32,7 +30,7 @@ class Linker(private val context: Context) {
 		section(context.rdataSec, 0) {
 			writer.bytes(context.rdataWriter)
 
-			if(context.dllImports.isNotEmpty()) {
+			if(context.dlls.isNotEmpty()) {
 				writer.align(16)
 				writeImports(currentSecRva + writer.pos - currentSecPos, writer.pos - currentSecPos, writer)
 			}
@@ -47,8 +45,8 @@ class Linker(private val context: Context) {
 			reloc.write()
 
 		for(reloc in context.ripRelocs) {
-			val value = reloc.sym.addr - (reloc.pos.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
-			writer.i32(reloc.pos.pos, value)
+			val value = reloc.sym.addr - (reloc.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
+			writer.i32(reloc.pos, value)
 		}
 
 		if(context.entryPoint == null)
@@ -160,7 +158,7 @@ class Linker(private val context: Context) {
 	 * - [startPos]: The pos of the start of the import data directory, relative to the section start
 	 */
 	private fun writeImports(startRva: Int, startPos: Int, writer: BinWriter) {
-		val dlls = context.dllImports.values
+		val dlls = context.dlls.values
 
 		val idtsRva  = startRva
 		val idtsPos  = writer.pos
@@ -173,7 +171,7 @@ class Linker(private val context: Context) {
 			val idtPos = idtsPos + dllIndex * 20
 			val dllNamePos = writer.pos
 
-			writer.ascii(dll.name)
+			writer.ascii(dll.name.string)
 			writer.ascii(".dll")
 			writer.i8(0)
 			writer.align(8)
@@ -188,7 +186,7 @@ class Linker(private val context: Context) {
 				writer.i32(iltPos + importIndex * 8, writer.pos - offset)
 				writer.i32(iatPos + importIndex * 8, writer.pos - offset)
 				writer.i16(0)
-				writer.asciiNT(importName)
+				writer.asciiNT(importName.string)
 				writer.align2()
 				importPos.sec = context.rdataSec
 				importPos.disp = iatPos + importIndex * 8 - idtsPos + startPos
@@ -216,10 +214,10 @@ class Linker(private val context: Context) {
 
 		for(reloc in context.absRelocs) {
 			val value = resolveImm(reloc.node)
-			val rva = reloc.pos.addr
+			val rva = reloc.addr
 			val pageRva = (rva shr 12) shl 12
 			pages.getOrPut(pageRva, ::ArrayList).add(rva - pageRva)
-			writer.i64(reloc.pos.pos, value + imageBase)
+			writer.i64(reloc.pos, value + imageBase)
 		}
 
 		val startPos = writer.pos
@@ -242,24 +240,23 @@ class Linker(private val context: Context) {
 	private fun resolveImmRec(node: Node, regValid: Boolean): Long {
 		fun sym(sym: Sym?): Long {
 			if(sym == null) context.err(node.srcPos, "Unresolved symbol")
-			if(sym is PosSym) return sym.addr.toLong()
+			if(sym is Pos) return sym.addr.toLong()
 			if(sym is IntSym) return sym.intValue
-			context.err(node.srcPos, "Invalid symbol")
+			context.err(node.srcPos, "Invalid symbol: $sym")
 		}
 
 		return when(node) {
-			is RefNode     -> node.intSupplier?.invoke() ?: context.err(node.srcPos, "Invalid ref node")
-			is StringNode  -> node.litSym!!.addr.toLong()
-			is IntNode     -> node.value
-			is UnNode      -> node.calc(regValid, ::resolveImmRec)
-			is BinNode     -> node.calc(regValid, ::resolveImmRec)
-			is DllCallNode -> node.importPos!!.addr.toLong()
-			is NameNode    -> sym(node.sym)
-			is DotNode     -> sym(node.sym)
-			is ArrayNode   -> sym(node.sym)
-			is OpNode      -> resolveImmRec(node.child!!, regValid)
-			is RegNode     -> 0
-			else           -> context.err(node.srcPos, "Invalid immediate node: $node")
+			is RefNode       -> node.intSupplier?.invoke() ?: context.err(node.srcPos, "Invalid ref node")
+			is StringNode    -> node.litSym!!.addr.toLong()
+			is IntNode       -> node.value
+			is UnNode        -> node.calc(regValid, ::resolveImmRec)
+			is BinNode       -> node.calc(regValid, ::resolveImmRec)
+			is NameNode      -> sym(node.sym)
+			is DotNode       -> sym(node.sym)
+			is ArrayNode     -> sym(node.sym)
+			is OpNode        -> resolveImmRec(node.child!!, regValid)
+			is RegNode       -> 0
+			else             -> context.err(node.srcPos, "Invalid immediate node: $node")
 		}
 	}
 
@@ -267,8 +264,8 @@ class Linker(private val context: Context) {
 
 	private fun Reloc.write() {
 		var value = resolveImm(node)
-		if(rel) value -= pos.addr + width.bytes + offset
-		writer.at(pos.pos) { writer.writeWidth(width, value) }
+		if(rel) value -= addr + width.bytes + offset
+		writer.at(pos) { writer.writeWidth(width, value) }
 	}
 
 

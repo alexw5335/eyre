@@ -3,5 +3,6 @@ package eyre
 import java.nio.file.Paths
 
 fun main() {
-	Compiler.compileDir(Paths.get("samples"))
+	val compiler = Compiler.createAtDir(Paths.get("samples"))
+	compiler.compile()
 }
