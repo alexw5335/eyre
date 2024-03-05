@@ -66,14 +66,85 @@ enum class Width(val bytes: Int) {
 
 
 
-enum class OpType(val width: Width = Width.NONE) {
+enum class OpType {
 	NONE,
+	R8,
+	R16,
+	R32,
+	R64,
 	MEM,
-	IMM,
-	R8(Width.BYTE),
-	R16(Width.WORD),
-	R32(Width.DWORD),
-	R64(Width.QWORD);
+	IMM,;
+}
+
+
+
+/**
+ *     Bits 0..3: reg index
+ *     Bits 4..8: reg type
+ */
+@JvmInline
+value class ValueReg(val backing: Int) {
+
+	val typeOrdinal get() = backing shr 4
+	val index get() = backing and 15
+	val value get() = backing and 7
+	val rex get() = (backing shr 3) and 1
+	val isInvalidSibIndex get() = index == 4
+	val isImperfectSibBase get() = value == 5
+	val rex8 get() = value in 20..23
+	val string get() = lowercaseNames.getOrElse(backing) { "invalid" }
+	override fun toString() = string
+
+
+	companion object {
+		private var counter = 16
+		private fun reg() = ValueReg(counter++)
+		val NONE = ValueReg(0)
+
+		val AL   = reg(); val CL   = reg(); val DL   = reg(); val BL   = reg()
+		val SPL  = reg(); val BPL  = reg(); val SIL  = reg(); val DIL  = reg()
+		val R8B  = reg(); val R9B  = reg(); val R10B = reg(); val R11B = reg()
+		val R12B = reg(); val R13B = reg(); val R14B = reg(); val R15B = reg()
+		val AX   = reg(); val CX   = reg(); val DX   = reg(); val BX   = reg()
+		val SP   = reg(); val BP   = reg(); val SI   = reg(); val DI   = reg()
+		val R8W  = reg(); val R9W  = reg(); val R10W = reg(); val R11W = reg()
+		val R12W = reg(); val R13W = reg(); val R14W = reg(); val R15W = reg()
+		val EAX  = reg(); val ECX  = reg(); val EDX  = reg(); val EBX  = reg()
+		val ESP  = reg(); val EBP  = reg(); val ESI  = reg(); val EDI  = reg()
+		val R8D  = reg(); val R9D  = reg(); val R10D = reg(); val R11D = reg()
+		val R12D = reg(); val R13D = reg(); val R14D = reg(); val R15D = reg()
+		val RAX  = reg(); val RCX  = reg(); val RDX  = reg(); val RBX  = reg()
+		val RSP  = reg(); val RBP  = reg(); val RSI  = reg(); val RDI  = reg()
+		val R8   = reg(); val R9   = reg(); val R10  = reg(); val R11  = reg()
+		val R12  = reg(); val R13  = reg(); val R14  = reg(); val R15  = reg()
+
+		val names = arrayOf(
+			"NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE",
+			"NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE",
+			"AL", "CL", "DL", "BL", "SPL", "BPL", "SIL", "DIL",
+			"R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B",
+			"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI",
+			"R8W", "R9W", "R10W", "R11W", "R12W", "R13W", "R14W", "R15W",
+			"EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI",
+			"R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D",
+			"RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI",
+			"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"
+		)
+
+		val lowercaseNames = arrayOf(
+			"none", "none", "none", "none", "none", "none", "none", "none",
+			"none", "none", "none", "none", "none", "none", "none", "none",
+			"al", "cl", "dl", "bl", "spl", "bpl", "sil", "dil",
+			"r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b",
+			"ax", "cx", "dx", "bx", "sp", "bp", "si", "di",
+			"r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w",
+			"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
+			"r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d",
+			"rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
+			"r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
+		)
+	}
+
 }
 
 
@@ -100,13 +171,20 @@ enum class Reg(val type: OpType, val index: Int) {
 	R8(OpType.R64, 8), R9(OpType.R64, 9), R10(OpType.R64, 10), R11(OpType.R64, 11),
 	R12(OpType.R64, 12), R13(OpType.R64, 13), R14(OpType.R64, 14), R15(OpType.R64, 15),
 	NONE(OpType.NONE, 0);
+	
+	val width = when(type) {
+		OpType.R8 -> Width.BYTE
+		OpType.R16 -> Width.WORD
+		OpType.R32 -> Width.DWORD
+		OpType.R64 -> Width.QWORD
+		else -> Width.NONE
+	}
 
 	val string = name.lowercase()
 	val value = (index and 0b111)
 	val rex = (index shr 3) and 1
 	val isInvalidIndex = index == 4
 	val isImperfectBase = value == 5
-	val width = type.width
 	val rex8 = type == OpType.R8 && index in 4..7
 	val widthOrdinal = width.ordinal - 1
 
