@@ -849,39 +849,29 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun encodeJCC(offset: Int, op1: OpNode) {
-		word(0x800F or (offset shl 8))
-		rel(op1, Width.DWORD)
-	}
-
-
-
 	private fun assemble1(mnemonic: Mnemonic, op1: OpNode) { when(mnemonic) {
-		Mnemonic.JO -> encodeJCC(0, op1)
-		Mnemonic.JNO -> encodeJCC(1, op1)
-		Mnemonic.JB, Mnemonic.JNAE, Mnemonic.JC -> encodeJCC(2, op1)
-		Mnemonic.JNB, Mnemonic.JAE, Mnemonic.JNC -> encodeJCC(3, op1)
-		Mnemonic.JZ, Mnemonic.JE   -> encodeJCC(4, op1)
-		Mnemonic.JNZ, Mnemonic.JNE  -> encodeJCC(5, op1)
-		Mnemonic.JBE, Mnemonic.JNA -> encodeJCC(6, op1)
-		Mnemonic.JNBE, Mnemonic.JA -> encodeJCC(7, op1)
-		Mnemonic.JS -> encodeJCC(8, op1)
-		Mnemonic.JNS -> encodeJCC(9, op1)
-		Mnemonic.JP, Mnemonic.JPE -> encodeJCC(10, op1)
-		Mnemonic.JNP, Mnemonic.JPO -> encodeJCC(11, op1)
-		Mnemonic.JL, Mnemonic.JNGE -> encodeJCC(12, op1)
-		Mnemonic.JNL, Mnemonic.JGE -> encodeJCC(13, op1)
-		Mnemonic.JLE, Mnemonic.JNG -> encodeJCC(14, op1)
-		Mnemonic.JNLE, Mnemonic.JG -> encodeJCC(15, op1)
+		Mnemonic.JO -> word(0x800F).rel(op1, Width.DWORD)
+		Mnemonic.JNO -> word(0x810F).rel(op1, Width.DWORD)
+		Mnemonic.JB, Mnemonic.JNAE, Mnemonic.JC -> word(0x820F).rel(op1, Width.DWORD)
+		Mnemonic.JNB, Mnemonic.JAE, Mnemonic.JNC -> word(0x830F).rel(op1, Width.DWORD)
+		Mnemonic.JZ, Mnemonic.JE -> word(0x840F).rel(op1, Width.DWORD)
+		Mnemonic.JNZ, Mnemonic.JNE -> word(0x850F).rel(op1, Width.DWORD)
+		Mnemonic.JBE, Mnemonic.JNA -> word(0x860F).rel(op1, Width.DWORD)
+		Mnemonic.JNBE, Mnemonic.JA -> word(0x870F).rel(op1, Width.DWORD)
+		Mnemonic.JS -> word(0x880F).rel(op1, Width.DWORD)
+		Mnemonic.JNS -> word(0x890F).rel(op1, Width.DWORD)
+		Mnemonic.JP, Mnemonic.JPE -> word(0x8A0F).rel(op1, Width.DWORD)
+		Mnemonic.JNP, Mnemonic.JPO -> word(0x8B0F).rel(op1, Width.DWORD)
+		Mnemonic.JL, Mnemonic.JNGE -> word(0x8C0F).rel(op1, Width.DWORD)
+		Mnemonic.JNL, Mnemonic.JGE -> word(0x8D0F).rel(op1, Width.DWORD)
+		Mnemonic.JLE, Mnemonic.JNG -> word(0x8E0F).rel(op1, Width.DWORD)
+		Mnemonic.JNLE, Mnemonic.JG -> word(0x8F0F).rel(op1, Width.DWORD)
 
 		Mnemonic.INC -> encode1RM(0xFE, 0b1111, 0, op1, Width.NONE)
 		Mnemonic.DEC -> encode1RM(0xFE, 0b1111, 1, op1, Width.NONE)
 
-		Mnemonic.INT -> {
-			if(op1.type != OpType.IMM) invalid()
-			byte(0xCD).imm(op1, Width.BYTE)
-		}
-
+		Mnemonic.INT -> byte(0xCD).imm(op1.also { if(it.type != OpType.IMM) invalid() }, Width.BYTE)
+		
 		Mnemonic.CALL -> {
 			if(op1.type == OpType.IMM) {
 				if(op1.child is SymNode && op1.child.sym is DllImportNode) {
@@ -896,27 +886,20 @@ class Assembler(private val context: Context) {
 			}
 		}
 
-		Mnemonic.JMP ->
-			if(op1.type == OpType.IMM)
-				byte(0xE9).rel(op1, Width.DWORD)
-			else
-				encode1RM(0xFF, 0b1000, 4, op1, Width.NONE)
-
-		Mnemonic.PUSH -> {
-			if(op1.type == OpType.IMM) {
-				byte(0x68).imm(op1, Width.DWORD)
-			} else if(op1.type == OpType.MEM) {
-				encode1M(0xFF, 0b1010, 6, op1, Width.NONE)
-			} else {
-				encode1O(0x50, 0b1010, op1.reg)
-			}
+		Mnemonic.JMP -> when(op1.type) {
+			OpType.IMM -> byte(0xE9).rel(op1, Width.DWORD)
+			else -> encode1RM(0xFF, 0b1000, 4, op1, Width.NONE)
 		}
 
-		Mnemonic.POP -> {
-			if (op1.type == OpType.MEM)
-				encode1M(0x8F, 0b1010, 0, op1, Width.NONE)
-			else
-				encode1O(0x58, 0b1010, op1.reg)
+		Mnemonic.PUSH -> when(op1.type) {
+			OpType.IMM ->byte(0x68).imm(op1, Width.DWORD)
+			OpType.MEM -> encode1M(0xFF, 0b1010, 6, op1, Width.NONE)
+			else -> encode1O(0x50, 0b1010, op1.reg)
+		}
+
+		Mnemonic.POP -> when(op1.type) {
+			OpType.MEM -> encode1M(0x8F, 0b1010, 0, op1, Width.NONE)
+			else -> encode1O(0x58, 0b1010, op1.reg)
 		}
 
 		Mnemonic.NOT  -> encode1RM(0xF6, 0b1111, 2, op1, Width.NONE)
@@ -932,12 +915,11 @@ class Assembler(private val context: Context) {
 
 
 	private fun assemble2(mnemonic: Mnemonic, op1: OpNode, op2: OpNode) { when(mnemonic) {
-		Mnemonic.IMUL ->
-			if(op2.type == OpType.IMM)
-				encode2RR(0x69, 0b1110, op1.reg, op1.reg).imm(op2, op1.width)
-			else
-				encode2RRM(0xAF0F, 0b1110, op1.reg, op2, Width.NONE)
-
+		Mnemonic.IMUL -> when(op2.type ) { 
+			OpType.IMM -> encode2RR(0x69, 0b1110, op1.reg, op1.reg).imm(op2, op1.width)
+			else -> encode2RRM(0xAF0F, 0b1110, op1.reg, op2, Width.NONE)
+		}
+		
 		Mnemonic.ADD -> encodeADD(0x00, 0, op1, op2)
 		Mnemonic.OR  -> encodeADD(0x08, 1, op1, op2)
 		Mnemonic.ADC -> encodeADD(0x10, 2, op1, op2)
@@ -946,7 +928,6 @@ class Assembler(private val context: Context) {
 		Mnemonic.SUB -> encodeADD(0x28, 5, op1, op2)
 		Mnemonic.XOR -> encodeADD(0x30, 6, op1, op2)
 		Mnemonic.CMP -> encodeADD(0x38, 7, op1, op2)
-
 		Mnemonic.ROL -> encodeROL(0, op1, op2)
 		Mnemonic.ROR -> encodeROL(1, op1, op2)
 		Mnemonic.RCL -> encodeROL(2, op1, op2)
@@ -958,68 +939,54 @@ class Assembler(private val context: Context) {
 
 		Mnemonic.LEA -> encode2RM(0x8D, 0b1110, op1.reg, op2, Width.NONE)
 
-		Mnemonic.MOV -> {
-			if(op2.type == OpType.IMM) {
-				if(op1.type == OpType.MEM)
-					encode1RM(0xC6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
-				else
-					encode1O(0xB0, 0b1111, op1.reg).imm64(op2, op1.width)
-			} else if(op2.type == OpType.MEM) {
-				encode2RM(0x8A, 0b1111, op1.reg, op2, Width.NONE)
-			} else {
-				encode2RMR(0x88, 0b1111, op1, op2.reg, Width.NONE)
+		Mnemonic.MOV -> when(op2.type) {
+			OpType.IMM -> when(op1.type) {
+				OpType.MEM -> encode1RM(0xC6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
+				else -> encode1O(0xB0, 0b1111, op1.reg).imm64(op2, op1.width)
 			}
+			OpType.MEM -> encode2RM(0x8A, 0b1111, op1.reg, op2, Width.NONE)
+			else -> encode2RMR(0x88, 0b1111, op1, op2.reg, Width.NONE)
 		}
 
-		Mnemonic.MOVSXD -> {
-			if(op2.width != Width.DWORD)
-				invalid()
-			if(op2.type == OpType.MEM)
-				encode2RMMismatch(0x63, 0b1100, op1.reg, op2, Width.NONE)
+		Mnemonic.MOVSXD -> when {
+			op2.width != Width.DWORD -> invalid()
+			op2.type == OpType.MEM -> encode2RMMismatch(0x63, 0b1100, op1.reg, op2, Width.NONE)
+			else -> encode2RRMismatch(0x63, 0b1100, op1.reg, op2.reg)
+		}
+		
+		Mnemonic.MOVSX -> when(op2.width) {
+			Width.BYTE -> if(op2.type == OpType.MEM)
+				encode2RMMismatch(0xBE0F, 0b1110, op1.reg, op2, Width.NONE)
 			else
-				encode2RRMismatch(0x63, 0b1100, op1.reg, op2.reg)
-		}
-
-		Mnemonic.MOVSX -> {
-			when(op2.width) {
-				Width.BYTE -> if(op2.type == OpType.MEM)
-					encode2RMMismatch(0xBE0F, 0b1110, op1.reg, op2, Width.NONE)
-				else
-					encode2RRMismatch(0xBE0F, 0b1110, op1.reg, op2.reg)
-				Width.WORD -> if(op2.type == OpType.MEM)
-					encode2RMMismatch(0xBF0F, 0b1100, op1.reg, op2, Width.NONE)
-				else
-					encode2RRMismatch(0xBF0F, 0b1100, op1.reg, op2.reg)
-				else -> invalid()
-			}
-		}
-
-		Mnemonic.MOVZX -> {
-			when(op2.width) {
-				Width.BYTE -> if(op2.type == OpType.MEM)
-					encode2RMMismatch(0xB60F, 0b1110, op1.reg, op2, Width.NONE)
-				else
-					encode2RRMismatch(0xB60F, 0b1110, op1.reg, op2.reg)
-				Width.WORD -> if(op2.type == OpType.MEM)
-					encode2RMMismatch(0xB70F, 0b1100, op1.reg, op2, Width.NONE)
-				else
-					encode2RRMismatch(0xB70F, 0b1100, op1.reg, op2.reg)
-				else -> invalid()
-			}
-		}
-
-		Mnemonic.TEST -> {
-			when(op2.type) {
-				OpType.IMM -> encode1RM(0xF6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
-				else -> encode2RMR(0x84, 0b1111, op1, op2.reg, Width.NONE)
-			}
-		}
-
-		Mnemonic.XCHG ->
-			if(op2.type == OpType.MEM)
-				encode2RRM(0x86, 0b1111, op1.reg, op2, Width.NONE)
+				encode2RRMismatch(0xBE0F, 0b1110, op1.reg, op2.reg)
+			Width.WORD -> if(op2.type == OpType.MEM)
+				encode2RMMismatch(0xBF0F, 0b1100, op1.reg, op2, Width.NONE)
 			else
-				encode2RMR(0x86, 0b1111, op1, op2.reg, Width.NONE)
+				encode2RRMismatch(0xBF0F, 0b1100, op1.reg, op2.reg)
+			else -> invalid()
+		}
+
+		Mnemonic.MOVZX -> when(op2.width) {
+			Width.BYTE -> if(op2.type == OpType.MEM)
+				encode2RMMismatch(0xB60F, 0b1110, op1.reg, op2, Width.NONE)
+			else
+				encode2RRMismatch(0xB60F, 0b1110, op1.reg, op2.reg)
+			Width.WORD -> if(op2.type == OpType.MEM)
+				encode2RMMismatch(0xB70F, 0b1100, op1.reg, op2, Width.NONE)
+			else
+				encode2RRMismatch(0xB70F, 0b1100, op1.reg, op2.reg)
+			else -> invalid()
+		}
+
+		Mnemonic.TEST -> when(op2.type) {
+			OpType.IMM -> encode1RM(0xF6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
+			else -> encode2RMR(0x84, 0b1111, op1, op2.reg, Width.NONE)
+		}
+		
+		Mnemonic.XCHG -> when(op2.type) { 
+			OpType.MEM -> encode2RRM(0x86, 0b1111, op1.reg, op2, Width.NONE)
+			else -> encode2RMR(0x86, 0b1111, op1, op2.reg, Width.NONE)
+		}
 
 		Mnemonic.BT -> encodeBT(0xA30F, 4, op1, op2)
 		Mnemonic.BTS -> encodeBT(0xAB0F, 5, op1, op2)
@@ -1033,16 +1000,8 @@ class Assembler(private val context: Context) {
 
 		Mnemonic.BSF -> encode2RRM(0xBC0F, 0b1110, op1.reg, op2, Width.NONE)
 		Mnemonic.BSR -> encode2RRM(0xBD0F, 0b1110, op1.reg, op2, Width.NONE)
-
-		Mnemonic.TZCNT -> {
-			byte(0xF3)
-			encode2RRM(0xBC0F, 0b1110, op1.reg, op2, Width.NONE)
-		}
-
-		Mnemonic.LZCNT -> {
-			byte(0xF3)
-			encode2RRM(0xBD0F, 0b1110, op1.reg, op2, Width.NONE)
-		}
+		Mnemonic.TZCNT -> { byte(0xF3); encode2RRM(0xBC0F, 0b1110, op1.reg, op2, Width.NONE) }
+		Mnemonic.LZCNT -> { byte(0xF3); encode2RRM(0xBD0F, 0b1110, op1.reg, op2, Width.NONE) }
 
 		Mnemonic.MOVBE -> when {
 			op2.type == OpType.MEM -> encode2RM(0xF0380F, 0b1110, op1.reg, op2, Width.NONE)
@@ -1066,21 +1025,19 @@ class Assembler(private val context: Context) {
 
 
 	private fun encodeBT(opcode: Int, ext: Int, op1: OpNode, op2: OpNode) {
-		if(op2.type == OpType.IMM)
-			encode1RM(0xBA0F, 0b1110, ext, op1, Width.BYTE).imm(op2, Width.BYTE)
-		else
-			encode2RMR(opcode, 0b1110, op1, op2.reg, Width.NONE)
+		when(op2.type) {
+			OpType.IMM -> encode1RM(0xBA0F, 0b1110, ext, op1, Width.BYTE).imm(op2, Width.BYTE)
+			else -> encode2RMR(opcode, 0b1110, op1, op2.reg, Width.NONE)
+		}
 	}
 
 
 
 	private fun encodeROL(ext: Int, op1: OpNode, op2: OpNode) {
-		if(op2.reg == Reg.CL) {
-			encode1RM(0xD2, 0b1111, ext, op1, Width.NONE)
-		} else if(op2.type == OpType.IMM) {
-			encode1RM(0xC0, 0b1111, 0, op1, Width.BYTE).imm(op2, Width.BYTE)
-		} else {
-			invalid()
+		when {
+			op2.reg == Reg.CL -> encode1RM(0xD2, 0b1111, ext, op1, Width.NONE)
+			op2.type == OpType.IMM -> encode1RM(0xC0, 0b1111, 0, op1, Width.BYTE).imm(op2, Width.BYTE)
+			else -> invalid()
 		}
 	}
 

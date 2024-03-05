@@ -78,10 +78,6 @@ enum class OpType {
 
 
 
-/**
- *     Bits 0..3: reg index
- *     Bits 4..8: reg type
- */
 @JvmInline
 value class ValueReg(val backing: Int) {
 
@@ -92,35 +88,41 @@ value class ValueReg(val backing: Int) {
 	val isInvalidSibIndex get() = index == 4
 	val isImperfectSibBase get() = value == 5
 	val rex8 get() = value in 20..23
+	val asR8 get() = ValueReg(16 or (backing and 7))
+	val asR16 get() = ValueReg(32 or (backing and 7))
+	val asR32 get() = ValueReg(48 or (backing and 7))
+	val asR64 get() = ValueReg(64 or (backing and 7))
 	val string get() = lowercaseNames.getOrElse(backing) { "invalid" }
 	override fun toString() = string
 
 
 	companion object {
+		val argIndexes = intArrayOf(1, 2, 8, 9)
+		
 		private var counter = 16
 		private fun reg() = ValueReg(counter++)
 		val NONE = ValueReg(0)
 
-		val AL   = reg(); val CL   = reg(); val DL   = reg(); val BL   = reg()
-		val SPL  = reg(); val BPL  = reg(); val SIL  = reg(); val DIL  = reg()
-		val R8B  = reg(); val R9B  = reg(); val R10B = reg(); val R11B = reg()
-		val R12B = reg(); val R13B = reg(); val R14B = reg(); val R15B = reg()
-		val AX   = reg(); val CX   = reg(); val DX   = reg(); val BX   = reg()
-		val SP   = reg(); val BP   = reg(); val SI   = reg(); val DI   = reg()
-		val R8W  = reg(); val R9W  = reg(); val R10W = reg(); val R11W = reg()
-		val R12W = reg(); val R13W = reg(); val R14W = reg(); val R15W = reg()
-		val EAX  = reg(); val ECX  = reg(); val EDX  = reg(); val EBX  = reg()
-		val ESP  = reg(); val EBP  = reg(); val ESI  = reg(); val EDI  = reg()
-		val R8D  = reg(); val R9D  = reg(); val R10D = reg(); val R11D = reg()
-		val R12D = reg(); val R13D = reg(); val R14D = reg(); val R15D = reg()
-		val RAX  = reg(); val RCX  = reg(); val RDX  = reg(); val RBX  = reg()
-		val RSP  = reg(); val RBP  = reg(); val RSI  = reg(); val RDI  = reg()
-		val R8   = reg(); val R9   = reg(); val R10  = reg(); val R11  = reg()
-		val R12  = reg(); val R13  = reg(); val R14  = reg(); val R15  = reg()
+		val AL   = ValueReg(16); val CL   = ValueReg(17); val DL   = ValueReg(18); val BL   = ValueReg(19)
+		val SPL  = ValueReg(20); val BPL  = ValueReg(21); val SIL  = ValueReg(22); val DIL  = ValueReg(23)
+		val R8B  = ValueReg(24); val R9B  = ValueReg(25); val R10B = ValueReg(26); val R11B = ValueReg(27)
+		val R12B = ValueReg(28); val R13B = ValueReg(29); val R14B = ValueReg(30); val R15B = ValueReg(31)
+		val AX   = ValueReg(32); val CX   = ValueReg(33); val DX   = ValueReg(34); val BX   = ValueReg(35)
+		val SP   = ValueReg(36); val BP   = ValueReg(37); val SI   = ValueReg(38); val DI   = ValueReg(39)
+		val R8W  = ValueReg(40); val R9W  = ValueReg(41); val R10W = ValueReg(42); val R11W = ValueReg(43)
+		val R12W = ValueReg(44); val R13W = ValueReg(45); val R14W = ValueReg(46); val R15W = ValueReg(47)
+		val EAX  = ValueReg(48); val ECX  = ValueReg(49); val EDX  = ValueReg(50); val EBX  = ValueReg(51)
+		val ESP  = ValueReg(52); val EBP  = ValueReg(53); val ESI  = ValueReg(54); val EDI  = ValueReg(55)
+		val R8D  = ValueReg(56); val R9D  = ValueReg(57); val R10D = ValueReg(58); val R11D = ValueReg(59)
+		val R12D = ValueReg(60); val R13D = ValueReg(61); val R14D = ValueReg(62); val R15D = ValueReg(63)
+		val RAX  = ValueReg(64); val RCX  = ValueReg(65); val RDX  = ValueReg(66); val RBX  = ValueReg(67)
+		val RSP  = ValueReg(68); val RBP  = ValueReg(69); val RSI  = ValueReg(70); val RDI  = ValueReg(71)
+		val R8   = ValueReg(72); val R9   = ValueReg(73); val R10  = ValueReg(74); val R11  = ValueReg(75)
+		val R12  = ValueReg(76); val R13  = ValueReg(77); val R14  = ValueReg(78); val R15  = ValueReg(79)
 
 		val names = arrayOf(
-			"NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE",
-			"NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", "NONE",
+			"NONE", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID",
+			"INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID",
 			"AL", "CL", "DL", "BL", "SPL", "BPL", "SIL", "DIL",
 			"R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B",
 			"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI",
@@ -132,8 +134,8 @@ value class ValueReg(val backing: Int) {
 		)
 
 		val lowercaseNames = arrayOf(
-			"none", "none", "none", "none", "none", "none", "none", "none",
-			"none", "none", "none", "none", "none", "none", "none", "none",
+			"none", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid",
+			"invalid", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid",
 			"al", "cl", "dl", "bl", "spl", "bpl", "sil", "dil",
 			"r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b",
 			"ax", "cx", "dx", "bx", "sp", "bp", "si", "di",
