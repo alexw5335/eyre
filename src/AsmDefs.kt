@@ -10,8 +10,6 @@ class StackMem(var disp: Int): Mem
 
 class RegMem(var reg: Reg) : Mem
 
-data object NullMem : Mem
-
 
 
 enum class Mnemonic {

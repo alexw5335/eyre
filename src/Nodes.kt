@@ -203,10 +203,12 @@ class VarNode(
 	override val base: Base,
 	val typeNode: TypeNode?,
 	val valueNode: Node?,
+	val proc: ProcNode?,
 	override var type: Type = UnchosenType,
-	var size: Int = 0
-) : PosSym, TypedSym {
-	var mem: Mem = NullMem
+	var size: Int = 0,
+	var mem: Mem? = null,
+) : TypedSym {
+	val isLocal get() = proc != null
 }
 
 class MemberNode(
@@ -226,7 +228,7 @@ class StructNode(
 	override var size: Int = 0,
 	override var alignment: Int = 0,
 	val members: ArrayList<MemberNode> = ArrayList()
-) : PosSym, Type
+) : Type
 
 class EnumEntryNode(
 	override val base: Base,

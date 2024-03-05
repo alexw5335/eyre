@@ -194,7 +194,7 @@ class Parser(private val context: Context) {
 
 
 	private fun parseFor() {
-		val srcPos = tokens[pos++].srcPos()
+		/*val srcPos = tokens[pos++].srcPos()
 		expect(TokenType.LPAREN)
 		val indexName = name()
 		expect(TokenType.COMMA)
@@ -205,7 +205,7 @@ class Parser(private val context: Context) {
 		val index = VarNode(Base(srcPos, node, indexName), null, null, IntTypes.DWORD, 4)
 		index.addSym()
 		node.index = index
-		parseScopeOrExpr(node)
+		parseScopeOrExpr(node)*/
 	}
 
 
@@ -359,7 +359,7 @@ class Parser(private val context: Context) {
 				mod.inferredSize = valueNode.elements.size
 		}
 
-		VarNode(Base(srcPos, scope, name), typeNode, valueNode).addNodeSym()
+		VarNode(Base(srcPos, scope, name), typeNode, valueNode, currentProc).addNodeSym()
 	}
 
 

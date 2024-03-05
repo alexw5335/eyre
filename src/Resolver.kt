@@ -279,9 +279,10 @@ class Resolver(private val context: Context) {
 		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
 		val count = resolveInt(node.right)
 		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
-		val sym = PosRefSym(receiver, type.baseType) { count.toInt() * type.baseType.size }
-		node.sym = sym
-		return sym
+		TODO()
+		//val sym = PosRefSym(receiver, type.baseType) { count.toInt() * type.baseType.size }
+		//node.sym = sym
+		//return sym
 	}
 
 

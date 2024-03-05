@@ -238,11 +238,17 @@ class Linker(private val context: Context) {
 
 
 	private fun resolveImmRec(node: Node, regValid: Boolean): Long {
-		fun sym(sym: Sym?): Long {
-			if(sym == null) context.err(node.srcPos, "Unresolved symbol")
-			if(sym is Pos) return sym.addr.toLong()
-			if(sym is IntSym) return sym.intValue
-			context.err(node.srcPos, "Invalid symbol: $sym")
+		fun sym(sym: Sym?): Long = when(sym) {
+			null            -> context.err(node.srcPos, "Unresolved symbol")
+			is ProcNode     -> sym.addr.toLong()
+			is LabelNode    -> sym.addr.toLong()
+			is StringLitSym -> sym.addr.toLong()
+			is IntSym       -> sym.intValue
+			is VarNode      -> if(sym.mem is GlobalMem)
+				(sym.mem as GlobalMem).addr.toLong()
+			else
+				context.err(node.srcPos, "Only global variables allowed here")
+			else -> context.err(node.srcPos, "Invalid node: $node")
 		}
 
 		return when(node) {
