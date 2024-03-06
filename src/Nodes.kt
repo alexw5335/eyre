@@ -61,10 +61,6 @@ interface SymNode : Node {
 	val sym: Sym?
 }
 
-interface MemSym : Sym {
-	val mem: Mem
-}
-
 
 
 /*
@@ -73,15 +69,26 @@ Basic nodes
 
 
 
-class OpNode(
-	override val base: Base,
-	val type: OpType,
-	val width: Width,
-	val child: Node?,
-	val reg: Reg,
-) : Node
+sealed interface OpNode : Node {
+	val reg: Reg
+	val width: Width
+}
 
-class RegNode(override val base: Base, val value: Reg) : Node
+class RegNode(override val base: Base, override val reg: Reg) : OpNode {
+	override val width get() = reg.width
+}
+
+class MemNode(override val base: Base, val child: Node, val mem: MemOperand) : OpNode {
+	override val width get() = mem.width
+	override val reg get() = Reg.NONE
+}
+
+class ImmNode(override val base: Base, val child: Node) : OpNode {
+	override val reg get() = Reg.NONE
+	override val width get() = Width.NONE
+}
+
+
 
 class NameNode(override val base: Base, val value: Name, override var sym: Sym? = null) : SymNode
 
@@ -209,7 +216,7 @@ class VarNode(
 	val proc: ProcNode?,
 	override var type: Type = UnchosenType,
 	var size: Int = 0,
-	var mem: Mem? = null,
+	var mem: VarLoc? = null,
 ) : TypedSym {
 	val isLocal get() = proc != null
 }

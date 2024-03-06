@@ -244,8 +244,8 @@ class Linker(private val context: Context) {
 			is LabelNode    -> sym.addr.toLong()
 			is StringLitSym -> sym.addr.toLong()
 			is IntSym       -> sym.intValue
-			is VarNode      -> if(sym.mem is GlobalMem)
-				(sym.mem as GlobalMem).addr.toLong()
+			is VarNode      -> if(sym.mem is GlobalVarLoc)
+				(sym.mem as GlobalVarLoc).addr.toLong()
 			else
 				context.err(node.srcPos, "Only global variables allowed here")
 			else -> context.err(node.srcPos, "Invalid node: $node")

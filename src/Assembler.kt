@@ -144,9 +144,9 @@ class Assembler(private val context: Context) {
 		if(binNode.right is CallNode) {
 			handleCallNode(binNode.right)
 			if(binNode.left is RegNode) {
-				if(!binNode.left.value.isR64)
+				if(!binNode.left.reg.isR64)
 					err(binNode.left, "Only R64 allowed here")
-				encode2RR(0x88, 0b1111, binNode.left.value, Reg.RAX)
+				encode2RR(0x88, 0b1111, binNode.left.reg, Reg.RAX)
 				return
 			} else if(binNode.left is SymNode) {
 				encodeMoveRaxToSym(binNode.srcPos, binNode.left.sym as? VarNode ?: err(binNode.left, "Invalid receiver"))
@@ -200,9 +200,9 @@ class Assembler(private val context: Context) {
 			val condition = ifNode.condition as? BinNode ?: err()
 
 			if(condition.left is RegNode) {
-				val left = condition.left.value
+				val left = condition.left.reg
 				if(condition.right is RegNode) {
-					encode2RR(0x3A, 0b1111, left, condition.right.value)
+					encode2RR(0x3A, 0b1111, left, condition.right.reg)
 				} else if(condition.right is SymNode && condition.right.sym is Pos) {
 					context.internalErr()
 					/*val right = condition.right.sym
@@ -253,14 +253,14 @@ class Assembler(private val context: Context) {
 			val dst = Reg.arg64(i)
 
 			if(n is RegNode) {
-				encodeMoveRegToReg(n.srcPos, dst, n.value)
+				encodeMoveRegToReg(n.srcPos, dst, n.reg)
 			} else if(n is SymNode) {
 				encodeMoveSymToReg(callNode.srcPos, dst, n.sym as? VarNode ?: err(n, "Invalid"))
 			} else if(n is StringNode) {
-				encodeMoveSymPtrToReg(n.srcPos, dst, n.litSym!!.let { GlobalMem(it.sec, it.disp) })
+				encodeMoveSymPtrToReg(n.srcPos, dst, n.litSym!!.let { GlobalVarLoc(it.sec, it.disp) })
 			} else if(n is UnNode && n.op == UnOp.ADDR) {
 				val sym = (n.child as? SymNode)?.sym as? PosSym ?: err(n.child, "Invalid address-of")
-				encodeMoveSymPtrToReg(callNode.srcPos, dst, GlobalMem(sym.sec, sym.disp))
+				encodeMoveSymPtrToReg(callNode.srcPos, dst, GlobalVarLoc(sym.sec, sym.disp))
 			} else {
 				encodeMoveImmToReg(dst, resolveImm(n))
 			}
@@ -295,15 +295,15 @@ class Assembler(private val context: Context) {
 				err(node, "Initialiser not available for local variables")
 			val offset = node.proc.localsStackSize
 			node.proc.localsStackSize += node.size
-			node.mem = StackMem(offset)
+			node.mem = StackVarLoc(offset)
 		} else if(node.valueNode == null) {
 			context.bssSize = context.bssSize.align(node.type.alignment)
-			node.mem = GlobalMem(context.bssSec, context.bssSize)
+			node.mem = GlobalVarLoc(context.bssSec, context.bssSize)
 			context.bssSize += node.size
 		} else {
 			sectioned(context.dataSec) {
 				writer.align(8)
-				node.mem = GlobalMem(section, writer.pos)
+				node.mem = GlobalVarLoc(section, writer.pos)
 				writeInitialiser(node.type, 0, node.valueNode)
 				writer.pos += node.type.size
 			}
@@ -399,7 +399,7 @@ class Assembler(private val context: Context) {
 			is StringLitSym -> posSym()
 			is IntSym       -> sym.intValue
 			is VarNode      ->
-				if(sym.mem !is GlobalMem)
+				if(sym.mem !is GlobalVarLoc)
 					err(node.srcPos, "Only global variables allowed here")
 				else
 					posSym()
@@ -418,7 +418,6 @@ class Assembler(private val context: Context) {
 		}
 
 		if(node is StringNode) { posSym(); return 0 }
-		if(node is OpNode)   return resolveRec(node.child!!, regValid)
 		if(node is IntNode)  return node.value
 		if(node is UnNode)   return node.calc(regValid, ::resolveRec)
 		if(node is NameNode) return sym(node.sym)
@@ -428,10 +427,10 @@ class Assembler(private val context: Context) {
 		if(node is BinNode) {
 			if(node.op == BinOp.MUL) {
 				if(node.left is RegNode) {
-					sib(node.left.value, node.right)
+					sib(node.left.reg, node.right)
 					return 0
 				} else if(node.right is RegNode) {
-					sib(node.right.value, node.left)
+					sib(node.right.reg, node.left)
 					return 0
 				}
 			}
@@ -439,13 +438,13 @@ class Assembler(private val context: Context) {
 		}
 
 		if(node is RegNode) {
-			if(!node.value.isR64)
+			if(!node.reg.isR64)
 				err(node.srcPos, "Only R64 allowed for memory operands")
 			if(base == Reg.NONE) {
-				base = node.value
+				base = node.reg
 			} else if(index == Reg.NONE) {
 				index = base
-				base = node.value
+				base = node.reg
 				scale = 1
 			} else {
 				err(node.srcPos, "Too many registers")
@@ -545,17 +544,17 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun writeMem(srcPos: SrcPos?, mem: Mem?, reg: Int, immWidth: Width) {
+	private fun writeMem(srcPos: SrcPos?, mem: VarLoc?, reg: Int, immWidth: Width) {
 		when(mem) {
-			is StackMem -> if(mem.disp.isImm8) {
+			is StackVarLoc -> if(mem.disp.isImm8) {
 				byte(0b01_000_101 or (reg shl 3))
 				byte(mem.disp)
 			} else {
 				byte(0b10_000_101 or (reg shl 3))
 				dword(mem.disp)
 			}
-			is GlobalMem -> writeMemRip(srcPos, mem, reg, immWidth)
-			is RegMem, null -> err(srcPos, "Invalid mem")
+			is GlobalVarLoc -> writeMemRip(srcPos, mem, reg, immWidth)
+			null -> err(srcPos, "Invalid mem")
 		}
 	}
 
@@ -695,7 +694,7 @@ class Assembler(private val context: Context) {
 		byte(opcode + (((mask and 1) and (1 shl width).inv()) shl 3) + op1.value)
 	}
 
-	private fun encode1M(opcode: Int, mask: Int, ext: Int, op1: OpNode, immWidth: Width) {
+	private fun encode1M(opcode: Int, mask: Int, ext: Int, op1: MemNode, immWidth: Width) {
 		val width = op1.width.ordinal - 1
 		resolveMem(op1)
 		if(mask.countOneBits() != 1) checkWidth(mask, width)
@@ -715,7 +714,7 @@ class Assembler(private val context: Context) {
 		writeMem(op2, op1.value, immWidth)
 	}
 
-	private fun encode2RM(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immWidth: Width) {
+	private fun encode2RM(opcode: Int, mask: Int, op1: Reg, op2: MemNode, immWidth: Width) {
 		if(op2.width != Width.NONE && op2.width.ordinal != op1.type)
 			invalid("Width mismatch")
 		encode2RMMismatch(opcode, mask, op1, op2, immWidth)
@@ -737,21 +736,21 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun encode1RM(opcode: Int, mask: Int, ext: Int, op1: OpNode, immWidth: Width) {
-		if(op1.type == OpType.MEM)
+		if(op1 is MemNode)
 			encode1M(opcode, mask, ext, op1, immWidth)
 		else
 			encode1R(opcode, mask, ext, op1.reg)
 	}
 
 	private fun encode2RRM(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immWidth: Width) {
-		if(op2.type == OpType.MEM)
+		if(op2 is MemNode)
 			encode2RM(opcode, mask, op1, op2, immWidth)
 		else
 			encode2RR(opcode, mask, op1, op2.reg)
 	}
 
 	private fun encode2RMR(opcode: Int, mask: Int, op1: OpNode, op2: Reg, immWidth: Width) {
-		if(op1.type == OpType.MEM)
+		if(op1 is MemNode)
 			encode2RM(opcode, mask, op2, op1, immWidth)
 		else
 			encode2RR(opcode, mask, op2, op1.reg)
@@ -777,7 +776,7 @@ class Assembler(private val context: Context) {
 
 	private fun assemble3(mnemonic: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode) { when(mnemonic) {
 		Mnemonic.IMUL -> {
-			if(op3.type != OpType.IMM) invalid()
+			if(op3 !is ImmNode) invalid()
 			encode2RRM(0x69, 0b1110, op1.reg, op2, op1.width).imm(op3, op1.width)
 		}
 		else -> invalid()
@@ -858,10 +857,13 @@ class Assembler(private val context: Context) {
 		Mnemonic.INC -> encode1RM(0xFE, 0b1111, 0, op1, Width.NONE)
 		Mnemonic.DEC -> encode1RM(0xFE, 0b1111, 1, op1, Width.NONE)
 
-		Mnemonic.INT -> byte(0xCD).imm(op1.also { if(it.type != OpType.IMM) invalid() }, Width.BYTE)
+		Mnemonic.INT -> when {
+			op1 is ImmNode -> byte(0xCD).imm(op1, Width.BYTE)
+			else -> invalid()
+		}
 		
 		Mnemonic.CALL -> {
-			if(op1.type == OpType.IMM) {
+			if(op1 is ImmNode) {
 				if(op1.child is SymNode && op1.child.sym is DllImportNode) {
 					byte(0xFF)
 					resolveMem(op1)
@@ -874,19 +876,19 @@ class Assembler(private val context: Context) {
 			}
 		}
 
-		Mnemonic.JMP -> when(op1.type) {
-			OpType.IMM -> byte(0xE9).rel(op1, Width.DWORD)
+		Mnemonic.JMP -> when(op1) {
+			is ImmNode -> byte(0xE9).rel(op1, Width.DWORD)
 			else -> encode1RM(0xFF, 0b1000, 4, op1, Width.NONE)
 		}
 
-		Mnemonic.PUSH -> when(op1.type) {
-			OpType.IMM ->byte(0x68).imm(op1, Width.DWORD)
-			OpType.MEM -> encode1M(0xFF, 0b1010, 6, op1, Width.NONE)
+		Mnemonic.PUSH -> when(op1) {
+			is ImmNode ->byte(0x68).imm(op1, Width.DWORD)
+			is MemNode -> encode1M(0xFF, 0b1010, 6, op1, Width.NONE)
 			else -> encode1O(0x50, 0b1010, op1.reg)
 		}
 
-		Mnemonic.POP -> when(op1.type) {
-			OpType.MEM -> encode1M(0x8F, 0b1010, 0, op1, Width.NONE)
+		Mnemonic.POP -> when(op1) {
+			is MemNode -> encode1M(0x8F, 0b1010, 0, op1, Width.NONE)
 			else -> encode1O(0x58, 0b1010, op1.reg)
 		}
 
@@ -901,8 +903,8 @@ class Assembler(private val context: Context) {
 	}}
 
 	private fun assemble2(mnemonic: Mnemonic, op1: OpNode, op2: OpNode) { when(mnemonic) {
-		Mnemonic.IMUL -> when(op2.type ) { 
-			OpType.IMM -> encode2RR(0x69, 0b1110, op1.reg, op1.reg).imm(op2, op1.width)
+		Mnemonic.IMUL -> when(op2) {
+			is ImmNode -> encode2RR(0x69, 0b1110, op1.reg, op1.reg).imm(op2, op1.width)
 			else -> encode2RRM(0xAF0F, 0b1110, op1.reg, op2, Width.NONE)
 		}
 		
@@ -923,29 +925,32 @@ class Assembler(private val context: Context) {
 		Mnemonic.SHR -> encodeROL(5, op1, op2)
 		Mnemonic.SAR -> encodeROL(7, op1, op2)
 
-		Mnemonic.LEA -> encode2RM(0x8D, 0b1110, op1.reg, op2, Width.NONE)
+		Mnemonic.LEA -> when(op2) {
+			is MemNode -> encode2RM(0x8D, 0b1110, op1.reg, op2, Width.NONE)
+			else -> invalid()
+		}
 
-		Mnemonic.MOV -> when(op2.type) {
-			OpType.IMM -> when(op1.type) {
-				OpType.MEM -> encode1RM(0xC6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
+		Mnemonic.MOV -> when(op2) {
+			is ImmNode -> when(op1) {
+				is MemNode -> encode1RM(0xC6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
 				else -> encode1O(0xB0, 0b1111, op1.reg).imm64(op2, op1.width)
 			}
-			OpType.MEM -> encode2RM(0x8A, 0b1111, op1.reg, op2, Width.NONE)
+			is MemNode -> encode2RM(0x8A, 0b1111, op1.reg, op2, Width.NONE)
 			else -> encode2RMR(0x88, 0b1111, op1, op2.reg, Width.NONE)
 		}
 
 		Mnemonic.MOVSXD -> when {
 			op2.width != Width.DWORD -> invalid()
-			op2.type == OpType.MEM -> encode2RMMismatch(0x63, 0b1100, op1.reg, op2, Width.NONE)
+			op2 is MemNode -> encode2RMMismatch(0x63, 0b1100, op1.reg, op2, Width.NONE)
 			else -> encode2RRMismatch(0x63, 0b1100, op1.reg, op2.reg)
 		}
 		
 		Mnemonic.MOVSX -> when(op2.width) {
-			Width.BYTE -> if(op2.type == OpType.MEM)
+			Width.BYTE -> if(op2 is MemNode)
 				encode2RMMismatch(0xBE0F, 0b1110, op1.reg, op2, Width.NONE)
 			else
 				encode2RRMismatch(0xBE0F, 0b1110, op1.reg, op2.reg)
-			Width.WORD -> if(op2.type == OpType.MEM)
+			Width.WORD -> if(op2 is MemNode)
 				encode2RMMismatch(0xBF0F, 0b1100, op1.reg, op2, Width.NONE)
 			else
 				encode2RRMismatch(0xBF0F, 0b1100, op1.reg, op2.reg)
@@ -953,24 +958,24 @@ class Assembler(private val context: Context) {
 		}
 
 		Mnemonic.MOVZX -> when(op2.width) {
-			Width.BYTE -> if(op2.type == OpType.MEM)
+			Width.BYTE -> if(op2 is MemNode)
 				encode2RMMismatch(0xB60F, 0b1110, op1.reg, op2, Width.NONE)
 			else
 				encode2RRMismatch(0xB60F, 0b1110, op1.reg, op2.reg)
-			Width.WORD -> if(op2.type == OpType.MEM)
+			Width.WORD -> if(op2 is MemNode)
 				encode2RMMismatch(0xB70F, 0b1100, op1.reg, op2, Width.NONE)
 			else
 				encode2RRMismatch(0xB70F, 0b1100, op1.reg, op2.reg)
 			else -> invalid()
 		}
 
-		Mnemonic.TEST -> when(op2.type) {
-			OpType.IMM -> encode1RM(0xF6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
+		Mnemonic.TEST -> when(op2) {
+			is ImmNode -> encode1RM(0xF6, 0b1111, 0, op1, op1.width).imm(op2, op1.width)
 			else -> encode2RMR(0x84, 0b1111, op1, op2.reg, Width.NONE)
 		}
 		
-		Mnemonic.XCHG -> when(op2.type) { 
-			OpType.MEM -> encode2RRM(0x86, 0b1111, op1.reg, op2, Width.NONE)
+		Mnemonic.XCHG -> when(op2) {
+			is MemNode -> encode2RRM(0x86, 0b1111, op1.reg, op2, Width.NONE)
 			else -> encode2RMR(0x86, 0b1111, op1, op2.reg, Width.NONE)
 		}
 
@@ -990,8 +995,8 @@ class Assembler(private val context: Context) {
 		Mnemonic.LZCNT -> { byte(0xF3); encode2RRM(0xBD0F, 0b1110, op1.reg, op2, Width.NONE) }
 
 		Mnemonic.MOVBE -> when {
-			op2.type == OpType.MEM -> encode2RM(0xF0380F, 0b1110, op1.reg, op2, Width.NONE)
-			op1.type == OpType.MEM -> encode2RM(0xF1380F, 0b1110, op2.reg, op1, Width.NONE)
+			op2 is MemNode -> encode2RM(0xF0380F, 0b1110, op1.reg, op2, Width.NONE)
+			op1 is MemNode -> encode2RM(0xF1380F, 0b1110, op2.reg, op1, Width.NONE)
 			else -> invalid()
 		}
 
@@ -999,16 +1004,16 @@ class Assembler(private val context: Context) {
 	}}
 
 	private fun encodeADD(opcode: Int, ext: Int, op1: OpNode, op2: OpNode) {
-		when(op2.type) {
-			OpType.IMM -> encode1RM(0x80, 0b1111, ext, op1, op1.width).imm(op2, op1.width)
-			OpType.MEM -> encode2RM(opcode + 2, 0b1111, op1.reg, op2, Width.NONE)
+		when(op2) {
+			is ImmNode -> encode1RM(0x80, 0b1111, ext, op1, op1.width).imm(op2, op1.width)
+			is MemNode -> encode2RM(opcode + 2, 0b1111, op1.reg, op2, Width.NONE)
 			else       -> encode2RMR(opcode + 0, 0b1111, op1, op2.reg, Width.NONE)
 		}
 	}
 
 	private fun encodeBT(opcode: Int, ext: Int, op1: OpNode, op2: OpNode) {
-		when(op2.type) {
-			OpType.IMM -> encode1RM(0xBA0F, 0b1110, ext, op1, Width.BYTE).imm(op2, Width.BYTE)
+		when(op2) {
+			is ImmNode -> encode1RM(0xBA0F, 0b1110, ext, op1, Width.BYTE).imm(op2, Width.BYTE)
 			else -> encode2RMR(opcode, 0b1110, op1, op2.reg, Width.NONE)
 		}
 	}
@@ -1016,7 +1021,7 @@ class Assembler(private val context: Context) {
 	private fun encodeROL(ext: Int, op1: OpNode, op2: OpNode) {
 		when {
 			op2.reg == Reg.CL -> encode1RM(0xD2, 0b1111, ext, op1, Width.NONE)
-			op2.type == OpType.IMM -> encode1RM(0xC0, 0b1111, 0, op1, Width.BYTE).imm(op2, Width.BYTE)
+			op2 is ImmNode -> encode1RM(0xC0, 0b1111, 0, op1, Width.BYTE).imm(op2, Width.BYTE)
 			else -> invalid()
 		}
 	}
@@ -1045,13 +1050,13 @@ class Assembler(private val context: Context) {
 		byte(0b11_000_000 or reg.regValue or rm.rmValue)
 	}
 
-	private fun rm64(opcode: Int, reg: Reg, mem: Mem) {
+	private fun rm64(opcode: Int, reg: Reg, mem: VarLoc) {
 		byte(0b0100_1000 or reg.rRex)
 		writer.varLengthInt(opcode)
 		writeMem(null, mem, reg.value, Width.NONE)
 	}
 
-	private fun rm32(opcode: Int, reg: Reg, mem: Mem) {
+	private fun rm32(opcode: Int, reg: Reg, mem: VarLoc) {
 		val rex = 0b0100_0000 or reg.rRex
 		if(rex != 0b0100_0000) byte(rex)
 		writer.varLengthInt(opcode)
@@ -1060,7 +1065,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun encodeMoveSymPtrToReg(srcPos: SrcPos?, dst: Reg, src: Mem) {
+	private fun encodeMoveSymPtrToReg(srcPos: SrcPos?, dst: Reg, src: VarLoc) {
 		word(0x8D48 or (dst.rex shl 2))
 		writeMem(srcPos, src, dst.value, Width.NONE)
 	}

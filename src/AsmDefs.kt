@@ -2,13 +2,21 @@ package eyre
 
 
 
-sealed interface Mem
+sealed interface Operand
 
-class GlobalMem(override var sec: Section, override var disp: Int) : Mem, Pos
+class RegOperand(var reg: Reg) : Operand
 
-class StackMem(var disp: Int): Mem
+class MemOperand(var width: Width, var base: Reg, var index: Reg, var scale: Int, var disp: Int) : Operand
 
-class RegMem(var reg: Reg) : Mem
+class ImmOperand(var value: Int)
+
+
+
+sealed interface VarLoc
+
+class GlobalVarLoc(override var sec: Section, override var disp: Int) : VarLoc, Pos
+
+class StackVarLoc(var disp: Int): VarLoc
 
 
 

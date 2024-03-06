@@ -456,7 +456,8 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseMemOp() {
+	private fun parseMemOp(): MemNode {
+		val srcPos = srcPos()
 		val base: Reg
 		val index: Reg
 		var scale = 0L
@@ -489,6 +490,8 @@ class Parser(private val context: Context) {
 			parseExpr()
 		else
 			null
+
+		return MemNode(Base(srcPos), )
 	}
 
 
