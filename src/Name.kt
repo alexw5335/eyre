@@ -16,8 +16,8 @@ class Name(val id: Int, val string: String) {
 
 	var type = Type.NONE
 	var mnemonic = Mnemonic.entries[0]
-	var width = Width.entries[0]
-	var reg = Reg.entries[0]
+	var width = Width.NONE
+	var reg = Reg.NONE
 	var keyword = TokenType.entries[0]
 
 	val isNull get() = id == 0
@@ -41,8 +41,8 @@ class Name(val id: Int, val string: String) {
 		init {
 			for(width in Width.entries)
 				get(width.string).let { it.type = Type.WIDTH; it.width = width }
-			for(reg in Reg.entries)
-				get(reg.string).let { it.type = Type.REG; it.reg = reg }
+			for(value in Reg.RANGE)
+				get(Reg(value).toString()).let { it.type = Type.REG; it.reg = Reg(value) }
 			for(mnemonic in Mnemonic.entries)
 				get(mnemonic.string).let { it.type = Type.MNEMONIC; it.mnemonic = mnemonic }
 			for(keyword in TokenType.entries)

@@ -1,5 +1,6 @@
 package eyre
 
+@Suppress("UnusedReceiverParameter")
 class Assembler(private val context: Context) {
 
 
@@ -117,20 +118,13 @@ class Assembler(private val context: Context) {
 		procNode.paramsStackPos = padding + procNode.regsStackSize + procNode.localsStackSize
 		procNode.sec = section
 		procNode.disp = writer.pos
-
-		byte(0x55) // push rbp
-		i24(0xE58948) // mov rbp, rsp
-		if(procNode.stackSize.isImm8) {
-			i24(0xEC8348); byte(procNode.stackSize) // sub rsp, byte disp
-		} else {
-			i24(0xEC8148); dword(procNode.stackSize) // sub rsp, dword disp
-		}
-
+		dword(0xE58948_55) // push rbp; move rbp, rsp
+		if(procNode.stackSize.isImm8)
+			i24(0xEC8348).byte(procNode.stackSize) // sub rsp, byte disp
+		else
+			i24(0xEC8148).dword(procNode.stackSize) // sub rsp, dword disp
 		assembleScope()
-
-		byte(0xC9) // leave
-		byte(0xC3) // ret
-
+		word(0xC3_C9) // leave; ret
 		procNode.size = writer.pos - procNode.disp
 	}
 
@@ -149,9 +143,8 @@ class Assembler(private val context: Context) {
 
 		if(binNode.right is CallNode) {
 			handleCallNode(binNode.right)
-
 			if(binNode.left is RegNode) {
-				if(binNode.left.value.type != OpType.R64)
+				if(!binNode.left.value.isR64)
 					err(binNode.left, "Only R64 allowed here")
 				encode2RR(0x88, 0b1111, binNode.left.value, Reg.RAX)
 				return
@@ -235,8 +228,8 @@ class Assembler(private val context: Context) {
 		assembleScope()
 
 		if(ifNode.next != null) {
+			ifNode.endJmpPos = writer.pos + 1
 			byte(0xE9)
-			ifNode.endJmpPos = writer.pos
 			dword(0)
 		} else if(ifNode.parentIf != null) {
 			var parent = ifNode.parentIf
@@ -257,19 +250,19 @@ class Assembler(private val context: Context) {
 
 	private fun handleCallNode(callNode: CallNode) {
 		for((i, n) in callNode.elements.withIndex()) {
-			val dstIndex = if(i < 4) Reg.argIndexes[i] else 0
+			val dst = Reg.arg64(i)
 
 			if(n is RegNode) {
-				encodeMoveRegToReg(n.srcPos, dstIndex, n.value)
+				encodeMoveRegToReg(n.srcPos, dst, n.value)
 			} else if(n is SymNode) {
-				encodeMoveSymToReg(callNode.srcPos, dstIndex, n.sym as? VarNode ?: err(n, "Invalid"))
+				encodeMoveSymToReg(callNode.srcPos, dst, n.sym as? VarNode ?: err(n, "Invalid"))
 			} else if(n is StringNode) {
-				encodeMoveSymPtrToReg(n.srcPos, dstIndex, n.litSym!!.let { GlobalMem(it.sec, it.disp) })
+				encodeMoveSymPtrToReg(n.srcPos, dst, n.litSym!!.let { GlobalMem(it.sec, it.disp) })
 			} else if(n is UnNode && n.op == UnOp.ADDR) {
 				val sym = (n.child as? SymNode)?.sym as? PosSym ?: err(n.child, "Invalid address-of")
-				encodeMoveSymPtrToReg(callNode.srcPos, dstIndex, GlobalMem(sym.sec, sym.disp))
+				encodeMoveSymPtrToReg(callNode.srcPos, dst, GlobalMem(sym.sec, sym.disp))
 			} else {
-				encodeMoveImmToReg(dstIndex, resolveImm(n))
+				encodeMoveImmToReg(dst, resolveImm(n))
 			}
 
 			if(i >= 4)
@@ -414,7 +407,7 @@ class Assembler(private val context: Context) {
 		}
 
 		fun sib(reg: Reg, other: Node) {
-			if(reg.type != OpType.R64)
+			if(!reg.isR64)
 				err(node.srcPos, "Only R64 allowed for memory operands")
 			if(other !is IntNode || !other.value.isImm32)
 				err(other.srcPos, "Invalid scale")
@@ -446,7 +439,7 @@ class Assembler(private val context: Context) {
 		}
 
 		if(node is RegNode) {
-			if(node.value.type != OpType.R64)
+			if(!node.value.isR64)
 				err(node.srcPos, "Only R64 allowed for memory operands")
 			if(base == Reg.NONE) {
 				base = node.value
@@ -474,13 +467,12 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun byte(value: Int) = writer.i8(value)
-
-	private fun word(value: Int) = writer.i16(value)
-
-	private fun i24(value: Int) = writer.i24(value)
-
-	private fun dword(value: Int) = writer.i32(value)
+	private fun Any.byte(value: Int) = writer.i8(value)
+	private fun Any.word(value: Int) = writer.i16(value)
+	private fun Any.i24(value: Int) = writer.i24(value)
+	private fun Any.dword(value: Int) = writer.i32(value)
+	private fun Any.dword(value: Long) = writer.i32(value)
+	private fun Any.qword(value: Long) = writer.i64(value)
 
 
 
@@ -595,7 +587,7 @@ class Assembler(private val context: Context) {
 		}
 
 		// Index cannot be ESP/RSP, swap to base if possible
-		if(hasIndex && index.isInvalidIndex) {
+		if(hasIndex && index.isInvalidSibIndex) {
 			when {
 				scale != 1 -> err(node.srcPos, "Index cannot be ESP/RSP")
 				hasBase    -> swapRegs()
@@ -686,7 +678,7 @@ class Assembler(private val context: Context) {
 
 
 	private fun encode1R(opcode: Int, mask: Int, ext: Int, op1: Reg) {
-		val width = op1.width.ordinal - 1
+		val width = op1.type - 1
 		checkWidth(mask, width)
 		writeO16(mask, width)
 		writeRex(mask, width, Reg.NONE, Reg.NONE, op1)
@@ -696,7 +688,7 @@ class Assembler(private val context: Context) {
 
 
 	private fun encode1O(opcode: Int, mask: Int, op1: Reg) {
-		val width = op1.width.ordinal - 1
+		val width = op1.type - 1
 		checkWidth(mask, width)
 		writeO16(mask, width)
 		writeRex(mask, width, Reg.NONE, Reg.NONE, op1)
@@ -714,7 +706,7 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun encode2RMMismatch(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immWidth: Width) {
-		val width = op1.width.ordinal - 1
+		val width = op1.type - 1
 		resolveMem(op2)
 		checkWidth(mask, width)
 		writeO16(mask, width)
@@ -724,12 +716,13 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun encode2RM(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immWidth: Width) {
-		if(op2.width != Width.NONE && op2.width != op1.width) invalid("Width mismatch")
+		if(op2.width != Width.NONE && op2.width.ordinal != op1.type)
+			invalid("Width mismatch")
 		encode2RMMismatch(opcode, mask, op1, op2, immWidth)
 	}
 
 	private fun encode2RRMismatch(opcode: Int, mask: Int, op1: Reg, op2: Reg) {
-		val width = op1.width.ordinal - 1
+		val width = op1.type - 1
 		checkWidth(mask, width)
 		writeO16(mask, width)
 		writeRex(mask, width, op1, Reg.NONE, op2)
@@ -738,7 +731,8 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun encode2RR(opcode: Int, mask: Int, op1: Reg, op2: Reg) {
-		if(op1.type != op2.type) invalid("Width mismatch")
+		if(op1.type != op2.type)
+			invalid("Width mismatch")
 		encode2RRMismatch(opcode, mask, op1, op2)
 	}
 
@@ -781,8 +775,6 @@ class Assembler(private val context: Context) {
 		}
 	}
 
-
-
 	private fun assemble3(mnemonic: Mnemonic, op1: OpNode, op2: OpNode, op3: OpNode) { when(mnemonic) {
 		Mnemonic.IMUL -> {
 			if(op3.type != OpType.IMM) invalid()
@@ -790,8 +782,6 @@ class Assembler(private val context: Context) {
 		}
 		else -> invalid()
 	}}
-
-
 
 	private fun assemble0(mnemonic: Mnemonic) { when(mnemonic) {
 		Mnemonic.RET -> byte(0xC3)
@@ -846,8 +836,6 @@ class Assembler(private val context: Context) {
 		Mnemonic.CPUID -> word(0xA20F)
 		else -> invalid()
 	}}
-
-
 
 	private fun assemble1(mnemonic: Mnemonic, op1: OpNode) { when(mnemonic) {
 		Mnemonic.JO -> word(0x800F).rel(op1, Width.DWORD)
@@ -911,8 +899,6 @@ class Assembler(private val context: Context) {
 
 		else -> invalid()
 	}}
-
-
 
 	private fun assemble2(mnemonic: Mnemonic, op1: OpNode, op2: OpNode) { when(mnemonic) {
 		Mnemonic.IMUL -> when(op2.type ) { 
@@ -1012,8 +998,6 @@ class Assembler(private val context: Context) {
 		else -> invalid()
 	}}
 
-
-
 	private fun encodeADD(opcode: Int, ext: Int, op1: OpNode, op2: OpNode) {
 		when(op2.type) {
 			OpType.IMM -> encode1RM(0x80, 0b1111, ext, op1, op1.width).imm(op2, op1.width)
@@ -1022,16 +1006,12 @@ class Assembler(private val context: Context) {
 		}
 	}
 
-
-
 	private fun encodeBT(opcode: Int, ext: Int, op1: OpNode, op2: OpNode) {
 		when(op2.type) {
 			OpType.IMM -> encode1RM(0xBA0F, 0b1110, ext, op1, Width.BYTE).imm(op2, Width.BYTE)
 			else -> encode2RMR(opcode, 0b1110, op1, op2.reg, Width.NONE)
 		}
 	}
-
-
 
 	private fun encodeROL(ext: Int, op1: OpNode, op2: OpNode) {
 		when {
@@ -1045,72 +1025,80 @@ class Assembler(private val context: Context) {
 
 	/*
 	Encoding utils
+	- Only R64 is allowed for DST registers when set by the user to avoid worrying about width mismatch
+	- Width of DST registers is irrelevant. Final width is chosen by variable type, imm width, etc.
+	- Any literal immediate values and registers are assumed to be signed
 	 */
 
 
 
-	private fun encodeMoveSymPtrToReg(srcPos: SrcPos?, dstIndex: Int, src: Mem) {
-		val dst = Reg.qwordRegs[dstIndex]
+	private fun rr64(opcode: Int, reg: Reg, rm: Reg) {
+		byte(0b0100_1000 or reg.rRex or rm.bRex)
+		writer.varLengthInt(opcode)
+		byte(0b11_000_000 or reg.regValue or rm.rmValue)
+	}
+
+	private fun rr32(opcode: Int, reg: Reg, rm: Reg) {
+		val rex = 0b0100_0000 or reg.rRex or rm.bRex
+		if(rex != 0b0100_0000) byte(rex)
+		writer.varLengthInt(opcode)
+		byte(0b11_000_000 or reg.regValue or rm.rmValue)
+	}
+
+	private fun rm64(opcode: Int, reg: Reg, mem: Mem) {
+		byte(0b0100_1000 or reg.rRex)
+		writer.varLengthInt(opcode)
+		writeMem(null, mem, reg.value, Width.NONE)
+	}
+
+	private fun rm32(opcode: Int, reg: Reg, mem: Mem) {
+		val rex = 0b0100_0000 or reg.rRex
+		if(rex != 0b0100_0000) byte(rex)
+		writer.varLengthInt(opcode)
+		writeMem(null, mem, reg.value, Width.NONE)
+	}
+
+
+
+	private fun encodeMoveSymPtrToReg(srcPos: SrcPos?, dst: Reg, src: Mem) {
 		word(0x8D48 or (dst.rex shl 2))
 		writeMem(srcPos, src, dst.value, Width.NONE)
 	}
 
 
 
-	private fun encodeMoveImmToReg(dstIndex: Int, src: Long) {
-		val dstValue = dstIndex and 0b111
-		val dstRex = dstIndex shr 3
-		if(src == 0L) {
-			if(dstRex == 1) byte(0b0100_0101)
-			byte(0x31)
-			byte(0b11_000_000 or (dstValue shl 3) or dstValue)
-		} else if(src.isImm32) {
-
-		} else {
-			//
-			byte(0x48 or (dstRex))
-			byte(0xB8 + dstValue)
-			writer.i64(src)
+	private fun encodeMoveImmToReg(dst: Reg, src: Long) {
+		when {
+			src == 0L   -> rr32(0x31, dst, dst) // 31 XOR RM32_R32
+			src.isImm32 -> rr64(0xC7, Reg(0), dst).dword(src) // RW C7/0 MOV RM64_I32 (sign-extended)
+			else        -> word(0xB848 or dst.rex or (dst.value shl 8)).qword(src) // RW B8 MOV R64_I64
 		}
 	}
 
 
 
-	private fun encodeMoveRegToReg(srcPos: SrcPos?, dstIndex: Int, src: Reg) {
-		if(dstIndex == src.index) return
-
-		val dstValue = dstIndex and 0b111
-		val dstRex = dstIndex shr 3
-
-		if(src.type == OpType.R32) {
-			if(dstRex == 1 || src.rex == 1)
-				byte(0b0100_0000 or (src.rex shl 2) or dstRex)
-		} else if(src.type == OpType.R64) {
-			word(0x8948 or (src.rex shl 2) or dstRex)
-		} else {
-			err(srcPos, "Invalid register: $src")
+	private fun encodeMoveRegToReg(srcPos: SrcPos?, dst: Reg, src: Reg) {
+		when {
+			dst == src -> return
+			src.isR32  -> rr32(0x89, src, dst) // 89 MOV RM32_R32
+			src.isR64  -> rr64(0x89, src, dst) // RW 89 MOV RM64_R64
+			else       -> err(srcPos, "Invalid register: $src")
 		}
-
-		byte(0b11_000_000 or (src.value shl 3) or dstValue)
 	}
 
 
 
 	private fun encodeMoveRaxToStackRSP(disp: Int) {
-		// mov [rsp + disp], rax
-		if(disp.isImm8) {
-			dword(0x24448948)
-			byte(disp)
-		} else {
-			dword(0x24848948)
-			dword(disp)
-		}
+		if(disp.isImm8)
+			dword(0x24448948).byte(disp)  // mov [rsp + disp8], rax
+		else
+			dword(0x24848948).dword(disp) // mov [rsp + disp32], rax
 	}
 
 
+
 	private fun encodeMoveRaxToSym(srcPos: SrcPos?, src: VarNode) {
-		word(0x8848)
-		writeMem(srcPos, src.mem, 0, Width.NONE)
+		// Sign doesn't matter here
 		when(src.type.size) {
 			1    -> byte(0x88)
 			2    -> word(0x8866)
@@ -1118,48 +1106,31 @@ class Assembler(private val context: Context) {
 			8    -> word(0x8948)
 			else -> err(srcPos, "Invalid type size")
 		}
+		writeMem(srcPos, src.mem, 0, Width.NONE)
 	}
 
 
 
-	private fun encodeMoveSymToReg(srcPos: SrcPos?, dstIndex: Int, src: VarNode) {
+	private fun encodeMoveSymToReg(srcPos: SrcPos?, dst: Reg, src: VarNode) {
 		val type = src.type
+		val mem = src.mem!!
 
 		if(type is StringType) {
-			encodeMoveSymPtrToReg(srcPos, dstIndex, src.mem!!)
+			encodeMoveSymPtrToReg(srcPos, dst, mem)
 			return
 		}
 
 		val signed = if(type is IntType) type.signed else false
-		val dst = Reg.qwordRegs[dstIndex]
 
 		when(type.size) {
 			// unsigned/signed: movzx/movsx rcx, byte [src]
-			1 -> {
-				byte(0x48 or (dst.rex shl 2))
-				if(signed) word(0xBE0F) else word(0xB60F)
-				writeMem(srcPos, src.mem, dst.value, Width.NONE)
-			}
+			1 -> rm64(if(signed) 0xBE0F else 0xB60F, dst, mem)
 			// unsigned/signed: movzx/movsx rcx, word [src]
-			2 -> {
-				byte(0x48 or (dst.rex shl 2))
-				if(signed) word(0xBF0F) else word(0xB70F)
-				writeMem(srcPos, src.mem, dst.value, Width.NONE)
-			}
+			2 -> rm64(if(signed) 0xBF0F else 0xB70F, dst, mem)
 			// unsigned: mov ecx, [src]; signed: movsxd rcx, [src]
-			4 -> if(!signed) {
-				if(dst.rex != 0) byte(0b0100_0100)
-				byte(0x8B)
-				writeMem(srcPos, src.mem, dst.value, Width.NONE)
-			} else {
-				word(0x6348 or (dst.rex shl 2))
-				writeMem(srcPos, src.mem, dst.value, Width.NONE)
-			}
+			4 -> if(signed) rm64(0x63, dst, src.mem!!) else rm32(0x8B, dst, mem)
 			// unsigned/signed: mov rcx, [src]
-			8 -> {
-				word(0x8B48 or (dst.rex shl 2))
-				writeMem(srcPos, src.mem, dst.value, Width.NONE)
-			}
+			8 -> rm64(0x8B, dst, mem)
 			else -> err(srcPos, "Invalid type size")
 		}
 	}

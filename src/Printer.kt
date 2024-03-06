@@ -81,8 +81,8 @@ class Printer(private val context: Context) {
 				when(token.type) {
 					TokenType.NAME    -> appendLine(token.nameValue.string)
 					TokenType.STRING  -> appendLine("\"${token.stringValue.replace("\n", "\\n")}\"")
-					TokenType.INT     -> appendLine(token.intValue.toString())
-					TokenType.REG     -> appendLine(token.regValue.string)
+					TokenType.INT     -> appendLine(token.intValue)
+					TokenType.REG     -> appendLine(token.regValue)
 					TokenType.CHAR    -> appendLine(Char(token.intValue.toInt()).escape)
 					else              -> appendLine(token.type.string)
 				}
@@ -223,7 +223,7 @@ class Printer(private val context: Context) {
 	}
 
 	fun StringBuilder.appendExpr(node: Node) { when(node) {
-		is RegNode -> append(node.value.string)
+		is RegNode -> append(node.value.toString())
 		is IntNode -> append(node.value.toString())
 		is StringNode -> append("\"${node.value.printable}\"")
 		is UnNode -> { append(node.op.string); appendExpr(node.child) }
@@ -282,7 +282,7 @@ class Printer(private val context: Context) {
 					appendExpr(node.child!!)
 					append(']')
 				}
-				else -> append(node.reg.string)
+				else -> append(node.reg.toString())
 			}
 		}
 

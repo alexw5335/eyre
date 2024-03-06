@@ -27,6 +27,8 @@ class Parser(private val context: Context) {
 
 
 
+	private fun at(type: TokenType) = tokens[pos].type == type
+
 	private fun anon() = Name["\$${anonCount++}"]
 
 	private fun Node.addNode() = nodes.add(this)
@@ -454,6 +456,43 @@ class Parser(private val context: Context) {
 
 
 
+	private fun parseMemOp() {
+		val base: Reg
+		val index: Reg
+		var scale = 0L
+
+		if(tokens[pos].type == TokenType.REG) {
+			base = tokens[pos++].regValue
+			if(!base.isR64)
+				err("Invalid memory operand (only R64 allowed)")
+
+			if(tokens[pos].type == TokenType.STAR) {
+				if(tokens[++pos].type != TokenType.INT)
+					err("Invalid memory operand")
+				index = base
+				scale = tokens[pos++].intValue
+			} else if(tokens[pos].type == TokenType.PLUS && tokens[pos + 1].type == TokenType.REG) {
+				pos++
+				index = tokens[pos++].regValue
+				if(!index.isR64)
+					err("Invalid memory operand (only R64 allowed)")
+				if(tokens[pos++].type != TokenType.STAR || tokens[pos].type != TokenType.INT)
+					err("Invalid memory operand")
+				scale = tokens[pos++].intValue
+			}
+		}
+
+		if(scale !in 1..8)
+			err("Invalid memory operand scale")
+
+		val node = if(tokens[pos].type == TokenType.RBRACK)
+			parseExpr()
+		else
+			null
+	}
+
+
+
 	private fun parseOperand(): OpNode {
 		val token = tokens[pos]
 		val srcPos = token.srcPos()
@@ -472,7 +511,7 @@ class Parser(private val context: Context) {
 		} else if(token.type == TokenType.REG) {
 			pos++
 			val reg = token.regValue
-			OpNode(Base(srcPos), reg.type, reg.width, null, reg)
+			OpNode(Base(srcPos), reg.opType, reg.width, null, reg)
 		} else {
 			OpNode(Base(srcPos), OpType.IMM, Width.NONE, parseExpr(), Reg.NONE)
 		}

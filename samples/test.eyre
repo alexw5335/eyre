@@ -4,8 +4,5 @@ dllimport Kernel32.ExitProcess
 dllimport msvcrt.printf
 
 proc main {
-	var i: dword
-	i = 10
-	printf("TEST: %d\n", i)
 	ExitProcess()
 }

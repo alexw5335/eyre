@@ -130,6 +130,18 @@ class BinWriter(bytes: ByteArray) {
 		pos += 5
 	}
 
+	fun i48(value: Long) {
+		ensureCapacity(8)
+		Unsafe.instance.putLong(bytes, pos + 16L, value)
+		pos += 6
+	}
+
+	fun i56(value: Long) {
+		ensureCapacity(8)
+		Unsafe.instance.putLong(bytes, pos + 16L, value)
+		pos += 7
+	}
+
 	fun i64(value: Long) {
 		ensureCapacity(8)
 		Unsafe.instance.putLong(bytes, pos + 16L, value)
@@ -156,7 +168,6 @@ class BinWriter(bytes: ByteArray) {
 	fun i64(pos: Int, value: Long) = Unsafe.instance.putLong(bytes, pos + 16L, value)
 	fun f32(pos: Int, value: Float) = Unsafe.instance.putFloat(bytes, pos + 16L, value)
 	fun f64(pos: Int, value: Double) = Unsafe.instance.putDouble(bytes, pos + 16L, value)
-
 	fun i32(value: Long) = i32(value.toUInt().toInt())
 
 

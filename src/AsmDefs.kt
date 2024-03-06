@@ -73,67 +73,70 @@ enum class OpType {
 	R32,
 	R64,
 	MEM,
-	IMM,;
+	IMM;
 }
 
 
 
 @JvmInline
-value class ValueReg(val backing: Int) {
+value class Reg(val backing: Int) {
 
-	val typeOrdinal get() = backing shr 4
+	val width get() = Width.entries[backing shr 4]
+	val opType get() = OpType.entries[backing shr 4]
+	val type get() = backing shr 4
 	val index get() = backing and 15
 	val value get() = backing and 7
+	val rmValue get() = backing and 7
+	val regValue get() = (backing and 7) shl 3
+	val rRex get() = (backing shr 1) and 4
+	val xRex get() = (backing shr 2) and 2
+	val bRex get() = (backing shr 3) and 1
 	val rex get() = (backing shr 3) and 1
 	val isInvalidSibIndex get() = index == 4
 	val isImperfectSibBase get() = value == 5
 	val rex8 get() = value in 20..23
-	val asR8 get() = ValueReg(16 or (backing and 7))
-	val asR16 get() = ValueReg(32 or (backing and 7))
-	val asR32 get() = ValueReg(48 or (backing and 7))
-	val asR64 get() = ValueReg(64 or (backing and 7))
-	val string get() = lowercaseNames.getOrElse(backing) { "invalid" }
-	override fun toString() = string
-
+	val asR8 get() = Reg(16 or (backing and 7))
+	val asR16 get() = Reg(32 or (backing and 7))
+	val asR32 get() = Reg(48 or (backing and 7))
+	val asR64 get() = Reg(64 or (backing and 7))
+	val isR8 get() = backing shr 4 == 1
+	val isR16 get() = backing shr 4 == 2
+	val isR32 get() = backing shr 4 == 3
+	val isR64 get() = backing shr 4 == 4
+	override fun toString() = names.getOrElse(backing) { "invalid" }
 
 	companion object {
-		val argIndexes = intArrayOf(1, 2, 8, 9)
-		
-		private var counter = 16
-		private fun reg() = ValueReg(counter++)
-		val NONE = ValueReg(0)
+		fun r8(index: Int) = Reg(16 or index)
+		fun r16(index: Int) = Reg(32 or index)
+		fun r32(index: Int) = Reg(48 or index)
+		fun r64(index: Int) = Reg(64 or index)
+		fun argNone(index: Int) = when(index) { 0->Reg(1) 1->Reg(2) 2->Reg(8) 3->Reg(9) else->Reg(0) }
+		fun arg64(index: Int) = when(index) { 0->RCX 1->RDX 2->R8 3->R9 else->NONE }
+		val RANGE = IntRange(16, 79)
+		val NONE = Reg(0)
+		const val TYPE_R8 = 1
+		const val TYPE_R16 = 2
+		const val TYPE_R32 = 3
+		const val TYPE_R64 = 4
 
-		val AL   = ValueReg(16); val CL   = ValueReg(17); val DL   = ValueReg(18); val BL   = ValueReg(19)
-		val SPL  = ValueReg(20); val BPL  = ValueReg(21); val SIL  = ValueReg(22); val DIL  = ValueReg(23)
-		val R8B  = ValueReg(24); val R9B  = ValueReg(25); val R10B = ValueReg(26); val R11B = ValueReg(27)
-		val R12B = ValueReg(28); val R13B = ValueReg(29); val R14B = ValueReg(30); val R15B = ValueReg(31)
-		val AX   = ValueReg(32); val CX   = ValueReg(33); val DX   = ValueReg(34); val BX   = ValueReg(35)
-		val SP   = ValueReg(36); val BP   = ValueReg(37); val SI   = ValueReg(38); val DI   = ValueReg(39)
-		val R8W  = ValueReg(40); val R9W  = ValueReg(41); val R10W = ValueReg(42); val R11W = ValueReg(43)
-		val R12W = ValueReg(44); val R13W = ValueReg(45); val R14W = ValueReg(46); val R15W = ValueReg(47)
-		val EAX  = ValueReg(48); val ECX  = ValueReg(49); val EDX  = ValueReg(50); val EBX  = ValueReg(51)
-		val ESP  = ValueReg(52); val EBP  = ValueReg(53); val ESI  = ValueReg(54); val EDI  = ValueReg(55)
-		val R8D  = ValueReg(56); val R9D  = ValueReg(57); val R10D = ValueReg(58); val R11D = ValueReg(59)
-		val R12D = ValueReg(60); val R13D = ValueReg(61); val R14D = ValueReg(62); val R15D = ValueReg(63)
-		val RAX  = ValueReg(64); val RCX  = ValueReg(65); val RDX  = ValueReg(66); val RBX  = ValueReg(67)
-		val RSP  = ValueReg(68); val RBP  = ValueReg(69); val RSI  = ValueReg(70); val RDI  = ValueReg(71)
-		val R8   = ValueReg(72); val R9   = ValueReg(73); val R10  = ValueReg(74); val R11  = ValueReg(75)
-		val R12  = ValueReg(76); val R13  = ValueReg(77); val R14  = ValueReg(78); val R15  = ValueReg(79)
+		val AL   = Reg(16); val CL   = Reg(17); val DL   = Reg(18); val BL   = Reg(19)
+		val SPL  = Reg(20); val BPL  = Reg(21); val SIL  = Reg(22); val DIL  = Reg(23)
+		val R8B  = Reg(24); val R9B  = Reg(25); val R10B = Reg(26); val R11B = Reg(27)
+		val R12B = Reg(28); val R13B = Reg(29); val R14B = Reg(30); val R15B = Reg(31)
+		val AX   = Reg(32); val CX   = Reg(33); val DX   = Reg(34); val BX   = Reg(35)
+		val SP   = Reg(36); val BP   = Reg(37); val SI   = Reg(38); val DI   = Reg(39)
+		val R8W  = Reg(40); val R9W  = Reg(41); val R10W = Reg(42); val R11W = Reg(43)
+		val R12W = Reg(44); val R13W = Reg(45); val R14W = Reg(46); val R15W = Reg(47)
+		val EAX  = Reg(48); val ECX  = Reg(49); val EDX  = Reg(50); val EBX  = Reg(51)
+		val ESP  = Reg(52); val EBP  = Reg(53); val ESI  = Reg(54); val EDI  = Reg(55)
+		val R8D  = Reg(56); val R9D  = Reg(57); val R10D = Reg(58); val R11D = Reg(59)
+		val R12D = Reg(60); val R13D = Reg(61); val R14D = Reg(62); val R15D = Reg(63)
+		val RAX  = Reg(64); val RCX  = Reg(65); val RDX  = Reg(66); val RBX  = Reg(67)
+		val RSP  = Reg(68); val RBP  = Reg(69); val RSI  = Reg(70); val RDI  = Reg(71)
+		val R8   = Reg(72); val R9   = Reg(73); val R10  = Reg(74); val R11  = Reg(75)
+		val R12  = Reg(76); val R13  = Reg(77); val R14  = Reg(78); val R15  = Reg(79)
 
 		val names = arrayOf(
-			"NONE", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID",
-			"INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID", "INVALID",
-			"AL", "CL", "DL", "BL", "SPL", "BPL", "SIL", "DIL",
-			"R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B",
-			"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI",
-			"R8W", "R9W", "R10W", "R11W", "R12W", "R13W", "R14W", "R15W",
-			"EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI",
-			"R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D",
-			"RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI",
-			"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"
-		)
-
-		val lowercaseNames = arrayOf(
 			"none", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid",
 			"invalid", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid",
 			"al", "cl", "dl", "bl", "spl", "bpl", "sil", "dil",
@@ -145,65 +148,6 @@ value class ValueReg(val backing: Int) {
 			"rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
 			"r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
 		)
-	}
-
-}
-
-
-
-enum class Reg(val type: OpType, val index: Int) {
-
-	AL(OpType.R8, 0), CL(OpType.R8, 1), DL(OpType.R8, 2), BL(OpType.R8, 3),
-	SPL(OpType.R8, 4), BPL(OpType.R8, 5), SIL(OpType.R8, 6), DIL(OpType.R8, 7),
-	R8B(OpType.R8, 8), R9B(OpType.R8, 9), R10B(OpType.R8, 10), R11B(OpType.R8, 11),
-	R12B(OpType.R8, 12), R13B(OpType.R8, 13), R14B(OpType.R8, 14), R15B(OpType.R8, 15),
-
-	AX(OpType.R16, 0), CX(OpType.R16, 1), DX(OpType.R16, 2), BX(OpType.R16, 3),
-	SP(OpType.R16, 4), BP(OpType.R16, 5), SI(OpType.R16, 6), DI(OpType.R16, 7),
-	R8W(OpType.R16, 8), R9W(OpType.R16, 9), R10W(OpType.R16, 10), R11W(OpType.R16, 11),
-	R12W(OpType.R16, 12), R13W(OpType.R16, 13), R14W(OpType.R16, 14), R15W(OpType.R16, 15),
-
-	EAX(OpType.R32, 0), ECX(OpType.R32, 1), EDX(OpType.R32, 2), EBX(OpType.R32, 3),
-	ESP(OpType.R32, 4), EBP(OpType.R32, 5), ESI(OpType.R32, 6), EDI(OpType.R32, 7),
-	R8D(OpType.R32, 8), R9D(OpType.R32, 9), R10D(OpType.R32, 10), R11D(OpType.R32, 11),
-	R12D(OpType.R32, 12), R13D(OpType.R32, 13), R14D(OpType.R32, 14), R15D(OpType.R32, 15),
-
-	RAX(OpType.R64, 0), RCX(OpType.R64, 1), RDX(OpType.R64, 2), RBX(OpType.R64, 3),
-	RSP(OpType.R64, 4), RBP(OpType.R64, 5), RSI(OpType.R64, 6), RDI(OpType.R64, 7),
-	R8(OpType.R64, 8), R9(OpType.R64, 9), R10(OpType.R64, 10), R11(OpType.R64, 11),
-	R12(OpType.R64, 12), R13(OpType.R64, 13), R14(OpType.R64, 14), R15(OpType.R64, 15),
-	NONE(OpType.NONE, 0);
-	
-	val width = when(type) {
-		OpType.R8 -> Width.BYTE
-		OpType.R16 -> Width.WORD
-		OpType.R32 -> Width.DWORD
-		OpType.R64 -> Width.QWORD
-		else -> Width.NONE
-	}
-
-	val string = name.lowercase()
-	val value = (index and 0b111)
-	val rex = (index shr 3) and 1
-	val isInvalidIndex = index == 4
-	val isImperfectBase = value == 5
-	val rex8 = type == OpType.R8 && index in 4..7
-	val widthOrdinal = width.ordinal - 1
-
-	companion object {
-		val byteRegs = arrayOf(AL, CL, DL, BL, SPL, BPL, SIL, DIL, R8B, R9B, R10B, R11B, R12B, R13B, R14B, R15B)
-		val wordRegs = arrayOf(AX, CX, DX, BX, SP, BP, SI, DI, R8W, R9W, R10W, R11W, R12W, R13W, R14W, R15W)
-		val dwordRegs = arrayOf(EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI, R8D, R9D, R10D, R11D, R12D, R13D, R14D, R15D)
-		val qwordRegs = arrayOf(RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15)
-		val gpRegs = arrayOf(byteRegs, wordRegs, dwordRegs, qwordRegs)
-		val aRegs = arrayOf(AL, AX, EAX, RAX)
-		val cRegs = arrayOf(CL, CX, ECX, RCX)
-		val dRegs = arrayOf(DL, DX, EDX, RDX)
-		val r8Regs = arrayOf(R8B, R8W, R8D, R8)
-		val r9Regs = arrayOf(R9B, R9W, R9D, R9)
-		val argRegs = arrayOf(cRegs, dRegs, r8Regs, r9Regs)
-		val arg64Regs = arrayOf(RCX, RDX, R8, R9)
-		val argIndexes = intArrayOf(1, 2, 8, 9)
 	}
 
 }
