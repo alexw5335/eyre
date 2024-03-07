@@ -78,8 +78,7 @@ class RegNode(override val base: Base, override val reg: Reg) : OpNode {
 	override val width get() = reg.width
 }
 
-class MemNode(override val base: Base, val child: Node, val mem: MemOperand) : OpNode {
-	override val width get() = mem.width
+class MemNode(override val base: Base, override val width: Width, val child: Node) : OpNode {
 	override val reg get() = Reg.NONE
 }
 
@@ -175,6 +174,8 @@ class ForNode(override val base: Base, val range: Node) : Node, Sym {
 	lateinit var index: VarNode
 }
 
+class WhileNode(override val base: Base, val condition: Node): Node, Sym
+
 class DoWhileNode(override val base: Base) : Node, Sym {
 	lateinit var condition: Node
 }
@@ -216,10 +217,8 @@ class VarNode(
 	val proc: ProcNode?,
 	override var type: Type = UnchosenType,
 	var size: Int = 0,
-	var mem: VarLoc? = null,
-) : TypedSym {
-	val isLocal get() = proc != null
-}
+	var loc: VarLoc? = null,
+) : TypedSym
 
 class MemberNode(
 	override val base: Base,

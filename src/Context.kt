@@ -33,7 +33,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val linkRelocs = ArrayList<Reloc>()
 
-	val absRelocs = ArrayList<AbsReloc>()
+	val absRelocs = ArrayList<AbsReloc>() // Only 64-bit immediate operands and 64-bit variables can produce these
 
 	val ripRelocs = ArrayList<RelReloc>()
 

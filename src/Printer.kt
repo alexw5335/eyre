@@ -147,7 +147,12 @@ class Printer(private val context: Context) {
 
 		when(node) {
 			is DllImportNode -> appendLine("DLLIMPORT ${node.dllName} ${node.import.name}")
-
+			is WhileNode -> {
+				append("while(")
+				appendExpr(node.condition)
+				appendLine(")")
+				indent++
+			}
 			is InsNode -> {
 				append(node.mnemonic)
 				append(' ')
@@ -162,8 +167,8 @@ class Printer(private val context: Context) {
 						}
 					}
 				}
+				appendLine()
 			}
-
 			is ProcNode -> {
 				appendLine("proc ${node.fullName}")
 				indent++
@@ -223,7 +228,7 @@ class Printer(private val context: Context) {
 	}
 
 	fun StringBuilder.appendExpr(node: Node) { when(node) {
-		is RegNode -> append(node.value.toString())
+		is RegNode -> append(node.reg.toString())
 		is IntNode -> append(node.value.toString())
 		is StringNode -> append("\"${node.value.printable}\"")
 		is UnNode -> { append(node.op.string); appendExpr(node.child) }
@@ -231,6 +236,7 @@ class Printer(private val context: Context) {
 		is ArrayNode -> { appendExpr(node.left); append('['); appendExpr(node.right); append(']') }
 		is RefNode -> { appendExpr(node.left); append("::"); appendExpr(node.right) }
 		is NameNode -> append(node.value.string)
+		is ImmNode -> appendExpr(node.child)
 
 		is TypeNode -> {
 			append(node.names.joinToString(separator = "."))
@@ -264,26 +270,14 @@ class Printer(private val context: Context) {
 			append(')')
 		}
 
-		is OpNode -> {
-			when(node.type) {
-				OpType.IMM -> {
-					if(node.width != Width.NONE) {
-						append(node.width.string)
-						append(' ')
-					}
-					appendExpr(node.child!!)
-				}
-				OpType.MEM -> {
-					if(node.width != Width.NONE) {
-						append(node.width.string)
-						append(' ')
-					}
-					append('[')
-					appendExpr(node.child!!)
-					append(']')
-				}
-				else -> append(node.reg.toString())
+		is MemNode -> {
+			if(node.width != Width.NONE) {
+				append(node.width.string)
+				append(' ')
 			}
+			append('[')
+			appendExpr(node.child)
+			append(']')
 		}
 
 		else -> context.internalErr("Non-printable expression node: $node")

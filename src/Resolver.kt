@@ -21,6 +21,8 @@ class Resolver(private val context: Context) {
 		throw EyreError(srcPos, message)
 
 	private fun visit(file: SrcFile, block: (Node) -> Unit) {
+		if(file.invalid)
+			return
 		for(node in file.nodes) {
 			try {
 				block(node)
@@ -114,6 +116,7 @@ class Resolver(private val context: Context) {
 		is IfNode        -> pushScope(node)
 		is ProcNode      -> pushScope(node)
 		is DoWhileNode   -> pushScope(node)
+		is WhileNode     -> pushScope(node)
 		is ForNode       -> pushScope(node)
 
 		is VarNode ->
@@ -223,6 +226,10 @@ class Resolver(private val context: Context) {
 			pushScope(node)
 			resolveNode(node.condition)
 		}
+		is WhileNode -> {
+			pushScope(node)
+			resolveNode(node.condition)
+		}
 		is ForNode -> {
 			resolveNode(node.range)
 			pushScope(node)
@@ -236,7 +243,8 @@ class Resolver(private val context: Context) {
 			node.litSym = sym
 			context.stringLiterals.add(sym)
 		}
-		is OpNode -> node.child?.let(::resolveNode)
+		is MemNode -> resolveNode(node.child)
+		is ImmNode -> resolveNode(node.child)
 		is RegNode,
 		is LabelNode,
 		is DllImportNode,
@@ -279,10 +287,13 @@ class Resolver(private val context: Context) {
 		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
 		val count = resolveInt(node.right)
 		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
-		TODO()
-		//val sym = PosRefSym(receiver, type.baseType) { count.toInt() * type.baseType.size }
-		//node.sym = sym
-		//return sym
+		if(receiver.loc is GlobalVarLoc) {
+			val sym = PosRefSym(receiver.loc as Pos, type.baseType) { count.toInt() * type.baseType.size }
+			node.sym = sym
+			return sym
+		} else {
+			err(node.srcPos, "Not yet implemented")
+		}
 	}
 
 

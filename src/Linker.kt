@@ -244,8 +244,8 @@ class Linker(private val context: Context) {
 			is LabelNode    -> sym.addr.toLong()
 			is StringLitSym -> sym.addr.toLong()
 			is IntSym       -> sym.intValue
-			is VarNode      -> if(sym.mem is GlobalVarLoc)
-				(sym.mem as GlobalVarLoc).addr.toLong()
+			is VarNode      -> if(sym.loc is GlobalVarLoc)
+				(sym.loc as GlobalVarLoc).addr.toLong()
 			else
 				context.err(node.srcPos, "Only global variables allowed here")
 			else -> context.err(node.srcPos, "Invalid node: $node")
@@ -260,7 +260,6 @@ class Linker(private val context: Context) {
 			is NameNode      -> sym(node.sym)
 			is DotNode       -> sym(node.sym)
 			is ArrayNode     -> sym(node.sym)
-			is OpNode        -> resolveImmRec(node.child!!, regValid)
 			is RegNode       -> 0
 			else             -> context.err(node.srcPos, "Invalid immediate node: $node")
 		}
