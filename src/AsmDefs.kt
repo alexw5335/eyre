@@ -2,13 +2,15 @@ package eyre
 
 
 
-sealed interface Operand
 
-class RegOperand(var reg: Reg) : Operand
-
-class MemOperand(var width: Width, var base: Reg, var index: Reg, var scale: Int, var disp: Int) : Operand
-
-class ImmOperand(var value: Int)
+class MemOperand(
+	var width : Width = Width.NONE,
+	var base  : Reg = Reg.NONE,
+	var index : Reg = Reg.NONE,
+	var scale : Int = 0,
+	var disp  : Int = 0,
+	var rip   : Boolean = false
+)
 
 
 
@@ -91,26 +93,32 @@ value class Reg(val backing: Int) {
 
 	val width get() = Width.entries[backing shr 4]
 	val opType get() = OpType.entries[backing shr 4]
+
 	val type get() = backing shr 4
 	val index get() = backing and 15
 	val value get() = backing and 7
 	val rmValue get() = backing and 7
 	val regValue get() = (backing and 7) shl 3
+
+	val isInvalidSibIndex get() = index == 4
+	val isImperfectSibBase get() = value == 5
+
 	val rRex get() = (backing shr 1) and 4
 	val xRex get() = (backing shr 2) and 2
 	val bRex get() = (backing shr 3) and 1
 	val rex get() = (backing shr 3) and 1
-	val isInvalidSibIndex get() = index == 4
-	val isImperfectSibBase get() = value == 5
-	val rex8 get() = value in 20..23
+	val requiresRex get() = value in 20..23
+
 	val asR8 get() = Reg(16 or (backing and 7))
 	val asR16 get() = Reg(32 or (backing and 7))
 	val asR32 get() = Reg(48 or (backing and 7))
 	val asR64 get() = Reg(64 or (backing and 7))
+
 	val isR8 get() = backing shr 4 == 1
 	val isR16 get() = backing shr 4 == 2
 	val isR32 get() = backing shr 4 == 3
 	val isR64 get() = backing shr 4 == 4
+
 	override fun toString() = names.getOrElse(backing) { "invalid" }
 
 	companion object {

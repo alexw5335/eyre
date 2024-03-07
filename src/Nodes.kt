@@ -78,7 +78,12 @@ class RegNode(override val base: Base, override val reg: Reg) : OpNode {
 	override val width get() = reg.width
 }
 
-class MemNode(override val base: Base, override val width: Width, val child: Node) : OpNode {
+class MemNode(
+	override val base: Base,
+	val child: Node?,
+	val operand: MemOperand,
+) : OpNode {
+	override val width get() = operand.width
 	override val reg get() = Reg.NONE
 }
 
