@@ -417,14 +417,14 @@ class Assembler(private val context: Context) {
 
 
 	private fun addLinkReloc(width: Width, node: Node, offset: Int, rel: Boolean) =
-		context.linkRelocs.add(Reloc(section, writer.pos, node, width, offset, rel))
+		context.linkRelocs.add(LinkReloc(section, writer.pos, node, width, offset, rel))
 
-	private fun resolveMem(node: Node) {
-		base = Reg.NONE
-		index = Reg.NONE
-		scale = 0
+	private fun resolveMem(node: MemNode) {
 		relocs = 0
-		disp = resolveRec(node, true)
+		val disp = resolveRec(node, true)
+		if(!disp.isImm32) invalid()
+		node.operand.disp = disp.toInt()
+		node.operand.relocs = relocs
 	}
 
 	private fun resolveImm(node: Node): Long {
@@ -450,34 +450,18 @@ class Assembler(private val context: Context) {
 			}
 			else -> err(node.srcPos, "Invalid node: $node")
 		}
-
-		if(node is RefNode) return node.intSupplier?.invoke() ?: err(node.srcPos, "Invalid ref node")
-		if(node is StringNode) { relocs++; return 0 }
-		if(node is IntNode) return node.value
-		if(node is UnNode) return node.calc(regValid, ::resolveRec)
-		if(node is NameNode) return sym(node.sym)
-		if(node is DotNode) return sym(node.sym)
-		if(node is ArrayNode) return sym(node.sym)
-
-		if(node is BinNode) {
-			if(node.op == BinOp.MUL && node.left is RegNode && node.right is IntNode) {
-				if(index != Reg.NONE || !node.left.reg.isR64 || node.left.reg.isInvalidSibIndex)
-					err(node.srcPos, "Invalid index")
-				scale = node.right.value.toInt()
-				index = node.left.reg
-				return 0
-			}
-			return node.calc(regValid, ::resolveRec)
+		
+		return when(node) {
+			is RefNode -> node.intSupplier?.invoke() ?: err(node.srcPos, "Invalid ref node")
+			is StringNode -> { relocs++; return 0 }
+			is IntNode -> node.value
+			is UnNode -> node.calc(regValid, ::resolveRec)
+			is NameNode -> sym(node.sym)
+			is DotNode -> sym(node.sym)
+			is ArrayNode -> sym(node.sym)
+			is BinNode -> node.calc(regValid, ::resolveRec)
+			else -> err(node.srcPos, "Invalid node: $node")
 		}
-
-		if(node is RegNode) {
-			if(base != Reg.NONE || !node.reg.isR64)
-				err(node.srcPos, "Invalid base")
-			base = node.reg
-			return 0
-		}
-
-		err(node.srcPos, "Invalid node: $node")
 	}
 
 
@@ -506,6 +490,13 @@ class Assembler(private val context: Context) {
 		val w = ((1 shl width) shr 3) and (mask shr 2)
 		val value = (w shl 3) or (r.rex shl 2) or (x.rex shl 1) or b.rex
 		if(value != 0 || r.requiresRex || b.requiresRex)
+			byte(0x40 or value)
+	}
+
+	private fun writeMemRex(mask: Int, width: Int, r: Reg, mem: MemOperand) {
+		val w = ((1 shl width) shr 3) and (mask shr 2)
+		val value = (w shl 3) or (mem.index.rexX) or mem.base.rexB
+		if(value != 0 || r.requiresRex)
 			byte(0x40 or value)
 	}
 
@@ -659,7 +650,14 @@ class Assembler(private val context: Context) {
 		byte(opcode + (((mask and 1) and (1 shl width).inv()) shl 3) + op1.value)
 	}
 
-	private fun encode1M(opcode: Int, mask: Int, ext: Int, op1: MemNode, immWidth: Width) {
+	private fun encode1MSingle(opcode: Int, ext: Int, op1: MemOperand) {
+		if(op1.rip) {
+			writer.varLengthInt(opcode)
+			writeMem()
+		}
+	}
+
+	private fun encode1M(opcode: Int, mask: Int, ext: Int, op1: MemOperand, immWidth: Width) {
 		val width = op1.width.ordinal - 1
 		resolveMem(op1)
 		if(mask.countOneBits() != 1 && (1 shl width) and mask == 0) invalid()
@@ -669,7 +667,7 @@ class Assembler(private val context: Context) {
 		writeMem(op1, ext, immWidth)
 	}
 
-	private fun encode2RMMismatch(opcode: Int, mask: Int, op1: Reg, op2: OpNode, immWidth: Width) {
+	private fun encode2RMMismatch(opcode: Int, mask: Int, op1: Reg, op2: MemNode, immWidth: Width) {
 		val width = op1.type - 1
 		resolveMem(op2)
 		if((1 shl width) and mask == 0) invalid()
@@ -999,13 +997,13 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun rr64(opcode: Int, reg: Reg, rm: Reg) {
-		byte(0b0100_1000 or reg.rRex or rm.bRex)
+		byte(0b0100_1000 or reg.rexR or rm.rexB)
 		writer.varLengthInt(opcode)
 		byte(0b11_000_000 or reg.regValue or rm.rmValue)
 	}
 
 	private fun rr32(opcode: Int, reg: Reg, rm: Reg) {
-		val rex = 0b0100_0000 or reg.rRex or rm.bRex
+		val rex = 0b0100_0000 or reg.rexR or rm.rexB
 		if(rex != 0b0100_0000) byte(rex)
 		writer.varLengthInt(opcode)
 		byte(0b11_000_000 or reg.regValue or rm.rmValue)
@@ -1022,28 +1020,28 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun rm8(opcode: Int, reg: Reg, mem: VarLoc) {
-		val rex = 0b0100_0000 or reg.rRex
+		val rex = 0b0100_0000 or reg.rexR
 		if(rex != 0b0100_0000 || reg.requiresRex) byte(rex)
 		writer.varLengthInt(opcode)
 		writeVarMem(null, mem, reg.value, Width.NONE)
 	}
 
 	private fun rm16(opcode: Int, reg: Reg, mem: VarLoc) {
-		val rex = 0b0100_0000 or reg.rRex
+		val rex = 0b0100_0000 or reg.rexR
 		if(rex != 0b0100_0000) byte(rex)
 		writer.varLengthInt(opcode)
 		writeVarMem(null, mem, reg.value, Width.NONE)
 	}
 
 	private fun rm32(opcode: Int, reg: Reg, mem: VarLoc) {
-		val rex = 0b0100_0000 or reg.rRex
+		val rex = 0b0100_0000 or reg.rexR
 		if(rex != 0b0100_0000) byte(rex)
 		writer.varLengthInt(opcode)
 		writeVarMem(null, mem, reg.value, Width.NONE)
 	}
 
 	private fun rm64(opcode: Int, reg: Reg, mem: VarLoc) {
-		byte(0b0100_1000 or reg.rRex)
+		byte(0b0100_1000 or reg.rexR)
 		writer.varLengthInt(opcode)
 		writeVarMem(null, mem, reg.value, Width.NONE)
 	}

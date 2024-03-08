@@ -88,6 +88,7 @@ class MemNode(
 }
 
 class ImmNode(override val base: Base, val child: Node) : OpNode {
+	val operand = ImmOperand(0, 0L)
 	override val reg get() = Reg.NONE
 	override val width get() = Width.NONE
 }
@@ -198,7 +199,7 @@ class InsNode(
 	val mnemonic: Mnemonic,
 	val op1: OpNode?,
 	val op2: OpNode?,
-	val op3: OpNode?
+	val op3: OpNode?,
 ) : Node
 
 class ScopeEndNode(val sym: Sym) : Node {

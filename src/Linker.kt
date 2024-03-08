@@ -267,7 +267,7 @@ class Linker(private val context: Context) {
 
 	private fun resolveImm(node: Node) = resolveImmRec(node, true)
 
-	private fun Reloc.write() {
+	private fun LinkReloc.write() {
 		var value = resolveImm(node)
 		if(rel) value -= addr + width.bytes + offset
 		writer.at(pos) { writer.writeWidth(width, value) }

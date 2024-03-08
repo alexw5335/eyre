@@ -492,7 +492,7 @@ class Parser(private val context: Context) {
 		val child = if(tokens[pos].type == TokenType.RBRACK) null else parseExpr()
 		if(scale !in 0..8)
 			err(srcPos, "Invalid scale")
-		return MemNode(Base(srcPos), child, MemOperand(width, base, index, 0, 0, false))
+		return MemNode(Base(srcPos), child, MemOperand(width, base, index, 0, 0, 0, false))
 	}
 
 

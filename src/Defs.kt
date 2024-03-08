@@ -76,7 +76,7 @@ class AbsReloc(
 	val node: Node,
 ) : Pos
 
-class Reloc(
+class LinkReloc(
 	override val sec: Section,
 	override val disp: Int,
 	val node   : Node,

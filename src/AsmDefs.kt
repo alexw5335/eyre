@@ -2,14 +2,20 @@ package eyre
 
 
 
-
 class MemOperand(
-	var width : Width = Width.NONE,
-	var base  : Reg = Reg.NONE,
-	var index : Reg = Reg.NONE,
-	var scale : Int = 0,
-	var disp  : Int = 0,
-	var rip   : Boolean = false
+	var width  : Width = Width.NONE,
+	var base   : Reg = Reg.NONE,
+	var index  : Reg = Reg.NONE,
+	var scale  : Int = 0,
+	var disp   : Int = 0,
+	var rip    : Boolean = false
+)
+
+
+
+class ImmOperand(
+	var relocs: Int = 0,
+	var value: Long = 0
 )
 
 
@@ -103,9 +109,9 @@ value class Reg(val backing: Int) {
 	val isInvalidSibIndex get() = index == 4
 	val isImperfectSibBase get() = value == 5
 
-	val rRex get() = (backing shr 1) and 4
-	val xRex get() = (backing shr 2) and 2
-	val bRex get() = (backing shr 3) and 1
+	val rexR get() = (backing shr 1) and 4
+	val rexX get() = (backing shr 2) and 2
+	val rexB get() = (backing shr 3) and 1
 	val rex get() = (backing shr 3) and 1
 	val requiresRex get() = value in 20..23
 
