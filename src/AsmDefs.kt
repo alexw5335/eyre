@@ -23,15 +23,7 @@ class ImmOperand(
 	var value: Long = 0
 ) : Operand
 
-
-
-sealed interface VarLoc
-
-class GlobalVarLoc(override var sec: Section, override var disp: Int) : VarLoc, Pos
-
-class StackVarLoc(var disp: Int): VarLoc
-
-class RegVarLoc(val reg: Reg): VarLoc
+class RegOperand(val reg: Reg) : Operand
 
 
 

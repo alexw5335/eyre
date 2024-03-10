@@ -793,12 +793,21 @@ class Assembler(private val context: Context) {
 
 
 
+	private fun encodeParamMove(dstIndex: Int, src: Operand) {
+		val dst = if(dstIndex >= 4) Reg.RAX else Reg.arg64(dstIndex)
+
+		if(src is RegOperand) {
+			encodeMoveRegToReg(dst, src.reg)
+		} else if(src is MemOperand) {
+			encodeMoveSymToReg()
+		}
+	}
 	private fun handleCallNode(callNode: CallNode) {
 		for((i, n) in callNode.elements.withIndex()) {
-			val dst = Reg.arg64(i)
+			val dst = if(i >= 4) Reg.RAX else Reg.arg64(i)
 
 			if(n is RegNode) {
-				encodeMoveRegToReg(n.srcPos, dst, n.reg)
+				encodeMoveRegToReg(dst, n.reg)
 			} else if(n is SymNode) {
 				encodeMoveSymToReg(callNode.srcPos, dst, n.sym as? VarNode ?: invalid())
 			} else if(n is StringNode) {
@@ -1119,12 +1128,12 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun encodeMoveRegToReg(srcPos: SrcPos?, dst: Reg, src: Reg) {
+	private fun encodeMoveRegToReg(dst: Reg, src: Reg) {
 		when {
 			dst == src -> return
 			src.isR32  -> rr32(0x89, src, dst) // 89 MOV RM32_R32
 			src.isR64  -> rr64(0x89, src, dst) // RW 89 MOV RM64_R64
-			else       -> err(srcPos, "Invalid register: $src")
+			else       -> err("Invalid register: $src")
 		}
 	}
 
@@ -1201,7 +1210,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun encodeMoveSymToReg(srcPos: SrcPos?, dst: Reg, src: VarNode) {
+	private fun encodeMoveSymToReg(dst: Reg, src: VarNode) {
 		if(src.type is StringType) {
 			encodeMoveSymPtrToReg(dst, src.loc!!)
 			return
@@ -1217,7 +1226,7 @@ class Assembler(private val context: Context) {
 			2 -> rm64(if(isSigned(src.type)) 0xBF0F else 0xB70F, dst, src.loc!!)
 			4 -> if(isSigned(src.type)) rm64(0x63, dst, src.loc!!) else rm32(0x8B, dst, src.loc!!)
 			8 -> rm64(0x8B, dst, src.loc!!)
-			else -> err(srcPos, "Invalid type size")
+			else -> err("Invalid type size")
 		}
 	}
 

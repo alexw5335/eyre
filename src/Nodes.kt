@@ -224,7 +224,7 @@ class VarNode(
 	val proc: ProcNode?,
 	override var type: Type = UnchosenType,
 	var size: Int = 0,
-	var loc: VarLoc? = null,
+	var operand: Operand? = null
 ) : TypedSym
 
 class MemberNode(
@@ -277,13 +277,10 @@ Symbols/Types
 
 
 class PosRefSym(
-	val receiver: Pos,
+	val receiver: Sym,
 	override val type: Type,
 	val offsetSupplier: () -> Int
-) : AnonSym, Pos, TypedSym {
-	override val sec get() = receiver.sec
-	override val disp get() = receiver.disp + offsetSupplier()
-}
+) : AnonSym, TypedSym
 
 data object UnchosenType : Type {
 	override val base = Base()

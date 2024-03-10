@@ -189,8 +189,8 @@ class Resolver(private val context: Context) {
 		is EnumNode -> resolveEnum(node)
 		is VarNode -> {
 			when(val atNode = node.atNode) {
-				is RegNode -> node.loc = RegVarLoc(atNode.reg)
-				is MemNode -> node.loc =
+				is RegNode -> node.operand = RegOperand(atNode.reg)
+				else -> node.operand = MemOperand()
 			}
 
 			node.typeNode?.let(::resolveTypeNode)
@@ -249,7 +249,7 @@ class Resolver(private val context: Context) {
 			node.litSym = sym
 			context.stringLiterals.add(sym)
 		}
-		is MemNode -> node.child?.let(::resolveNode)
+		is MemNode -> resolveNode(node.child)
 		is ImmNode -> resolveNode(node.child)
 		is RegNode,
 		is LabelNode,
@@ -293,13 +293,14 @@ class Resolver(private val context: Context) {
 		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
 		val count = resolveInt(node.right)
 		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
-		if(receiver.loc is GlobalVarLoc) {
+		TODO()
+		/*if(receiver.loc is) {
 			val sym = PosRefSym(receiver.loc as Pos, type.baseType) { count.toInt() * type.baseType.size }
 			node.sym = sym
 			return sym
 		} else {
 			err(node.srcPos, "Not yet implemented")
-		}
+		}*/
 	}
 
 
