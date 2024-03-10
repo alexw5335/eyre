@@ -243,7 +243,7 @@ class Resolver(private val context: Context) {
 			node.litSym = sym
 			context.stringLiterals.add(sym)
 		}
-		is MemNode -> resolveNode(node.child)
+		is MemNode -> node.child?.let(::resolveNode)
 		is ImmNode -> resolveNode(node.child)
 		is RegNode,
 		is LabelNode,

@@ -62,25 +62,25 @@ class Dll(val name: Name) {
 	val imports = HashMap<Name, DllImport>()
 }
 
-class RelReloc(
-	val srcPos: SrcPos?,
+class RipReloc(
 	override val sec: Section,
 	override val disp: Int,
-	val sym: Pos,
-	val immWidth: Width
+	val reloc: Pos,
+	val relocDisp: Int,
+	val immWidth: Width // WARNING: immWidth might be QWORD
+) : Pos
+
+class RelReloc(
+	override val sec: Section,
+	override val disp: Int,
+	val width: Width,
+	val reloc: Pos,
+	val relocDisp: Int,
 ) : Pos
 
 class AbsReloc(
 	override val sec: Section,
 	override val disp: Int,
-	val node: Node,
-) : Pos
-
-class LinkReloc(
-	override val sec: Section,
-	override val disp: Int,
-	val node   : Node,
-	val width  : Width,
-	val offset : Int,
-	val rel    : Boolean
+	val reloc: Pos,
+	val relocDisp: Int,
 ) : Pos

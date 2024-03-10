@@ -41,11 +41,13 @@ class Linker(private val context: Context) {
 			}
 		}
 
-		for(reloc in context.linkRelocs)
-			reloc.write()
+		for(reloc in context.relRelocs) {
+			val value = reloc.reloc.addr + reloc.relocDisp - reloc.addr - reloc.width.bytes
+			writer.at(reloc.pos) { writer.writeWidth(reloc.width, value) }
+		}
 
 		for(reloc in context.ripRelocs) {
-			val value = reloc.sym.addr - (reloc.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
+			val value = reloc.reloc.addr + reloc.relocDisp - (reloc.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
 			writer.i32(reloc.pos, value)
 		}
 
@@ -205,15 +207,11 @@ class Linker(private val context: Context) {
 
 
 
-	// Relocations
-
-
-
 	private fun writeAbsRelocs(startRva: Int, writer: BinWriter) {
 		val pages = HashMap<Int, ArrayList<Int>>()
 
 		for(reloc in context.absRelocs) {
-			val value = resolveImm(reloc.node)
+			val value = reloc.reloc.addr + reloc.relocDisp
 			val rva = reloc.addr
 			val pageRva = (rva shr 12) shl 12
 			pages.getOrPut(pageRva, ::ArrayList).add(rva - pageRva)
@@ -233,44 +231,6 @@ class Linker(private val context: Context) {
 
 		val size = writer.pos - startPos
 		writeDataDir(5, startRva, size)
-	}
-
-
-
-	private fun resolveImmRec(node: Node, regValid: Boolean): Long {
-		fun sym(sym: Sym?): Long = when(sym) {
-			null            -> context.err(node.srcPos, "Unresolved symbol")
-			is ProcNode     -> sym.addr.toLong()
-			is LabelNode    -> sym.addr.toLong()
-			is StringLitSym -> sym.addr.toLong()
-			is IntSym       -> sym.intValue
-			is VarNode      -> if(sym.loc is GlobalVarLoc)
-				(sym.loc as GlobalVarLoc).addr.toLong()
-			else
-				context.err(node.srcPos, "Only global variables allowed here")
-			else -> context.err(node.srcPos, "Invalid node: $node")
-		}
-
-		return when(node) {
-			is RefNode       -> node.intSupplier?.invoke() ?: context.err(node.srcPos, "Invalid ref node")
-			is StringNode    -> node.litSym!!.addr.toLong()
-			is IntNode       -> node.value
-			is UnNode        -> node.calc(regValid, ::resolveImmRec)
-			is BinNode       -> node.calc(regValid, ::resolveImmRec)
-			is NameNode      -> sym(node.sym)
-			is DotNode       -> sym(node.sym)
-			is ArrayNode     -> sym(node.sym)
-			is RegNode       -> 0
-			else             -> context.err(node.srcPos, "Invalid immediate node: $node")
-		}
-	}
-
-	private fun resolveImm(node: Node) = resolveImmRec(node, true)
-
-	private fun LinkReloc.write() {
-		var value = resolveImm(node)
-		if(rel) value -= addr + width.bytes + offset
-		writer.at(pos) { writer.writeWidth(width, value) }
 	}
 
 

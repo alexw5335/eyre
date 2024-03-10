@@ -63,7 +63,6 @@ class Compiler(val context: Context) {
 
 	private fun compileInternal() {
 		IntTypes.ALL.forEach(context.symTable::add)
-
 		for(file in context.files) {
 			lexer.lex(file)
 			printer.appendTokens(file, lexer.tokens)
@@ -73,7 +72,6 @@ class Compiler(val context: Context) {
 			}
 		}
 		checkErrors()
-
 		for(file in context.files)
 			resolver.resolveFile(file)
 		checkErrors()

@@ -1,22 +1,26 @@
 package eyre
 
 
+sealed interface Operand
 
 class MemOperand(
-	var width  : Width = Width.NONE,
-	var base   : Reg = Reg.NONE,
-	var index  : Reg = Reg.NONE,
-	var scale  : Int = 0,
-	var disp   : Int = 0,
-	var rip    : Boolean = false
-)
-
-
+	var width : Width = Width.NONE,
+	var base  : Reg = Reg.NONE,
+	var index : Reg = Reg.NONE,
+	var scale : Int = 0,
+	var disp  : Int = 0,
+	var reloc : Pos? = null
+) : Operand {
+	companion object {
+		fun rip(reloc: Pos?, disp: Int) = MemOperand(reloc = reloc, disp = disp)
+		fun rbp(disp: Int) = MemOperand(base = Reg.RBP, disp = disp)
+	}
+}
 
 class ImmOperand(
-	var relocs: Int = 0,
+	var reloc: Pos? = null,
 	var value: Long = 0
-)
+) : Operand
 
 
 
@@ -27,6 +31,21 @@ class GlobalVarLoc(override var sec: Section, override var disp: Int) : VarLoc, 
 class StackVarLoc(var disp: Int): VarLoc
 
 
+
+enum class Prefix(val string: String) {
+	NONE("NP"),
+	P66("66"),
+	PF3("F3"),
+	PF2("F2"),
+	P9B("9B");
+}
+
+enum class Escape(val string: String?) {
+	NONE(""),
+	E0F("0F"),
+	E38("0F 38"),
+	E3A("0F 3A");
+}
 
 enum class Mnemonic {
 	ADD, OR, ADC, SBB, AND, SUB, XOR, CMP,
@@ -75,6 +94,7 @@ enum class Width(val bytes: Int) {
 	val string = name.lowercase()
 	val min: Long = if(bytes > 8) 0 else -(1L shl ((bytes shl 3) - 1))
 	val max: Long = if(bytes > 8) 0 else (1L shl ((bytes shl 3) - 1)) - 1
+	operator fun contains(value: Reg) = value.type == ordinal
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
 
@@ -113,6 +133,7 @@ value class Reg(val backing: Int) {
 	val rexX get() = (backing shr 2) and 2
 	val rexB get() = (backing shr 3) and 1
 	val rex get() = (backing shr 3) and 1
+	val hasRex get() = (backing and 0b1000) != 0
 	val requiresRex get() = value in 20..23
 
 	val asR8 get() = Reg(16 or (backing and 7))
@@ -120,10 +141,12 @@ value class Reg(val backing: Int) {
 	val asR32 get() = Reg(48 or (backing and 7))
 	val asR64 get() = Reg(64 or (backing and 7))
 
-	val isR8 get() = backing shr 4 == 1
-	val isR16 get() = backing shr 4 == 2
-	val isR32 get() = backing shr 4 == 3
-	val isR64 get() = backing shr 4 == 4
+	val isValid get() = backing >= TYPE_R8
+	val isNone get() = backing shr 4 == TYPE_NONE
+	val isR8 get() = backing shr 4 == TYPE_R8
+	val isR16 get() = backing shr 4 == TYPE_R16
+	val isR32 get() = backing shr 4 == TYPE_R32
+	val isR64 get() = backing shr 4 == TYPE_R64
 
 	override fun toString() = names.getOrElse(backing) { "invalid" }
 
@@ -136,6 +159,7 @@ value class Reg(val backing: Int) {
 		fun arg64(index: Int) = when(index) { 0->RCX 1->RDX 2->R8 3->R9 else->NONE }
 		val RANGE = IntRange(16, 79)
 		val NONE = Reg(0)
+		const val TYPE_NONE = 0
 		const val TYPE_R8 = 1
 		const val TYPE_R16 = 2
 		const val TYPE_R32 = 3

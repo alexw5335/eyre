@@ -31,15 +31,15 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val bssSec   = Section(3, ".bss", 0xC0_00_00_80U, null).also(sections::add)
 
-	val linkRelocs = ArrayList<LinkReloc>()
-
-	val absRelocs = ArrayList<AbsReloc>() // Only 64-bit immediate operands and 64-bit variables can produce these
-
-	val ripRelocs = ArrayList<RelReloc>()
-
 	var entryPoint: Pos? = null
 
 	val stringLiterals = ArrayList<StringLitSym>()
+
+	val relRelocs = ArrayList<RelReloc>()
+
+	val absRelocs = ArrayList<AbsReloc>()
+
+	val ripRelocs = ArrayList<RipReloc>()
 
 
 

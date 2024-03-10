@@ -460,39 +460,9 @@ class Parser(private val context: Context) {
 			}
 		}
 
+		val mem = op1 as? MemNode ?: op2 as? MemNode ?: op3 as? MemNode
 		expectNewline()
-		InsNode(Base(srcPos), mnemonic, op1, op2, op3).addNode()
-	}
-
-
-
-	private fun parseMemNode(width: Width): MemNode {
-		val srcPos = tokens[pos].srcPos()
-		var base = Reg.NONE
-		var index = Reg.NONE
-		var scale = 0L
-
-		if(tokens[pos].type == TokenType.REG) {
-			base = tokens[pos++].regValue
-			if(tokens[pos].type == TokenType.STAR) {
-				if(tokens[++pos].type != TokenType.INT)
-					err(srcPos, "Invalid memory operand")
-				base = Reg.NONE
-				index = base
-				scale = tokens[pos++].intValue
-			} else if(tokens[pos].type == TokenType.PLUS && tokens[pos + 1].type == TokenType.REG) {
-				pos++
-				index = tokens[pos++].regValue
-				if(tokens[pos++].type != TokenType.STAR || tokens[pos].type != TokenType.INT)
-					err(srcPos, "Invalid memory operand")
-				scale = tokens[pos++].intValue
-			}
-		}
-
-		val child = if(tokens[pos].type == TokenType.RBRACK) null else parseExpr()
-		if(scale !in 0..8)
-			err(srcPos, "Invalid scale")
-		return MemNode(Base(srcPos), child, MemOperand(width, base, index, 0, 0, 0, false))
+		InsNode(Base(srcPos), mnemonic, op1, op2, op3, mem).addNode()
 	}
 
 
@@ -504,10 +474,14 @@ class Parser(private val context: Context) {
 		return if(token.nameValue.type == Name.Type.WIDTH) {
 			pos++
 			expect(TokenType.LBRACK)
-			parseMemNode(token.nameValue.width)
+			val node = MemNode(Base(srcPos), token.nameValue.width, parseExpr())
+			expect(TokenType.RBRACK)
+			return node
 		} else if(token.type == TokenType.LBRACK) {
 			pos++
-			parseMemNode(Width.NONE)
+			val node = MemNode(Base(srcPos), Width.NONE, parseExpr())
+			expect(TokenType.RBRACK)
+			return node
 		} else if(token.type == TokenType.REG) {
 			RegNode(Base(srcPos), tokens[pos++].regValue)
 		} else {

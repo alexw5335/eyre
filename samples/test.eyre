@@ -4,10 +4,8 @@ dllimport Kernel32.ExitProcess
 dllimport msvcrt.printf
 
 proc main {
-	xor edi, edi
-	while(edi <= 20) {
-		printf("counter: %d\n", edi)
-		add edi, 1
-	}
-	ExitProcess()
+	sub rsp, 40
+	lea rcx, ["TEST"]
+	call printf
+	call ExitProcess
 }

@@ -224,6 +224,8 @@ class Printer(private val context: Context) {
 			is CallNode -> { appendExpr(node); appendLine() }
 			is ArrayNode -> { appendExpr(node); appendLine() }
 			is DotNode -> { appendExpr(node); appendLine() }
+			is BinNode -> { appendExpr(node); appendLine() }
+			else -> appendLine(node)
 		}
 	}
 
@@ -251,11 +253,13 @@ class Printer(private val context: Context) {
 		}
 
 		is BinNode -> {
+			append('(')
 			appendExpr(node.left)
 			append(' ')
 			append(node.op.string)
 			append(' ')
 			appendExpr(node.right)
+			append(')')
 		}
 
 		is CallNode -> {
@@ -275,6 +279,7 @@ class Printer(private val context: Context) {
 				append(node.width.string)
 				append(' ')
 			}
+
 			append('[')
 			appendExpr(node.child)
 			append(']')

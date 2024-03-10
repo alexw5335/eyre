@@ -80,15 +80,14 @@ class RegNode(override val base: Base, override val reg: Reg) : OpNode {
 
 class MemNode(
 	override val base: Base,
-	val child: Node?,
-	val operand: MemOperand,
+	override val width: Width,
+	val child: Node
 ) : OpNode {
-	override val width get() = operand.width
+	val operand = MemOperand(width = width)
 	override val reg get() = Reg.NONE
 }
 
 class ImmNode(override val base: Base, val child: Node) : OpNode {
-	val operand = ImmOperand(0, 0L)
 	override val reg get() = Reg.NONE
 	override val width get() = Width.NONE
 }
@@ -102,16 +101,16 @@ class IntNode(override val base: Base, val value: Long) : Node
 class StringNode(override val base: Base, val value: String, var litSym: StringLitSym? = null) : Node
 
 class UnNode(override val base: Base, val op: UnOp, val child: Node) : Node {
-	fun calc(function: (Node) -> Long): Long =
+	inline fun calc(function: (Node) -> Long): Long =
 		op.calc(function(child))
-	fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long =
+	inline fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long =
 		op.calc(function(child, op.regValid && regValid))
 }
 
 class BinNode(override val base: Base, val op: BinOp, val left: Node, val right: Node) : Node {
-	fun calc(function: (Node) -> Long): Long =
+	inline fun calc(function: (Node) -> Long): Long =
 		op.calc(function(left), function(right))
-	fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long =
+	inline fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long =
 		op.calc(function(left, op.leftRegValid && regValid), function(right, op.rightRegValid && regValid))
 }
 
@@ -200,6 +199,7 @@ class InsNode(
 	val op1: OpNode?,
 	val op2: OpNode?,
 	val op3: OpNode?,
+	val mem: MemNode?,
 ) : Node
 
 class ScopeEndNode(val sym: Sym) : Node {
