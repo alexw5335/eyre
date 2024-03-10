@@ -12,7 +12,8 @@ class MemOperand(
 	var reloc : Pos? = null
 ) : Operand {
 	companion object {
-		fun rip(reloc: Pos?, disp: Int) = MemOperand(reloc = reloc, disp = disp)
+		fun rip(reloc: Pos, disp: Int) = MemOperand(reloc = reloc, disp = disp)
+		fun rip(reloc: Pos) = MemOperand(reloc = reloc)
 		fun rbp(disp: Int) = MemOperand(base = Reg.RBP, disp = disp)
 	}
 }
@@ -29,6 +30,8 @@ sealed interface VarLoc
 class GlobalVarLoc(override var sec: Section, override var disp: Int) : VarLoc, Pos
 
 class StackVarLoc(var disp: Int): VarLoc
+
+class RegVarLoc(val reg: Reg): VarLoc
 
 
 
@@ -98,6 +101,12 @@ enum class Width(val bytes: Int) {
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
 
+	companion object {
+		fun fromBytes(bytes: Int) = when(bytes) {
+			1 -> BYTE 2 -> WORD 4 -> DWORD 8 -> QWORD else -> NONE
+		}
+	}
+
 }
 
 
@@ -120,6 +129,7 @@ value class Reg(val backing: Int) {
 	val width get() = Width.entries[backing shr 4]
 	val opType get() = OpType.entries[backing shr 4]
 
+	val size get() = backing shr 4 // size in bytes
 	val type get() = backing shr 4
 	val index get() = backing and 15
 	val value get() = backing and 7

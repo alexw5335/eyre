@@ -221,6 +221,23 @@ class Printer(private val context: Context) {
 				}
 				indent++
 			}
+			is VarNode -> {
+				append("var ")
+				append(node.fullName)
+				if(node.typeNode != null) {
+					append(": ")
+					appendExpr(node.typeNode)
+				}
+				if(node.atNode != null) {
+					append(" @ ")
+					appendExpr(node.atNode)
+				}
+				if(node.valueNode != null) {
+					append(" = ")
+					appendExpr(node.valueNode)
+				}
+				appendLine()
+			}
 			is CallNode -> { appendExpr(node); appendLine() }
 			is ArrayNode -> { appendExpr(node); appendLine() }
 			is DotNode -> { appendExpr(node); appendLine() }

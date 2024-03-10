@@ -354,11 +354,28 @@ class Parser(private val context: Context) {
 	private fun parseVar() {
 		val srcPos = tokens[pos++].srcPos()
 		val name = name()
+		val typeNode: TypeNode?
+		var atNode: Node? = null
 
-		val typeNode = if(tokens[pos].type == TokenType.COLON) {
+		if(tokens[pos].type == TokenType.COLON) {
 			pos++
-			parseType()
-		} else null
+			typeNode = parseType()
+			if(tokens[pos].type == TokenType.AT) {
+				pos++
+				if(tokens[pos].type == TokenType.REG) {
+					atNode = RegNode(Base(tokens[pos].srcPos()), tokens[pos].regValue)
+					pos++
+				} else if(tokens[pos].type == TokenType.LBRACK) {
+					pos++
+					atNode = MemNode(Base(tokens[pos].srcPos()), Width.NONE, parseExpr())
+					expect(TokenType.RBRACK)
+				} else {
+					err(srcPos, "Invalid variable location")
+				}
+			}
+		} else {
+			typeNode = null
+		}
 
 		val valueNode = if(tokens[pos].type == TokenType.SET) {
 			pos++
@@ -371,7 +388,7 @@ class Parser(private val context: Context) {
 				mod.inferredSize = valueNode.elements.size
 		}
 
-		VarNode(Base(srcPos, scope, name), typeNode, valueNode, currentProc).addNodeSym()
+		VarNode(Base(srcPos, scope, name), typeNode, atNode, valueNode, currentProc).addNodeSym()
 	}
 
 

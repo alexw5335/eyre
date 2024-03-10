@@ -188,7 +188,13 @@ class Resolver(private val context: Context) {
 		is StructNode -> resolveStruct(node)
 		is EnumNode -> resolveEnum(node)
 		is VarNode -> {
+			when(val atNode = node.atNode) {
+				is RegNode -> node.loc = RegVarLoc(atNode.reg)
+				is MemNode -> node.loc =
+			}
+
 			node.typeNode?.let(::resolveTypeNode)
+			node.atNode?.let(::resolveNode)
 			node.valueNode?.let(::resolveNode)
 			if(node.type is StringType) {
 				if(node.valueNode !is StringNode)

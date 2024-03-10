@@ -219,6 +219,7 @@ class ConstNode(
 class VarNode(
 	override val base: Base,
 	val typeNode: TypeNode?,
+	val atNode: Node?,
 	val valueNode: Node?,
 	val proc: ProcNode?,
 	override var type: Type = UnchosenType,

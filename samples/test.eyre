@@ -3,9 +3,9 @@ namespace eyre
 dllimport Kernel32.ExitProcess
 dllimport msvcrt.printf
 
+
 proc main {
 	sub rsp, 40
-	lea rcx, ["TEST"]
-	call printf
-	call ExitProcess
+	var myVar: dword @ [rsp - 32]
+	ExitProcess()
 }
