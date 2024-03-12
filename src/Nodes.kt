@@ -30,6 +30,7 @@ interface Sym : Node {
 	val parent get() = base.parent
 	val name get() = base.name
 	var resolved get() = base.resolved; set(value) { base.resolved = value }
+	val unResolved get() = !base.resolved
 }
 
 interface AnonSym : Sym {
@@ -88,6 +89,7 @@ class MemNode(
 }
 
 class ImmNode(override val base: Base, val child: Node) : OpNode {
+	val operand = ImmOperand()
 	override val reg get() = Reg.NONE
 	override val width get() = Width.NONE
 }
@@ -126,7 +128,7 @@ class RefNode(
 	val right: Node
 ) : Node {
 	var receiver: Sym? = null
-	var intSupplier: (() -> Long)? = null
+	var intValue: Long = 0L
 }
 
 class InitNode(
@@ -212,7 +214,7 @@ class NamespaceNode(override val base: Base) : Sym
 
 class ConstNode(
 	override val base: Base,
-	val valueNode: Node?,
+	val valueNode: Node,
 	override var intValue: Long = 0
 ) : Node, IntSym
 

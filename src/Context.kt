@@ -41,6 +41,8 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val ripRelocs = ArrayList<RipReloc>()
 
+	val constantNodes = ArrayList<Node>()
+
 
 
 	fun getDllImport(dllName: Name, name: Name): DllImport {
