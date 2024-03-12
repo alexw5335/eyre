@@ -20,26 +20,34 @@ class Resolver(private val context: Context) {
 	private fun err(srcPos: SrcPos?, message: String): Nothing =
 		throw EyreError(srcPos, message)
 
-	private fun err(node: Node, message: String): Nothing =
-		throw EyreError(node.srcPos, message)
-
 
 
 	fun resolveFile(file: SrcFile) {
-		if(file.invalid) return
+		if(file.resolved || file.invalid) return
 		scopeStack.clear()
+		file.resolving = true
 
 		try {
 			for(node in file.nodes) resolveNodeType(node)
 			for(node in file.nodes) resolveNode(node)
-			for(node in file.nodes) calculateNode(node)
 		} catch(e: EyreError) {
 			file.invalid = true
 			context.errors.add(e)
+			return
 		}
+
+		file.resolving = false
+		file.resolved = true
 	}
 
 
+
+	private fun resolveNodeFile(srcNode: Node, node: Node) {
+		val file = node.srcPos?.file ?: context.internalErr()
+		if(file.resolving)
+			err(srcNode.srcPos, "Cyclic resolution")
+		resolveFile(file)
+	}
 
 
 
@@ -132,12 +140,12 @@ class Resolver(private val context: Context) {
 
 
 	/*
-	Stage 2: Name resolution
+	Reference resolution
 	 */
 
 
 
-	private fun calculateTypeNode(node: TypeNode) {
+	private fun resolveTypeNode(node: TypeNode) {
 		var type = node.type
 		for(i in node.mods.size - 1 downTo 0) {
 			when(val mod = node.mods[i]) {
@@ -151,7 +159,7 @@ class Resolver(private val context: Context) {
 						array.count = mod.inferredSize
 					} else {
 						resolveNode(mod.sizeNode)
-						val count = calculateInt(mod.sizeNode)
+						val count = resolveInt(mod.sizeNode)
 						if(!count.isImm32) err(node.srcPos, "Array size out of bounds: $count")
 						array.count = count.toInt()
 						type = array.baseType
@@ -164,33 +172,17 @@ class Resolver(private val context: Context) {
 
 
 	private fun resolveNode(node: Node) { when(node) {
-		is ScopeEndNode  -> popScope()
+		is ScopeEndNode -> popScope()
 		is NamespaceNode -> pushScope(node)
-		is NameNode      -> node.sym = resolveName(node.srcPos, node.value)
-		is UnNode        -> resolveNode(node.child)
-		is DotNode       -> resolveDotNode(node)
-		is ArrayNode     -> resolveArrayNode(node)
-		is RefNode       -> node.receiver = resolveSymNode(node.left)
-		is ConstNode     -> resolveNode(node.valueNode)
-		is MemNode       -> resolveNode(node.child)
-		is ImmNode       -> resolveNode(node.child)
-		is StructNode    -> resolveStruct(node)
-
-		is EnumNode -> {
-			pushScope(node)
-			for(entry in node.entries)
-				entry.valueNode?.let(::resolveNode)
-			popScope()
-		}
-
+		is NameNode -> node.sym = resolveName(node.srcPos, node.value)
+		is UnNode -> resolveNode(node.child)
+		is DotNode -> resolveDotNode(node)
+		is ArrayNode -> resolveArrayNode(node)
+		is RefNode -> resolveRefNode(node)
+		is StructNode -> resolveStruct(node)
+		is EnumNode -> resolveEnum(node)
 		is VarNode -> {
-			when(val atNode = node.atNode) {
-				is RegNode -> node.operand = RegOperand(atNode.reg)
-				else -> node.operand = MemOperand()
-			}
-
 			node.typeNode?.let(::resolveTypeNode)
-			node.atNode?.let(::resolveNode)
 			node.valueNode?.let(::resolveNode)
 			if(node.type is StringType) {
 				if(node.valueNode !is StringNode)
@@ -208,6 +200,11 @@ class Resolver(private val context: Context) {
 		is BinNode -> {
 			resolveNode(node.left)
 			resolveNode(node.right)
+		}
+		is ConstNode -> {
+			resolveNode(node.valueNode)
+			node.intValue = resolveInt(node.valueNode)
+			node.resolved = true
 		}
 		is ProcNode -> {
 			if(node.name == Name.MAIN)
@@ -240,6 +237,8 @@ class Resolver(private val context: Context) {
 			node.litSym = sym
 			context.stringLiterals.add(sym)
 		}
+		is MemNode -> resolveNode(node.child)
+		is ImmNode -> resolveNode(node.child)
 		is RegNode,
 		is LabelNode,
 		is DllImportNode,
@@ -249,10 +248,47 @@ class Resolver(private val context: Context) {
 
 
 
-	private fun resolveTypeNode(node: TypeNode) {
-		for(mod in node.mods)
-			if(mod is TypeNode.ArrayMod && mod.sizeNode != null)
-				resolveNode(mod.sizeNode)
+	private fun resolveInt(node: Node): Long {
+		fun sym(sym: Sym?): Long {
+			if(sym == null)
+				err(node.srcPos, "Unresolved symbol")
+			if(!sym.resolved)
+				resolveNodeFile(node, sym)
+			if(sym is IntSym)
+				return sym.intValue
+			err(node.srcPos, "Invalid int node: $node, $sym")
+		}
+
+		return when(node) {
+			is IntNode  -> node.value
+			is UnNode   -> node.calc(::resolveInt)
+			is BinNode  -> node.calc(::resolveInt)
+			is NameNode -> sym(node.sym)
+			is DotNode  -> sym(node.sym)
+			is RefNode  -> {
+				if(!node.receiver!!.resolved)
+					resolveNodeFile(node, node.receiver!! as Node)
+				node.intSupplier?.invoke() ?: err(node.srcPos, "Invalid int node: $node")
+			}
+			else -> err(node.srcPos, "Invalid int node: $node")
+		}
+	}
+
+
+
+	private fun resolveArrayNode(node: ArrayNode): Sym {
+		val receiver = resolveSymNode(node.left) as? VarNode ?: err(node.srcPos, "Invalid receiver")
+		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
+		val count = resolveInt(node.right)
+		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
+		TODO()
+/*		if(receiver.loc is GlobalVarLoc) {
+			val sym = PosRefSym(receiver.loc as Pos, type.baseType) { count.toInt() * type.baseType.size }
+			node.sym = sym
+			return sym
+		} else {
+			err(node.srcPos, "Not yet implemented")
+		}*/
 	}
 
 
@@ -279,12 +315,69 @@ class Resolver(private val context: Context) {
 	}
 
 
-
 	private fun resolveSymNode(node: Node): Sym = when(node) {
 		is NameNode  -> resolveName(node.srcPos, node.value).also { node.sym = it }
 		is DotNode   -> resolveDotNode(node)
 		is ArrayNode -> resolveArrayNode(node)
 		else         -> err(node.srcPos, "Invalid receiver node: $node")
+	}
+
+	private fun resolveRefNode(node: RefNode) {
+		val right = (node.right as? NameNode)?.value
+			?: err(node.right.srcPos, "Invalid reference node: ${node.right}")
+
+		val receiver = resolveSymNode(node.left)
+		node.receiver = receiver
+
+		fun invalid(): Nothing = err(node.srcPos, "Invalid reference")
+
+		when(right) {
+			Name.COUNT -> when(receiver) {
+				is EnumNode -> node.intSupplier = { receiver.entries.size.toLong() }
+				else -> invalid()
+			}
+			Name.SIZE -> when(receiver) {
+				is StructNode  -> node.intSupplier = { receiver.size.toLong() }
+				is VarNode     -> node.intSupplier = { receiver.size.toLong() }
+				is EnumNode    -> node.intSupplier = { receiver.size.toLong() }
+				else -> invalid()
+			}
+			else -> invalid()
+		}
+	}
+
+
+	private fun resolveEnum(enum: EnumNode) {
+		pushScope(enum)
+
+		var current = 0L
+		var max = 0L
+
+		for(entry in enum.entries) {
+			entry.intValue = if(entry.valueNode != null) {
+				resolveNode(entry.valueNode)
+				resolveInt(entry.valueNode)
+			} else {
+				current
+			}
+
+			max = max.coerceAtLeast(entry.intValue)
+
+			current = entry.intValue + 1
+			entry.resolved = true
+		}
+
+		enum.resolved = true
+
+		enum.size = when {
+			max >= Short.MAX_VALUE -> 4
+			max >= Byte.MAX_VALUE -> 2
+			else -> 1
+		}
+
+		enum.alignment = enum.size
+
+		popScope()
 	}
 
 
@@ -295,212 +388,13 @@ class Resolver(private val context: Context) {
 				resolveTypeNode(member.typeNode)
 			else
 				resolveStruct(member.struct!!)
-	}
 
-
-
-
-	/*
-	Stage 3: Constant calculation
-	 */
-
-
-
-	// Assuming unresolved
-	private fun calculateNode(node: Node) {
-		when(node) {
-			is EnumNode -> calculateEnum(node)
-			is MemNode -> node.operand.disp = calculateMem(node, true, node.operand).toInt()
-			is ImmNode -> node.operand.value = calculateImm(node, true, node.operand)
-			is RefNode -> calculateRefNode(node)
-			is StructNode -> calculateStruct(node)
-			is ConstNode -> {
-				node.intValue = calculateInt(node.valueNode)
-				node.resolved = true
-			}
-		}
-	}
-
-
-
-	private var currentMem: MemOperand? = null
-	private var currentImm: ImmOperand? = null
-
-	private fun calculateImm(node: Node, regValid: Boolean, imm: ImmOperand): Long {
-		fun reloc(pos: Pos): Long {
-			if(imm.reloc != null || !regValid)
-				err(node, "Only one relocation allowed")
-			imm.reloc = pos
-			return 0
-		}
-
-		fun sym(sym: Sym?): Long = when(sym) {
-			null            -> err(node, "Invalid symbol: $sym")
-			is IntSym       -> sym.intValue
-			is ProcNode     -> reloc(sym)
-			is LabelNode    -> reloc(sym)
-			is StringLitSym -> reloc(sym)
-			else            -> err(node, "Invalid symbol: $sym")
-		}
-
-		return when(node) {
-			is IntNode    -> node.value
-			is UnNode     -> node.calc(regValid) { n, v -> calculateImm(n, v, imm) }
-			is BinNode    -> node.calc(regValid) { n, v -> calculateImm(n, v, imm) }
-			is DotNode    -> sym(node.sym)
-			is NameNode   -> sym(node.sym)
-			is StringNode -> sym(node.litSym)
-			is ArrayNode  -> sym(node.sym)
-			is RefNode    -> { if(node.receiver!!.unResolved) calculateRefNode(node); node.intValue }
-			else          -> err(node, "Invalid node: $node")
-		}
-	}
-
-
-
-	private fun calculateMem(node: Node, regValid: Boolean, mem: MemOperand): Long {
-		fun reloc(pos: Pos): Long {
-			if(mem.reloc != null || !regValid)
-				err(node, "Only one relocation allowed")
-			mem.reloc = pos
-			return 0
-		}
-
-		fun sym(sym: Sym?): Long = when(sym) {
-			null            -> err(node, "Invalid symbol: $sym")
-			is IntSym       -> sym.intValue
-			is ProcNode     -> reloc(sym)
-			is LabelNode    -> reloc(sym)
-			is StringLitSym -> reloc(sym)
-			is VarNode      -> TODO()
-			else            -> err(node, "Invalid symbol: $sym")
-		}
-
-		return when(node) {
-			is IntNode -> node.value
-			is UnNode -> node.calc(regValid) { n, v -> calculateMem(n, v, mem) }
-			is RegNode -> {
-				if(mem.base.isValid || !regValid)
-					err(node, "Invalid memory operand")
-				mem.base = node.reg
-				0
-			}
-			is BinNode -> if(node.op == BinOp.MUL && node.left is RegNode && node.right is IntNode) {
-				if(mem.index.isValid || !regValid)
-					err(node, "Invalid memory operand")
-				mem.index = node.left.reg
-				mem.scale = node.right.value.toInt()
-				0
-			} else
-				node.calc(regValid) { n, v -> calculateMem(n, v, mem) }
-			is DotNode    -> sym(node.sym)
-			is NameNode   -> sym(node.sym)
-			is StringNode -> sym(node.litSym)
-			is ArrayNode  -> sym(node.sym)
-			is RefNode    -> { if(node.receiver!!.unResolved) calculateRefNode(node); node.intValue }
-			else          -> err(node, "Invalid node: $node")
-
-		}
-	}
-
-
-
-
-	private fun calculateInt(node: Node): Long {
-		fun sym(sym: Sym?): Long {
-			if(sym == null) err(node.srcPos, "Unresolved symbol")
-			if(sym !is IntSym) err(node.srcPos, "Invalid symbol")
-			if(!sym.resolved) calculateNode(sym)
-			return sym.intValue
-		}
-
-		return when(node) {
-			is IntNode  -> node.value
-			is UnNode   -> node.calc(::calculateInt)
-			is BinNode  -> node.calc(::calculateInt)
-			is NameNode -> sym(node.sym)
-			is DotNode  -> sym(node.sym)
-			is RefNode  -> { if(node.receiver!!.unResolved) calculateRefNode(node); node.intValue }
-			else        -> err(node.srcPos, "Invalid int node: $node")
-		}
-	}
-
-
-
-	private fun calculateRefNode(node: RefNode) {
-		val right = (node.right as? NameNode)?.value ?: err(node, "Expecting name")
-		val receiver = node.receiver!!
-		if(!receiver.resolved) calculateNode(receiver)
-		when(right) {
-			Name.COUNT -> when(receiver) {
-				is EnumNode -> node.intValue = receiver.entries.size.toLong()
-				else -> err(node, "::count not valid for receiver $receiver")
-			}
-			Name.SIZE -> when(receiver) {
-				is StructNode  -> node.intValue = receiver.size.toLong()
-				is VarNode     -> node.intValue = receiver.size.toLong()
-				is EnumNode    -> node.intValue = receiver.size.toLong()
-				else -> err(node, "::size not valid for receiver $receiver")
-			}
-			else -> err(node, "Invalid reference ::$right")
-		}
-	}
-
-
-
-	private fun resolveArrayNode(node: ArrayNode): Sym {
-		val receiver = resolveSymNode(node.left) as? VarNode ?: err(node.srcPos, "Invalid receiver")
-		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
-		val count = calculateInt(node.right)
-		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
-		TODO()
-		/*if(receiver.loc is) {
-			val sym = PosRefSym(receiver.loc as Pos, type.baseType) { count.toInt() * type.baseType.size }
-			node.sym = sym
-			return sym
-		} else {
-			err(node.srcPos, "Not yet implemented")
-		}*/
-	}
-
-
-
-	private fun calculateEnum(enum: EnumNode) {
-		var current = 0L
-		var max = 0L
-
-		for(entry in enum.entries) {
-			entry.intValue = if(entry.valueNode != null)
-				calculateInt(entry.valueNode)
-			else
-				current
-
-			max = max.coerceAtLeast(entry.intValue)
-
-			current = entry.intValue + 1
-			entry.resolved = true
-		}
-
-		enum.size = when {
-			max >= Short.MAX_VALUE -> 4
-			max >= Byte.MAX_VALUE -> 2
-			else -> 1
-		}
-
-		enum.alignment = enum.size
-		enum.resolved = true
-	}
-
-
-
-	private fun calculateStruct(struct: StructNode) {
 		var structSize = 0
 		var structAlignment = 0
 
 		for((index, member) in struct.members.withIndex()) {
 			val type = member.type
 			member.index = index
-			member.typeNode?.let(::calculateTypeNode)
 
 			if(struct.isUnion) {
 				member.offset = 0

@@ -21,6 +21,8 @@ sealed class SrcFile(val name: String) {
 	val nodes = ArrayList<Node>()
 	var lineCount = 0
 	var invalid = false
+	var resolving = false
+	var resolved = false
 	abstract fun codeSize(): Int
 	abstract fun readCode(dst: CharArray)
 }

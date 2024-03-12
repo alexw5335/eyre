@@ -128,7 +128,7 @@ class RefNode(
 	val right: Node
 ) : Node {
 	var receiver: Sym? = null
-	var intValue: Long = 0L
+	var intSupplier: (() -> Long)? = null
 }
 
 class InitNode(
@@ -226,7 +226,7 @@ class VarNode(
 	val proc: ProcNode?,
 	override var type: Type = UnchosenType,
 	var size: Int = 0,
-	var operand: Operand? = null
+	var loc: VarLoc? = null
 ) : TypedSym
 
 class MemberNode(

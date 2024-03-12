@@ -197,18 +197,35 @@ class Parser(private val context: Context) {
 
 
 	private fun parseFor() {
-		/*val srcPos = tokens[pos++].srcPos()
+		val srcPos = tokens[pos++].srcPos()
 		expect(TokenType.LPAREN)
+
 		val indexName = name()
+		val indexAtNode = if(tokens[pos].type == TokenType.AT) {
+			pos++
+			parseAtom()
+		} else null
+
 		expect(TokenType.COMMA)
 		val range = parseExpr()
 		expect(TokenType.RPAREN)
 		val node = ForNode(Base(srcPos, scope, anon()), range)
 		node.addNode()
-		val index = VarNode(Base(srcPos, node, indexName), null, null, IntTypes.DWORD, 4)
+
+		val index = VarNode(
+			Base(srcPos, node, indexName),
+			null,
+			indexAtNode,
+			null,
+			currentProc,
+			IntTypes.DWORD,
+			4,
+			null
+		)
+
 		index.addSym()
 		node.index = index
-		parseScopeOrExpr(node)*/
+		parseScopeOrExpr(node)
 	}
 
 
@@ -362,16 +379,9 @@ class Parser(private val context: Context) {
 			typeNode = parseType()
 			if(tokens[pos].type == TokenType.AT) {
 				pos++
-				if(tokens[pos].type == TokenType.REG) {
-					atNode = RegNode(Base(tokens[pos].srcPos()), tokens[pos].regValue)
-					pos++
-				} else if(tokens[pos].type == TokenType.LBRACK) {
-					pos++
-					atNode = MemNode(Base(tokens[pos].srcPos()), Width.NONE, parseExpr())
-					expect(TokenType.RBRACK)
-				} else {
-					err(srcPos, "Invalid variable location")
-				}
+				atNode = parseAtom()
+				if(currentProc == null)
+					err(srcPos, "Explicit variable location only allowed in functions")
 			}
 		} else {
 			typeNode = null
@@ -570,13 +580,13 @@ class Parser(private val context: Context) {
 				pos++
 				InitNode(Base(srcPos), elements)
 			}
-
+			TokenType.LBRACK -> MemNode(Base(srcPos), Width.NONE, parseExpr()).also { expect(TokenType.RBRACK) }
+			TokenType.LPAREN -> parseExpr().also { expect(TokenType.RPAREN) }
 			TokenType.REG    -> RegNode(base, token.regValue)
 			TokenType.NAME   -> NameNode(base, token.nameValue)
 			TokenType.INT    -> IntNode(base, token.intValue)
 			TokenType.STRING -> StringNode(base, token.stringValue)
 			TokenType.CHAR   -> IntNode(base, token.intValue)
-			TokenType.LPAREN -> parseExpr().also { expect(TokenType.RPAREN) }
 			else -> {
 				val op = token.type.unOp ?: err(srcPos, "Invalid atom: $token")
 				if(op.precedence < precedence) {

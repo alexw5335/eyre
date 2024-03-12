@@ -27,6 +27,16 @@ class RegOperand(val reg: Reg) : Operand
 
 
 
+sealed interface VarLoc
+
+class GlobalVarLoc(override var sec: Section, override var disp: Int) : VarLoc, Pos
+
+class RegVarLoc(var reg: Reg) : VarLoc
+
+class MemVarLoc(var operand: MemOperand) : VarLoc
+
+
+
 enum class Prefix(val string: String) {
 	NONE("NP"),
 	P66("66"),
