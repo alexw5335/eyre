@@ -4,8 +4,7 @@ dllimport Kernel32.ExitProcess
 dllimport msvcrt.printf
 
 proc main {
-	for(a @ rsp, 0.. 10) {
-
-	}
+	for(a, 0..10)
+		printf("%d\n", a)
 	ExitProcess()
 }
