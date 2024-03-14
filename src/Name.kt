@@ -37,6 +37,7 @@ class Name(val id: Int, val string: String) {
 		val MAIN = get("main")
 		val SIZE = get("size")
 		val COUNT = get("count")
+		val OFFSET = get("offset")
 
 		init {
 			for(width in Width.entries)

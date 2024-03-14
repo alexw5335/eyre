@@ -43,6 +43,9 @@ class Parser(private val context: Context) {
 	private fun err(srcPos: SrcPos?, message: String): Nothing =
 		throw EyreError(srcPos, message)
 
+	private fun err(node: Node, message: String): Nothing =
+		throw EyreError(node.srcPos, message)
+
 	private fun err(message: String): Nothing =
 		throw EyreError(tokens[pos].srcPos(), message)
 
@@ -218,12 +221,13 @@ class Parser(private val context: Context) {
 			indexAtNode,
 			null,
 			currentProc,
+			determineVarLoc(indexAtNode),
 			IntTypes.DWORD,
-			4,
-			null
+			4
 		)
 
 		index.addSym()
+		currentProc!!.locals.add(index)
 		node.index = index
 		parseScopeOrExpr(node)
 	}
@@ -368,6 +372,16 @@ class Parser(private val context: Context) {
 
 
 
+	private fun determineVarLoc(atNode: Node?): VarLoc = when {
+		currentProc == null -> GlobalVarLoc(Section.NULL, 0)
+		atNode == null      -> StackVarLoc(0)
+		atNode is RegNode   -> RegVarLoc(atNode.reg)
+		atNode is MemNode   -> MemVarLoc(MemOperand())
+		else                -> err(atNode, "Could not determine variable storage type")
+	}
+
+
+
 	private fun parseVar() {
 		val srcPos = tokens[pos++].srcPos()
 		val name = name()
@@ -398,7 +412,10 @@ class Parser(private val context: Context) {
 				mod.inferredSize = valueNode.elements.size
 		}
 
-		VarNode(Base(srcPos, scope, name), typeNode, atNode, valueNode, currentProc).addNodeSym()
+		val loc = determineVarLoc(atNode)
+		val node = VarNode(Base(srcPos, scope, name), typeNode, atNode, valueNode, currentProc, loc)
+		node.addNodeSym()
+		currentProc?.locals?.add(node)
 	}
 
 

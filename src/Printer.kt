@@ -251,7 +251,6 @@ class Printer(private val context: Context) {
 		is IntNode -> append(node.value.toString())
 		is StringNode -> append("\"${node.value.printable}\"")
 		is UnNode -> { append(node.op.string); appendExpr(node.child) }
-		is DotNode -> { appendExpr(node.left); append('.'); appendExpr(node.right) }
 		is ArrayNode -> { appendExpr(node.left); append('['); appendExpr(node.right); append(']') }
 		is RefNode -> { appendExpr(node.left); append("::"); appendExpr(node.right) }
 		is NameNode -> append(node.value.string)
@@ -267,6 +266,14 @@ class Printer(private val context: Context) {
 					append(']')
 				}
 			}
+		}
+
+		is DotNode -> {
+			append('(')
+			appendExpr(node.left)
+			append('.')
+			appendExpr(node.right)
+			append(')')
 		}
 
 		is BinNode -> {

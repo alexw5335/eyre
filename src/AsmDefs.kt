@@ -1,7 +1,6 @@
 package eyre
 
 
-sealed interface Operand
 
 class MemOperand(
 	var width : Width = Width.NONE,
@@ -10,29 +9,33 @@ class MemOperand(
 	var scale : Int = 0,
 	var disp  : Int = 0,
 	var reloc : Pos? = null
-) : Operand {
+) {
 	companion object {
 		fun rip(reloc: Pos, disp: Int) = MemOperand(reloc = reloc, disp = disp)
 		fun rip(reloc: Pos) = MemOperand(reloc = reloc)
 		fun rbp(disp: Int) = MemOperand(base = Reg.RBP, disp = disp)
+		fun rsp(disp: Int) = MemOperand(base = Reg.RSP, disp = disp)
 	}
 }
+
+
 
 class ImmOperand(
 	var reloc: Pos? = null,
 	var value: Long = 0
-) : Operand
-
-class RegOperand(val reg: Reg) : Operand
+)
 
 
 
+/**
+ * The storage type of a variable should be determined during parsing. The parameters of [VarLoc] subclasses should be
+ * mutable so that the contents can be filled in during assembly (except for [RegVarLoc], which can be determined
+ * immediately).
+ */
 sealed interface VarLoc
-
 class GlobalVarLoc(override var sec: Section, override var disp: Int) : VarLoc, Pos
-
-class RegVarLoc(var reg: Reg) : VarLoc
-
+class RegVarLoc(val reg: Reg) : VarLoc
+class StackVarLoc(var disp: Int) : VarLoc
 class MemVarLoc(var operand: MemOperand) : VarLoc
 
 
@@ -160,9 +163,32 @@ value class Reg(val backing: Int) {
 	val isR32 get() = backing shr 4 == TYPE_R32
 	val isR64 get() = backing shr 4 == TYPE_R64
 
+	val isVolatile get() = (volatileFlags and (1 shl index)) != 0
+	val isNonVolatile get() = (volatileFlags and (1 shl index)) == 0
+
 	override fun toString() = names.getOrElse(backing) { "invalid" }
 
+	/*
+		0    rax   eax    ax     al     ah    volatile
+		1    rcx   ecx    cx     cl     bh    volatile
+		2    rdx   edx    dx     dl     ch    volatile
+		3    rbx   ebx    bx     bl     dh    non-nolatile
+		4    rsp   esp    sp     spl          non-volatile
+		5    rbp   ebp    bp     bpl          non-volatile
+		6    rsi   esi    si     sil          non-volatile
+		7    rdi   edi    di     dil          non-volatile
+		8    r8    r8d    r8w    r8b          volatile
+		9    r9    r9d    r9w    r9b          volatile
+		10   r10   r10d   r10w   r10b         volatile
+		11   r11   r11d   r11w   r11b         volatile
+		12   r12   r12d   r12w   r12b         non-volatile
+		13   r13   r13d   r13w   r13b         non-volatile
+		14   r14   r14d   r14w   r14b         non-volatile
+		15   r15   r15d   r15w   r15b         non-volatile
+	 */
 	companion object {
+		val volatileFlags = 0b00001111_00000111
+
 		fun r8(index: Int) = Reg(16 or index)
 		fun r16(index: Int) = Reg(32 or index)
 		fun r32(index: Int) = Reg(48 or index)

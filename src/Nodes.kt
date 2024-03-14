@@ -140,15 +140,20 @@ class ArrayNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node,
-	override var sym: Sym? = null
-) : SymNode
+) : Node {
+	var receiver: VarNode? = null
+	var type: Type? = null
+}
 
 class DotNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node,
-	override var sym: Sym? = null
-) : SymNode
+	var sym: Sym? = null,
+	var isAccess: Boolean = false
+) : Node
+
+class SymChain(val list: List<Node> = ArrayList())
 
 class TypeNode(
 	override val base: Base,
@@ -224,9 +229,9 @@ class VarNode(
 	val atNode: Node?,
 	val valueNode: Node?,
 	val proc: ProcNode?,
+	val loc: VarLoc,
 	override var type: Type = UnchosenType,
 	var size: Int = 0,
-	var loc: VarLoc? = null
 ) : TypedSym
 
 class MemberNode(
@@ -262,12 +267,8 @@ class EnumNode(
 ) : Node, Type
 
 class ProcNode(override val base: Base, var size: Int = 0) : PosSym {
+	val locals = ArrayList<VarNode>()
 	var mostParams = 0
-	var paramsStackSize = 0
-	var paramsStackPos = 0
-	var localsStackSize = 0
-	var regsStackSize = 0
-	var stackSize = 0
 }
 
 
@@ -277,12 +278,6 @@ Symbols/Types
  */
 
 
-
-class PosRefSym(
-	val receiver: Sym,
-	override val type: Type,
-	val offsetSupplier: () -> Int
-) : AnonSym, TypedSym
 
 data object UnchosenType : Type {
 	override val base = Base()

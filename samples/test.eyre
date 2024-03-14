@@ -3,8 +3,18 @@ namespace eyre
 dllimport Kernel32.ExitProcess
 dllimport msvcrt.printf
 
+struct Vec {
+	dword x
+	dword y
+}
+
+var vec: Vec
+
 proc main {
-	for(a, 0..10)
-		printf("%d\n", a)
+	var vec: Vec
+	mov dword [vec.y], 10
+	mov edx, [vec.y]
+	lea rcx, ["%d\n"]
+	call printf
 	ExitProcess()
 }

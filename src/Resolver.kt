@@ -20,6 +20,9 @@ class Resolver(private val context: Context) {
 	private fun err(srcPos: SrcPos?, message: String): Nothing =
 		throw EyreError(srcPos, message)
 
+	private fun err(node: Node, message: String): Nothing =
+		throw EyreError(node.srcPos, message)
+
 
 
 	fun resolveFile(file: SrcFile) {
@@ -264,7 +267,7 @@ class Resolver(private val context: Context) {
 			is UnNode   -> node.calc(::resolveInt)
 			is BinNode  -> node.calc(::resolveInt)
 			is NameNode -> sym(node.sym)
-			is DotNode  -> sym(node.sym)
+			//is DotNode  -> sym(node.sym)
 			is RefNode  -> {
 				if(!node.receiver!!.resolved)
 					resolveNodeFile(node, node.receiver!! as Node)
@@ -276,62 +279,74 @@ class Resolver(private val context: Context) {
 
 
 
+	private fun resolveSymNode(node: Node): Sym = when(node) {
+		is NameNode  -> resolveName(node.srcPos, node.value).also { node.sym = it }
+		is DotNode   -> resolveDotNode(node)
+		is ArrayNode -> resolveArrayNode(node)
+		else         -> err(node, "Invalid node: $node")
+	}
+
+
+
 	private fun resolveArrayNode(node: ArrayNode): Sym {
-		val receiver = resolveSymNode(node.left) as? VarNode ?: err(node.srcPos, "Invalid receiver")
-		val type = receiver.type as? ArrayType ?: err(node.srcPos, "Invalid receiver")
-		val count = resolveInt(node.right)
-		if(!count.isImm32) err(node.srcPos, "Array index out of bounds")
-		TODO()
-/*		if(receiver.loc is GlobalVarLoc) {
-			val sym = PosRefSym(receiver.loc as Pos, type.baseType) { count.toInt() * type.baseType.size }
-			node.sym = sym
-			return sym
+		val receiver = resolveSymNode(node.left) as? VarNode
+			?: err(node.srcPos, "Invalid receiver")
+		val type = receiver.type
+		node.receiver = receiver
+		if(type is ArrayType) {
+			node.type = type.baseType
+		} else if(type is PointerType) {
+			node.type = type.baseType
 		} else {
-			err(node.srcPos, "Not yet implemented")
-		}*/
+			err(node.srcPos, "Invalid type")
+		}
+		return node.type!!
 	}
 
 
 
 	private fun resolveDotNode(node: DotNode): Sym {
-		val receiver = resolveSymNode(node.left)
-		if(node.right !is NameNode)
-			err(node.right.srcPos, "Invalid name node: ${node.right}")
+		val right = (node.right as? NameNode)?.value
+			?: err(node.right, "Expecting name, found: ${node.right}")
 
-		fun invalidReceiver(): Nothing = err(node.srcPos, "Invalid receiver")
-
-		if(receiver is TypedSym && receiver is Pos) {
-			if(receiver.type !is StructNode) invalidReceiver()
-			val member = resolveName(node.srcPos, receiver.type, node.right.value)
-			if(member !is MemberNode) context.internalErr()
-			val sym = PosRefSym(receiver, receiver.type) { member.offset }
-			node.sym = sym
-			return sym
-		} else {
-			val sym = resolveName(node.srcPos, receiver, node.right.value).also { node.sym = it }
-			node.sym = sym
-			return sym
+		val receiver: Sym = when(node.left) {
+			is ArrayNode -> {
+				resolveArrayNode(node.left)
+				node.isAccess = true
+				node.left.type as? StructNode ?: err(node.srcPos, "Invalid type")
+			}
+			is NameNode -> when(val sym = resolveName(node.srcPos, node.left.value).also { node.left.sym = it}) {
+				is VarNode -> { node.isAccess = true; sym.type }
+				else -> { node.isAccess = false; sym }
+			}
+			is DotNode -> when(val sym = resolveDotNode(node.left)) {
+				is VarNode    -> { node.isAccess = true; sym.type }
+				is MemberNode -> { node.isAccess = true; sym.type }
+				else          -> { node.isAccess = false; sym }
+			}
+			else -> err(node.srcPos, "Invalid node: $node")
 		}
+
+		return resolveName(node.srcPos, receiver, right).also { node.sym = it }
 	}
 
 
-	private fun resolveSymNode(node: Node): Sym = when(node) {
-		is NameNode  -> resolveName(node.srcPos, node.value).also { node.sym = it }
-		is DotNode   -> resolveDotNode(node)
-		is ArrayNode -> resolveArrayNode(node)
-		else         -> err(node.srcPos, "Invalid receiver node: $node")
-	}
 
 	private fun resolveRefNode(node: RefNode) {
 		val right = (node.right as? NameNode)?.value
 			?: err(node.right.srcPos, "Invalid reference node: ${node.right}")
 
 		val receiver = resolveSymNode(node.left)
+
 		node.receiver = receiver
 
 		fun invalid(): Nothing = err(node.srcPos, "Invalid reference")
 
 		when(right) {
+			Name.OFFSET -> when(receiver) {
+				is MemberNode -> { }
+
+			}
 			Name.COUNT -> when(receiver) {
 				is EnumNode -> node.intSupplier = { receiver.entries.size.toLong() }
 				else -> invalid()
