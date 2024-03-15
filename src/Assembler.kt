@@ -137,19 +137,29 @@ class Assembler(private val context: Context) {
 		return node.operand
 	}
 
-	private fun resolveInt(node: Node): Int {
-		currentReloc = null
-		memOperand = null
-		val value = resolveRec(node, false)
-		if(!value.isImm32) invalid()
-		return value.toInt()
-	}
-
 	private fun resolveImm(node: Node): ImmOperand {
 		currentReloc = null
 		memOperand = null
 		val value = resolveRec(if(node is ImmNode) node.child else node, true)
 		return ImmOperand(currentReloc, value)
+	}
+
+	private fun resolveInt(node: Node): Long {
+		fun intSym(sym: Sym?) = when(sym) {
+			null -> invalid()
+			!is IntSym -> invalid()
+			else -> sym.intValue
+		}
+
+		return when(node) {
+			is DotNode  -> if(node.isAccess) invalid() else intSym(node.sym)
+			is IntNode  -> node.value
+			is UnNode   -> node.op.calc(resolveInt(node.child))
+			is BinNode  -> node.op.calc(resolveInt(node.left), resolveInt(node.right))
+			is NameNode -> intSym(node.sym)
+			is RefNode  -> node.intSupplier?.invoke() ?: err("Invalid reference")
+			else        -> invalid()
+		}
 	}
 
 	private fun resolveRec(node: Node, regValid: Boolean): Long {
@@ -188,15 +198,20 @@ class Assembler(private val context: Context) {
 			if(!node.isAccess)
 				return sym(node.sym)
 			var disp = 0L
-			var n: DotNode = node
+			var current: Node = node
+
 			while(true) {
-				disp += (n.sym as MemberNode).offset
-				when(val left = n.left) {
+				when(current) {
+					is DotNode -> {
+						disp += (current.sym as MemberNode).offset
+						current = current.left
+					}
 					is ArrayNode -> {
-						disp += resolveImm()
+						disp += resolveInt(current.right) * current.type!!.size
+						current = current.left
 					}
 					is NameNode -> {
-						val sym = left.sym
+						val sym = current.sym
 						if(sym !is VarNode) invalid()
 						if(sym.loc is GlobalVarLoc) {
 							return reloc(sym.loc)
@@ -209,8 +224,6 @@ class Assembler(private val context: Context) {
 							invalid()
 						}
 					}
-					is DotNode -> n = left
-					else -> invalid()
 				}
 			}
 		}
@@ -963,10 +976,10 @@ class Assembler(private val context: Context) {
 				if(node.elements.size > type.count)
 					err(node.srcPos, "Too many initialiser elements. Found: ${node.elements.size}, expected: < ${type.count}")
 				for(i in node.elements.indices)
-					writeInitialiser(type.baseType, offset + type.baseType.size * i, node.elements[i])
+					writeInitialiser(type.type, offset + type.type.size * i, node.elements[i])
 			} else if(type is PointerType) {
 				for(i in node.elements.indices)
-					writeInitialiser(type.baseType, offset + type.baseType.size * i, node.elements[i])
+					writeInitialiser(type.type, offset + type.type.size * i, node.elements[i])
 			} else {
 				err(node.srcPos, "Invalid initialiser type: ${type.name}")
 			}

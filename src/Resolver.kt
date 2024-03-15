@@ -152,7 +152,7 @@ class Resolver(private val context: Context) {
 		var type = node.type
 		for(i in node.mods.size - 1 downTo 0) {
 			when(val mod = node.mods[i]) {
-				is TypeNode.PointerMod -> type = (type as PointerType).baseType
+				is TypeNode.PointerMod -> type = (type as PointerType).type
 				is TypeNode.ArrayMod -> {
 					val array = type as ArrayType
 
@@ -165,7 +165,7 @@ class Resolver(private val context: Context) {
 						val count = resolveInt(mod.sizeNode)
 						if(!count.isImm32) err(node.srcPos, "Array size out of bounds: $count")
 						array.count = count.toInt()
-						type = array.baseType
+						type = array.type
 					}
 				}
 			}
@@ -279,24 +279,34 @@ class Resolver(private val context: Context) {
 
 
 
-	private fun resolveSymNode(node: Node): Sym = when(node) {
-		is NameNode  -> resolveName(node.srcPos, node.value).also { node.sym = it }
-		is DotNode   -> resolveDotNode(node)
-		is ArrayNode -> resolveArrayNode(node)
-		else         -> err(node, "Invalid node: $node")
+	private fun resolveNameNode(node: NameNode): Sym {
+		val sym = resolveName(node.srcPos, node.value)
+		node.sym = sym
+		return sym
 	}
 
 
 
-	private fun resolveArrayNode(node: ArrayNode): Sym {
-		val receiver = resolveSymNode(node.left) as? VarNode
-			?: err(node.srcPos, "Invalid receiver")
+	private fun resolveReceiver(node: Node): Sym = when(node) {
+		is NameNode  -> resolveNameNode(node)
+		is ArrayNode -> resolveArrayNode(node)
+		is DotNode   -> resolveDotNode(node)
+		else         -> err(node, "Invalid node")
+	}
+
+
+
+	private fun resolveArrayNode(node: ArrayNode): Type {
+		resolveNode(node.left)
+		val receiver = resolveReceiver(node.left) as? VarNode
+			?: err(node.left, "Invalid receiver")
+		node.receiver = receiver
 		val type = receiver.type
 		node.receiver = receiver
 		if(type is ArrayType) {
-			node.type = type.baseType
+			node.type = type.type
 		} else if(type is PointerType) {
-			node.type = type.baseType
+			node.type = type.type
 		} else {
 			err(node.srcPos, "Invalid type")
 		}
@@ -304,30 +314,55 @@ class Resolver(private val context: Context) {
 	}
 
 
+	// list of operations: member access, member deref, index
+	// chain: base var followed by list of operations
+
+	private fun resolveChain(node: Node): Sym {
+		var current = node
+
+		val list = ArrayList<Node>()
+
+		while(true) {
+			list.add(node)
+			current = when(current) {
+				is NameNode  -> break
+				is DotNode   -> current.left
+				is ArrayNode -> current.left
+				else         -> err(node, "Invalid node")
+			}
+		}
+
+
+	}
 
 	private fun resolveDotNode(node: DotNode): Sym {
 		val right = (node.right as? NameNode)?.value
 			?: err(node.right, "Expecting name, found: ${node.right}")
 
 		val receiver: Sym = when(node.left) {
-			is ArrayNode -> {
-				resolveArrayNode(node.left)
-				node.isAccess = true
-				node.left.type as? StructNode ?: err(node.srcPos, "Invalid type")
-			}
-			is NameNode -> when(val sym = resolveName(node.srcPos, node.left.value).also { node.left.sym = it}) {
-				is VarNode -> { node.isAccess = true; sym.type }
-				else -> { node.isAccess = false; sym }
-			}
-			is DotNode -> when(val sym = resolveDotNode(node.left)) {
-				is VarNode    -> { node.isAccess = true; sym.type }
-				is MemberNode -> { node.isAccess = true; sym.type }
-				else          -> { node.isAccess = false; sym }
-			}
-			else -> err(node.srcPos, "Invalid node: $node")
+			is ArrayNode -> resolveArrayNode(node.left)
+			is DotNode   -> resolveDotNode(node.left)
+			is NameNode  -> resolveNameNode(node.left)
+			else         -> err(node, "Invalid node")
 		}
 
-		return resolveName(node.srcPos, receiver, right).also { node.sym = it }
+		if(receiver is AccessSym) {
+			node.sym = receiver
+
+			if(receiver.type is PointerType) {
+				receiver.ops.add()
+			}
+
+			return receiver
+		} else if(receiver is VarNode) {
+			val sym = AccessSym(receiver, receiver.type)
+			val type = receiver.type
+
+		} else {
+			val sym = resolveName(node.srcPos, receiver, right)
+			node.sym = sym
+			return sym
+		}
 	}
 
 
@@ -336,7 +371,11 @@ class Resolver(private val context: Context) {
 		val right = (node.right as? NameNode)?.value
 			?: err(node.right.srcPos, "Invalid reference node: ${node.right}")
 
-		val receiver = resolveSymNode(node.left)
+		val receiver: Sym = when(node.left) {
+			is NameNode -> resolveNameNode(node.left)
+			is DotNode -> resolveDotNode(node.left)
+			else -> err(node.left, "Invalid receiver")
+		}
 
 		node.receiver = receiver
 

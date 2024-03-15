@@ -8,13 +8,13 @@ struct Vec {
 	dword y
 }
 
-var vec: Vec
+struct Values {
+	Vec* a
+	Vec* b
+}
 
 proc main {
-	var vec: Vec
-	mov dword [vec.y], 10
-	mov edx, [vec.y]
-	lea rcx, ["%d\n"]
-	call printf
+	var values: Values
+	mov eax, []
 	ExitProcess()
 }

@@ -55,7 +55,7 @@ enum class TokenType(
 	REG("reg"),
 	EOF("eof"),
 
-	LPAREN  ("(", BinOp.INV),
+	LPAREN  ("(", BinOp.CALL),
 	RPAREN  (")"),
 	PLUS    ("+", BinOp.ADD, UnOp.POS),
 	MINUS   ("-", BinOp.SUB, UnOp.NEG),

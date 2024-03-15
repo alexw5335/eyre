@@ -153,8 +153,6 @@ class DotNode(
 	var isAccess: Boolean = false
 ) : Node
 
-class SymChain(val list: List<Node> = ArrayList())
-
 class TypeNode(
 	override val base: Base,
 	val names: List<Name>,
@@ -279,6 +277,16 @@ Symbols/Types
 
 
 
+sealed interface AccessOp
+class DerefMemberOp(member: MemberNode) : AccessOp
+class MemberOp(member: MemberNode) : AccessOp
+class IndexOp(index: Node) : AccessOp
+class PtrIndexOp(index: Node) : AccessOp
+
+class AccessSym(val first: VarNode, var type: Type) : AnonSym {
+	val ops = ArrayList<AccessOp>()
+}
+
 data object UnchosenType : Type {
 	override val base = Base()
 	override var size = 0
@@ -299,19 +307,16 @@ class StringType(override var size: Int = 0) : Type {
 	override var alignment = 8
 }
 
-class PointerType(val baseType: Type): Type {
+class PointerType(override val type: Type): Type, TypedSym {
 	override val base = Base()
 	override val size = 8
 	override val alignment = 8
 }
 
-class ArrayType(
-	val baseType: Type,
-	var count: Int = 0
-): Type {
+class ArrayType(override val type: Type, var count: Int = 0): Type, TypedSym {
 	override val base = Base()
-	override val size get() = count * baseType.size
-	override val alignment get() = baseType.alignment
+	override val size get() = count * type.size
+	override val alignment get() = type.alignment
 }
 
 object IntTypes {

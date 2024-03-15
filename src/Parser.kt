@@ -628,14 +628,11 @@ class Parser(private val context: Context) {
 					break
 				else
 					err(left.srcPos, "Invalid binary operator token: $token")
-			val op = token.type.binOp
-				?: break
-			if(op.precedence < precedence)
-				break
+			val op = token.type.binOp ?: break
+			if(op.precedence < precedence) break
 			pos++
 			val base = Base(left.srcPos)
-
-			if(op == BinOp.INV) {
+			if(op == BinOp.CALL) {
 				val elements = ArrayList<Node>()
 				while(tokens[pos].type != TokenType.RPAREN) {
 					elements.add(parseExpr())

@@ -4,7 +4,7 @@ package eyre
 
 enum class BinOp(val precedence: Int, val string: String?) {
 
-	INV   (12, null),
+	CALL  (12, null),
 	ARR   (11, null),
 	DOT   (11, "."),
 	REF   (10, "::"),
@@ -36,7 +36,7 @@ enum class BinOp(val precedence: Int, val string: String?) {
 	fun calc(a: Int, b: Int): Int = when(this) {
 		TO    -> 0
 		UNTIL -> 0
-		INV   -> 0
+		CALL   -> 0
 		ARR   -> 0
 		DOT   -> 0
 		REF   -> 0
@@ -64,7 +64,7 @@ enum class BinOp(val precedence: Int, val string: String?) {
 	fun calc(a: Long, b: Long): Long = when(this) {
 		TO    -> 0
 		UNTIL -> 0
-		INV   -> 0
+		CALL   -> 0
 		ARR   -> 0
 		DOT   -> 0
 		REF   -> 0
