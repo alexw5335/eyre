@@ -296,44 +296,34 @@ class Resolver(private val context: Context) {
 
 
 
-	private fun resolveArrayNode(node: ArrayNode): Type {
+	private fun resolveArrayNode(node: ArrayNode): Sym {
 		resolveNode(node.left)
-		val receiver = resolveReceiver(node.left) as? VarNode
-			?: err(node.left, "Invalid receiver")
-		node.receiver = receiver
-		val type = receiver.type
-		node.receiver = receiver
-		if(type is ArrayType) {
-			node.type = type.type
-		} else if(type is PointerType) {
-			node.type = type.type
+		val receiver = resolveReceiver(node.left)
+
+		val access: AccessSym = if(receiver is AccessSym) {
+			receiver
 		} else {
-			err(node.srcPos, "Invalid type")
+			val varNode = receiver as? VarNode ?: err(node, "Invalid receiver")
+			AccessSym(varNode, varNode.type)
 		}
-		return node.type!!
+
+		val type = access.type
+
+		if(type is PointerType) {
+			access.ops.add(PtrIndexOp(type.type, node.right))
+			access.type = type.type
+		} else if(type is ArrayType) {
+			access.ops.add(IndexOp(type.type, node.right))
+			access.type = type.type
+		} else {
+			err(node, "Invalid receiver")
+		}
+
+		node.sym = access
+		return access
 	}
 
 
-	// list of operations: member access, member deref, index
-	// chain: base var followed by list of operations
-
-	private fun resolveChain(node: Node): Sym {
-		var current = node
-
-		val list = ArrayList<Node>()
-
-		while(true) {
-			list.add(node)
-			current = when(current) {
-				is NameNode  -> break
-				is DotNode   -> current.left
-				is ArrayNode -> current.left
-				else         -> err(node, "Invalid node")
-			}
-		}
-
-
-	}
 
 	private fun resolveDotNode(node: DotNode): Sym {
 		val right = (node.right as? NameNode)?.value
@@ -346,18 +336,27 @@ class Resolver(private val context: Context) {
 			else         -> err(node, "Invalid node")
 		}
 
-		if(receiver is AccessSym) {
-			node.sym = receiver
-
-			if(receiver.type is PointerType) {
-				receiver.ops.add()
+		fun access(sym: AccessSym) {
+			val type = sym.type
+			if(type is PointerType) {
+				val member = resolveName(node.srcPos, type.type, right) as MemberNode
+				sym.ops.add(DerefMemberOp(member))
+				sym.type = member.type
+			} else {
+				val member = resolveName(node.srcPos, type, right) as MemberNode
+				sym.ops.add(MemberOp(member))
+				sym.type = member.type
 			}
+			node.sym = sym
+		}
 
+		if(receiver is AccessSym) {
+			access(receiver)
 			return receiver
 		} else if(receiver is VarNode) {
 			val sym = AccessSym(receiver, receiver.type)
-			val type = receiver.type
-
+			access(sym)
+			return sym
 		} else {
 			val sym = resolveName(node.srcPos, receiver, right)
 			node.sym = sym

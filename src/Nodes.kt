@@ -141,16 +141,14 @@ class ArrayNode(
 	val left: Node,
 	val right: Node,
 ) : Node {
-	var receiver: VarNode? = null
-	var type: Type? = null
+	var sym: AccessSym? = null
 }
 
 class DotNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node,
-	var sym: Sym? = null,
-	var isAccess: Boolean = false
+	var sym: Sym? = null
 ) : Node
 
 class TypeNode(
@@ -278,10 +276,10 @@ Symbols/Types
 
 
 sealed interface AccessOp
-class DerefMemberOp(member: MemberNode) : AccessOp
-class MemberOp(member: MemberNode) : AccessOp
-class IndexOp(index: Node) : AccessOp
-class PtrIndexOp(index: Node) : AccessOp
+class DerefMemberOp(val member: MemberNode) : AccessOp
+class MemberOp(val member: MemberNode) : AccessOp
+class IndexOp(val type: Type, val index: Node) : AccessOp
+class PtrIndexOp(val type: Type, val index: Node) : AccessOp
 
 class AccessSym(val first: VarNode, var type: Type) : AnonSym {
 	val ops = ArrayList<AccessOp>()

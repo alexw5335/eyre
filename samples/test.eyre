@@ -5,16 +5,9 @@ dllimport msvcrt.printf
 
 struct Vec {
 	dword x
-	dword y
-}
-
-struct Values {
-	Vec* a
-	Vec* b
+	dword* y
 }
 
 proc main {
-	var values: Values
-	mov eax, []
 	ExitProcess()
 }

@@ -145,18 +145,17 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun resolveInt(node: Node): Long {
-		fun intSym(sym: Sym?) = when(sym) {
-			null -> invalid()
-			!is IntSym -> invalid()
-			else -> sym.intValue
+		fun sym(sym: Sym?) = when(sym) {
+			is IntSym -> sym.intValue
+			else      -> invalid()
 		}
 
 		return when(node) {
-			is DotNode  -> if(node.isAccess) invalid() else intSym(node.sym)
+			is DotNode  -> sym(node.sym)
 			is IntNode  -> node.value
 			is UnNode   -> node.op.calc(resolveInt(node.child))
 			is BinNode  -> node.op.calc(resolveInt(node.left), resolveInt(node.right))
-			is NameNode -> intSym(node.sym)
+			is NameNode -> sym(node.sym)
 			is RefNode  -> node.intSupplier?.invoke() ?: err("Invalid reference")
 			else        -> invalid()
 		}
@@ -170,62 +169,36 @@ class Assembler(private val context: Context) {
 			return 0
 		}
 
+		fun loc(loc: VarLoc, disp: Long): Long {
+			if(loc is GlobalVarLoc) {
+				return reloc(loc)
+			} else if(loc is StackVarLoc) {
+				val mem = memOperand ?: invalid()
+				if(mem.base.isValid) invalid()
+				mem.base = Reg.RSP
+				return disp + loc.disp
+			} else {
+				invalid()
+			}
+		}
+
 		fun sym(sym: Sym?): Long = when(sym) {
 			null            -> err("Invalid symbol")
 			is IntSym       -> sym.intValue
 			is ProcNode     -> reloc(sym)
 			is LabelNode    -> reloc(sym)
 			is StringLitSym -> reloc(sym)
-			is VarNode      -> when(val loc = sym.loc) {
-				is GlobalVarLoc -> reloc(loc)
-				is StackVarLoc -> {
-					val mem = memOperand ?: invalid()
-					if(mem.base.isValid) invalid()
-					mem.base = Reg.RSP
-					loc.disp.toLong()
+			is VarNode      -> loc(sym.loc, 0)
+			is AccessSym    -> {
+				var disp = 0L
+				for(op in sym.ops) when(op) {
+					is MemberOp -> disp += op.member.offset
+					is IndexOp  -> disp += op.type.size * resolveInt(op.index)
+					else        -> err(node, "Invalid op: $op")
 				}
-				is MemVarLoc -> {
-					val mem = memOperand ?: invalid()
-					TODO()
-				}
-				else -> invalid()
+				loc(sym.first.loc, disp)
 			}
-
 			else -> err("Invalid symbol: $sym")
-		}
-
-		fun dotNode(node: DotNode): Long {
-			if(!node.isAccess)
-				return sym(node.sym)
-			var disp = 0L
-			var current: Node = node
-
-			while(true) {
-				when(current) {
-					is DotNode -> {
-						disp += (current.sym as MemberNode).offset
-						current = current.left
-					}
-					is ArrayNode -> {
-						disp += resolveInt(current.right) * current.type!!.size
-						current = current.left
-					}
-					is NameNode -> {
-						val sym = current.sym
-						if(sym !is VarNode) invalid()
-						if(sym.loc is GlobalVarLoc) {
-							return reloc(sym.loc)
-						} else if(sym.loc is StackVarLoc) {
-							val mem = memOperand ?: invalid()
-							if(mem.base.isValid) invalid()
-							mem.base = Reg.RSP
-							return disp + sym.loc.disp
-						} else {
-							invalid()
-						}
-					}
-				}
-			}
 		}
 
 		return when(node) {
@@ -253,7 +226,8 @@ class Assembler(private val context: Context) {
 				node.calc(regValid, ::resolveRec)
 			}
 
-			is DotNode    -> dotNode(node)
+			is ArrayNode  -> sym(node.sym)
+			is DotNode    -> sym(node.sym)
 			is IntNode    -> node.value
 			is UnNode     -> node.calc(regValid, ::resolveRec)
 			is NameNode   -> sym(node.sym)
