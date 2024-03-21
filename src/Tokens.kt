@@ -57,7 +57,6 @@ enum class TokenType(
 	MINUS   ("-", BinOp.SUB, UnOp.NEG),
 	STAR    ("*", BinOp.MUL, UnOp.DEREF),
 	SLASH   ("/", BinOp.DIV),
-	SET     ("=", BinOp.SET),
 	COMMA   (","),
 	SEMI    (";"),
 	COLON   (":"),
@@ -71,7 +70,6 @@ enum class TokenType(
 	GT      (">", BinOp.GT),
 	SHL     ("<<", BinOp.SHL),
 	SHR     (">>", BinOp.SHR),
-	SAR     (">>>", BinOp.SAR),
 	LTE     ("<=", BinOp.LTE),
 	GTE     (">=", BinOp.GTE),
 	EQ      ("==", BinOp.EQ),
@@ -87,7 +85,19 @@ enum class TokenType(
 	REF     ("::", BinOp.REF),
 	AT      ("@"),
 	TO      ("..", BinOp.TO),
-	UNTIL   ("..<", BinOp.UNTIL);
+	UNTIL   ("..<", BinOp.UNTIL),
+	INC     ("++", null, UnOp.INC_PRE),
+	DEC     ("--", null, UnOp.DEC_PRE),
+	SET     ("=", BinOp.SET),
+	SET_MUL ("*=", BinOp.SET_MUL),
+	SET_DIV ("/=", BinOp.SET_DIV),
+	SET_ADD ("+=", BinOp.SET_ADD),
+	SET_SUB ("-=", BinOp.SET_SUB),
+	SET_XOR ("^=", BinOp.SET_XOR),
+	SET_OR  ("|=", BinOp.SET_OR),
+	SET_AND ("&=", BinOp.SET_AND),
+	SET_SHL ("<<=", BinOp.SET_SHL),
+	SET_SHR (">>=", BinOp.SET_SHR);
 
 	val isKeyword get() = this < NAME
 	val isSym get() = this > EOF

@@ -410,7 +410,7 @@ class Parser(private val context: Context) {
 		val srcPos = token.srcPos()
 		val base = Base(srcPos)
 
-		return when(token.type) {
+		val node = when(token.type) {
 			TokenType.LBRACE -> {
 				val elements = ArrayList<Node>()
 				while(tokens[pos].type != TokenType.RBRACE) {
@@ -428,12 +428,16 @@ class Parser(private val context: Context) {
 			TokenType.CHAR   -> IntNode(base, token.intValue)
 			else -> {
 				val op = token.type.unOp ?: err(srcPos, "Invalid atom: $token")
-				if(op.precedence < precedence) {
-
-				}
+				//if(op.precedence < precedence) { }
 				val child = parseExpr(op.precedence)
 				UnNode(base, op, child)
 			}
+		}
+
+		return when(tokens[pos].type.unOp) {
+			UnOp.INC_PRE -> UnNode(base, UnOp.INC_POST, node).also { pos++ }
+			UnOp.DEC_PRE -> UnNode(base, UnOp.DEC_POST, node).also { pos++ }
+			else         -> node
 		}
 	}
 

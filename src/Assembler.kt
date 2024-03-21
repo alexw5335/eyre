@@ -114,26 +114,23 @@ class Assembler(private val context: Context) {
 
 
 
-
-	class RegDescriptor(val index: Int) {
-		val reg = Reg.r64(index)
-		var size = 0
-		var signed = false
-	}
-
-	private val regDescriptors = Array<RegDescriptor>(16, ::RegDescriptor)
-
 	private var volatileRegs = 0b00001111_00000111
 
-	private fun getReg(): RegDescriptor {
+	private fun getReg(): Reg {
 		if(volatileRegs == 0) invalid()
 		val reg = volatileRegs.countTrailingZeroBits()
 		volatileRegs = volatileRegs xor (1 shl reg)
-		return regDescriptors[reg]
+		return Reg.r64(reg)
 	}
 
-	private fun freeReg(descriptor: RegDescriptor) {
-		volatileRegs = volatileRegs or (1 shl descriptor.index)
+	private fun getReg(reg: Reg) {
+		val index = reg.index
+		if(volatileRegs and (1 shl index) == 0) invalid()
+		volatileRegs = volatileRegs xor (1 shl index)
+	}
+
+	private fun freeReg(reg: Reg) {
+		volatileRegs = volatileRegs or (1 shl reg.index)
 	}
 
 	private fun ins(mnemonic: Mnemonic, op1: Operand? = null, op2: Operand? = null) =
@@ -159,7 +156,7 @@ class Assembler(private val context: Context) {
 			is RegMem    -> RegOperand(dst.mem.reg)
 		}
 
-		ins(Mnemonic.MOV, dstOperand, RegOperand(reg.reg))
+		ins(Mnemonic.MOV, dstOperand, RegOperand(reg))
 		freeReg(reg)
 	}
 
@@ -225,10 +222,16 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun checkCalls(node: Node) {
+	private var hasDiv = false
+
+	private fun checkExpr(node: Node) {
 		when(node) {
-			is UnNode -> checkCalls(node.child)
-			is BinNode -> { checkCalls(node.left); checkCalls(node.right) }
+			is UnNode -> checkExpr(node.child)
+			is BinNode -> {
+				if(node.op == BinOp.DIV) hasDiv = true
+				checkExpr(node.left)
+				checkExpr(node.right)
+			}
 			is CallNode -> {
 				val disp = allocateStack(8)
 				val dst = MemOperand.rbp(Width.NONE, disp)
@@ -285,22 +288,25 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun genExpr(target: RegDescriptor, node: Node) {
-		checkCalls(node)
+	private fun genExpr(target: Reg, node: Node) {
+		hasDiv = false
+		checkExpr(node)
+		if(hasDiv) getReg(Reg.RAX)
 		genExprRec(target, node)
+		if(hasDiv) freeReg(Reg.RAX)
 	}
 
 
 
-	private fun genExprRec(target: RegDescriptor, node: Node) {
-		val targetOp = RegOperand(target.reg)
+	private fun genExprRec(target: Reg, node: Node) {
+		val targetOp = RegOperand(target)
 		if(node is BinNode) {
 			if(node.left is BinNode) {
 				if(node.right is BinNode) {
 					genExprRec(target, node.left)
 					val next = getReg()
 					genExprRec(next, node.right)
-					ins(node.op.arithmeticMnemonic, targetOp, RegOperand(next.reg))
+					ins(node.op.arithmeticMnemonic, targetOp, RegOperand(next))
 					freeReg(next)
 				} else {
 					genExprRec(target, node.left)
@@ -314,7 +320,7 @@ class Assembler(private val context: Context) {
 				ins(node.op.arithmeticMnemonic, targetOp, node.right.toOperand())
 			}
 		} else {
-			genMovRegNode(target.reg, node)
+			genMovRegNode(target, node)
 		}
 	}
 
@@ -323,32 +329,13 @@ class Assembler(private val context: Context) {
 	/**
 	 * [opcode] is the opcode for R32_RM32
 	 */
-	private fun genBinReg(opcode: Int, dst: RegDescriptor, src: VarNode) {
+	private fun genBinReg(opcode: Int, dst: Reg, src: VarNode) {
 		if(src.mem is RegMem) {
-			rr64(opcode, dst.reg, src.mem.reg)
+			rr64(opcode, dst, src.mem.reg)
 			return
-		}
-
-		val mem = src.toMem()
-
-		when(src.size) {
-			1 -> { }
-			2 -> {
-				val reg = getReg()
-				genMovRegVar(reg.reg, src)
-				if(dst.size == 4)
-					rm32(opcode, reg.reg, mem)
-				else
-					rm64(opcode, reg.reg, mem)
-				freeReg(reg)
-			}
-			4 -> {
-				if(dst.size == 4)
-					rm32(opcode, dst.reg, mem)
-				else
-					rm64(opcode, dst.reg, mem)
-			} // Only if dst holds an int
-			8 -> rm64(opcode, dst.reg, mem)
+		} else {
+			if(src.size != 8) invalid()
+			rm64(opcode, dst, src.toMem())
 		}
 	}
 

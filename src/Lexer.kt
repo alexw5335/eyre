@@ -108,9 +108,11 @@ class Lexer(private val context: Context) {
 			while(pos < size && chars[++pos] != '\n') Unit
 			return
 		}
-
 		if(chars[pos] != '*') {
-			add(TokenType.SLASH)
+			if(chars[pos] == '=')
+				addAdv(TokenType.SET_DIV)
+			else
+				add(TokenType.SLASH)
 			return
 		}
 
@@ -204,15 +206,11 @@ class Lexer(private val context: Context) {
 			// Single symbols
 			charMap['('] = { add(TokenType.LPAREN) }
 			charMap[')'] = { add(TokenType.RPAREN) }
-			charMap['+'] = { add(TokenType.PLUS) }
-			charMap['-'] = { add(TokenType.MINUS) }
-			charMap['*'] = { add(TokenType.STAR) }
 			charMap['['] = { add(TokenType.LBRACK) }
 			charMap[']'] = { add(TokenType.RBRACK) }
 			charMap['{'] = { add(TokenType.LBRACE) }
 			charMap['}'] = { add(TokenType.RBRACE) }
 			charMap[';'] = { add(TokenType.SEMI) }
-			charMap['^'] = { add(TokenType.CARET) }
 			charMap['~'] = { add(TokenType.TILDE) }
 			charMap[','] = { add(TokenType.COMMA) }
 			charMap['?'] = { add(TokenType.QUEST) }
@@ -220,22 +218,37 @@ class Lexer(private val context: Context) {
 			charMap['@'] = { add(TokenType.AT) }
 
 			// Compound symbols
+			charMap['^'] = { when(chars[pos]) {
+				'=' -> addAdv(TokenType.SET_XOR)
+				else -> add(TokenType.CARET)
+			}}
+			charMap['*'] = { when(chars[pos]) {
+				'=' -> addAdv(TokenType.SET_MUL)
+				else -> add(TokenType.STAR)
+			}}
+			charMap['+'] = { when(chars[pos]) {
+				'+' -> addAdv(TokenType.INC)
+				'=' -> addAdv(TokenType.SET_ADD)
+				else -> add(TokenType.PLUS)
+			}}
+			charMap['-'] = { when(chars[pos]) {
+				'-' -> addAdv(TokenType.DEC)
+				'=' -> addAdv(TokenType.SET_SUB)
+				else -> add(TokenType.MINUS)
+			}}
 			charMap['&'] = { when(chars[pos]) {
+				'='  -> addAdv(TokenType.SET_AND)
 				'&'  -> addAdv(TokenType.LAND)
 				else -> add(TokenType.AMP)
 			}}
 			charMap['|'] = { when(chars[pos]) {
+				'='  -> addAdv(TokenType.SET_OR)
 				'|'  -> addAdv(TokenType.LOR)
 				else -> add(TokenType.PIPE)
 			}}
 			charMap[':'] = { when(chars[pos]) {
 				':'  -> addAdv(TokenType.REF)
 				else -> add(TokenType.COLON)
-			}}
-			charMap['<'] = { when(chars[pos]) {
-				'<'  -> addAdv(TokenType.SHL)
-				'='  -> addAdv(TokenType.LTE)
-				else -> add(TokenType.LT)
 			}}
 			charMap['='] = { when(chars[pos]) {
 				'='  -> addAdv(TokenType.EQ)
@@ -245,21 +258,26 @@ class Lexer(private val context: Context) {
 				'='  -> addAdv(TokenType.NEQ)
 				else -> TokenType.BANG
 			}}
+			charMap['<'] = { when(chars[pos]) {
+				'<'  -> when(chars[++pos]) {
+					'=' -> addAdv(TokenType.SET_SHL)
+					else -> add(TokenType.SHL)
+				}
+				'='  -> addAdv(TokenType.LTE)
+				else -> add(TokenType.LT)
+			}}
 			charMap['>'] = { when(chars[pos]) {
 				'>' -> when(chars[++pos]) {
-					'>'  -> addAdv(TokenType.SAR)
+					'='  -> addAdv(TokenType.SET_SHR)
 					else -> add(TokenType.SHR)
 				}
 				'='  -> addAdv(TokenType.GTE)
 				else -> add(TokenType.GT)
 			}}
 			charMap['.'] = { when(chars[pos]) {
-				'.' -> {
-					pos++
-					when(chars[pos]) {
-						'<' -> addAdv(TokenType.UNTIL)
-						else -> add(TokenType.TO)
-					}
+				'.' -> when(chars[++pos]) {
+					'<' -> addAdv(TokenType.UNTIL)
+					else -> add(TokenType.TO)
 				}
 				else -> add(TokenType.DOT)
 			}}

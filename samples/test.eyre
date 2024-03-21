@@ -1,9 +1,5 @@
 namespace eyre
 
-fun myFunction() {
-	testing(testing(1, 2), 2)
-}
-
-fun testing(a: i8, b: i32): i32 {
-
+fun main() {
+	a >>= ++10++-1
 }

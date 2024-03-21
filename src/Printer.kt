@@ -213,10 +213,14 @@ class Printer(private val context: Context) {
 		}
 	}
 
-	fun StringBuilder.appendExpr(node: Node) { when(node) {
+	private fun StringBuilder.appendExpr(node: Node) { when(node) {
 		is IntNode -> append(node.value.toString())
 		is StringNode -> append("\"${node.value.printable}\"")
-		is UnNode -> { append(node.op.string); appendExpr(node.child) }
+		is UnNode -> {
+			if(!node.op.isPostfix) append(node.op.string)
+			appendExpr(node.child)
+			if(node.op.isPostfix) append(node.op.string)
+		}
 		is ArrayNode -> { appendExpr(node.left); append('['); appendExpr(node.right); append(']') }
 		is RefNode -> { appendExpr(node.left); append("::"); appendExpr(node.right) }
 		is NameNode -> append(node.value.string)
