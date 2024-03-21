@@ -6,20 +6,7 @@ import java.util.HashMap
 
 class Name(val id: Int, val string: String) {
 
-	enum class Type {
-		NONE,
-		MNEMONIC,
-		WIDTH,
-		REG,
-		KEYWORD
-	}
-
-	var type = Type.NONE
-	var mnemonic = Mnemonic.entries[0]
-	var width = Width.NONE
-	var reg = Reg.NONE
-	var keyword = TokenType.entries[0]
-
+	var keyword: TokenType? = null
 	val isNull get() = id == 0
 	val isNotNull get() = id != 0
 	override fun equals(other: Any?) = this === other
@@ -40,15 +27,9 @@ class Name(val id: Int, val string: String) {
 		val OFFSET = get("offset")
 
 		init {
-			for(width in Width.entries)
-				get(width.string).let { it.type = Type.WIDTH; it.width = width }
-			for(value in Reg.RANGE)
-				get(Reg(value).toString()).let { it.type = Type.REG; it.reg = Reg(value) }
-			for(mnemonic in Mnemonic.entries)
-				get(mnemonic.string).let { it.type = Type.MNEMONIC; it.mnemonic = mnemonic }
 			for(keyword in TokenType.entries)
 				if(keyword.isKeyword)
-					get(keyword.string).let { it.type = Type.KEYWORD; it.keyword = keyword }
+					get(keyword.string).keyword = keyword
 		}
 
 	}

@@ -81,43 +81,24 @@ class Lexer(private val context: Context) {
 
 
 
-	private fun onNewline() {
-		lineCount++
-	}
-
-
-
 	private fun name() {
-		pos--
-		val startPos = pos
-
-		while(true) {
-			val char = chars[pos]
-			if(!char.isNamePart) break
-			pos++
-		}
-
+		val startPos = pos - 1 // Assuming that first char has been skipped
+		while(chars[pos].isNamePart) pos++
 		val name = Name[String(chars, startPos, pos - startPos)]
-
-		when(name.type) {
-			Name.Type.NONE,
-			Name.Type.MNEMONIC,
-			Name.Type.WIDTH   -> add(Token(TokenType.NAME, lineCount, nameValue = name))
-			Name.Type.REG     -> add(Token(TokenType.REG, lineCount, regValue = name.reg))
-			Name.Type.KEYWORD -> add(name.keyword)
-		}
+		if(name.keyword != null)
+			add(name.keyword!!)
+		else
+			add(Token(TokenType.NAME, lineCount, nameValue = name))
 	}
 
 
 
 	private fun number() {
-		pos--
-		var size = 0
-		while(chars[pos + size].isNamePart) size++
-		val string = String(chars, pos, size)
+		val startPos = pos - 1// Assuming that first char has been skipped
+		while(chars[pos].isNamePart) pos++ // TODO: Fix this
+		val string = String(chars, startPos, pos - startPos)
 		val value = string.toLongOrNull(10) ?: err("Malformed integer: $string")
 		add(Token(TokenType.INT, lineCount, intValue = value))
-		pos += size
 	}
 
 
@@ -148,7 +129,7 @@ class Lexer(private val context: Context) {
 				count--
 				pos++
 			} else if(char == '\n') {
-				onNewline()
+				lineCount++
 			}
 		}
 	}
@@ -215,7 +196,7 @@ class Lexer(private val context: Context) {
 
 		init {
 			// Whitespace
-			charMap['\n'] = Lexer::onNewline
+			charMap['\n'] = { lineCount++ }
 			charMap[' ']  = { }
 			charMap['\t'] = { }
 			charMap['\r'] = { }

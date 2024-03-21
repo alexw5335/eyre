@@ -70,32 +70,6 @@ Basic nodes
 
 
 
-sealed interface OpNode : Node {
-	val reg: Reg
-	val width: Width
-}
-
-class RegNode(override val base: Base, override val reg: Reg) : OpNode {
-	override val width get() = reg.width
-}
-
-class MemNode(
-	override val base: Base,
-	override val width: Width,
-	val child: Node
-) : OpNode {
-	val operand = MemOperand(width = width)
-	override val reg get() = Reg.NONE
-}
-
-class ImmNode(override val base: Base, val child: Node) : OpNode {
-	val operand = ImmOperand()
-	override val reg get() = Reg.NONE
-	override val width get() = Width.NONE
-}
-
-
-
 class NameNode(override val base: Base, val value: Name, override var sym: Sym? = null) : SymNode
 
 class IntNode(override val base: Base, val value: Long) : Node
@@ -103,33 +77,27 @@ class IntNode(override val base: Base, val value: Long) : Node
 class StringNode(override val base: Base, val value: String, var litSym: StringLitSym? = null) : Node
 
 class UnNode(override val base: Base, val op: UnOp, val child: Node) : Node {
-	inline fun calc(function: (Node) -> Long): Long =
-		op.calc(function(child))
-	inline fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long =
-		op.calc(function(child, op.regValid && regValid))
+	inline fun calc(function: (Node) -> Long): Long = op.calc(function(child))
 }
 
 class BinNode(override val base: Base, val op: BinOp, val left: Node, val right: Node) : Node {
-	inline fun calc(function: (Node) -> Long): Long =
-		op.calc(function(left), function(right))
-	inline fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long =
-		op.calc(function(left, op.leftRegValid && regValid), function(right, op.rightRegValid && regValid))
+	inline fun calc(function: (Node) -> Long): Long = op.calc(function(left), function(right))
 }
 
 class CallNode(
 	override val base: Base,
 	val left: Node,
-	val elements: List<Node>
-) : Node
+	val args: List<Node>
+) : Node {
+	var receiver: Sym? = null
+	var operand: Operand? = null
+}
 
 class RefNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node
-) : Node {
-	var receiver: Sym? = null
-	var intSupplier: (() -> Long)? = null
-}
+) : Node
 
 class InitNode(
 	override val base: Base,
@@ -140,15 +108,12 @@ class ArrayNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node,
-) : Node {
-	var sym: AccessSym? = null
-}
+) : Node
 
 class DotNode(
 	override val base: Base,
 	val left: Node,
 	val right: Node,
-	var sym: Sym? = null
 ) : Node
 
 class TypeNode(
@@ -168,25 +133,6 @@ class DllImportNode(
 	val import: DllImport
 ) : Node, Sym, Pos by import
 
-class IfNode(
-	override val base: Base,
-	val condition: Node?,
-	val parentIf: IfNode?
-) : Node, Sym {
-	var startJmpPos = 0
-	var endJmpPos = 0
-	var next: IfNode? = null
-}
-
-class ForNode(override val base: Base, val range: Node) : Node, Sym {
-	lateinit var index: VarNode
-}
-
-class WhileNode(override val base: Base, val condition: Node): Node, Sym
-
-class DoWhileNode(override val base: Base) : Node, Sym {
-	lateinit var condition: Node
-}
 
 
 
@@ -196,20 +142,9 @@ Top-level nodes
 
 
 
-class InsNode(
-	override val base: Base,
-	val mnemonic: Mnemonic,
-	val op1: OpNode?,
-	val op2: OpNode?,
-	val op3: OpNode?,
-	val mem: MemNode?,
-) : Node
-
 class ScopeEndNode(val sym: Sym) : Node {
 	override val base: Base = Base.NULL
 }
-
-class LabelNode(override val base: Base) : PosSym
 
 class NamespaceNode(override val base: Base) : Sym
 
@@ -222,10 +157,8 @@ class ConstNode(
 class VarNode(
 	override val base: Base,
 	val typeNode: TypeNode?,
-	val atNode: Node?,
 	val valueNode: Node?,
-	val proc: ProcNode?,
-	val loc: VarLoc,
+	val mem: Mem,
 	override var type: Type = UnchosenType,
 	var size: Int = 0,
 ) : TypedSym
@@ -262,9 +195,14 @@ class EnumNode(
 	override var alignment: Int = 0
 ) : Node, Type
 
-class ProcNode(override val base: Base, var size: Int = 0) : PosSym {
+class FunNode(override val base: Base) : PosSym {
+	var returnTypeNode: TypeNode? = null
+	var returnType: Type? = null
+	var size = 0
+	val params = ArrayList<VarNode>()
 	val locals = ArrayList<VarNode>()
 	var mostParams = 0
+	var stackPos = 0
 }
 
 
@@ -275,14 +213,10 @@ Symbols/Types
 
 
 
-sealed interface AccessOp
-class DerefMemberOp(val member: MemberNode) : AccessOp
-class MemberOp(val member: MemberNode) : AccessOp
-class IndexOp(val type: Type, val index: Node) : AccessOp
-class PtrIndexOp(val type: Type, val index: Node) : AccessOp
-
-class AccessSym(val first: VarNode, var type: Type) : AnonSym {
-	val ops = ArrayList<AccessOp>()
+data object VoidType : Type {
+	override val base = Base()
+	override var size = 0
+	override var alignment = 0
 }
 
 data object UnchosenType : Type {
@@ -318,10 +252,6 @@ class ArrayType(override val type: Type, var count: Int = 0): Type, TypedSym {
 }
 
 object IntTypes {
-	val BYTE  = IntType(Name["byte"], 1, true)
-	val WORD  = IntType(Name["word"], 2, true)
-	val DWORD = IntType(Name["dword"], 4, true)
-	val QWORD = IntType(Name["qword"], 8, true)
 	val I8    = IntType(Name["i8"], 1, true)
 	val I16   = IntType(Name["i16"], 2, true)
 	val I32   = IntType(Name["i32"], 4, true)
@@ -330,5 +260,5 @@ object IntTypes {
 	val U16   = IntType(Name["u16"], 2, false)
 	val U32   = IntType(Name["u32"], 4, false)
 	val U64   = IntType(Name["u64"], 8, false)
-	val ALL   = arrayOf(BYTE, WORD, DWORD, QWORD, I8, I16, I32, I64, U8, U16, U32, U64)
+	val ALL   = arrayOf(I8, I16, I32, I64, U8, U16, U32, U64)
 }

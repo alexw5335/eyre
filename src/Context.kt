@@ -35,13 +35,11 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val stringLiterals = ArrayList<StringLitSym>()
 
-	val relRelocs = ArrayList<RelReloc>()
+	val relRelocs = ArrayList<Reloc>()
 
-	val absRelocs = ArrayList<AbsReloc>()
+	val absRelocs = ArrayList<Reloc>()
 
-	val ripRelocs = ArrayList<RipReloc>()
-
-	val constantNodes = ArrayList<Node>()
+	val ripRelocs = ArrayList<Reloc>()
 
 
 

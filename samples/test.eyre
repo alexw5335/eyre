@@ -1,13 +1,9 @@
 namespace eyre
 
-dllimport Kernel32.ExitProcess
-dllimport msvcrt.printf
-
-struct Vec {
-	dword x
-	dword* y
+fun myFunction() {
+	testing(testing(1, 2), 2)
 }
 
-proc main {
-	ExitProcess()
+fun testing(a: i8, b: i32): i32 {
+
 }

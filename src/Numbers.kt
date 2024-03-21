@@ -7,6 +7,9 @@ fun Int.align8() = (this + 7) and -8
 fun Int.align(alignment: Int) = (this + alignment - 1) and -alignment
 fun Long.align(alignment: Int) = (this + alignment - 1) and -alignment.toLong()
 
+val Int.signString get() = if(this < 0) "- ${-this}" else "+ $this"
+val Long.signString get() = if(this < 0) "- ${-this}" else "+ $this"
+
 
 
 fun BinWriter.writeWidth(width: Width, value: Int): Boolean {

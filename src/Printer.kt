@@ -82,7 +82,6 @@ class Printer(private val context: Context) {
 					TokenType.NAME    -> appendLine(token.nameValue.string)
 					TokenType.STRING  -> appendLine("\"${token.stringValue.replace("\n", "\\n")}\"")
 					TokenType.INT     -> appendLine(token.intValue)
-					TokenType.REG     -> appendLine(token.regValue)
 					TokenType.CHAR    -> appendLine(Char(token.intValue.toInt()).escape)
 					else              -> appendLine(token.type.string)
 				}
@@ -147,30 +146,20 @@ class Printer(private val context: Context) {
 
 		when(node) {
 			is DllImportNode -> appendLine("DLLIMPORT ${node.dllName} ${node.import.name}")
-			is WhileNode -> {
-				append("while(")
-				appendExpr(node.condition)
-				appendLine(")")
-				indent++
-			}
-			is InsNode -> {
-				append(node.mnemonic)
-				append(' ')
-				if(node.op1 != null) {
-					appendExpr(node.op1)
-					if(node.op2 != null) {
-						append(", ")
-						appendExpr(node.op2)
-						if(node.op3 != null) {
-							append(", ")
-							appendExpr(node.op3)
-						}
-					}
+			is FunNode -> {
+				append("fun ${node.fullName}(")
+				for((i, param) in node.params.withIndex()) {
+					append(param.name)
+					append(": ")
+					appendExpr(param.typeNode!!)
+					if(i != node.params.lastIndex) append(", ")
+				}
+				append(")")
+				if(node.returnTypeNode != null) {
+					append(": ")
+					appendExpr(node.returnTypeNode!!)
 				}
 				appendLine()
-			}
-			is ProcNode -> {
-				appendLine("proc ${node.fullName}")
 				indent++
 			}
 			is EnumNode -> {
@@ -199,26 +188,8 @@ class Printer(private val context: Context) {
 				appendLine("struct ${node.fullName}")
 				appendChildren(node.members)
 			}
-			is ForNode -> {
-				append("for(")
-				append(node.index.name)
-				append(", ")
-				appendExpr(node.range)
-				appendLine(')')
-				indent++
-			}
 			is NamespaceNode -> {
 				appendLine("namespace ${node.fullName}")
-				indent++
-			}
-			is IfNode -> {
-				if(node.condition != null) {
-					if(node.parentIf == null) append("if(") else append("elif(")
-					appendExpr(node.condition)
-					appendLine(')')
-				} else {
-					appendLine("else")
-				}
 				indent++
 			}
 			is VarNode -> {
@@ -227,10 +198,6 @@ class Printer(private val context: Context) {
 				if(node.typeNode != null) {
 					append(": ")
 					appendExpr(node.typeNode)
-				}
-				if(node.atNode != null) {
-					append(" @ ")
-					appendExpr(node.atNode)
 				}
 				if(node.valueNode != null) {
 					append(" = ")
@@ -247,14 +214,12 @@ class Printer(private val context: Context) {
 	}
 
 	fun StringBuilder.appendExpr(node: Node) { when(node) {
-		is RegNode -> append(node.reg.toString())
 		is IntNode -> append(node.value.toString())
 		is StringNode -> append("\"${node.value.printable}\"")
 		is UnNode -> { append(node.op.string); appendExpr(node.child) }
 		is ArrayNode -> { appendExpr(node.left); append('['); appendExpr(node.right); append(']') }
 		is RefNode -> { appendExpr(node.left); append("::"); appendExpr(node.right) }
 		is NameNode -> append(node.value.string)
-		is ImmNode -> appendExpr(node.child)
 
 		is TypeNode -> {
 			append(node.names.joinToString(separator = "."))
@@ -289,24 +254,13 @@ class Printer(private val context: Context) {
 		is CallNode -> {
 			appendExpr(node.left)
 			append('(')
-			for(i in 0 ..< node.elements.size - 1) {
-				appendExpr(node.elements[i])
+			for(i in 0 ..< node.args.size - 1) {
+				appendExpr(node.args[i])
 				append(", ")
 			}
-			if(node.elements.isNotEmpty())
-				appendExpr(node.elements[0])
+			if(node.args.isNotEmpty())
+				appendExpr(node.args[0])
 			append(')')
-		}
-
-		is MemNode -> {
-			if(node.width != Width.NONE) {
-				append(node.width.string)
-				append(' ')
-			}
-
-			append('[')
-			appendExpr(node.child)
-			append(']')
 		}
 
 		else -> context.internalErr("Non-printable expression node: $node")

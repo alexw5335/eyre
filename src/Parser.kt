@@ -15,9 +15,7 @@ class Parser(private val context: Context) {
 
 	private var fileNamespace: NamespaceNode? = null
 
-	private var anonCount = 0
-
-	private var currentProc: ProcNode? = null
+	private var currentFun: FunNode? = null
 
 
 
@@ -26,10 +24,6 @@ class Parser(private val context: Context) {
 	 */
 
 
-
-	private fun at(type: TokenType) = tokens[pos].type == type
-
-	private fun anon() = Name["\$${anonCount++}"]
 
 	private fun Node.addNode() = nodes.add(this)
 
@@ -102,18 +96,14 @@ class Parser(private val context: Context) {
 		while(pos < tokens.size) {
 			when(tokens[pos].type) {
 				TokenType.DLLIMPORT -> parseDllImport()
-				TokenType.DO        -> parseDoWhile()
-				TokenType.WHILE     -> parseWhile()
-				TokenType.FOR       -> parseFor()
-				TokenType.IF        -> parseIf()
 				TokenType.ENUM      -> parseEnum()
 				TokenType.UNION     -> parseStruct(scope, true).addNodeSym()
 				TokenType.STRUCT    -> parseStruct(scope, false).addNodeSym()
 				TokenType.VAR       -> parseVar()
-				TokenType.PROC      -> parseProc()
+				TokenType.FUN       -> parseFun()
 				TokenType.CONST     -> parseConst()
 				TokenType.NAMESPACE -> parseNamespace()
-				TokenType.NAME      -> if(tokens[pos + 1].type == TokenType.COLON) parseLabel() else handleName()
+				TokenType.NAME      -> handleName()
 				TokenType.RBRACE    -> break
 				TokenType.EOF       -> break
 				else                -> err("Invalid token: ${tokens[pos]}")
@@ -123,9 +113,9 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseStatement() {
+	/*private fun parseStatement() {
 		when(tokens[pos].type) {
-			TokenType.IF   -> parseIf()
+			//TokenType.IF   -> parseIf()
 			TokenType.NAME -> handleName()
 			else -> err("Invalid token: ${tokens[pos]}")
 		}
@@ -147,7 +137,7 @@ class Parser(private val context: Context) {
 
 		ScopeEndNode(scope).addNode()
 		this.scope = prevScope
-	}
+	}*/
 
 
 
@@ -163,120 +153,11 @@ class Parser(private val context: Context) {
 
 
 
-	private fun parseLabel() {
-		val srcPos = tokens[pos].srcPos()
-		val name = tokens[pos].nameValue
-		pos += 2
-		LabelNode(Base(srcPos, scope, name)).addNodeSym()
-	}
-
-
-
 	private fun handleName() {
-		val srcPos = tokens[pos].srcPos()
-		val name = tokens[pos].nameValue
-
-		if(name.type == Name.Type.MNEMONIC) {
-			pos++
-			parseInstruction(srcPos, name.mnemonic)
-		} else {
-			when(val expr = parseExpr()) {
-				is CallNode,
-				is BinNode -> expr.addNode()
-				else -> err(expr.srcPos, "Invalid node: $expr")
-			}
-		}
-	}
-
-
-
-	private fun parseCondition(): Node {
-		expect(TokenType.LPAREN)
-		val expr = parseExpr()
-		expect(TokenType.RPAREN)
-		return expr
-	}
-
-
-
-	private fun parseFor() {
-		val srcPos = tokens[pos++].srcPos()
-		expect(TokenType.LPAREN)
-
-		val indexName = name()
-		val indexAtNode = if(tokens[pos].type == TokenType.AT) {
-			pos++
-			parseAtom()
-		} else null
-
-		expect(TokenType.COMMA)
-		val range = parseExpr()
-		expect(TokenType.RPAREN)
-		val node = ForNode(Base(srcPos, scope, anon()), range)
-		node.addNode()
-
-		val index = VarNode(
-			Base(srcPos, node, indexName),
-			null,
-			indexAtNode,
-			null,
-			currentProc,
-			determineVarLoc(indexAtNode),
-			IntTypes.DWORD,
-			4
-		)
-
-		index.addSym()
-		currentProc!!.locals.add(index)
-		node.index = index
-		parseScopeOrExpr(node)
-	}
-
-
-
-	private fun parseWhile() {
-		val srcPos = tokens[pos++].srcPos()
-		val node = WhileNode(Base(srcPos, scope, anon()), parseCondition())
-		node.addNode()
-		parseScope(node)
-	}
-
-
-
-	private fun parseDoWhile() {
-		val srcPos = tokens[pos++].srcPos()
-		val node = DoWhileNode(Base(srcPos, scope, anon()))
-		node.addNode()
-		parseScope(node)
-		expect(TokenType.WHILE)
-		node.condition = parseCondition()
-	}
-
-
-
-	private fun parseIf() {
-		val srcPos = tokens[pos++].srcPos()
-		var parent = IfNode(Base(srcPos, scope, anon()), parseCondition(), null)
-		parent.addNode()
-		parseScopeOrExpr(parent)
-
-		while(true) {
-			if(tokens[pos].type == TokenType.ELIF) {
-				val srcPos2 = tokens[pos++].srcPos()
-				val next = IfNode(Base(srcPos2, scope, anon()), parseCondition(), parent)
-				next.addNode()
-				parseScopeOrExpr(next)
-				parent.next = next
-				parent = next
-			} else if(tokens[pos].type == TokenType.ELSE) {
-				val srcPos2 = tokens[pos++].srcPos()
-				val next = IfNode(Base(srcPos2, scope, anon()), null, parent)
-				next.addNode()
-				parent.next = next
-				parseScopeOrExpr(next)
-				break
-			} else
-				break
+		when(val expr = parseExpr()) {
+			is CallNode,
+			is BinNode -> expr.addNode()
+			else -> err(expr, "Invalid node: $expr")
 		}
 	}
 
@@ -372,31 +253,14 @@ class Parser(private val context: Context) {
 
 
 
-	private fun determineVarLoc(atNode: Node?): VarLoc = when {
-		currentProc == null -> GlobalVarLoc(Section.NULL, 0)
-		atNode == null      -> StackVarLoc(0)
-		atNode is RegNode   -> RegVarLoc(atNode.reg)
-		atNode is MemNode   -> MemVarLoc(MemOperand())
-		else                -> err(atNode, "Could not determine variable storage type")
-	}
-
-
-
 	private fun parseVar() {
 		val srcPos = tokens[pos++].srcPos()
 		val name = name()
 		val typeNode: TypeNode?
-		var atNode: Node? = null
 
 		if(tokens[pos].type == TokenType.COLON) {
 			pos++
 			typeNode = parseType()
-			if(tokens[pos].type == TokenType.AT) {
-				pos++
-				atNode = parseAtom()
-				if(currentProc == null)
-					err(srcPos, "Explicit variable location only allowed in functions")
-			}
 		} else {
 			typeNode = null
 		}
@@ -412,24 +276,48 @@ class Parser(private val context: Context) {
 				mod.inferredSize = valueNode.elements.size
 		}
 
-		val loc = determineVarLoc(atNode)
-		val node = VarNode(Base(srcPos, scope, name), typeNode, atNode, valueNode, currentProc, loc)
+		val mem = if(currentFun == null) GlobalMem() else StackMem()
+		val node = VarNode(Base(srcPos, scope, name), typeNode, valueNode, mem)
 		node.addNodeSym()
-		currentProc?.locals?.add(node)
+		currentFun?.locals?.add(node)
 	}
 
 
 
-	private fun parseProc() {
+	private fun parseFun() {
 		val srcPos = tokens[pos++].srcPos()
 		val name = name()
-		if(currentProc != null)
-			err(srcPos, "Nested procedures not supported")
-		val node = ProcNode(Base(srcPos, scope, name))
+		if(currentFun != null)
+			err(srcPos, "Nested functions not supported")
+		val node = FunNode(Base(srcPos, scope, name))
 		node.addNodeSym()
-		currentProc = node
+		expect(TokenType.LPAREN)
+		while(true) {
+			if(tokens[pos].type == TokenType.RPAREN) {
+				pos++
+				break
+			}
+			val paramSrcPos = srcPos()
+			val paramName = name()
+			expect(TokenType.COLON)
+			val paramType = parseType()
+			val param = VarNode(Base(paramSrcPos, node, paramName), paramType, null, StackMem())
+			param.addSym()
+			node.params.add(param)
+			if(tokens[pos].type != TokenType.COMMA) {
+				expect(TokenType.RPAREN)
+				break
+			} else {
+				pos++
+			}
+		}
+		node.returnTypeNode = if(tokens[pos].type == TokenType.COLON) {
+			pos++
+			parseType()
+		} else null
+		currentFun = node
 		parseScope(node)
-		currentProc = null
+		currentFun = null
 	}
 
 
@@ -466,70 +354,6 @@ class Parser(private val context: Context) {
 				err(srcPos, "Only one single-line namespace allowed per file")
 			scope = node
 			fileNamespace = node
-		}
-	}
-
-
-
-	/*
-	Instruction parsing
-	 */
-
-
-
-	private fun parseInstruction(srcPos: SrcPos, mnemonic: Mnemonic) {
-		if(currentProc == null)
-			err(srcPos, "Instruction must be inside a function")
-
-		var op1: OpNode? = null
-		var op2: OpNode? = null
-		var op3: OpNode? = null
-
-		fun commaOrNewline(): Boolean {
-			if(atNewline)
-				return false
-			if(tokens[pos++].type != TokenType.COMMA)
-				err(srcPos, "Expecting newline or comma")
-			return true
-		}
-
-		if(!atNewline) {
-			op1 = parseOperand()
-			if(commaOrNewline()) {
-				op2 = parseOperand()
-				if(commaOrNewline()) {
-					op3 = parseOperand()
-					expectNewline()
-				}
-			}
-		}
-
-		val mem = op1 as? MemNode ?: op2 as? MemNode ?: op3 as? MemNode
-		expectNewline()
-		InsNode(Base(srcPos), mnemonic, op1, op2, op3, mem).addNode()
-	}
-
-
-
-	private fun parseOperand(): OpNode {
-		val token = tokens[pos]
-		val srcPos = token.srcPos()
-
-		return if(token.nameValue.type == Name.Type.WIDTH) {
-			pos++
-			expect(TokenType.LBRACK)
-			val node = MemNode(Base(srcPos), token.nameValue.width, parseExpr())
-			expect(TokenType.RBRACK)
-			return node
-		} else if(token.type == TokenType.LBRACK) {
-			pos++
-			val node = MemNode(Base(srcPos), Width.NONE, parseExpr())
-			expect(TokenType.RBRACK)
-			return node
-		} else if(token.type == TokenType.REG) {
-			RegNode(Base(srcPos), tokens[pos++].regValue)
-		} else {
-			ImmNode(Base(srcPos), parseExpr())
 		}
 	}
 
@@ -597,9 +421,7 @@ class Parser(private val context: Context) {
 				pos++
 				InitNode(Base(srcPos), elements)
 			}
-			TokenType.LBRACK -> MemNode(Base(srcPos), Width.NONE, parseExpr()).also { expect(TokenType.RBRACK) }
 			TokenType.LPAREN -> parseExpr().also { expect(TokenType.RPAREN) }
-			TokenType.REG    -> RegNode(base, token.regValue)
 			TokenType.NAME   -> NameNode(base, token.nameValue)
 			TokenType.INT    -> IntNode(base, token.intValue)
 			TokenType.STRING -> StringNode(base, token.stringValue)
@@ -627,7 +449,7 @@ class Parser(private val context: Context) {
 				if(atNewline)
 					break
 				else
-					err(left.srcPos, "Invalid binary operator token: $token")
+					err(left, "Invalid binary operator token: $token")
 			val op = token.type.binOp ?: break
 			if(op.precedence < precedence) break
 			pos++
@@ -641,7 +463,7 @@ class Parser(private val context: Context) {
 				}
 				pos++
 				left = CallNode(base, left, elements)
-				currentProc?.let { if(elements.size > it.mostParams) it.mostParams = elements.size }
+				currentFun?.let { if(elements.size > it.mostParams) it.mostParams = elements.size }
 			} else {
 				val right = parseExpr(op.precedence + 1)
 				left = when(op) {

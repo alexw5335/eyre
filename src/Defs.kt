@@ -62,25 +62,15 @@ class Dll(val name: Name) {
 	val imports = HashMap<Name, DllImport>()
 }
 
-class RipReloc(
-	override val sec: Section,
-	override val disp: Int,
-	val reloc: Pos,
-	val relocDisp: Int,
-	val immWidth: Width // WARNING: immWidth might be QWORD
-) : Pos
-
-class RelReloc(
-	override val sec: Section,
-	override val disp: Int,
-	val width: Width,
-	val reloc: Pos,
-	val relocDisp: Int,
-) : Pos
-
-class AbsReloc(
-	override val sec: Section,
-	override val disp: Int,
-	val reloc: Pos,
-	val relocDisp: Int,
+/**
+ * - [immWidth] is only used by memory operands followed by an immediate operand
+ * - [width] is only used by REL operands (QWORD for AbsReloc, DWORD for MemReloc)
+ */
+class Reloc(
+	override var sec  : Section,
+	override var disp : Int,
+	val target        : Pos,
+	val targetDisp    : Int,
+	val immWidth      : Width, // Only used by memory operand relocations
+	val width         : Width  // Only used by rel operand relocations
 ) : Pos

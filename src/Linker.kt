@@ -42,19 +42,20 @@ class Linker(private val context: Context) {
 		}
 
 		for(reloc in context.relRelocs) {
-			val value = reloc.reloc.addr + reloc.relocDisp - reloc.addr - reloc.width.bytes
+			val value = reloc.target.addr + reloc.targetDisp - reloc.addr - reloc.width.bytes
 			writer.at(reloc.pos) { writer.writeWidth(reloc.width, value) }
 		}
 
 		for(reloc in context.ripRelocs) {
-			val value = reloc.reloc.addr + reloc.relocDisp - (reloc.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
+			val value = reloc.target.addr + reloc.targetDisp - (reloc.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
 			writer.i32(reloc.pos, value)
 		}
 
-		if(context.entryPoint == null)
-			context.err(null, "Missing main function")
+		//if(context.entryPoint == null)
+		//	System.err.println("Warning: Missing main function, resulting EXE is invalid.")
+		//else
+		//	writer.i32(entryPointPos, context.entryPoint!!.addr)
 
-		writer.i32(entryPointPos, context.entryPoint!!.addr)
 		writer.i32(imageSizePos, currentSecRva)
 		writer.i32(numSectionsPos, numSections)
 	}
@@ -211,7 +212,7 @@ class Linker(private val context: Context) {
 		val pages = HashMap<Int, ArrayList<Int>>()
 
 		for(reloc in context.absRelocs) {
-			val value = reloc.reloc.addr + reloc.relocDisp
+			val value = reloc.target.addr + reloc.targetDisp
 			val rva = reloc.addr
 			val pageRva = (rva shr 12) shl 12
 			pages.getOrPut(pageRva, ::ArrayList).add(rva - pageRva)

@@ -8,7 +8,6 @@ class Token(
 	val intValue: Long = 0L,
 	val stringValue: String = "",
 	val nameValue: Name = Name.NONE,
-	val regValue: Reg = Reg.AL,
 ) {
 	override fun toString() = buildString {
 		append("Token(line $line, ")
@@ -17,7 +16,6 @@ class Token(
 			TokenType.STRING -> append("string = $stringValue")
 			TokenType.INT    -> append("int = $intValue")
 			TokenType.CHAR   -> append("char = ${Char(intValue.toInt())}")
-			TokenType.REG    -> append("reg = $regValue")
 			else             -> append(type.string)
 		}
 		append(')')
@@ -39,11 +37,10 @@ enum class TokenType(
 	ELSE("else"),
 	VAR("var"),
 	NAMESPACE("namespace"),
-	FUN("fun"),
 	STRUCT("struct"),
 	UNION("union"),
 	ENUM("enum"),
-	PROC("proc"),
+	FUN("fun"),
 	CONST("const"),
 	DLLIMPORT("dllimport"),
 	RETURN("return"),
@@ -52,7 +49,6 @@ enum class TokenType(
 	STRING("string"),
 	INT("int"),
 	CHAR("char"),
-	REG("reg"),
 	EOF("eof"),
 
 	LPAREN  ("(", BinOp.CALL),

@@ -1,59 +1,68 @@
 package eyre
 
+import kotlin.math.absoluteValue
 
 
-class MemOperand(
-	var width : Width = Width.NONE,
-	var base  : Reg = Reg.NONE,
-	var index : Reg = Reg.NONE,
-	var scale : Int = 0,
-	var disp  : Int = 0,
-	var reloc : Pos? = null
-) {
+
+sealed interface Mem
+
+class GlobalMem(override var sec: Section = Section.NULL, override var disp: Int = 0) : Mem, Pos
+
+class StackMem(var disp: Int = 0) : Mem
+
+class RegMem(var reg: Reg) : Mem
+
+
+
+sealed interface Operand
+
+data class RegOperand(val reg: Reg) : Operand
+
+data class MemOperand(
+	val width: Width = Width.NONE,
+	val base: Reg = Reg.NONE,
+	val index: Reg = Reg.NONE,
+	val scale: Int = 0,
+	val disp: Int = 0,
+	val reloc: Pos? = null
+) : Operand {
 	companion object {
-		fun rip(reloc: Pos, disp: Int) = MemOperand(reloc = reloc, disp = disp)
-		fun rip(reloc: Pos) = MemOperand(reloc = reloc)
-		fun rbp(disp: Int) = MemOperand(base = Reg.RBP, disp = disp)
-		fun rsp(disp: Int) = MemOperand(base = Reg.RSP, disp = disp)
+		fun reloc(width: Width, reloc: Pos) = MemOperand(width = width, reloc = reloc)
+		fun rbp(width: Width, disp: Int) = MemOperand(width = width, base = Reg.RBP, disp = disp)
+		fun rsp(width: Width, disp: Int) = MemOperand(width = width, base = Reg.RSP, disp = disp)
+	}
+}
+
+data class ImmOperand(val value: Long) : Operand
+
+data class Instruction(val mnemonic: Mnemonic, val op1: Operand? = null, val op2: Operand? = null) {
+
+	private fun StringBuilder.appendOperand(operand: Operand) {
+		when(operand) {
+			is RegOperand -> append(operand.reg)
+			is ImmOperand -> append(operand.value)
+			is MemOperand -> if(operand.reloc != null) {
+				append("[RELOC + ${operand.disp}]")
+			} else if(operand.index.isValid) {
+				append("[${operand.base} + ${operand.index} * ${operand.scale} ${operand.disp.signString}]")
+			} else {
+				append("[${operand.base} ${operand.disp.signString}]")
+			}
+		}
+	}
+
+	override fun toString() = buildString {
+		append(mnemonic)
+		if(op1 == null) return@buildString
+		append(' ')
+		appendOperand(op1)
+		if(op2 == null) return@buildString
+		append(", ")
+		appendOperand(op2)
 	}
 }
 
 
-
-class ImmOperand(
-	var reloc: Pos? = null,
-	var value: Long = 0
-)
-
-
-
-/**
- * The storage type of a variable should be determined during parsing. The parameters of [VarLoc] subclasses should be
- * mutable so that the contents can be filled in during assembly (except for [RegVarLoc], which can be determined
- * immediately).
- */
-sealed interface VarLoc
-class GlobalVarLoc(override var sec: Section, override var disp: Int) : VarLoc, Pos
-class RegVarLoc(val reg: Reg) : VarLoc
-class StackVarLoc(var disp: Int) : VarLoc
-class MemVarLoc(var operand: MemOperand) : VarLoc
-
-
-
-enum class Prefix(val string: String) {
-	NONE("NP"),
-	P66("66"),
-	PF3("F3"),
-	PF2("F2"),
-	P9B("9B");
-}
-
-enum class Escape(val string: String?) {
-	NONE(""),
-	E0F("0F"),
-	E38("0F 38"),
-	E3A("0F 3A");
-}
 
 enum class Mnemonic {
 	ADD, OR, ADC, SBB, AND, SUB, XOR, CMP,
@@ -106,33 +115,12 @@ enum class Width(val bytes: Int) {
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
 
-	companion object {
-		fun fromBytes(bytes: Int) = when(bytes) {
-			1 -> BYTE 2 -> WORD 4 -> DWORD 8 -> QWORD else -> NONE
-		}
-	}
-
-}
-
-
-
-enum class OpType {
-	NONE,
-	R8,
-	R16,
-	R32,
-	R64,
-	MEM,
-	IMM;
 }
 
 
 
 @JvmInline
 value class Reg(val backing: Int) {
-
-	val width get() = Width.entries[backing shr 4]
-	val opType get() = OpType.entries[backing shr 4]
 
 	val size get() = backing shr 4 // size in bytes
 	val type get() = backing shr 4
@@ -168,24 +156,6 @@ value class Reg(val backing: Int) {
 
 	override fun toString() = names.getOrElse(backing) { "invalid" }
 
-	/*
-		0    rax   eax    ax     al     ah    volatile
-		1    rcx   ecx    cx     cl     bh    volatile
-		2    rdx   edx    dx     dl     ch    volatile
-		3    rbx   ebx    bx     bl     dh    non-nolatile
-		4    rsp   esp    sp     spl          non-volatile
-		5    rbp   ebp    bp     bpl          non-volatile
-		6    rsi   esi    si     sil          non-volatile
-		7    rdi   edi    di     dil          non-volatile
-		8    r8    r8d    r8w    r8b          volatile
-		9    r9    r9d    r9w    r9b          volatile
-		10   r10   r10d   r10w   r10b         volatile
-		11   r11   r11d   r11w   r11b         volatile
-		12   r12   r12d   r12w   r12b         non-volatile
-		13   r13   r13d   r13w   r13b         non-volatile
-		14   r14   r14d   r14w   r14b         non-volatile
-		15   r15   r15d   r15w   r15b         non-volatile
-	 */
 	companion object {
 		val volatileFlags = 0b00001111_00000111
 
@@ -193,9 +163,7 @@ value class Reg(val backing: Int) {
 		fun r16(index: Int) = Reg(32 or index)
 		fun r32(index: Int) = Reg(48 or index)
 		fun r64(index: Int) = Reg(64 or index)
-		fun argNone(index: Int) = when(index) { 0->Reg(1) 1->Reg(2) 2->Reg(8) 3->Reg(9) else->Reg(0) }
-		fun arg64(index: Int) = when(index) { 0->RCX 1->RDX 2->R8 3->R9 else->NONE }
-		val RANGE = IntRange(16, 79)
+		fun arg(index: Int) = when(index) { 0->RCX 1->RDX 2->R8 3->R9 else->NONE }
 		val NONE = Reg(0)
 		const val TYPE_NONE = 0
 		const val TYPE_R8 = 1

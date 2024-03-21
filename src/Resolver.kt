@@ -110,11 +110,12 @@ class Resolver(private val context: Context) {
 	private fun resolveNodeType(node: Node) { when(node) {
 		is ScopeEndNode  -> popScope()
 		is NamespaceNode -> pushScope(node)
-		is IfNode        -> pushScope(node)
-		is ProcNode      -> pushScope(node)
-		is DoWhileNode   -> pushScope(node)
-		is WhileNode     -> pushScope(node)
-		is ForNode       -> pushScope(node)
+		is FunNode       -> {
+			pushScope(node)
+			for(param in node.params)
+				param.type = resolveType(param.typeNode!!)
+			node.returnType = node.returnTypeNode?.let(::resolveType) ?: VoidType
+		}
 
 		is VarNode ->
 			if(node.typeNode != null)
@@ -179,9 +180,6 @@ class Resolver(private val context: Context) {
 		is NamespaceNode -> pushScope(node)
 		is NameNode -> node.sym = resolveName(node.srcPos, node.value)
 		is UnNode -> resolveNode(node.child)
-		is DotNode -> resolveDotNode(node)
-		is ArrayNode -> resolveArrayNode(node)
-		is RefNode -> resolveRefNode(node)
 		is StructNode -> resolveStruct(node)
 		is EnumNode -> resolveEnum(node)
 		is VarNode -> {
@@ -198,7 +196,8 @@ class Resolver(private val context: Context) {
 		is InitNode -> node.elements.forEach(::resolveNode)
 		is CallNode -> {
 			resolveNode(node.left)
-			node.elements.forEach(::resolveNode)
+			node.receiver = (node.left as? SymNode)?.sym ?: err(node, "Invalid receiver")
+			node.args.forEach(::resolveNode)
 		}
 		is BinNode -> {
 			resolveNode(node.left)
@@ -209,41 +208,11 @@ class Resolver(private val context: Context) {
 			node.intValue = resolveInt(node.valueNode)
 			node.resolved = true
 		}
-		is ProcNode -> {
+		is FunNode -> {
 			if(node.name == Name.MAIN)
 				context.entryPoint = node
 			pushScope(node)
 		}
-		is InsNode -> {
-			node.op1?.let(::resolveNode)
-			node.op2?.let(::resolveNode)
-			node.op3?.let(::resolveNode)
-		}
-		is DoWhileNode -> {
-			pushScope(node)
-			resolveNode(node.condition)
-		}
-		is WhileNode -> {
-			pushScope(node)
-			resolveNode(node.condition)
-		}
-		is ForNode -> {
-			resolveNode(node.range)
-			pushScope(node)
-		}
-		is IfNode -> {
-			node.condition?.let(::resolveNode)
-			pushScope(node)
-		}
-		is StringNode -> {
-			val sym = StringLitSym(node.value)
-			node.litSym = sym
-			context.stringLiterals.add(sym)
-		}
-		is MemNode -> resolveNode(node.child)
-		is ImmNode -> resolveNode(node.child)
-		is RegNode,
-		is LabelNode,
 		is DllImportNode,
 		is IntNode -> Unit
 		else -> context.internalErr("Unhandled node: $node")
@@ -267,137 +236,10 @@ class Resolver(private val context: Context) {
 			is UnNode   -> node.calc(::resolveInt)
 			is BinNode  -> node.calc(::resolveInt)
 			is NameNode -> sym(node.sym)
-			//is DotNode  -> sym(node.sym)
-			is RefNode  -> {
-				if(!node.receiver!!.resolved)
-					resolveNodeFile(node, node.receiver!! as Node)
-				node.intSupplier?.invoke() ?: err(node.srcPos, "Invalid int node: $node")
-			}
-			else -> err(node.srcPos, "Invalid int node: $node")
+			else        -> err(node.srcPos, "Invalid int node: $node")
 		}
 	}
 
-
-
-	private fun resolveNameNode(node: NameNode): Sym {
-		val sym = resolveName(node.srcPos, node.value)
-		node.sym = sym
-		return sym
-	}
-
-
-
-	private fun resolveReceiver(node: Node): Sym = when(node) {
-		is NameNode  -> resolveNameNode(node)
-		is ArrayNode -> resolveArrayNode(node)
-		is DotNode   -> resolveDotNode(node)
-		else         -> err(node, "Invalid node")
-	}
-
-
-
-	private fun resolveArrayNode(node: ArrayNode): Sym {
-		resolveNode(node.left)
-		val receiver = resolveReceiver(node.left)
-
-		val access: AccessSym = if(receiver is AccessSym) {
-			receiver
-		} else {
-			val varNode = receiver as? VarNode ?: err(node, "Invalid receiver")
-			AccessSym(varNode, varNode.type)
-		}
-
-		val type = access.type
-
-		if(type is PointerType) {
-			access.ops.add(PtrIndexOp(type.type, node.right))
-			access.type = type.type
-		} else if(type is ArrayType) {
-			access.ops.add(IndexOp(type.type, node.right))
-			access.type = type.type
-		} else {
-			err(node, "Invalid receiver")
-		}
-
-		node.sym = access
-		return access
-	}
-
-
-
-	private fun resolveDotNode(node: DotNode): Sym {
-		val right = (node.right as? NameNode)?.value
-			?: err(node.right, "Expecting name, found: ${node.right}")
-
-		val receiver: Sym = when(node.left) {
-			is ArrayNode -> resolveArrayNode(node.left)
-			is DotNode   -> resolveDotNode(node.left)
-			is NameNode  -> resolveNameNode(node.left)
-			else         -> err(node, "Invalid node")
-		}
-
-		fun access(sym: AccessSym) {
-			val type = sym.type
-			if(type is PointerType) {
-				val member = resolveName(node.srcPos, type.type, right) as MemberNode
-				sym.ops.add(DerefMemberOp(member))
-				sym.type = member.type
-			} else {
-				val member = resolveName(node.srcPos, type, right) as MemberNode
-				sym.ops.add(MemberOp(member))
-				sym.type = member.type
-			}
-			node.sym = sym
-		}
-
-		if(receiver is AccessSym) {
-			access(receiver)
-			return receiver
-		} else if(receiver is VarNode) {
-			val sym = AccessSym(receiver, receiver.type)
-			access(sym)
-			return sym
-		} else {
-			val sym = resolveName(node.srcPos, receiver, right)
-			node.sym = sym
-			return sym
-		}
-	}
-
-
-
-	private fun resolveRefNode(node: RefNode) {
-		val right = (node.right as? NameNode)?.value
-			?: err(node.right.srcPos, "Invalid reference node: ${node.right}")
-
-		val receiver: Sym = when(node.left) {
-			is NameNode -> resolveNameNode(node.left)
-			is DotNode -> resolveDotNode(node.left)
-			else -> err(node.left, "Invalid receiver")
-		}
-
-		node.receiver = receiver
-
-		fun invalid(): Nothing = err(node.srcPos, "Invalid reference")
-
-		when(right) {
-			Name.OFFSET -> when(receiver) {
-				is MemberNode -> { }
-
-			}
-			Name.COUNT -> when(receiver) {
-				is EnumNode -> node.intSupplier = { receiver.entries.size.toLong() }
-				else -> invalid()
-			}
-			Name.SIZE -> when(receiver) {
-				is StructNode  -> node.intSupplier = { receiver.size.toLong() }
-				is VarNode     -> node.intSupplier = { receiver.size.toLong() }
-				is EnumNode    -> node.intSupplier = { receiver.size.toLong() }
-				else -> invalid()
-			}
-			else -> invalid()
-		}
-	}
 
 
 	private fun resolveEnum(enum: EnumNode) {
