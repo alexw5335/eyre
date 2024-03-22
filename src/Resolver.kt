@@ -20,7 +20,7 @@ class Resolver(private val context: Context) {
 	private fun err(srcPos: SrcPos?, message: String): Nothing =
 		throw EyreError(srcPos, message)
 
-	private fun err(node: Node, message: String): Nothing =
+	private fun err(node: Node, message: String = "Unspecified error"): Nothing =
 		throw EyreError(node.srcPos, message)
 
 
@@ -77,6 +77,15 @@ class Resolver(private val context: Context) {
 
 
 
+	private fun resolveScopedName(srcPos: SrcPos?, scope: Sym, name: Name): Sym {
+		return when(scope) {
+			is VarNode -> resolveName(srcPos, scope.type, name)
+			is 
+		}
+	}
+
+
+
 	private fun resolveName(srcPos: SrcPos?, name: Name): Sym {
 		context.symTable.get(null, name)?.let { return it }
 		for(i in scopeStack.indices.reversed())
@@ -116,15 +125,7 @@ class Resolver(private val context: Context) {
 				param.type = resolveType(param.typeNode!!)
 			node.returnType = node.returnTypeNode?.let(::resolveType) ?: VoidType
 		}
-
-		is VarNode ->
-			if(node.typeNode != null)
-				node.type = resolveType(node.typeNode)
-			else if(node.valueNode is StringNode)
-				node.type = StringType(node.valueNode.value.length)
-			else
-				err(node.srcPos, "Cannot infer variable type")
-
+		is VarNode -> node.type = node.typeNode?.let(::resolveType) ?: err(node.srcPos, "Missing type node")
 		is StructNode ->
 			for(member in node.members) {
 				if(member.struct != null) {
@@ -178,25 +179,18 @@ class Resolver(private val context: Context) {
 	private fun resolveNode(node: Node) { when(node) {
 		is ScopeEndNode -> popScope()
 		is NamespaceNode -> pushScope(node)
-		is NameNode -> node.sym = resolveName(node.srcPos, node.value)
+		is NameNode -> node.sym = resolveName(node.srcPos, node.name)
 		is UnNode -> resolveNode(node.child)
 		is StructNode -> resolveStruct(node)
 		is EnumNode -> resolveEnum(node)
 		is VarNode -> {
 			node.typeNode?.let(::resolveTypeNode)
 			node.valueNode?.let(::resolveNode)
-			if(node.type is StringType) {
-				if(node.valueNode !is StringNode)
-					err(node.srcPos, "Invalid string")
-				node.size = node.valueNode.value.length
-			} else {
-				node.size = node.type.size
-			}
 		}
 		is InitNode -> node.elements.forEach(::resolveNode)
 		is CallNode -> {
 			resolveNode(node.left)
-			node.receiver = (node.left as? SymNode)?.sym ?: err(node, "Invalid receiver")
+			node.receiver = (node.left as? NameNode)?.sym ?: err(node, "Invalid receiver")
 			node.args.forEach(::resolveNode)
 		}
 		is BinNode -> {
@@ -217,6 +211,71 @@ class Resolver(private val context: Context) {
 		is IntNode -> Unit
 		else -> context.internalErr("Unhandled node: $node")
 	}}
+
+
+
+	private fun resolveNameNode(node: NameNode): Sym {
+		val sym = resolveName(node.srcPos, node.name)
+		node.sym = sym
+		return sym
+	}
+	private fun resolveDotNode(node: DotNode) {
+		val right = (node.right as? NameNode)?.name ?: err(node)
+		when(node.left) {
+			is NameNode -> {
+				val receiver = resolveNameNode(node.left)
+				if(receiver is VarNode) {
+
+				}
+			}
+			is DotNode -> {
+				resolveDotNode(node.left)
+			}
+			is ArrayNode -> { }
+		}
+	}
+
+
+
+	private fun resolveCallNode(node: CallNode) {
+		resolveNode(node.left)
+		when(node.left) {
+			is NameNode  -> {
+				node.receiver = resolveNameNode(node.left)
+				when(node.receiver) {
+					is VarNode -> { }
+				}
+			}
+			is DotNode   -> {
+				resolveDotNode(node.left)
+
+			}
+			is CallNode  -> resolveCallNode(node.left)
+			is ArrayNode -> resolveArrayNode(node.left)
+			else         -> err(node.left)
+		}
+		node.receiver = (node.left as? NameNode)?.sym ?: err(node, "Invalid receiver")
+		node.args.forEach(::resolveNode)
+	}
+
+
+
+	private fun resolveArrayNode(node: ArrayNode) {
+		val type: Type
+		when(node.left) {
+			is NameNode -> {
+				resolveNameNode(node.left)
+				type = (node.left.sym as? TypedSym)?.type ?: err(node.left)
+			}
+			is DotNode -> {
+
+			}
+			is ArrayNode -> {
+				resolveArrayNode(node.left)
+				type = node.left.type!!
+			}
+		}
+	}
 
 
 

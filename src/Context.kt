@@ -31,7 +31,7 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	val bssSec   = Section(3, ".bss", 0xC0_00_00_80U, null).also(sections::add)
 
-	var entryPoint: Pos? = null
+	var entryPoint: FunNode? = null
 
 	val stringLiterals = ArrayList<StringLitSym>()
 
@@ -45,9 +45,9 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 	fun getDllImport(dllName: Name, name: Name): DllImport {
 		return dlls
-			.getOrPut(dllName) { Dll(dllName) }
+			.getOrPut(dllName) { Dll(dllName, HashMap()) }
 			.imports
-			.getOrPut(name) { DllImport(name, rdataSec, 0) }
+			.getOrPut(name) { DllImport(name, SecPos()) }
 	}
 
 	fun err(srcPos: SrcPos?, message: String): Nothing {

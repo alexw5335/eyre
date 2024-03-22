@@ -1,39 +1,27 @@
 package eyre
 
-import kotlin.math.absoluteValue
-
-
-
-sealed interface Mem
-
-class GlobalMem(override var sec: Section = Section.NULL, override var disp: Int = 0) : Mem, Pos
-
-class StackMem(var disp: Int = 0) : Mem
-
-class RegMem(var reg: Reg) : Mem
-
 
 
 sealed interface Operand
 
-data class RegOperand(val reg: Reg) : Operand
+data class RegOperand(var reg: Reg) : Operand
 
 data class MemOperand(
-	val width: Width = Width.NONE,
-	val base: Reg = Reg.NONE,
-	val index: Reg = Reg.NONE,
-	val scale: Int = 0,
-	val disp: Int = 0,
-	val reloc: Pos? = null
+	var width: Width = Width.NONE,
+	var base: Reg = Reg.NONE,
+	var index: Reg = Reg.NONE,
+	var scale: Int = 0,
+	var disp: Int = 0,
+	var reloc: SecPos? = null
 ) : Operand {
 	companion object {
-		fun reloc(width: Width, reloc: Pos) = MemOperand(width = width, reloc = reloc)
+		fun reloc(width: Width, reloc: SecPos) = MemOperand(width = width, reloc = reloc)
 		fun rbp(width: Width, disp: Int) = MemOperand(width = width, base = Reg.RBP, disp = disp)
 		fun rsp(width: Width, disp: Int) = MemOperand(width = width, base = Reg.RSP, disp = disp)
 	}
 }
 
-data class ImmOperand(val value: Long) : Operand
+data class ImmOperand(var value: Long) : Operand
 
 data class Instruction(val mnemonic: Mnemonic, val op1: Operand? = null, val op2: Operand? = null) {
 

@@ -41,36 +41,24 @@ data class SrcPos(val file: SrcFile, val line: Int)
 
 class EyreError(val srcPos: SrcPos?, override val message: String) : Exception()
 
-interface Pos {
-	val sec: Section
-	val disp: Int
-	val pos get() = sec.pos + disp
-	val addr get() = sec.addr + disp
+class SecPos(var sec: Section = Section.NULL, var disp: Int = 0) {
+	val totalPos get() = sec.pos + disp
+	val totalAddr get() = sec.addr + disp
 }
 
-private class PosImpl(override val sec: Section, override val disp: Int) : Pos
+class DllImport(val name: Name, val pos: SecPos)
 
-fun Pos(sec: Section, disp: Int): Pos = PosImpl(sec, disp)
-
-class DllImport(
-	val name: Name,
-	override var sec: Section,
-	override var disp: Int
-) : Pos
-
-class Dll(val name: Name) {
-	val imports = HashMap<Name, DllImport>()
-}
+class Dll(val name: Name, val imports: HashMap<Name, DllImport>)
 
 /**
+ * - [pos] is where the relocation will be written
  * - [immWidth] is only used by memory operands followed by an immediate operand
  * - [width] is only used by REL operands (QWORD for AbsReloc, DWORD for MemReloc)
  */
 class Reloc(
-	override var sec  : Section,
-	override var disp : Int,
-	val target        : Pos,
-	val targetDisp    : Int,
-	val immWidth      : Width, // Only used by memory operand relocations
-	val width         : Width  // Only used by rel operand relocations
-) : Pos
+	val pos      : SecPos,
+	val target   : SecPos,
+	val disp     : Int,
+	val immWidth : Width, // Only used by memory operand relocations
+	val width    : Width  // Only used by rel operand relocations
+)

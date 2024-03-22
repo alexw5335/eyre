@@ -75,7 +75,7 @@ class Compiler(val context: Context) {
 		//for(file in context.files)
 		//	resolver.resolveFile(file)
 		//checkErrors()
-		//assembler.assemble()
+		//for(file in context.files) assembler.assemble(file)
 		//checkErrors()
 		//linker.link()
 		//checkErrors()

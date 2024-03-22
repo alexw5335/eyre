@@ -1,5 +1,6 @@
 namespace eyre
 
 fun main() {
-	a >>= ++10++-1
+	main.test(1)[10].testing.x
+	//testing(main.rectangles(10)[15].padding.left)
 }

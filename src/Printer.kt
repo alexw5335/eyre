@@ -216,14 +216,7 @@ class Printer(private val context: Context) {
 	private fun StringBuilder.appendExpr(node: Node) { when(node) {
 		is IntNode -> append(node.value.toString())
 		is StringNode -> append("\"${node.value.printable}\"")
-		is UnNode -> {
-			if(!node.op.isPostfix) append(node.op.string)
-			appendExpr(node.child)
-			if(node.op.isPostfix) append(node.op.string)
-		}
-		is ArrayNode -> { appendExpr(node.left); append('['); appendExpr(node.right); append(']') }
-		is RefNode -> { appendExpr(node.left); append("::"); appendExpr(node.right) }
-		is NameNode -> append(node.value.string)
+		is NameNode -> append(node.name.string)
 
 		is TypeNode -> {
 			append(node.names.joinToString(separator = "."))
@@ -237,11 +230,26 @@ class Printer(private val context: Context) {
 			}
 		}
 
+		is RefNode -> {
+			appendExpr(node.left)
+			append("::")
+			appendExpr(node.right)
+		}
+
 		is DotNode -> {
 			append('(')
 			appendExpr(node.left)
 			append('.')
 			appendExpr(node.right)
+			append(')')
+		}
+
+		is ArrayNode -> {
+			append('(')
+			appendExpr(node.left)
+			append('[')
+			appendExpr(node.right)
+			append(']')
 			append(')')
 		}
 
@@ -255,7 +263,16 @@ class Printer(private val context: Context) {
 			append(')')
 		}
 
+		is UnNode -> {
+			append('(')
+			if(!node.op.isPostfix) append(node.op.string)
+			appendExpr(node.child)
+			if(node.op.isPostfix) append(node.op.string)
+			append(')')
+		}
+
 		is CallNode -> {
+			append('(')
 			appendExpr(node.left)
 			append('(')
 			for(i in 0 ..< node.args.size - 1) {
@@ -264,6 +281,7 @@ class Printer(private val context: Context) {
 			}
 			if(node.args.isNotEmpty())
 				appendExpr(node.args[0])
+			append(')')
 			append(')')
 		}
 

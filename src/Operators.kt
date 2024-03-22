@@ -4,9 +4,9 @@ package eyre
 
 enum class BinOp(val precedence: Int, val string: String?) {
 
-	CALL    (12, null),
 	ARR     (11, null),
 	DOT     (11, "."),
+	CALL    (10, null),
 	REF     (10, "::"),
 	MUL     (9, "*"),
 	DIV     (9, "/"),

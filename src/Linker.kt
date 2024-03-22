@@ -42,19 +42,21 @@ class Linker(private val context: Context) {
 		}
 
 		for(reloc in context.relRelocs) {
-			val value = reloc.target.addr + reloc.targetDisp - reloc.addr - reloc.width.bytes
-			writer.at(reloc.pos) { writer.writeWidth(reloc.width, value) }
+			val value = reloc.target.totalAddr + reloc.disp -
+				reloc.pos.totalAddr - reloc.width.bytes
+			writer.at(reloc.pos.totalPos) { writer.writeWidth(reloc.width, value) }
 		}
 
 		for(reloc in context.ripRelocs) {
-			val value = reloc.target.addr + reloc.targetDisp - (reloc.addr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
-			writer.i32(reloc.pos, value)
+			val value = reloc.target.totalAddr + reloc.disp -
+				(reloc.pos.totalAddr + 4 + reloc.immWidth.bytes.coerceAtMost(4))
+			writer.i32(reloc.pos.totalPos, value)
 		}
 
 		//if(context.entryPoint == null)
 		//	System.err.println("Warning: Missing main function, resulting EXE is invalid.")
 		//else
-		//	writer.i32(entryPointPos, context.entryPoint!!.addr)
+		//	writer.i32(entryPointPos, context.entryPoint!!.pos.totalAddr)
 
 		writer.i32(imageSizePos, currentSecRva)
 		writer.i32(numSectionsPos, numSections)
@@ -191,8 +193,8 @@ class Linker(private val context: Context) {
 				writer.i16(0)
 				writer.asciiNT(importName.string)
 				writer.align2()
-				importPos.sec = context.rdataSec
-				importPos.disp = iatPos + importIndex * 8 - idtsPos + startPos
+				importPos.pos.sec = context.rdataSec
+				importPos.pos.disp = iatPos + importIndex * 8 - idtsPos + startPos
 				importIndex++
 			}
 
@@ -212,11 +214,11 @@ class Linker(private val context: Context) {
 		val pages = HashMap<Int, ArrayList<Int>>()
 
 		for(reloc in context.absRelocs) {
-			val value = reloc.target.addr + reloc.targetDisp
-			val rva = reloc.addr
+			val value = reloc.target.totalAddr + reloc.disp
+			val rva = reloc.pos.totalAddr
 			val pageRva = (rva shr 12) shl 12
 			pages.getOrPut(pageRva, ::ArrayList).add(rva - pageRva)
-			writer.i64(reloc.pos, value + imageBase)
+			writer.i64(reloc.pos.totalPos, value + imageBase)
 		}
 
 		val startPos = writer.pos
