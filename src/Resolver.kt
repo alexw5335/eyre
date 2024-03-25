@@ -45,7 +45,8 @@ class Resolver(private val context: Context) {
 
 
 
-	private fun resolveNodeFile(srcNode: Node, node: Node) {
+	private fun checkResolveFile(srcNode: Node, node: Node) {
+		if(node.resolved) return
 		val file = node.srcPos?.file ?: context.internalErr()
 		if(file.resolving)
 			err(srcNode.srcPos, "Cyclic resolution")
@@ -73,15 +74,6 @@ class Resolver(private val context: Context) {
 	private fun resolveName(srcPos: SrcPos?, scope: Sym, name: Name): Sym {
 		return context.symTable.get(scope, name)
 			?: err(srcPos, "Unresolved symbol: $name")
-	}
-
-
-
-	private fun resolveScopedName(srcPos: SrcPos?, scope: Sym, name: Name): Sym {
-		return when(scope) {
-			is VarNode -> resolveName(srcPos, scope.type, name)
-			is 
-		}
 	}
 
 
@@ -179,36 +171,34 @@ class Resolver(private val context: Context) {
 	private fun resolveNode(node: Node) { when(node) {
 		is ScopeEndNode -> popScope()
 		is NamespaceNode -> pushScope(node)
-		is NameNode -> node.sym = resolveName(node.srcPos, node.name)
+		is NameNode -> resolveNameNode(node)
 		is UnNode -> resolveNode(node.child)
 		is StructNode -> resolveStruct(node)
 		is EnumNode -> resolveEnum(node)
+		is DotNode -> resolveDotNode(node)
+		is ArrayNode -> resolveArrayNode(node)
 		is VarNode -> {
 			node.typeNode?.let(::resolveTypeNode)
 			node.valueNode?.let(::resolveNode)
 		}
 		is InitNode -> node.elements.forEach(::resolveNode)
-		is CallNode -> {
-			resolveNode(node.left)
-			node.receiver = (node.left as? NameNode)?.sym ?: err(node, "Invalid receiver")
-			node.args.forEach(::resolveNode)
-		}
+		is CallNode -> resolveCallNode(node)
 		is BinNode -> {
 			resolveNode(node.left)
 			resolveNode(node.right)
 		}
 		is ConstNode -> {
-			resolveNode(node.valueNode)
-			node.intValue = resolveInt(node.valueNode)
-			node.resolved = true
+			//resolveNode(node.valueNode)
+			//node.intValue = resolveInt(node.valueNode)
+			//node.resolved = true
 		}
 		is FunNode -> {
 			if(node.name == Name.MAIN)
 				context.entryPoint = node
 			pushScope(node)
 		}
-		is DllImportNode,
-		is IntNode -> Unit
+		is DllImportNode -> Unit
+		is IntNode -> node.exprType = IntTypes.I32
 		else -> context.internalErr("Unhandled node: $node")
 	}}
 
@@ -216,85 +206,85 @@ class Resolver(private val context: Context) {
 
 	private fun resolveNameNode(node: NameNode): Sym {
 		val sym = resolveName(node.srcPos, node.name)
-		node.sym = sym
+		node.exprSym = sym
+		node.exprType = exprType(sym)
 		return sym
 	}
-	private fun resolveDotNode(node: DotNode) {
-		val right = (node.right as? NameNode)?.name ?: err(node)
-		when(node.left) {
-			is NameNode -> {
-				val receiver = resolveNameNode(node.left)
-				if(receiver is VarNode) {
 
-				}
-			}
-			is DotNode -> {
-				resolveDotNode(node.left)
-			}
-			is ArrayNode -> { }
-		}
+
+
+	private fun exprType(sym: Sym): Type? = when(sym) {
+		is VarNode -> sym.type
+		is MemberNode -> sym.type
+		else -> null
 	}
 
 
 
 	private fun resolveCallNode(node: CallNode) {
-		resolveNode(node.left)
-		when(node.left) {
-			is NameNode  -> {
-				node.receiver = resolveNameNode(node.left)
-				when(node.receiver) {
-					is VarNode -> { }
-				}
-			}
-			is DotNode   -> {
-				resolveDotNode(node.left)
-
-			}
-			is CallNode  -> resolveCallNode(node.left)
-			is ArrayNode -> resolveArrayNode(node.left)
-			else         -> err(node.left)
-		}
-		node.receiver = (node.left as? NameNode)?.sym ?: err(node, "Invalid receiver")
+		val left = node.left
+		resolveNode(left)
 		node.args.forEach(::resolveNode)
+		val receiver = left.exprSym as? FunNode ?: err(node.left)
+		node.receiver = receiver
+		node.exprType = receiver.returnType
 	}
 
 
 
 	private fun resolveArrayNode(node: ArrayNode) {
-		val type: Type
-		when(node.left) {
-			is NameNode -> {
-				resolveNameNode(node.left)
-				type = (node.left.sym as? TypedSym)?.type ?: err(node.left)
-			}
-			is DotNode -> {
+		val left = node.left
+		resolveNode(left)
+		val receiver = left.exprType ?: err(left)
+		if(receiver !is ArrayType) err(left)
+		node.exprType = receiver.type
+	}
 
-			}
-			is ArrayNode -> {
-				resolveArrayNode(node.left)
-				type = node.left.type!!
-			}
+
+
+	private fun resolveDotNode(node: DotNode) {
+		val left = node.left
+		val right = (node.right as? NameNode)?.name ?: err(node.right)
+		resolveNode(left)
+		if(left.exprType != null) {
+			var receiver = left.exprType!!
+
+			if(receiver is PointerType) {
+				node.type = DotNode.Type.DEREF
+				receiver = receiver.type
+			} else
+				node.type = DotNode.Type.MEMBER
+
+			val member = resolveName(node.srcPos, receiver, right) as? MemberNode
+				?: err(node)
+			node.exprType = member.type
+			node.member = member
+		} else {
+			node.type = DotNode.Type.SYM
+			val sym = node.left.exprSym ?: err(node.left)
+			node.exprType = exprType(sym)
+			node.exprSym = sym
 		}
 	}
 
 
 
+
 	private fun resolveInt(node: Node): Long {
-		fun sym(sym: Sym?): Long {
-			if(sym == null)
-				err(node.srcPos, "Unresolved symbol")
-			if(!sym.resolved)
-				resolveNodeFile(node, sym)
-			if(sym is IntSym)
-				return sym.intValue
-			err(node.srcPos, "Invalid int node: $node, $sym")
+		fun sym(sym: Sym?): Long = when(sym) {
+			null             -> err(node.srcPos, "Unresolved symbol")
+			is ConstNode     -> { checkResolveFile(node, sym); sym.intValue }
+			is MemberNode    -> { checkResolveFile(node, sym); sym.offset.toLong() }
+			is EnumEntryNode -> { checkResolveFile(node, sym); sym.intValue }
+			else             -> err(node.srcPos, "Invalid int node: $node, $sym")
 		}
 
 		return when(node) {
 			is IntNode  -> node.value
 			is UnNode   -> node.calc(::resolveInt)
 			is BinNode  -> node.calc(::resolveInt)
-			is NameNode -> sym(node.sym)
+			is NameNode -> sym(node.exprSym)
+			is DotNode  -> sym(node.exprSym)
 			else        -> err(node.srcPos, "Invalid int node: $node")
 		}
 	}

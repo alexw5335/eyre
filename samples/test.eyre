@@ -1,6 +1,6 @@
 namespace eyre
 
-fun main() {
-	main.test(1)[10].testing.x
-	//testing(main.rectangles(10)[15].padding.left)
+fun main(a: u32, b: u32) {
+	var c: u32
+	c = a + b * 12312312312
 }
