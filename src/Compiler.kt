@@ -9,19 +9,6 @@ import kotlin.system.exitProcess
 class Compiler(val context: Context) {
 
 
-	companion object {
-		fun createAtDir(dir: Path, buildPath: Path = Paths.get("build")): Compiler {
-			val files = Files
-				.walk(dir)
-				.toList()
-				.filter { it.extension == "eyre" }
-				.map { ProjectSrcFile(it.relativeTo(dir).toString(), it) }
-			return Compiler(Context(buildPath, files))
-		}
-	}
-
-
-
 	/*
 	Variables
 	 */
@@ -61,21 +48,24 @@ class Compiler(val context: Context) {
 
 
 
+	fun parseFile(file: SrcFile) {
+		lexer.lex(file)
+		printer.appendTokens(file, lexer.tokens)
+		if(!file.invalid) {
+			parser.parse(file, lexer.tokens)
+			printer.appendNodes(file)
+		}
+	}
+
+
+
 	private fun compileInternal() {
 		IntTypes.ALL.forEach(context.symTable::add)
-		for(file in context.files) {
-			lexer.lex(file)
-			printer.appendTokens(file, lexer.tokens)
-			if(!file.invalid) {
-				parser.parse(file, lexer.tokens)
-				printer.appendNodes(file)
-			}
-		}
+		context.files.forEach(::parseFile)
 		checkErrors()
-		for(file in context.files)
-			resolver.resolveFile(file)
+		context.files.forEach(resolver::resolveFile)
 		checkErrors()
-		for(file in context.files) assembler.assemble(file)
+		context.files.forEach(assembler::assembleFile)
 		checkErrors()
 		linker.link()
 		checkErrors()

@@ -169,25 +169,19 @@ class Resolver(private val context: Context) {
 
 
 	private fun resolveNode(node: Node) { when(node) {
-		is ScopeEndNode -> popScope()
+		is ScopeEndNode  -> popScope()
 		is NamespaceNode -> pushScope(node)
-		is NameNode -> resolveNameNode(node)
-		is UnNode -> resolveNode(node.child)
-		is StructNode -> resolveStruct(node)
-		is EnumNode -> resolveEnum(node)
-		is DotNode -> resolveDotNode(node)
-		is ArrayNode -> resolveArrayNode(node)
-		is VarNode -> {
+		is NameNode      -> resolveNameNode(node)
+		is StructNode    -> resolveStruct(node)
+		is EnumNode      -> resolveEnum(node)
+		is DotNode       -> resolveDotNode(node)
+		is ArrayNode     -> resolveArrayNode(node)
+		is VarNode       -> {
 			node.typeNode?.let(::resolveTypeNode)
 			node.valueNode?.let(::resolveNode)
 		}
 		is InitNode -> node.elements.forEach(::resolveNode)
 		is CallNode -> resolveCallNode(node)
-		is BinNode -> {
-			resolveNode(node.left)
-			resolveNode(node.right)
-			node.exprType = IntTypes.I32
-		}
 		is ConstNode -> {
 			//resolveNode(node.valueNode)
 			//node.intValue = resolveInt(node.valueNode)
@@ -199,9 +193,19 @@ class Resolver(private val context: Context) {
 			pushScope(node)
 		}
 		is DllImportNode -> Unit
-		is IntNode -> {
+
+		is UnNode -> {
+			resolveNode(node.child)
+			node.exprType = IntTypes.I32
+
+		}
+		is BinNode -> {
+			resolveNode(node.left)
+			resolveNode(node.right)
 			node.exprType = IntTypes.I32
 		}
+		is IntNode -> node.isLeaf = true
+
 		else -> context.internalErr("Unhandled node: $node")
 	}}
 

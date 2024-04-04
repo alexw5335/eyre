@@ -36,9 +36,8 @@ class Assembler(private val context: Context) {
 
 
 
-	fun assemble(file: SrcFile) {
-		testRandom(10)
-		/*this.nodeIndex = 0
+	fun assembleFile(file: SrcFile) {
+		this.nodeIndex = 0
 		this.file = file
 
 		try {
@@ -46,7 +45,7 @@ class Assembler(private val context: Context) {
 		} catch(e: EyreError) {
 			context.errors.add(e)
 			file.invalid = true
-		}*/
+		}
 	}
 
 
@@ -183,7 +182,7 @@ class Assembler(private val context: Context) {
 
 	private fun genExpr(node: Node) {
 		instructions.clear()
-		genExprRec(node)
+		genExprRec(node, false)
 	}
 
 	private fun allocExprRec(node: Node, parentOp: BinOp?) {
@@ -241,7 +240,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun genExprRec(node: Node) {
+	private fun genExprRec(node: Node, mustInit: Boolean) {
 		if(node !is BinNode) TODO()
 
 		val left = node.left
@@ -252,7 +251,6 @@ class Assembler(private val context: Context) {
 		if(left.isLeaf) {
 			if(right.isLeaf) {
 				if(!node.isRegless || mustInit) {
-					mustInit = false
 					genMovRegNode(dst, left)
 					genBinRegNode(op, dst, right)
 				} else {
@@ -260,24 +258,25 @@ class Assembler(private val context: Context) {
 					genBinRegNode(op, dst, right)
 				}
 			} else {
+
 				if(!op.isCommutative) {
-					mustInit = true
 					if(left !is BinNode)
 						genMovRegNode(dst, left)
 					else
-						genExprRec(left)
-					genExprRec(right)
+						genExprRec(left, true)
+					genExprRec(right, false)
 					genBinRegNode(op, dst, right)
 				} else {
+					genExprRec(right, false)
 					genBinRegNode(op, dst, left)
 				}
 			}
 		} else if(right.isLeaf) {
-			genExprRec(left)
+			genExprRec(left, false)
 			genBinRegNode(op, dst, right)
 		} else {
-			genExprRec(left)
-			genExprRec(right)
+			genExprRec(left, false)
+			genExprRec(right, false)
 			genBinRegReg(op, dst, right.reg!!)
 		}
 	}
@@ -306,7 +305,7 @@ class Assembler(private val context: Context) {
 		when(src) {
 			//is SymNode -> insRM(op.mnemonic, dst, src.sym)
 			is IntNode -> ins(op.mnemonic, RegOperand(dst), ImmOperand(src.value))
-			is BinNode -> { src.reg = dst; genExprRec(src) }
+			is BinNode -> { src.reg = dst; genExprRec(src, false) }
 			else       -> error("Invalid node: $src")
 		}
 	}
@@ -315,7 +314,7 @@ class Assembler(private val context: Context) {
 		when(src) {
 		//	is SymNode -> insRM(Mnemonic.MOV, dst, src.sym)
 			is IntNode -> ins(Mnemonic.MOV, RegOperand(dst), ImmOperand(src.value))
-			is BinNode -> { src.reg = dst; genExprRec(src) }
+			is BinNode -> { src.reg = dst; genExprRec(src, true) }
 			else       -> error("Invalid node: $src")
 		}
 	}
@@ -330,44 +329,11 @@ class Assembler(private val context: Context) {
 
 	private val regValues = LongArray(16)
 
-
-
-	class TestResult(
-		val node: Node,
-		val expected: Long,
-		val generated: Long
-	)
-
-
-
-	private fun testExpr(node: Node): TestResult? {
-		val trueValue: Long
-		val generatedValue: Long
-
-		try {
-			trueValue = evalExpr(node)
-			instructions.forEach(::evalIns)
-			generatedValue = regValues[node.reg!!.index]
-		} catch(e: ArithmeticException) {
-			println("Divide by zero, aborting test")
-			return null
-		} catch(e: Exception) {
-			System.err.println("Error for expression: $node")
-			throw e
-		}
-
-		return TestResult(node, trueValue, generatedValue)
-	}
-
-
-
 	private fun evalExpr(node: Node): Long = when(node) {
 		is IntNode -> node.value
 		is BinNode -> node.op.calc(evalExpr(node.left), evalExpr(node.right))
 		else       -> error("Invalid node: $node")
 	}
-
-
 
 	private fun evalIns(ins: Instruction) {
 		val dst = (ins.op1 as RegOperand).reg
@@ -391,13 +357,9 @@ class Assembler(private val context: Context) {
 		}
 	}
 
-
-
 	private val binOps = arrayOf(BinOp.ADD, BinOp.SUB, BinOp.MUL)
 
-
-
-	private fun randomExpr(minDepth: Int = 2, maxDepth: Int = 3, depth: Int = 0): Node {
+	fun randomExpr(minDepth: Int = 2, maxDepth: Int = 3, depth: Int = 0): Node {
 		fun bin() = BinNode(
 			binOps.random(),
 			randomExpr(minDepth, maxDepth, depth + 1),
@@ -414,27 +376,39 @@ class Assembler(private val context: Context) {
 		}
 	}
 
+	class TestResult(val node: Node, val expected: Long, val generated: Long, val zeroDivide: Boolean)
 
+	fun testExpr(node: Node): TestResult {
+		val trueValue: Long
+		val generatedValue: Long
 
-	private fun testRandom(count: Int) {
 		try {
-			for(i in 0 ..< count) {
-				val node = randomExpr()
-				println(node.exprString)
-				allocExpr(node)
-				printFullExpr(node)
-				genExpr(node)
-				for(ins in instructions) println(ins.printString)
-				val result = testExpr(node) ?: continue
-				if(result.generated != result.expected){
-					System.err.println("Test failed. Expected: ${result.expected}. Generated: ${result.generated}")
-					break
-				}
-				println("Test passed\n")
-			}
-		} catch(e: Exception) {
-			e.printStackTrace()
-			exitProcess(1)
+			trueValue = evalExpr(node)
+			instructions.forEach(::evalIns)
+			generatedValue = regValues[node.reg!!.index]
+		} catch(e: ArithmeticException) {
+			return TestResult(node, 0, 0, true)
+		}
+
+		return TestResult(node, trueValue, generatedValue, false)
+	}
+
+	fun testAndPrintExpr(node: Node): Boolean {
+		println(node.exprString)
+		allocExpr(node)
+		printFullExpr(node)
+		genExpr(node)
+		for(ins in instructions) println(ins.printString)
+		val result = testExpr(node)
+		if(result.zeroDivide) {
+			System.err.println("Zero divide")
+			return false
+		} else if(result.generated != result.expected) {
+			System.err.println("Test failed. Expected: ${result.expected}. Generated: ${result.generated}")
+			return true
+		} else {
+			println("Test passed\n")
+			return false
 		}
 	}
 

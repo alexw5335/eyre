@@ -113,7 +113,7 @@ class Parser(private val context: Context) {
 				TokenType.NAME      -> handleName()
 				TokenType.RBRACE    -> break
 				TokenType.EOF       -> break
-				else                -> err("Invalid token: ${tokens[pos]}")
+				else                -> parseExpr().addNode()
 			}
 		}
 	}
@@ -162,11 +162,6 @@ class Parser(private val context: Context) {
 
 	private fun handleName() {
 		parseExpr().addNode()
-		//when(val expr = parseExpr()) {
-		//	is CallNode,
-		//	is BinNode -> expr.addNode()
-		//	else -> err(expr, "Invalid node: $expr")
-		//}
 	}
 
 
