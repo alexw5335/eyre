@@ -1,5 +1,9 @@
 package eyre
 
+import kotlin.math.max
+import kotlin.random.Random
+import kotlin.system.exitProcess
+
 class Assembler(private val context: Context) {
 
 
@@ -19,6 +23,12 @@ class Assembler(private val context: Context) {
 
 	private fun err(message: String = "No reason given"): Nothing = throw EyreError(currentSrcPos, message)
 
+	private val instructions = ArrayList<Instruction>()
+
+	private fun ins(mnemonic: Mnemonic, op1: Operand? = null, op2: Operand? = null) =
+		instructions.add(Instruction(mnemonic, op1, op2))
+
+
 
 	/*
 	Assembly
@@ -27,7 +37,8 @@ class Assembler(private val context: Context) {
 
 
 	fun assemble(file: SrcFile) {
-		this.nodeIndex = 0
+		testRandom(10)
+		/*this.nodeIndex = 0
 		this.file = file
 
 		try {
@@ -35,7 +46,7 @@ class Assembler(private val context: Context) {
 		} catch(e: EyreError) {
 			context.errors.add(e)
 			file.invalid = true
-		}
+		}*/
 	}
 
 
@@ -65,23 +76,12 @@ class Assembler(private val context: Context) {
 
 
 
-	private var volatileRegs = 0b00001111_00000111
-
-	private fun getReg(): Reg {
-		if(volatileRegs == 0) invalid()
-		val reg = volatileRegs.countTrailingZeroBits()
-		volatileRegs = volatileRegs xor (1 shl reg)
-		return Reg.r64(reg)
-	}
-
-	private fun getReg(reg: Reg) {
-		val index = reg.index
-		if(volatileRegs and (1 shl index) == 0) invalid()
-		volatileRegs = volatileRegs xor (1 shl index)
-	}
-
-	private fun freeReg(reg: Reg) {
-		volatileRegs = volatileRegs or (1 shl reg.index)
+	private fun VarNode.width() = when(size) {
+		1    -> Width.BYTE
+		2    -> Width.WORD
+		4    -> Width.DWORD
+		8    -> Width.QWORD
+		else -> Width.NONE
 	}
 
 	private fun assembleFunction(function: FunNode) {
@@ -90,13 +90,11 @@ class Assembler(private val context: Context) {
 		function.stackPos = -32
 		for(param in function.params) {
 			function.stackPos -= param.size
-			param.mem.base = Reg.RBP
-			param.mem.disp = function.stackPos
+			param.mem = StackOperand(function.stackPos, param.width())
 		}
 		for(local in function.locals) {
 			function.stackPos -= local.size
-			local.mem.base = Reg.RBP
-			local.mem.disp = function.stackPos
+			local.mem = StackOperand(function.stackPos, local.width())
 		}
 
 		assembleScope()
@@ -115,402 +113,330 @@ class Assembler(private val context: Context) {
 
 	private fun assembleBinNode(node: BinNode) {
 		if(node.op != BinOp.SET) invalid()
-		val dst = (node.left.exprSym as? VarNode) ?: invalid()
-		val reg = getReg()
-		genExprRec(reg, node.right)
-		genMovVarReg(dst, reg)
+		allocExpr(node.right)
+		println(node.exprString)
+		printFullExpr(node.right)
+		genExpr(node.right)
+		for(ins in instructions)
+			println(ins.printString)
+		val result = testExpr(node.right) ?: return
+		if(result.expected != result.generated)
+			System.err.println("Expected: ${result.expected}. Generated: ${result.generated}")
+		else
+			println("Test passed")
 	}
 
 
 
-	private fun genExprRec(dst: Reg, node: Node) {
-		if(node is BinNode) {
-			if(node.left is BinNode) {
-				if(node.right is BinNode) {
-					genExprRec(dst, node.left)
-					val next = getReg()
-					genExprRec(next, node.right)
-					genBinRegReg(node.op, dst, next)
-					freeReg(next)
-				} else {
-					genExprRec(dst, node.left)
-					genBinRegNode(node.op, dst, node.right)
-				}
-			} else if(node.right is BinNode) {
-				genExprRec(dst, node.right)
-				genBinRegNode(node.op, dst, node.left)
-			} else {
-				genMovRegNode(dst, node.left)
-				genBinRegNode(node.op, dst, node.right)
-			}
-		} else {
-			genMovRegNode(dst, node)
+	private fun genCall(call: CallNode) {
+		val function = call.receiver ?: invalid()
+		if(call.args.size != function.params.size) invalid()
+		for((argIndex, arg) in call.args.withIndex()) {
+			val param = function.params[argIndex]
+			val argType = arg.exprType ?: invalid()
+			if(!checkTypes(param.type, argType)) invalid()
 		}
 	}
 
-	private fun BinOp.arithmeticExt() = when(this) {
-		BinOp.ADD -> 0
-		BinOp.OR -> 1
-		BinOp.AND -> 4
-		BinOp.SUB -> 5
-		BinOp.XOR -> 6
-		else -> invalid()
-	}
-
-	private fun BinOp.arithmeticOpcode() = when(this) {
-		BinOp.ADD -> 0x00
-		BinOp.OR -> 0x08
-		BinOp.AND -> 0x20
-		BinOp.SUB -> 0x28
-		BinOp.XOR -> 0x30
-		else -> invalid()
+	private fun checkTypes(a: Type, b: Type): Boolean = when(a) {
+		is PointerType -> b is PointerType && checkTypes(a.type, b.type)
+		is IntType     -> b is IntType
+		else           -> a == b
 	}
 
 
 
 	/*
-	Arithmetic operations
+	AST generation
 	 */
 
 
+	private var mustInit = false
 
-	private fun genBinRegNode(op: BinOp, dst: Reg, src: Node) {
-		when(op) {
-			BinOp.MUL -> genMulRegNode(dst, src)
-			else -> genArithmeticRegNode(op, dst, src)
+	private var volatileRegs = 0b00001111_00000111
+
+	private fun nextReg(): Reg {
+		if(volatileRegs == 0) error("Spill")
+		val reg = volatileRegs.countTrailingZeroBits()
+		return Reg.r64(reg)
+	}
+
+	private fun allocReg(): Reg {
+		if(volatileRegs == 0) error("Spill")
+		val reg = volatileRegs.countTrailingZeroBits()
+		volatileRegs = volatileRegs xor (1 shl reg)
+		return Reg.r64(reg)
+	}
+
+	private fun freeReg(reg: Reg) {
+		volatileRegs = volatileRegs or (1 shl reg.index)
+	}
+
+	private fun isAvailable(reg: Reg) = volatileRegs and (1 shl reg.index) == 1
+
+
+
+	private fun allocExpr(node: Node) {
+		allocExprRec(node, null)
+		freeReg(node.reg!!)
+	}
+
+	private fun genExpr(node: Node) {
+		instructions.clear()
+		genExprRec(node)
+	}
+
+	private fun allocExprRec(node: Node, parentOp: BinOp?) {
+		when(node) {
+			is CallNode -> {
+				val dst = StackOperand(allocateStack(8))
+				node.mem = dst
+				genCall(node)
+				ins(Mnemonic.MOV, dst, RegOperand(Reg.RAX))
+			}
+			is IntNode -> node.isLeaf = true
+			is BinNode -> {
+				val left = node.left
+				val right = node.right
+				val op = node.op
+
+				allocExprRec(left, op)
+				allocExprRec(right, op)
+
+				if(left.isLeaf) {
+					if(right.isLeaf) {
+						if(op.isCommutative && (parentOp == op)) {
+							node.isRegless = true
+							node.isLeaf = true
+							node.numRegs = 0
+						} else {
+							node.reg = allocReg()
+							node.numRegs = 1
+						}
+					} else {
+						if(op.isCommutative) {
+							node.reg = right.reg
+							node.numRegs = right.numRegs
+						} else {
+							node.reg = allocReg()
+							node.numRegs = max(2, node.right.numRegs)
+							freeReg(right.reg!!)
+						}
+					}
+				} else if(right.isLeaf) {
+					node.reg = left.reg
+					node.numRegs = left.numRegs
+				} else {
+					node.reg = left.reg
+					freeReg(right.reg!!)
+					node.numRegs = if(left.numRegs != right.numRegs)
+						max(left.numRegs, right.numRegs)
+					else
+						left.numRegs + 1
+				}
+			}
+			else -> TODO()
 		}
+	}
+
+
+
+	private fun genExprRec(node: Node) {
+		if(node !is BinNode) TODO()
+
+		val left = node.left
+		val right = node.right
+		val op = node.op
+		val dst = node.reg!!
+
+		if(left.isLeaf) {
+			if(right.isLeaf) {
+				if(!node.isRegless || mustInit) {
+					mustInit = false
+					genMovRegNode(dst, left)
+					genBinRegNode(op, dst, right)
+				} else {
+					genBinRegNode(op, dst, left)
+					genBinRegNode(op, dst, right)
+				}
+			} else {
+				if(!op.isCommutative) {
+					mustInit = true
+					if(left !is BinNode)
+						genMovRegNode(dst, left)
+					else
+						genExprRec(left)
+					genExprRec(right)
+					genBinRegNode(op, dst, right)
+				} else {
+					genBinRegNode(op, dst, left)
+				}
+			}
+		} else if(right.isLeaf) {
+			genExprRec(left)
+			genBinRegNode(op, dst, right)
+		} else {
+			genExprRec(left)
+			genExprRec(right)
+			genBinRegReg(op, dst, right.reg!!)
+		}
+	}
+
+
+
+	private val BinOp.mnemonic get() = when(this) {
+		BinOp.ADD -> Mnemonic.ADD
+		BinOp.SUB -> Mnemonic.SUB
+		BinOp.MUL -> Mnemonic.IMUL
+		BinOp.DIV -> Mnemonic.IDIV
+		else -> TODO()
+	}
+
+	private val Reg.op get() = RegOperand(this)
+
+	private fun genXchgRaxReg(src: Reg) {
+		ins(Mnemonic.XCHG, Reg.RAX.op, src.op)
 	}
 
 	private fun genBinRegReg(op: BinOp, dst: Reg, src: Reg) {
-		when(op) {
-			BinOp.MUL -> genMulRegReg(dst, src)
-			else -> genArithmeticRegReg(op.arithmeticOpcode(), dst, src)
-		}
+		ins(op.mnemonic, RegOperand(dst), RegOperand(src))
 	}
 
-	/*
-	F6/5   IMUL  RM       1111
-	0F AF  IMUL  R_RM     1110
-	6B     IMUL  R_RM_I8  1110
-	69     IMUL  R_RM_I   1110
-	 */
-	private fun genMulRegReg(dst: Reg, src: Reg) {
-		byte(0b0100_1000 or dst.rexR or src.rexB)
-		word(0xAF0F)
-		byte(0b11_000_000 or dst.regValue or src.rmValue)
-	}
-	private fun genMulRegImm(dst: Reg, src: Long) {
-		if(!src.isImm32) {
-			val dst2 = getReg()
-			byte(0b0100_1000 or dst2.rexR)
-			byte(0xB8 or dst2.value)
-			qword(src)
-			genMulRegReg(dst, dst2)
-		} else {
-			byte(0b0100_1000 or dst.rexR or dst.rexB)
-			byte(0x69)
-			byte(0b11_000_000 or dst.regValue or dst.rmValue)
-			if(!src.isImm32) invalid()
-			dword(src.toInt())
-		}
-	}
-
-	private fun genMulRegVar(dst: Reg, src: VarNode) {
-		if(src.size != 4) invalid()
-		rm64(0xAF0F, dst, src.mem)
-	}
-	private fun genMulRegNode(dst: Reg, src: Node) {
+	private fun genBinRegNode(op: BinOp, dst: Reg, src: Node) {
 		when(src) {
-			is IntNode -> genMulRegImm(dst, src.value)
-			else -> genMulRegVar(dst, src.exprSym as? VarNode ?: invalid())
+			//is SymNode -> insRM(op.mnemonic, dst, src.sym)
+			is IntNode -> ins(op.mnemonic, RegOperand(dst), ImmOperand(src.value))
+			is BinNode -> { src.reg = dst; genExprRec(src) }
+			else       -> error("Invalid node: $src")
 		}
 	}
 
-
-
-	private fun genArithmeticRegImm(ext: Int, dst: Reg, src: Long) {
-		// 80/0 ADD RM_I 1111
-		byte(0b0100_1000 or dst.rexB)
-		byte(0x81)
-		byte(0b11_000_000 or (ext shl 3) or dst.rmValue)
-		if(!src.isImm32) invalid()
-		dword(src.toInt())
-	}
-	private fun genArithmeticRegReg(opcode: Int, dst: Reg, src: Reg) {
-		// 00 ADD RM_R 1111
-		rr64(opcode + 1, dst, src)
-	}
-	private fun genArithmeticRegVar(opcode: Int, dst: Reg, src: VarNode) {
-		// 02 ADD R_RM 1111
-		if(src.size != 4) invalid()
-		rm64(opcode + 3, dst, src.mem)
-	}
-	private fun genArithmeticRegNode(op: BinOp, dst: Reg, src: Node) {
-		val ext = op.arithmeticExt()
-		val opcode = op.arithmeticOpcode()
-
+	private fun genMovRegNode(dst: Reg, src: Node) {
 		when(src) {
-			is IntNode -> genArithmeticRegImm(ext, dst, src.value)
-			else -> genArithmeticRegVar(opcode, dst, src.exprSym as? VarNode ?: invalid())
+		//	is SymNode -> insRM(Mnemonic.MOV, dst, src.sym)
+			is IntNode -> ins(Mnemonic.MOV, RegOperand(dst), ImmOperand(src.value))
+			is BinNode -> { src.reg = dst; genExprRec(src) }
+			else       -> error("Invalid node: $src")
 		}
 	}
 
 
 
 	/*
-	Basic codegen
+	Testing
 	 */
 
 
 
-	private fun Any.byte(value: Int) = writer.i8(value)
-
-	private fun Any.word(value: Int) = writer.i16(value)
-
-	private fun Any.i24(value: Int) = writer.i24(value)
-
-	private fun Any.dword(value: Int) = writer.i32(value)
-
-	private fun Any.qword(value: Long) = writer.i64(value)
-
-	private fun isSigned(type: Type) = type is IntType && type.signed
+	private val regValues = LongArray(16)
 
 
 
-	private fun writeRipMem(target: SecPos, reg: Int, immWidth: Width) {
-		byte((reg shl 3) or 0b101)
-		context.ripRelocs.add(Reloc(SecPos(section, writer.pos), target, 0, immWidth, Width.DWORD))
+	class TestResult(
+		val node: Node,
+		val expected: Long,
+		val generated: Long
+	)
+
+
+
+	private fun testExpr(node: Node): TestResult? {
+		val trueValue: Long
+		val generatedValue: Long
+
+		try {
+			trueValue = evalExpr(node)
+			instructions.forEach(::evalIns)
+			generatedValue = regValues[node.reg!!.index]
+		} catch(e: ArithmeticException) {
+			println("Divide by zero, aborting test")
+			return null
+		} catch(e: Exception) {
+			System.err.println("Error for expression: $node")
+			throw e
+		}
+
+		return TestResult(node, trueValue, generatedValue)
 	}
 
 
 
-	private fun writeRbpMem(disp: Int, reg: Int) {
-		if(disp.isImm8) {
-			byte(0b01_000_101 or (reg shl 3))
-			byte(disp)
-		} else {
-			byte(0b10_000_101 or (reg shl 3))
-			dword(disp)
+	private fun evalExpr(node: Node): Long = when(node) {
+		is IntNode -> node.value
+		is BinNode -> node.op.calc(evalExpr(node.left), evalExpr(node.right))
+		else       -> error("Invalid node: $node")
+	}
+
+
+
+	private fun evalIns(ins: Instruction) {
+		val dst = (ins.op1 as RegOperand).reg
+
+		val srcValue = when(ins.op2) {
+			is RegOperand -> regValues[ins.op2.reg.index]
+			is ImmOperand -> ins.op2.value
+			else          -> err()
+		}
+
+		when(ins.mnemonic) {
+			Mnemonic.MOV  -> regValues[dst.index] = srcValue
+			Mnemonic.ADD  -> regValues[dst.index] += srcValue
+			Mnemonic.SUB  -> regValues[dst.index] -= srcValue
+			Mnemonic.IMUL -> regValues[dst.index] *= srcValue
+			Mnemonic.IDIV -> regValues[dst.index] /= srcValue
+			Mnemonic.AND  -> regValues[dst.index] = regValues[dst.index] and srcValue
+			Mnemonic.XOR  -> regValues[dst.index] = regValues[dst.index] xor srcValue
+			Mnemonic.OR   -> regValues[dst.index] = regValues[dst.index] or srcValue
+			else          -> error("Invalid mnemonic: ${ins.mnemonic}")
 		}
 	}
 
 
 
-	private fun writeMem(mem: MemOperand, reg: Int, immWidth: Width) {
-		if(mem.reloc != null) {
-			writeRipMem(mem.reloc!!, reg, immWidth)
-			return
+	private val binOps = arrayOf(BinOp.ADD, BinOp.SUB, BinOp.MUL)
+
+
+
+	private fun randomExpr(minDepth: Int = 2, maxDepth: Int = 3, depth: Int = 0): Node {
+		fun bin() = BinNode(
+			binOps.random(),
+			randomExpr(minDepth, maxDepth, depth + 1),
+			randomExpr(minDepth, maxDepth, depth + 1)
+		)
+
+		fun int() = IntNode(Random.nextLong(9) + 1)
+
+		return when {
+			depth == maxDepth -> int()
+			depth < minDepth -> bin()
+			Random.nextBoolean() -> int()
+			else  -> bin()
 		}
+	}
 
-		val i = mem.index.value
-		val b = mem.base.value
-		val disp = mem.disp
 
-		val mod = if(disp == 0) 0 else if(disp.isImm8) 1 else 2
-		fun disp() = if(disp == 0) Unit else if(disp.isImm8) byte(disp) else dword(disp)
 
-		if(mem.index.isValid) { // SIB: [R*S] or [R*S+DISP] or [R+R*S] or [R+R*S+DISP]
-			if(mem.index.isInvalidSibIndex) invalid()
-			val s = when(mem.scale) { 1 -> 0 2 -> 1 4 -> 2 8 -> 4 else -> err("Invalid scale") }
-			if(mem.base.isValid) {
-				if(b == 5 && disp == 0) { // [RBP/R13+R*S] -> [RBP+R*S+DISP8]
-					i24(0b01_000_100 or (reg shl 3) or (s shl 14) or (i shl 11) or (0b101 shl 8))
-				} else {
-					word((mod shl 6) or (reg shl 3) or 0b100 or (s shl 14) or (i shl 11) or (b shl 8))
-					disp()
+	private fun testRandom(count: Int) {
+		try {
+			for(i in 0 ..< count) {
+				val node = randomExpr()
+				println(node.exprString)
+				allocExpr(node)
+				printFullExpr(node)
+				genExpr(node)
+				for(ins in instructions) println(ins.printString)
+				val result = testExpr(node) ?: continue
+				if(result.generated != result.expected){
+					System.err.println("Test failed. Expected: ${result.expected}. Generated: ${result.generated}")
+					break
 				}
-			} else { // Index only, requires disp32
-				word((reg shl 3) or 0b100 or (s shl 14) or (i shl 11) or (0b101 shl 8))
-				dword(mem.disp)
+				println("Test passed\n")
 			}
-		} else if(mem.base.isValid) { // Indirect: [R] or [R+DISP]
-			if(b == 4) { // [RSP/R12] -> [RSP/R12+NONE*1] (same with DISP)
-				word((mod shl 6) or (reg shl 3) or 0b100 or (0b00_100_100 shl 8))
-				disp()
-			} else if(b == 5 && disp == 0) { // [RBP/R13] -> [RBP/R13+0]
-				word(0b00000000_01_000_101 or (reg shl 3))
-			} else {
-				byte((mod shl 6) or (reg shl 3) or b)
-				disp()
-			}
-		} else {
-			invalid()
+		} catch(e: Exception) {
+			e.printStackTrace()
+			exitProcess(1)
 		}
 	}
-
-
-
-	private fun rr64(opcode: Int, reg: Reg, rm: Reg) {
-		byte(0b0100_1000 or reg.rexR or rm.rexB)
-		writer.varLengthInt(opcode)
-		byte(0b11_000_000 or reg.regValue or rm.rmValue)
-	}
-
-	private fun rr32(opcode: Int, reg: Reg, rm: Reg) {
-		val rex = 0b0100_0000 or reg.rexR or rm.rexB
-		if(rex != 0b0100_0000) byte(rex)
-		writer.varLengthInt(opcode)
-		byte(0b11_000_000 or reg.regValue or rm.rmValue)
-	}
-
-	private fun rm8(opcode: Int, reg: Reg, mem: MemOperand) {
-		val rex = 0b0100_0000 or reg.rexR
-		if(rex != 0b0100_0000 || reg.requiresRex) byte(rex)
-		writer.varLengthInt(opcode)
-		writeMem(mem, reg.value, Width.NONE)
-	}
-
-	private fun rm16(opcode: Int, reg: Reg, mem: MemOperand) {
-		byte(0x66)
-		val rex = 0b0100_0000 or reg.rexR
-		if(rex != 0b0100_0000) byte(rex)
-		writer.varLengthInt(opcode)
-		writeMem(mem, reg.value, Width.NONE)
-	}
-
-	private fun rm32(opcode: Int, reg: Reg, mem: MemOperand) {
-		val rex = 0b0100_0000 or reg.rexR
-		if(rex != 0b0100_0000) byte(rex)
-		writer.varLengthInt(opcode)
-		writeMem(mem, reg.value, Width.NONE)
-	}
-
-	private fun rm64(opcode: Int, reg: Reg, mem: MemOperand) {
-		byte(0b0100_1000 or reg.rexR)
-		writer.varLengthInt(opcode)
-		writeMem(mem, reg.value, Width.NONE)
-	}
-
-
-
-	/*
-	MOV to SYM
-	 */
-
-
-
-	private fun genMovVarReg(dst: VarNode, src: Reg) {
-		when(dst.size) {
-			1 -> rm8(0x88, src, dst.mem)
-			2 -> rm16(0x89, src, dst.mem)
-			4 -> rm32(0x89, src, dst.mem)
-			8 -> rm64(0x89, src, dst.mem)
-			else -> invalid()
-		}
-	}
-
-
-
-	private fun genMovVarImm(dst: VarNode, src: Long) {
-		// 1:   mov byte [rcx], 10
-		// 2:   mov word [rcx], 10
-		// 4:   mov dword [rcx], 10
-		// 8u:  mov dword [rcx], 10
-		// 8s:  mov qword [rcx], 10
-		// I64: mov rax, 1 << 40; mov qword [rcx], rax
-		when(dst.size) {
-			1 -> {
-				byte(0xC6)
-				writeMem(dst.mem, 0, Width.BYTE)
-				if(src !in Width.BYTE) invalid()
-				byte(src.toInt())
-			}
-			2 -> {
-				word(0xC766)
-				writeMem(dst.mem, 0, Width.WORD)
-				if(src !in Width.WORD) invalid()
-				word(src.toInt())
-			}
-			4 -> {
-				byte(0xC7)
-				writeMem(dst.mem, 0, Width.DWORD)
-				if(src !in Width.DWORD) invalid()
-				dword(src.toInt())
-			}
-			8 -> if(src.isImm32) {
-				if(isSigned(dst.type)) {
-					word(0xC748)
-					writeMem(dst.mem, 0, Width.DWORD)
-					dword(src.toInt())
-				} else {
-					byte(0xC7)
-					writeMem(dst.mem, 0, Width.DWORD)
-					dword(src.toInt())
-				}
-			} else {
-				word(0xB048) // mov rax, qword src
-				qword(src)
-				byte(0x89) // mov [dst], rax
-				writeMem(dst.mem, 0, Width.NONE)
-			}
-		}
-	}
-
-
-
-	/*
-	MOV to REG
-	 */
-
-
-
-	private fun genMovRegNode(dst: Reg, node: Node) {
-		if(node.exprSym != null)
-			genMovRegVar(dst, node.exprSym as? VarNode ?: invalid())
-		else if(node is IntNode)
-			genMovRegImm(dst, node.value)
-		else
-			invalid()
-	}
-
-
-
-	private fun genMovRegReg(dst: Reg, src: Reg) {
-		when {
-			dst == src -> return
-			src.isR32  -> rr32(0x89, src, dst) // 89 MOV RM32_R32
-			src.isR64  -> rr64(0x89, src, dst) // RW 89 MOV RM64_R64
-			else       -> err("Invalid register: $src")
-		}
-	}
-
-
-
-	private fun genLea(dst: Reg, src: MemOperand) {
-		word(0x8D48 or (dst.rex shl 2))
-		writeMem(src, dst.value, Width.NONE)
-	}
-
-
-
-	private fun genMovRegImm(dst: Reg, src: Long) {
-		// src == 0    -> xor dst, dst
-		// src.isImm32 -> mov dst, src (RW C7/0 MOV RM64_I32) (sign-extended)
-		// else        -> mov dst, src (RW B8 MOV R64_I64)
-		when {
-			src == 0L   -> rr32(0x31, dst, dst)
-			src.isImm32 -> rr64(0xC7, Reg(0), dst).dword(src.toInt())
-			else        -> word(0xB848 or dst.rex or (dst.value shl 8)).qword(src)
-		}
-	}
-
-
-
-	private fun genMovRegVar(dst: Reg, src: VarNode) {
-		// 1: movsx/movzx rcx, byte [src]
-		// 2: movsx/movzx rcx, word [src]
-		// 4s: movsxd rcx, [src]
-		// 4u: mov ecx, [src]
-		// 8: mov rcx, [src]
-		when(src.size) {
-			1 -> rm64(if(isSigned(src.type)) 0xBE0F else 0xB60F, dst, src.mem)
-			2 -> rm64(if(isSigned(src.type)) 0xBF0F else 0xB70F, dst, src.mem)
-			4 -> if(isSigned(src.type)) rm64(0x63, dst, src.mem) else rm32(0x8B, dst, src.mem)
-			8 -> rm64(0x8B, dst, src.mem)
-			else -> err("Invalid type size")
-		}
-	}
-
 
 
 }

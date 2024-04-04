@@ -2,31 +2,45 @@ package eyre
 
 
 
-enum class BinOp(val precedence: Int, val string: String?) {
+enum class BinOp(
+	val precedence: Int,
+	val string: String?,
+	val isCommutative: Boolean = false
+) {
 
 	ARR     (11, null),
 	DOT     (11, "."),
+
 	CALL    (10, null),
 	REF     (10, "::"),
-	MUL     (9, "*"),
+
+	MUL     (9, "*", isCommutative = true),
 	DIV     (9, "/"),
-	ADD     (8, "+"),
+
+	ADD     (8, "+", isCommutative = true),
 	SUB     (8, "-"),
+
 	SHL     (7, "<<"),
 	SHR     (7, ">>"),
+
 	TO      (6, ".."),
 	UNTIL   (6, "..<"),
+
 	GT      (5, ">"),
 	LT      (5, "<"),
 	GTE     (5, ">="),
 	LTE     (5, "<="),
-	EQ      (4, "=="),
-	NEQ     (4, "!="),
-	AND     (3, "&"),
-	XOR     (3, "^"),
-	OR      (3, "|"),
-	LAND    (2, "&&"),
-	LOR     (2, "||"),
+
+	EQ      (4, "==", isCommutative = true),
+	NEQ     (4, "!=", isCommutative = true),
+
+	AND     (3, "&", isCommutative =  true),
+	XOR     (3, "^", isCommutative = true),
+	OR      (3, "|", isCommutative = true),
+
+	LAND    (2, "&&", isCommutative = true),
+	LOR     (2, "||", isCommutative = true),
+
 	SET     (1, "="),
 	SET_MUL (1, "*="),
 	SET_DIV (1, "/="),

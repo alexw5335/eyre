@@ -289,5 +289,4 @@ class Printer(private val context: Context) {
 	}}
 
 
-
 }

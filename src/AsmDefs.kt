@@ -3,53 +3,11 @@ package eyre
 
 
 sealed interface Operand
-
 data class RegOperand(var reg: Reg) : Operand
-
-data class MemOperand(
-	var width: Width = Width.NONE,
-	var base: Reg = Reg.NONE,
-	var index: Reg = Reg.NONE,
-	var scale: Int = 0,
-	var disp: Int = 0,
-	var reloc: SecPos? = null
-) : Operand {
-	companion object {
-		fun reloc(width: Width, reloc: SecPos) = MemOperand(width = width, reloc = reloc)
-		fun rbp(width: Width, disp: Int) = MemOperand(width = width, base = Reg.RBP, disp = disp)
-		fun rsp(width: Width, disp: Int) = MemOperand(width = width, base = Reg.RSP, disp = disp)
-	}
-}
-
+data class StackOperand(var disp: Int, var width: Width = Width.NONE) : Operand
+data class RelocOperand(var reloc: SecPos, var width: Width = Width.NONE) : Operand
 data class ImmOperand(var value: Long) : Operand
-
-data class Instruction(val mnemonic: Mnemonic, val op1: Operand? = null, val op2: Operand? = null) {
-
-	private fun StringBuilder.appendOperand(operand: Operand) {
-		when(operand) {
-			is RegOperand -> append(operand.reg)
-			is ImmOperand -> append(operand.value)
-			is MemOperand -> if(operand.reloc != null) {
-				append("[RELOC + ${operand.disp}]")
-			} else if(operand.index.isValid) {
-				append("[${operand.base} + ${operand.index} * ${operand.scale} ${operand.disp.signString}]")
-			} else {
-				append("[${operand.base} ${operand.disp.signString}]")
-			}
-		}
-	}
-
-	override fun toString() = buildString {
-		append(mnemonic)
-		if(op1 == null) return@buildString
-		append(' ')
-		appendOperand(op1)
-		if(op2 == null) return@buildString
-		append(", ")
-		appendOperand(op2)
-	}
-}
-
+data class Instruction(val mnemonic: Mnemonic, val op1: Operand?, val op2: Operand?)
 
 
 enum class Mnemonic {

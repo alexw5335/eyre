@@ -186,6 +186,7 @@ class Resolver(private val context: Context) {
 		is BinNode -> {
 			resolveNode(node.left)
 			resolveNode(node.right)
+			node.exprType = IntTypes.I32
 		}
 		is ConstNode -> {
 			//resolveNode(node.valueNode)
@@ -198,7 +199,9 @@ class Resolver(private val context: Context) {
 			pushScope(node)
 		}
 		is DllImportNode -> Unit
-		is IntNode -> node.exprType = IntTypes.I32
+		is IntNode -> {
+			node.exprType = IntTypes.I32
+		}
 		else -> context.internalErr("Unhandled node: $node")
 	}}
 

@@ -13,6 +13,9 @@ sealed class Node {
 	var exprType: Type? = null
 	var exprSym: Sym? = null
 	var resolved = false
+	var reg: Reg? = null
+	var isLeaf = false
+	var numRegs = 0
 }
 
 interface Sym {
@@ -51,6 +54,7 @@ class UnNode(val op: UnOp, val child: Node) : Node() {
 }
 
 class BinNode(val op: BinOp, val left: Node, val right: Node) : Node() {
+	var isRegless = false
 	inline fun calc(function: (Node) -> Long): Long = op.calc(function(left), function(right))
 }
 
@@ -58,6 +62,7 @@ class NameNode(val name: Name) : Node()
 
 class CallNode(val left: Node, val args: List<Node>) : Node() {
 	var receiver: FunNode? = null
+	var mem: Operand? = null
 }
 
 class ArrayNode(val left: Node, val right: Node) : Node() {
@@ -114,7 +119,7 @@ class VarNode(
 	override var type: Type = UnchosenType,
 ) : Node(), TypedSym {
 	val size get() = type.size
-	var mem: MemOperand = MemOperand()
+	var mem: Operand? = null
 }
 
 class MemberNode(
