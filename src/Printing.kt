@@ -13,17 +13,18 @@ fun printFullExpr(node: Node, indent: Int = 0) {
 	when(node) {
 		is BinNode -> {
 			if(node.isLeaf)
-				println("${node.op} \u001B[32mLEAF\u001B[0m")
+				println("${node.op}  \u001B[32mLEAF\u001B[0m")
 			else
-				println("${node.op} \u001B[31m${node.reg} ${node.numRegs}\u001B[0m")
+				println("${node.op}  \u001B[31m${node.numRegs}\u001B[0m")
 			printFullExpr(node.left, indent + 1)
 			printFullExpr(node.right, indent + 1)
 		}
 		is IntNode -> println(node.value)
 		is UnNode -> {
-			println("${node.op}   (${node.reg} ${node.isLeaf} ${node.numRegs})")
+			println("${node.op}  \u001B[31m${node.numRegs}\u001B[0m")
 			printFullExpr(node.child, indent + 1)
 		}
+		is NameNode -> println(node.name)
 		else -> error("Unhandled node: $node")
 	}
 }

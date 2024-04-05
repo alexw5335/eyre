@@ -2,7 +2,6 @@ package eyre
 
 import kotlin.math.max
 import kotlin.random.Random
-import kotlin.system.exitProcess
 
 class Assembler(private val context: Context) {
 
@@ -61,6 +60,7 @@ class Assembler(private val context: Context) {
 				is FunNode       -> assembleFunction(node)
 				is VarNode       -> { }
 				is CallNode      -> { }
+				is StructNode    -> { }
 				is BinNode       -> assembleBinNode(node)
 				else             -> err("Invalid node: $node")
 			}
@@ -112,17 +112,9 @@ class Assembler(private val context: Context) {
 
 	private fun assembleBinNode(node: BinNode) {
 		if(node.op != BinOp.SET) invalid()
-		allocExpr(node.right)
-		println(node.exprString)
-		printFullExpr(node.right)
+		preGenExpr(node.right, null)
 		genExpr(node.right)
-		for(ins in instructions)
-			println(ins.printString)
-		val result = testExpr(node.right) ?: return
-		if(result.expected != result.generated)
-			System.err.println("Expected: ${result.expected}. Generated: ${result.generated}")
-		else
-			println("Test passed")
+		instructions.forEach { println(it.printString) }
 	}
 
 
@@ -150,84 +142,63 @@ class Assembler(private val context: Context) {
 	 */
 
 
-	private var mustInit = false
 
-	private var volatileRegs = 0b00001111_00000111
-
-	private fun nextReg(): Reg {
-		if(volatileRegs == 0) error("Spill")
-		val reg = volatileRegs.countTrailingZeroBits()
-		return Reg.r64(reg)
-	}
+	private var availableRegs = 0b00001111_00000111
 
 	private fun allocReg(): Reg {
-		if(volatileRegs == 0) error("Spill")
-		val reg = volatileRegs.countTrailingZeroBits()
-		volatileRegs = volatileRegs xor (1 shl reg)
+		if(availableRegs == 0) error("Spill")
+		val reg = availableRegs.countTrailingZeroBits()
+		availableRegs = availableRegs xor (1 shl reg)
 		return Reg.r64(reg)
 	}
 
 	private fun freeReg(reg: Reg) {
-		volatileRegs = volatileRegs or (1 shl reg.index)
+		availableRegs = availableRegs or (1 shl reg.index)
 	}
 
-	private fun isAvailable(reg: Reg) = volatileRegs and (1 shl reg.index) == 1
+	private fun isAvailable(reg: Reg) = availableRegs and (1 shl reg.index) == 1
+
+	private fun isUsed(reg: Reg) = availableRegs and (1 shl reg.index) == 0
 
 
-
-	private fun allocExpr(node: Node) {
-		allocExprRec(node, null)
-		freeReg(node.reg!!)
-	}
-
-	private fun genExpr(node: Node) {
+	private fun genExpr(node: Node): Reg {
 		instructions.clear()
-		genExprRec(node, false)
+		val dst = allocReg()
+		genExprRec(dst, node)
+		freeReg(dst)
+		return dst
 	}
 
-	private fun allocExprRec(node: Node, parentOp: BinOp?) {
+	private fun preGenExpr(node: Node, parentOp: BinOp?) {
 		when(node) {
-			is CallNode -> {
-				val dst = StackOperand(allocateStack(8))
-				node.mem = dst
-				genCall(node)
-				ins(Mnemonic.MOV, dst, RegOperand(Reg.RAX))
-			}
 			is IntNode -> node.isLeaf = true
+			is NameNode -> node.isLeaf = true
 			is BinNode -> {
 				val left = node.left
 				val right = node.right
 				val op = node.op
 
-				allocExprRec(left, op)
-				allocExprRec(right, op)
+				preGenExpr(left, op)
+				preGenExpr(right, op)
 
 				if(left.isLeaf) {
 					if(right.isLeaf) {
 						if(op.isCommutative && (parentOp == op)) {
-							node.isRegless = true
 							node.isLeaf = true
 							node.numRegs = 0
 						} else {
-							node.reg = allocReg()
 							node.numRegs = 1
 						}
 					} else {
 						if(op.isCommutative) {
-							node.reg = right.reg
 							node.numRegs = right.numRegs
 						} else {
-							node.reg = allocReg()
 							node.numRegs = max(2, node.right.numRegs)
-							freeReg(right.reg!!)
 						}
 					}
 				} else if(right.isLeaf) {
-					node.reg = left.reg
 					node.numRegs = left.numRegs
 				} else {
-					node.reg = left.reg
-					freeReg(right.reg!!)
 					node.numRegs = if(left.numRegs != right.numRegs)
 						max(left.numRegs, right.numRegs)
 					else
@@ -240,44 +211,48 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun genExprRec(node: Node, mustInit: Boolean) {
-		if(node !is BinNode) TODO()
+	private fun genExprRec(dst: Reg, node: Node) {
+		when(node) {
+			is BinNode -> {
+				val left = node.left
+				val right = node.right
+				val op = node.op
 
-		val left = node.left
-		val right = node.right
-		val op = node.op
-		val dst = node.reg!!
-
-		if(left.isLeaf) {
-			if(right.isLeaf) {
-				if(!node.isRegless || mustInit) {
-					genMovRegNode(dst, left)
-					genBinRegNode(op, dst, right)
+				if(left.isLeaf) {
+					if(right.isLeaf) {
+						genMov(dst, node)
+					} else {
+						if(op.isCommutative) {
+							genExprRec(dst, right)
+							genBinOp(op, dst, left)
+						} else {
+							val next = allocReg()
+							genExprRec(next, right)
+							genMov(dst, left)
+							genBinOp(op, dst, next)
+							freeReg(next)
+						}
+					}
+				} else if(right.isLeaf) {
+					genExprRec(dst, left)
+					genBinOp(op, dst, right)
 				} else {
-					genBinRegNode(op, dst, left)
-					genBinRegNode(op, dst, right)
-				}
-			} else {
-
-				if(!op.isCommutative) {
-					if(left !is BinNode)
-						genMovRegNode(dst, left)
-					else
-						genExprRec(left, true)
-					genExprRec(right, false)
-					genBinRegNode(op, dst, right)
-				} else {
-					genExprRec(right, false)
-					genBinRegNode(op, dst, left)
+					if(op.isCommutative && right.numRegs > left.numRegs) {
+						genExprRec(dst, right)
+						val next = allocReg()
+						genExprRec(next, left)
+						genBinOp(op, dst, next)
+						freeReg(next)
+					} else {
+						genExprRec(dst, left)
+						val next = allocReg()
+						genExprRec(next, right)
+						genBinOp(op, dst, next)
+						freeReg(next)
+					}
 				}
 			}
-		} else if(right.isLeaf) {
-			genExprRec(left, false)
-			genBinRegNode(op, dst, right)
-		} else {
-			genExprRec(left, false)
-			genExprRec(right, false)
-			genBinRegReg(op, dst, right.reg!!)
+			else -> TODO()
 		}
 	}
 
@@ -291,31 +266,71 @@ class Assembler(private val context: Context) {
 		else -> TODO()
 	}
 
-	private val Reg.op get() = RegOperand(this)
-
-	private fun genXchgRaxReg(src: Reg) {
-		ins(Mnemonic.XCHG, Reg.RAX.op, src.op)
-	}
-
-	private fun genBinRegReg(op: BinOp, dst: Reg, src: Reg) {
+	private fun genBinOp(op: BinOp, dst: Reg, src: Reg) {
 		ins(op.mnemonic, RegOperand(dst), RegOperand(src))
 	}
 
-	private fun genBinRegNode(op: BinOp, dst: Reg, src: Node) {
-		when(src) {
-			//is SymNode -> insRM(op.mnemonic, dst, src.sym)
-			is IntNode -> ins(op.mnemonic, RegOperand(dst), ImmOperand(src.value))
-			is BinNode -> { src.reg = dst; genExprRec(src, false) }
-			else       -> error("Invalid node: $src")
+	private fun genMemberAccess(dst: Reg, node: DotNode) {
+		val leftSym = node.left.exprSym
+		if(leftSym is VarNode) {
+
+		} else {
+			genMemberAccess(dst, node.left as DotNode)
 		}
 	}
 
-	private fun genMovRegNode(dst: Reg, src: Node) {
+
+
+	private fun genDiv(dst: Reg, src: Reg) {
+		val saveRax = dst != Reg.RAX
+		if(isUsed(Reg.RAX)) {
+			ins(Mnemonic.PUSH, RegOperand(Reg.RAX))
+		}
+	}
+
+
+
+	private fun genBinOp(op: BinOp, dst: Reg, src: Node) {
 		when(src) {
-		//	is SymNode -> insRM(Mnemonic.MOV, dst, src.sym)
+			is NameNode -> {
+				val sym = src.exprSym ?: invalid()
+				if(sym !is VarNode) invalid()
+				if(src.exprType != IntTypes.I32) invalid()
+				ins(op.mnemonic, RegOperand(dst), sym.mem!!)
+			}
+
+			is IntNode -> ins(op.mnemonic, RegOperand(dst), ImmOperand(src.value))
+			is BinNode -> {
+				if(src.isConst) {
+					ins(op.mnemonic, RegOperand(dst), ImmOperand(src.constValue))
+				} else {
+					genBinOp(src.op, dst, src.left)
+					genBinOp(op, dst, src.right)
+				}
+			}
+			else -> error("Invalid node: $src")
+		}
+	}
+
+	private fun genMov(dst: Reg, src: Node) {
+		when(src) {
+			is NameNode -> {
+				val sym = src.exprSym ?: invalid()
+				if(sym !is VarNode) invalid()
+				if(src.exprType != IntTypes.I32) invalid()
+				ins(Mnemonic.MOV, RegOperand(dst), sym.mem!!)
+			}
+
 			is IntNode -> ins(Mnemonic.MOV, RegOperand(dst), ImmOperand(src.value))
-			is BinNode -> { src.reg = dst; genExprRec(src, true) }
-			else       -> error("Invalid node: $src")
+			is BinNode -> {
+				if(src.isConst) {
+					ins(Mnemonic.MOV, RegOperand(dst), ImmOperand(src.constValue))
+				} else {
+					genMov(dst, src.left)
+					genBinOp(src.op, dst, src.right)
+				}
+			}
+			else -> error("Invalid node: $src")
 		}
 	}
 
@@ -376,40 +391,28 @@ class Assembler(private val context: Context) {
 		}
 	}
 
-	class TestResult(val node: Node, val expected: Long, val generated: Long, val zeroDivide: Boolean)
-
-	fun testExpr(node: Node): TestResult {
-		val trueValue: Long
+	fun testExpr(node: Node): Boolean {
+		val expectedValue: Long
 		val generatedValue: Long
 
 		try {
-			trueValue = evalExpr(node)
+			println(node.exprString)
+			preGenExpr(node, null)
+			printFullExpr(node)
+			val dst = genExpr(node)
+			expectedValue = evalExpr(node)
 			instructions.forEach(::evalIns)
-			generatedValue = regValues[node.reg!!.index]
-		} catch(e: ArithmeticException) {
-			return TestResult(node, 0, 0, true)
-		}
-
-		return TestResult(node, trueValue, generatedValue, false)
-	}
-
-	fun testAndPrintExpr(node: Node): Boolean {
-		println(node.exprString)
-		allocExpr(node)
-		printFullExpr(node)
-		genExpr(node)
-		for(ins in instructions) println(ins.printString)
-		val result = testExpr(node)
-		if(result.zeroDivide) {
-			System.err.println("Zero divide")
-			return false
-		} else if(result.generated != result.expected) {
-			System.err.println("Test failed. Expected: ${result.expected}. Generated: ${result.generated}")
-			return true
-		} else {
+			generatedValue = regValues[dst.index]
+			for(ins in instructions) println(ins.printString)
+			if(generatedValue != expectedValue) {
+				System.err.println("Test failed. Expected: $expectedValue. Generated: $generatedValue")
+				return false
+			}
 			println("Test passed\n")
-			return false
+		} catch(e: ArithmeticException) {
+			println("Divide by zero, aborting")
 		}
+		return true
 	}
 
 

@@ -60,7 +60,7 @@ class Compiler(val context: Context) {
 
 
 	private fun compileInternal() {
-		IntTypes.ALL.forEach(context.symTable::add)
+		context.symTable.add(IntTypes.INT)
 		context.files.forEach(::parseFile)
 		checkErrors()
 		context.files.forEach(resolver::resolveFile)

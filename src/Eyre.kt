@@ -8,8 +8,8 @@ import kotlin.io.path.relativeTo
 
 
 fun main() {
-	//Eyre.compile("samples")
-	Eyre.testRandomExpressions()
+	Eyre.compile("samples")
+	//Eyre.testRandomExpressions()
 }
 
 
@@ -33,7 +33,7 @@ object Eyre {
 		val file = VirtualSrcFile("virtual.eyre", expr)
 		val compiler = Compiler(Context(Paths.get("build"), listOf(file)))
 		compiler.parseFile(file)
-		compiler.assembler.testAndPrintExpr(file.nodes.single())
+		compiler.assembler.testExpr(file.nodes.single())
 	}
 
 
@@ -42,7 +42,7 @@ object Eyre {
 		val context = Context(Paths.get(""), emptyList())
 		val assembler = Assembler(context)
 		for(i in 0 ..< 10)
-			if(assembler.testAndPrintExpr(assembler.randomExpr()))
+			if(assembler.testExpr(assembler.randomExpr()))
 				break
 	}
 

@@ -198,13 +198,28 @@ class Resolver(private val context: Context) {
 			resolveNode(node.child)
 			node.exprType = IntTypes.I32
 
+			if(node.child.isConst) {
+				node.isConst = true
+				node.isLeaf = true
+				node.constValue = node.op.calc(node.child.constValue)
+			}
 		}
 		is BinNode -> {
 			resolveNode(node.left)
 			resolveNode(node.right)
 			node.exprType = IntTypes.I32
+
+			if(node.left.isConst && node.right.isConst) {
+				node.isConst = true
+				node.isLeaf = true
+				node.constValue = node.op.calc(node.left.constValue, node.right.constValue)
+			}
 		}
-		is IntNode -> node.isLeaf = true
+		is IntNode -> {
+			node.isLeaf = true
+			node.isConst = true
+			node.constValue = node.value
+		}
 
 		else -> context.internalErr("Unhandled node: $node")
 	}}

@@ -1,5 +1,15 @@
 namespace eyre
 
-fun main(a: u32, b: u32) {
-	a = (1 + 2) * (3 + 4)
+struct Vec {
+	int x
+	int y
+}
+
+fun main(vec: Vec*) {
+	var a: int
+	a = vec.x
+
+	[rbp - 32]
+	mov rax, [rbp - 32]
+
 }

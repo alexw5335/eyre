@@ -13,9 +13,10 @@ sealed class Node {
 	var exprType: Type? = null
 	var exprSym: Sym? = null
 	var resolved = false
-	var reg: Reg? = null
 	var isLeaf = false
 	var numRegs = 0
+	var isConst = false
+	var constValue = 0L
 }
 
 interface Sym {
@@ -56,6 +57,14 @@ class UnNode(val op: UnOp, val child: Node) : Node() {
 class BinNode(val op: BinOp, val left: Node, val right: Node) : Node() {
 	var isRegless = false
 	inline fun calc(function: (Node) -> Long): Long = op.calc(function(left), function(right))
+	// Must be LEAF_LEAF_INIT if it is the left-most of a binary leaf chain
+	enum class Type {
+		NODE_NODE,
+		NODE_LEAF,
+		LEAF_NODE,
+		LEAF_LEAF,
+		LEAF_LEAF_INIT;
+	}
 }
 
 class NameNode(val name: Name) : Node()
@@ -76,7 +85,6 @@ class DotNode(val left: Node, val right: Node) : Node() {
 		DEREF
 	}
 	var type = Type.SYM
-	var isOp = false
 	var member: MemberNode? = null
 }
 
@@ -216,6 +224,7 @@ class ArrayType(override val type: Type, var count: Int = 0): Type, TypedSym, An
 }
 
 object IntTypes {
+	val INT   = IntType(Name["int"], 4, true)
 	val I8    = IntType(Name["i8"], 1, true)
 	val I16   = IntType(Name["i16"], 2, true)
 	val I32   = IntType(Name["i32"], 4, true)

@@ -9,7 +9,6 @@ data class RelocOperand(var reloc: SecPos, var width: Width = Width.NONE) : Oper
 data class ImmOperand(var value: Long) : Operand
 data class Instruction(val mnemonic: Mnemonic, val op1: Operand?, val op2: Operand?)
 
-
 enum class Mnemonic {
 	ADD, OR, ADC, SBB, AND, SUB, XOR, CMP,
 	PUSH, POP, MOVSXD, MOVSX, MOVZX, IMUL,
