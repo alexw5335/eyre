@@ -24,8 +24,8 @@ class Assembler(private val context: Context) {
 
 	private val instructions = ArrayList<Instruction>()
 
-	private fun ins(mnemonic: Mnemonic, op1: Operand? = null, op2: Operand? = null) =
-		instructions.add(Instruction(mnemonic, op1, op2))
+	private fun ins(mnemonic: Mnemonic, op1: Operand? = null, op2: Operand? = null, op3: Operand? = null) =
+		instructions.add(Instruction(mnemonic, op1, op2, op3))
 
 
 
@@ -152,6 +152,12 @@ class Assembler(private val context: Context) {
 		return Reg.r64(reg)
 	}
 
+	private fun nextReg(): Reg {
+		if(availableRegs == 0) error("Spill")
+		val reg = availableRegs.countTrailingZeroBits()
+		return Reg.r64(reg)
+	}
+
 	private fun freeReg(reg: Reg) {
 		availableRegs = availableRegs or (1 shl reg.index)
 	}
@@ -173,6 +179,15 @@ class Assembler(private val context: Context) {
 		when(node) {
 			is IntNode -> node.isLeaf = true
 			is NameNode -> node.isLeaf = true
+			is UnNode -> {
+				preGenExpr(node.child, null)
+				if(node.child.isLeaf) {
+					node.numRegs = 1
+				} else {
+					node.numRegs = node.child.numRegs
+					node.requiredRegs = node.child.requiredRegs
+				}
+			}
 			is BinNode -> {
 				val left = node.left
 				val right = node.right
@@ -180,6 +195,12 @@ class Assembler(private val context: Context) {
 
 				preGenExpr(left, op)
 				preGenExpr(right, op)
+
+				if(op == BinOp.DIV) {
+					node.requiredRegs = node.requiredRegs
+				} else if(op == BinOp.SHL || op == BinOp.SHR) {
+
+				}
 
 				if(left.isLeaf) {
 					if(right.isLeaf) {
@@ -190,15 +211,14 @@ class Assembler(private val context: Context) {
 							node.numRegs = 1
 						}
 					} else {
-						if(op.isCommutative) {
-							node.numRegs = right.numRegs
-						} else {
-							node.numRegs = max(2, node.right.numRegs)
-						}
+						node.requiredRegs = right.requiredRegs
+						node.numRegs = if(op.isCommutative) right.numRegs else max(2, node.right.numRegs)
 					}
 				} else if(right.isLeaf) {
+					node.requiredRegs = left.requiredRegs
 					node.numRegs = left.numRegs
 				} else {
+					node.requiredRegs = left.requiredRegs or right.requiredRegs
 					node.numRegs = if(left.numRegs != right.numRegs)
 						max(left.numRegs, right.numRegs)
 					else
@@ -270,21 +290,85 @@ class Assembler(private val context: Context) {
 		ins(op.mnemonic, RegOperand(dst), RegOperand(src))
 	}
 
-	private fun genMemberAccess(dst: Reg, node: DotNode) {
-		val leftSym = node.left.exprSym
-		if(leftSym is VarNode) {
 
-		} else {
-			genMemberAccess(dst, node.left as DotNode)
+
+	private fun genBinOpRR(op: BinOp, dst: Reg, src: Reg) {
+		when(op) {
+			BinOp.ADD -> ins(Mnemonic.ADD, RegOperand(dst), RegOperand(src))
+			BinOp.SUB -> ins(Mnemonic.SUB, RegOperand(dst), RegOperand(src))
+			BinOp.AND -> ins(Mnemonic.AND, RegOperand(dst), RegOperand(src))
+			BinOp.OR  -> ins(Mnemonic.OR, RegOperand(dst), RegOperand(src))
+			BinOp.XOR -> ins(Mnemonic.XOR, RegOperand(dst), RegOperand(src))
+			BinOp.MUL -> ins(Mnemonic.IMUL, RegOperand(dst), RegOperand(src))
+			BinOp.SHL -> {
+				if(src == Reg.RCX) {
+					ins(Mnemonic.SHL, RegOperand(dst), RegOperand(src))
+				} else {
+					if(isUsed(Reg.RCX)) ins(Mnemonic.PUSH, RegOperand(Reg.RCX))
+					ins(Mnemonic.SHL, RegOperand(dst), RegOperand(src))
+					if(isUsed(Reg.RCX)) ins(Mnemonic.POP, RegOperand(Reg.RCX))
+				}
+			}
+			BinOp.SHR -> {
+				if(src == Reg.RCX) {
+					ins(Mnemonic.SHL, RegOperand(dst), RegOperand(src))
+				} else {
+					if(isUsed(Reg.RCX)) ins(Mnemonic.PUSH, RegOperand(Reg.RCX))
+					ins(Mnemonic.SHR, RegOperand(dst), RegOperand(src))
+					if(isUsed(Reg.RCX)) ins(Mnemonic.POP, RegOperand(Reg.RCX))
+				}
+			}
+			BinOp.DIV -> {
+				if(isUsed(Reg.RDX))
+					ins(Mnemonic.PUSH, RegOperand(Reg.RDX))
+				if(dst != Reg.RAX) {
+					ins(Mnemonic.PUSH, RegOperand(Reg.RAX))
+					ins(Mnemonic.MOV, RegOperand(Reg.RAX), RegOperand(dst))
+				}
+				ins(Mnemonic.CDQ)
+				ins(Mnemonic.IDIV, RegOperand(src))
+				if(dst != Reg.RAX) {
+					ins(Mnemonic.MOV, RegOperand(dst), RegOperand(Reg.RAX))
+					ins(Mnemonic.POP, RegOperand(Reg.RAX))
+				}
+				if(isUsed(Reg.RDX))
+					ins(Mnemonic.POP, RegOperand(Reg.RDX))
+			}
+			else -> TODO()
 		}
 	}
 
 
 
-	private fun genDiv(dst: Reg, src: Reg) {
-		val saveRax = dst != Reg.RAX
-		if(isUsed(Reg.RAX)) {
-			ins(Mnemonic.PUSH, RegOperand(Reg.RAX))
+	private fun genBinOpRI(op: BinOp, dst: Reg, src: Long) {
+		when(op) {
+			BinOp.ADD -> ins(Mnemonic.ADD, RegOperand(dst), ImmOperand(src))
+			BinOp.SUB -> ins(Mnemonic.SUB, RegOperand(dst), ImmOperand(src))
+			BinOp.AND -> ins(Mnemonic.AND, RegOperand(dst), ImmOperand(src))
+			BinOp.OR  -> ins(Mnemonic.OR, RegOperand(dst), ImmOperand(src))
+			BinOp.XOR -> ins(Mnemonic.XOR, RegOperand(dst), ImmOperand(src))
+			BinOp.MUL -> ins(Mnemonic.IMUL, RegOperand(dst), RegOperand(dst), ImmOperand(src))
+			BinOp.SHL -> ins(Mnemonic.SHL, RegOperand(dst), ImmOperand(src))
+			BinOp.SHR -> ins(Mnemonic.SAR, RegOperand(dst), ImmOperand(src))
+			BinOp.DIV -> {
+				if(isUsed(Reg.RDX))
+					ins(Mnemonic.PUSH, RegOperand(Reg.RDX))
+				if(dst != Reg.RAX) {
+					ins(Mnemonic.PUSH, RegOperand(Reg.RAX))
+					ins(Mnemonic.MOV, RegOperand(Reg.RAX), RegOperand(dst))
+				}
+				val srcReg = nextReg()
+				ins(Mnemonic.MOV, RegOperand(srcReg), ImmOperand(src))
+				ins(Mnemonic.CDQ)
+				ins(Mnemonic.IDIV, RegOperand(srcReg))
+				if(dst != Reg.RAX) {
+					ins(Mnemonic.MOV, RegOperand(dst), RegOperand(Reg.RAX))
+					ins(Mnemonic.POP, RegOperand(Reg.RAX))
+				}
+				if(isUsed(Reg.RDX))
+					ins(Mnemonic.POP, RegOperand(Reg.RDX))
+			}
+			else -> TODO()
 		}
 	}
 
@@ -295,14 +379,13 @@ class Assembler(private val context: Context) {
 			is NameNode -> {
 				val sym = src.exprSym ?: invalid()
 				if(sym !is VarNode) invalid()
-				if(src.exprType != IntTypes.I32) invalid()
+				//if(src.exprType != IntTypes.I32) invalid()
 				ins(op.mnemonic, RegOperand(dst), sym.mem!!)
 			}
-
-			is IntNode -> ins(op.mnemonic, RegOperand(dst), ImmOperand(src.value))
+			is IntNode -> genBinOpRI(op, dst, src.constValue)
 			is BinNode -> {
 				if(src.isConst) {
-					ins(op.mnemonic, RegOperand(dst), ImmOperand(src.constValue))
+					genBinOpRI(op, dst, src.constValue)
 				} else {
 					genBinOp(src.op, dst, src.left)
 					genBinOp(op, dst, src.right)
@@ -317,7 +400,7 @@ class Assembler(private val context: Context) {
 			is NameNode -> {
 				val sym = src.exprSym ?: invalid()
 				if(sym !is VarNode) invalid()
-				if(src.exprType != IntTypes.I32) invalid()
+				//if(src.exprType != IntTypes.I32) invalid()
 				ins(Mnemonic.MOV, RegOperand(dst), sym.mem!!)
 			}
 

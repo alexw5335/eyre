@@ -49,6 +49,9 @@ val Instruction.printString get() = buildString {
 	if(op2 == null) return@buildString
 	append(", ")
 	append(op2.printString)
+	if(op3 == null) return@buildString
+	append(", ")
+	append(op3.printString)
 }
 
 

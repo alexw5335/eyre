@@ -1,15 +1,5 @@
 namespace eyre
 
-struct Vec {
-	int x
-	int y
-}
-
-fun main(vec: Vec*) {
-	var a: int
-	a = vec.x
-
-	[rbp - 32]
-	mov rax, [rbp - 32]
-
+fun main(a: int, b: int, c: int) {
+	a = (a * b) + (b / c)
 }

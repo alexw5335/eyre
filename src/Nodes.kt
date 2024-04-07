@@ -17,6 +17,7 @@ sealed class Node {
 	var numRegs = 0
 	var isConst = false
 	var constValue = 0L
+	var requiredRegs = 0 // 1: divSrc 2: divDst 4: shlDst
 }
 
 interface Sym {
@@ -55,16 +56,7 @@ class UnNode(val op: UnOp, val child: Node) : Node() {
 }
 
 class BinNode(val op: BinOp, val left: Node, val right: Node) : Node() {
-	var isRegless = false
 	inline fun calc(function: (Node) -> Long): Long = op.calc(function(left), function(right))
-	// Must be LEAF_LEAF_INIT if it is the left-most of a binary leaf chain
-	enum class Type {
-		NODE_NODE,
-		NODE_LEAF,
-		LEAF_NODE,
-		LEAF_LEAF,
-		LEAF_LEAF_INIT;
-	}
 }
 
 class NameNode(val name: Name) : Node()
