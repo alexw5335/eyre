@@ -36,6 +36,7 @@ val Operand.printString: String get() = when(this) {
 	is RegOperand -> reg.toString()
 	is RelocOperand -> "[RIP]"
 	is StackOperand -> if(disp < 0) "[RBP - ${-disp}]" else "[RBP + $disp]"
+	is MemOperand   -> "[$base + $index * $scale ${if(disp < 0) "- ${-disp}" else "+ $disp"}]"
 }
 
 

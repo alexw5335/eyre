@@ -1,5 +1,4 @@
 namespace eyre
 
 fun main(a: int, b: int, c: int) {
-	a = (a * b) + (b / c)
 }

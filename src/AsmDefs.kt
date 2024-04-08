@@ -9,9 +9,10 @@ value class RequiredRegs(val value: Int) {
 
 
 sealed interface Operand
+data class MemOperand(var base: Reg, var index: Reg, var scale: Int, var disp: Int) : Operand
 data class RegOperand(var reg: Reg) : Operand
 data class StackOperand(var disp: Int, var width: Width = Width.NONE) : Operand
-data class RelocOperand(var reloc: SecPos, var width: Width = Width.NONE) : Operand
+data class RelocOperand(var reloc: SecPos, var disp: Int, var width: Width = Width.NONE) : Operand
 data class ImmOperand(var value: Long) : Operand
 data class Instruction(val mnemonic: Mnemonic, val op1: Operand?, val op2: Operand?, val op3: Operand?)
 

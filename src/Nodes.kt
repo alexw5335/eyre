@@ -203,6 +203,7 @@ data object UnchosenType : Type, AnonSym {
 class IntType(override val name: Name, override val size: Int, val signed: Boolean) : Type {
 	override val parent = null
 	override val alignment = size
+	override fun toString() = name.string
 }
 
 class PointerType(override val type: Type): Type, TypedSym, AnonSym {
@@ -225,5 +226,5 @@ object IntTypes {
 	val U16   = IntType(Name["u16"], 2, false)
 	val U32   = IntType(Name["u32"], 4, false)
 	val U64   = IntType(Name["u64"], 8, false)
-	val ALL   = arrayOf(I8, I16, I32, I64, U8, U16, U32, U64)
+	val ALL   = arrayOf(I8, I16, I32, I64, U8, U16, U32, U64, INT)
 }
