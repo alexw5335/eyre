@@ -51,6 +51,7 @@ sealed class Node {
 	var exprSym: Sym? = null
 	var resolved = false
 
+	var hasCall = false
 	var isLeaf = false
 	var numRegs = 0
 	var isConst = false
@@ -103,7 +104,7 @@ class NameNode(val name: Name) : Node()
 
 class CallNode(val left: Node, val args: List<Node>) : Node() {
 	var receiver: FunNode? = null
-	var mem: Operand? = null
+	var loc: StackVarLoc? = null
 }
 
 class ArrayNode(val left: Node, val right: Node) : Node() {

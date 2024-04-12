@@ -22,8 +22,6 @@ class Assembler(private val context: Context) {
 
 	private fun err(message: String = "No reason given"): Nothing = throw EyreError(currentSrcPos, message)
 
-	private val calls = ArrayList<CallNode>()
-
 
 
 	/*
@@ -118,11 +116,10 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun genCall(call: CallNode) {
+	private fun genCall(call: CallNode, shouldStore: Boolean) {
 		val function = call.receiver ?: invalid()
 		if(call.args.size != function.params.size) invalid()
-		val exprArgs = BooleanArray(4)
-		val constArgs = BooleanArray(4)
+		var lastCall = -1
 		for(argIndex in call.args.size - 1 downTo 0) {
 			val arg = call.args[argIndex]
 			val param = function.params[argIndex]
@@ -132,14 +129,23 @@ class Assembler(private val context: Context) {
 			if(argIndex >= 4) {
 				fullGenExpr(StackVarLoc(function.argsOffset + (argIndex - 4 * 8)), type, arg)
 			} else {
-				preGenExpr(type, arg)
-				if(calls.isEmpty()) {
-					if(arg.isConst) constArgs[argIndex] = true else exprArgs[argIndex] = true
+				if(hasCall(arg)) {
+					arg.hasCall = true
+					lastCall = argIndex
+				}
+			}
+		}
+
+		for(i in 3 downTo 0) {
+			val arg = call.args[i]
+			if(arg.hasCall) {
+				val dst = Reg.arg(i)
+				allocReg(dst)
+				fullGenExpr(dst, type, arg)
+				if(lastCall == i) {
+
 				} else {
-					calls.forEach(::genCall)
-					val dst = Reg.arg(argIndex)
-					allocReg(dst)
-					genExprRec(type, dst, arg)
+
 				}
 			}
 		}
@@ -159,6 +165,10 @@ class Assembler(private val context: Context) {
 		}
 
 		freeArgRegs()
+
+		val loc = StackVarLoc(allocateStack(8))
+		call.loc = loc
+		genMovRegToVar(call.exprType!!, loc, Reg.RAX)
 	}
 
 
@@ -216,10 +226,10 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun hasCalls(node: Node): Boolean = when(node) {
+	private fun hasCall(node: Node): Boolean = when(node) {
 		is CallNode -> true
-		is UnNode   -> hasCalls(node.child)
-		is BinNode  -> hasCalls(node.left) || hasCalls(node.right)
+		is UnNode   -> hasCall(node.child)
+		is BinNode  -> hasCall(node.left) || hasCall(node.right)
 		else        -> false
 	}
 
@@ -252,10 +262,7 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun preGenExpr(type: Type, node: Node) {
-		calls.clear()
-		preGenExprRec(type, node, null)
-	}
+	private fun preGenExpr(type: Type, node: Node) = preGenExprRec(type, node, null)
 
 
 
@@ -274,7 +281,7 @@ class Assembler(private val context: Context) {
 				node.genType = GenType.I32
 			}
 			is CallNode -> {
-				calls.add(node)
+				genCall(node)
 				symGenType(type, node)
 			}
 			is NameNode -> symGenType(type, node)
@@ -344,6 +351,7 @@ class Assembler(private val context: Context) {
 
 
 	private fun fullGenExpr(dst: Reg, type: Type, node: Node) {
+		preGenExpr(type, node)
 		if(node.isLeaf)
 			genMov(type, dst, node)
 		else
@@ -458,6 +466,15 @@ class Assembler(private val context: Context) {
 		}
 	}
 
+
+
+	private fun loc(node: Node): VarLoc = if(node is CallNode)
+		node.loc!!
+	else
+		(node.exprSym as VarNode).loc!!
+
+
+
 	/**
 	 * [src] must be a leaf node.
 	 */
@@ -465,10 +482,10 @@ class Assembler(private val context: Context) {
 		when(src.genType) {
 			GenType.I8,
 			GenType.I32 -> genMovRegImm(dst, src.constValue)
-			GenType.SYM8 -> rm8(0x8A, dst, (src.exprSym as VarNode).loc!!)
-			GenType.SYM16 -> rm16(0x8B, dst, (src.exprSym as VarNode).loc!!)
-			GenType.SYM32 -> rm32(0x8B, dst, (src.exprSym as VarNode).loc!!)
-			GenType.SYM64 -> rm64(0x8B, dst, (src.exprSym as VarNode).loc!!)
+			GenType.SYM8 -> rm8(0x8A, dst, loc(src))
+			GenType.SYM16 -> rm16(0x8B, dst, loc(src))
+			GenType.SYM32 -> rm32(0x8B, dst, loc(src))
+			GenType.SYM64 -> rm64(0x8B, dst, loc(src))
 			GenType.BINARY_LEAF_LEAF_COMMUTATIVE -> {
 				src as BinNode
 				genMov(type, dst, src.left)
@@ -485,10 +502,10 @@ class Assembler(private val context: Context) {
 		when(src.genType) {
 			GenType.I8,
 			GenType.I32 -> genBinOpRI(type, op, dst, src.constValue)
-			GenType.SYM8 -> genBinOpRM(op, dst.asR8, (src.exprSym as VarNode).loc!!)
-			GenType.SYM16 -> genBinOpRM(op, dst.asR16, (src.exprSym as VarNode).loc!!)
-			GenType.SYM32 -> genBinOpRM(op, dst.asR32, (src.exprSym as VarNode).loc!!)
-			GenType.SYM64 -> genBinOpRM(op, dst.asR64, (src.exprSym as VarNode).loc!!)
+			GenType.SYM8 -> genBinOpRM(op, dst.asR8, loc(src))
+			GenType.SYM16 -> genBinOpRM(op, dst.asR16, loc(src))
+			GenType.SYM32 -> genBinOpRM(op, dst.asR32, loc(src))
+			GenType.SYM64 -> genBinOpRM(op, dst.asR64, loc(src))
 			GenType.BINARY_LEAF_LEAF_COMMUTATIVE -> {
 				src as BinNode
 				genBinOp(type, op, dst, src.left)
