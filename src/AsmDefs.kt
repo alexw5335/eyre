@@ -1,12 +1,9 @@
 package eyre
 
 
-@JvmInline
-value class RequiredRegs(val value: Int) {
-
-}
-
-
+sealed interface VarLoc
+class StackVarLoc(var disp: Int) : VarLoc
+class GlobalVarLoc(var reloc: SecPos) : VarLoc
 
 sealed interface Operand
 data class MemOperand(var base: Reg, var index: Reg, var scale: Int, var disp: Int) : Operand
@@ -74,6 +71,8 @@ enum class Width(val bytes: Int) {
 @JvmInline
 value class Reg(val backing: Int) {
 
+	constructor(type: Int, value: Int) : this((type shl 4) and value)
+
 	val size get() = backing shr 4 // size in bytes
 	val type get() = backing shr 4
 	val index get() = backing and 15
@@ -84,8 +83,11 @@ value class Reg(val backing: Int) {
 	val isInvalidSibIndex get() = index == 4
 	val isImperfectSibBase get() = value == 5
 
+	/** Reg */
 	val rexR get() = (backing shr 1) and 4
+	/** Index */
 	val rexX get() = (backing shr 2) and 2
+	/** RM, base, or opcode reg*/
 	val rexB get() = (backing shr 3) and 1
 	val rex get() = (backing shr 3) and 1
 	val hasRex get() = (backing and 0b1000) != 0

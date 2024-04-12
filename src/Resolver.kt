@@ -219,6 +219,7 @@ class Resolver(private val context: Context) {
 			node.isLeaf = true
 			node.isConst = true
 			node.constValue = node.value
+			node.exprType = IntTypes.I32
 		}
 
 		else -> context.internalErr("Unhandled node: $node")

@@ -1,4 +1,9 @@
 namespace eyre
 
-fun main(a: int, b: int, c: int) {
+fun main() {
+	test(1, test(2, 3))
+}
+
+fun test(a: int, b: int): int {
+
 }

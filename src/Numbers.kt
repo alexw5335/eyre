@@ -48,6 +48,7 @@ val Int.isImm16 get() = this in Short.MIN_VALUE..Short.MAX_VALUE
 val Long.isImm8 get() = this in Byte.MIN_VALUE..Byte.MAX_VALUE
 val Long.isImm16 get() = this in Short.MIN_VALUE..Short.MAX_VALUE
 val Long.isImm32 get() = this in Int.MIN_VALUE..Int.MAX_VALUE
+val Long.isImm64 get() = this > Int.MAX_VALUE || this < Int.MIN_VALUE
 val Boolean.int get() = if(this) 1 else 0
 
 val Char.isHex get() = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'

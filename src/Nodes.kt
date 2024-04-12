@@ -8,16 +8,54 @@ Interfaces
 
 
 
+enum class GenType(val isLeaf: Boolean = false) {
+	NONE(true),
+	/** Immediate operand, treated like I32 in most cases. */
+	I8(true),
+	/** Immediate operand. */
+	I32(true),
+	/** Register operand <- qword or unsigned dword immediate, initialised with `REX.W B8+r MOV R64, I64`. */
+	I64(false),
+	/** Memory operands. */
+	SYM8(true),
+	SYM16(true),
+	SYM32(true),
+	SYM64(true),
+	/** Loads into qword registers using MOVZX or MOVSX. */
+	SYM_U8,
+	SYM_U16,
+	SYM_U32,
+	SYM_I8,
+	SYM_I16,
+	SYM_I32,
+	/** Nodes with children */
+	UNARY_LEAF,
+	UNARY_NODE,
+	BINARY_NODE_NODE_LEFT,
+	BINARY_NODE_NODE_RIGHT,
+	BINARY_NODE_LEAF,
+	BINARY_LEAF_NODE,
+	BINARY_LEAF_LEAF(false),
+	BINARY_LEAF_NODE_COMMUTATIVE(false),
+	BINARY_LEAF_LEAF_COMMUTATIVE(true);
+
+	/**
+	 * If this element can be represented by an immediate operand
+	 */
+	val isImm get() = this == I8 || this == I32
+}
+
 sealed class Node {
 	var srcPos: SrcPos? = null
 	var exprType: Type? = null
 	var exprSym: Sym? = null
 	var resolved = false
+
 	var isLeaf = false
 	var numRegs = 0
 	var isConst = false
 	var constValue = 0L
-	var requiredRegs = 0 // 1: divSrc 2: divDst 4: shlDst
+	var genType = GenType.NONE
 }
 
 interface Sym {
@@ -33,6 +71,8 @@ interface AnonSym : Sym {
 interface Type : Sym {
 	val size: Int
 	val alignment: Int
+	val isQword get() = size == 8
+	val signed get() = false
 }
 
 interface TypedSym : Sym {
@@ -119,7 +159,7 @@ class VarNode(
 	override var type: Type = UnchosenType,
 ) : Node(), TypedSym {
 	val size get() = type.size
-	var mem: Operand? = null
+	var loc: VarLoc? = null
 }
 
 class MemberNode(
@@ -169,6 +209,11 @@ class FunNode(
 	val locals = ArrayList<VarNode>()
 	var mostParams = 0
 	var stackPos = 0
+	/**
+	 * Offset from RBP for the first arg.
+	 * E.g. arg 4: RBP - 64. Arg 5: RBP - 56. Arg 6: RBP - 48, etc.
+	 */
+	var argsOffset = 0
 }
 
 
@@ -200,7 +245,7 @@ data object UnchosenType : Type, AnonSym {
 	override var alignment = 0
 }
 
-class IntType(override val name: Name, override val size: Int, val signed: Boolean) : Type {
+class IntType(override val name: Name, override val size: Int, override val signed: Boolean) : Type {
 	override val parent = null
 	override val alignment = size
 	override fun toString() = name.string

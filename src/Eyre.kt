@@ -29,7 +29,7 @@ object Eyre {
 
 
 
-	fun testExpression(expr: String) {
+/*	fun testExpression(expr: String) {
 		val file = VirtualSrcFile("virtual.eyre", expr)
 		val compiler = Compiler(Context(Paths.get("build"), listOf(file)))
 		compiler.parseFile(file)
@@ -44,7 +44,7 @@ object Eyre {
 		for(i in 0 ..< 10)
 			if(assembler.testExpr(assembler.randomExpr()))
 				break
-	}
+	}*/
 
 
 }

@@ -14,6 +14,7 @@ data class Section(
 	var addr = 0
 	var size = 0
 	val present get() = addr != 0
+	val relocs = ArrayList<Reloc>()
 	companion object { val NULL = Section(0, "", 0U, null) }
 }
 
