@@ -1,7 +1,9 @@
 package eyre
 
+import java.util.Stack
 import kotlin.math.absoluteValue
 import kotlin.math.max
+import kotlin.math.min
 
 class Assembler(private val context: Context) {
 
@@ -83,15 +85,6 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun allocateStack(size: Int): Int {
-		val function = currentFun!!
-		val disp = function.stackPos
-		function.stackPos -= size
-		return disp
-	}
-
-
-
 	private fun assembleBinNode(node: BinNode) {
 		if(node.op != BinOp.SET) invalid()
 		val left = node.left.exprSym as? VarNode ?: invalid()
@@ -116,10 +109,84 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun genCall(call: CallNode, shouldStore: Boolean) {
+	private fun genCall(call: CallNode) {
 		val function = call.receiver ?: invalid()
 		if(call.args.size != function.params.size) invalid()
-		var lastCall = -1
+
+		val callDsts = ArrayList<StackVarLoc>()
+		for((i, arg) in call.args.withIndex()) {
+			if(!arg.hasCall) continue
+			val type = function.params[i].type
+			val dst = allocStack()
+			fullGenExpr(dst, type, arg)
+			callDsts.add(dst)
+		}
+
+		for(i in call.args.size - 1 downTo 0) {
+			val arg = call.args[i]
+			val type = function.params[i].type
+			if(arg.hasCall) continue
+			if(i >= 4)
+				fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
+			else
+				fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+		}
+
+		for(i in min(call.args.size - 1, 3) downTo 0) {
+			val arg = call.args[i]
+			val type = function.params[i].type
+			if(arg.hasCall) continue
+			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+		}
+
+		// Args with calls of more than 4 arguments must be generated first
+		for(i in call.args.indices) {
+			val arg = call.args[i]
+			val type = function.params[i].type
+			if(!arg.hasLongCall) continue
+			if(i >= 4)
+				fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
+			else
+				fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+		}
+
+		// Args beyond the fourth can be generated in any order
+		for(i in call.args.size - 1 downTo 4) {
+			val arg = call.args[i]
+			val type = function.params[i].type
+			if(arg.hasLongCall) continue
+			fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
+		}
+
+		// Args with calls
+		for(i in min(call.args.size - 1, 3) downTo 0) {
+			val arg = call.args[i]
+			val type = function.params[i].type
+			if(!arg.hasCall || arg.hasLongCall) continue
+			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+		}
+
+		// Args without calls
+		for(i in min(call.args.size - 1, 3) downTo 0) {
+			val arg = call.args[i]
+			val type = function.params[i].type
+			if(arg.hasCall) continue
+			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+		}
+
+		for(i in call.args.indices) {
+			val arg = call.args[i]
+			val type = function.params[i].type
+			if(!arg.hasLongCall) continue
+			if(i >= 4)
+				fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
+			else
+				fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+		}
+
+
+		/*val exprArgs = BooleanArray(4)
+
 		for(argIndex in call.args.size - 1 downTo 0) {
 			val arg = call.args[argIndex]
 			val param = function.params[argIndex]
@@ -130,22 +197,11 @@ class Assembler(private val context: Context) {
 				fullGenExpr(StackVarLoc(function.argsOffset + (argIndex - 4 * 8)), type, arg)
 			} else {
 				if(hasCall(arg)) {
-					arg.hasCall = true
-					lastCall = argIndex
-				}
-			}
-		}
-
-		for(i in 3 downTo 0) {
-			val arg = call.args[i]
-			if(arg.hasCall) {
-				val dst = Reg.arg(i)
-				allocReg(dst)
-				fullGenExpr(dst, type, arg)
-				if(lastCall == i) {
-
+					val dst = Reg.arg(argIndex)
+					allocReg(dst)
+					fullGenExpr(dst, type, arg)
 				} else {
-
+					exprArgs[argIndex] = true
 				}
 			}
 		}
@@ -154,21 +210,13 @@ class Assembler(private val context: Context) {
 			if(!exprArgs[i]) continue
 			val dst = Reg.arg(i)
 			allocReg(dst)
-			genExprRec(function.params[i].type, dst, call.args[i])
-		}
-
-		for(i in 3 downTo 0) {
-			if(!constArgs[i]) continue
-			val dst = Reg.arg(i)
-			allocReg(dst)
-			genMovRegImm(dst, call.args[i].constValue)
+			fullGenExpr(dst, function.params[i].type, call.args[i])
 		}
 
 		freeArgRegs()
-
 		val loc = StackVarLoc(allocateStack(8))
 		call.loc = loc
-		genMovRegToVar(call.exprType!!, loc, Reg.RAX)
+		genMovRegToVar(call.exprType!!, loc, Reg.RAX)*/
 	}
 
 
@@ -182,7 +230,7 @@ class Assembler(private val context: Context) {
 
 
 	/*
-	Register allocation
+	Allocation
 	 */
 
 
@@ -220,18 +268,22 @@ class Assembler(private val context: Context) {
 
 
 
+	private val freeStackVars = Stack<StackVarLoc>()
+
+	private fun allocStack(size: Int = 8): StackVarLoc {
+		if(freeStackVars.isNotEmpty()) return freeStackVars.pop()
+		val function = currentFun!!
+		val stackVar = StackVarLoc(function.stackPos)
+		function.stackPos -= size
+		freeStackVars.push(stackVar)
+		return stackVar
+	}
+
+
+
 	/*
 	AST pre-generation
 	 */
-
-
-
-	private fun hasCall(node: Node): Boolean = when(node) {
-		is CallNode -> true
-		is UnNode   -> hasCall(node.child)
-		is BinNode  -> hasCall(node.left) || hasCall(node.right)
-		else        -> false
-	}
 
 
 

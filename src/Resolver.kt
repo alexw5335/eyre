@@ -193,37 +193,70 @@ class Resolver(private val context: Context) {
 			pushScope(node)
 		}
 		is DllImportNode -> Unit
-
-		is UnNode -> {
-			resolveNode(node.child)
-			node.exprType = IntTypes.I32
-
-			if(node.child.isConst) {
-				node.isConst = true
-				node.isLeaf = true
-				node.constValue = node.op.calc(node.child.constValue)
-			}
-		}
-		is BinNode -> {
-			resolveNode(node.left)
-			resolveNode(node.right)
-			node.exprType = IntTypes.I32
-
-			if(node.left.isConst && node.right.isConst) {
-				node.isConst = true
-				node.isLeaf = true
-				node.constValue = node.op.calc(node.left.constValue, node.right.constValue)
-			}
-		}
-		is IntNode -> {
-			node.isLeaf = true
-			node.isConst = true
-			node.constValue = node.value
-			node.exprType = IntTypes.I32
-		}
+		is UnNode -> resolveUnNode(node)
+		is BinNode -> resolveBinNode(node)
+		is IntNode -> resolveIntNode(node)
 
 		else -> context.internalErr("Unhandled node: $node")
 	}}
+
+
+
+	private fun resolveIntNode(node: IntNode) {
+		val value = node.value
+		node.isLeaf = true
+		node.isConst = true
+		node.constValue = value
+		node.exprType = when {
+			value > Int.MAX_VALUE || value < Int.MIN_VALUE -> IntTypes.I64
+			value > Short.MAX_VALUE || value < Short.MIN_VALUE -> IntTypes.I32
+			value > Byte.MAX_VALUE || value < Byte.MIN_VALUE -> IntTypes.I16
+			else -> IntTypes.I32
+		}
+	}
+
+
+
+	private fun resolveUnNode(node: UnNode) {
+		resolveNode(node.child)
+		node.exprType = IntTypes.I32
+
+		if(node.child.isConst) {
+			node.isConst = true
+			node.isLeaf = true
+			node.constValue = node.op.calc(node.child.constValue)
+		} else {
+			node.hasCall = node.child.hasCall
+			node.hasLongCall = node.child.hasLongCall
+		}
+
+		if(node.child.exprType !is IntType)
+			err(node, "Unary operator only applicable to integer types")
+		node.exprType = node.child.exprType
+	}
+
+
+
+	private fun resolveBinNode(node: BinNode) {
+		resolveNode(node.left)
+		resolveNode(node.right)
+
+		if(node.left.isConst && node.right.isConst) {
+			node.isConst = true
+			node.isLeaf = true
+			node.constValue = node.op.calc(node.left.constValue, node.right.constValue)
+		} else {
+			node.hasCall = node.left.hasCall || node.right.hasCall
+			node.hasLongCall = node.left.hasLongCall || node.right.hasLongCall
+		}
+
+		if(node.left.exprType !is IntType || node.right.exprType !is IntType)
+			err(node, "Binary operator only applicable to integer types")
+		node.exprType = if(node.left.exprType!!.size > node.right.exprType!!.size)
+			node.left.exprType
+		else
+			node.right.exprType
+	}
 
 
 
@@ -247,10 +280,25 @@ class Resolver(private val context: Context) {
 	private fun resolveCallNode(node: CallNode) {
 		val left = node.left
 		resolveNode(left)
-		node.args.forEach(::resolveNode)
+
 		val receiver = left.exprSym as? FunNode ?: err(node.left)
 		node.receiver = receiver
+
+		if(node.args.size > receiver.params.size)
+			err(node, "Too many arguments")
+
+		for(i in node.args.indices) {
+			val arg = node.args[i]
+			resolveNode(arg)
+			val paramType = receiver.params[i].type
+			if(paramType !is IntType && arg.exprType != paramType)
+				err(arg, "Invalid argument type (expected $paramType, found ${arg.exprType}")
+			node.hasLongCall = node.hasLongCall || arg.hasLongCall
+		}
+
 		node.exprType = receiver.returnType
+		node.hasCall = true
+		node.hasLongCall = node.args.size > 4
 	}
 
 

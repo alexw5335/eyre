@@ -51,7 +51,9 @@ sealed class Node {
 	var exprSym: Sym? = null
 	var resolved = false
 
+	var generated = false // Used for args
 	var hasCall = false
+	var hasLongCall = false // Call with more than 4 args
 	var isLeaf = false
 	var numRegs = 0
 	var isConst = false
@@ -105,6 +107,9 @@ class NameNode(val name: Name) : Node()
 class CallNode(val left: Node, val args: List<Node>) : Node() {
 	var receiver: FunNode? = null
 	var loc: StackVarLoc? = null
+	inline fun iterateReversed(block: (Int, Node, Type) -> Unit) {
+		for(i in args.size - 1 downTo 0) block(i, args[i], receiver!!.params[i].type)
+	}
 }
 
 class ArrayNode(val left: Node, val right: Node) : Node() {
