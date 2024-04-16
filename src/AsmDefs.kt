@@ -3,6 +3,7 @@ package eyre
 
 sealed interface VarLoc
 class StackVarLoc(var disp: Int) : VarLoc
+class RspVarLoc(var disp: Int) : VarLoc
 class GlobalVarLoc(var reloc: SecPos) : VarLoc
 
 sealed interface Operand

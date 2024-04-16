@@ -304,6 +304,12 @@ class Parser(private val context: Context) {
 				pos++
 				break
 			}
+			if(tokens[pos].type == TokenType.VARARG) {
+				pos++
+				expect(TokenType.RPAREN)
+				node.isVararg = true
+				break
+			}
 			val paramSrcPos = srcPos()
 			val paramName = name()
 			expect(TokenType.COLON)

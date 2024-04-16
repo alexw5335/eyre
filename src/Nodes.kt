@@ -205,7 +205,7 @@ class EnumNode(
 
 class FunNode(
 	override val parent: Sym?,
-	override val name: Name
+	override val name: Name,
 ) : Node(), Sym {
 	val pos = SecPos()
 	var returnTypeNode: TypeNode? = null
@@ -215,6 +215,7 @@ class FunNode(
 	val locals = ArrayList<VarNode>()
 	var mostParams = 0
 	var stackPos = 0
+	var isVararg = false
 	/**
 	 * Offset from RBP for the first arg.
 	 * E.g. arg 4: RBP - 64. Arg 5: RBP - 56. Arg 6: RBP - 48, etc.

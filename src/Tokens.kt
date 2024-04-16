@@ -88,6 +88,7 @@ enum class TokenType(
 	UNTIL   ("..<", BinOp.UNTIL),
 	INC     ("++", null, UnOp.INC_PRE),
 	DEC     ("--", null, UnOp.DEC_PRE),
+	VARARG  ("..."),
 	SET     ("=", BinOp.SET),
 	SET_MUL ("*=", BinOp.SET_MUL),
 	SET_DIV ("/=", BinOp.SET_DIV),

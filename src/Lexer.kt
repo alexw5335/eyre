@@ -259,7 +259,7 @@ class Lexer(private val context: Context) {
 				else -> TokenType.BANG
 			}}
 			charMap['<'] = { when(chars[pos]) {
-				'<'  -> when(chars[++pos]) {
+				'<' -> when(chars[++pos]) {
 					'=' -> addAdv(TokenType.SET_SHL)
 					else -> add(TokenType.SHL)
 				}
@@ -276,6 +276,7 @@ class Lexer(private val context: Context) {
 			}}
 			charMap['.'] = { when(chars[pos]) {
 				'.' -> when(chars[++pos]) {
+					'.' -> addAdv(TokenType.VARARG)
 					'<' -> addAdv(TokenType.UNTIL)
 					else -> add(TokenType.TO)
 				}

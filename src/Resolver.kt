@@ -284,16 +284,21 @@ class Resolver(private val context: Context) {
 		val receiver = left.exprSym as? FunNode ?: err(node.left)
 		node.receiver = receiver
 
-		if(node.args.size > receiver.params.size)
+		if(node.args.size > receiver.params.size && !receiver.isVararg)
 			err(node, "Too many arguments")
 
 		for(i in node.args.indices) {
 			val arg = node.args[i]
 			resolveNode(arg)
-			val paramType = receiver.params[i].type
-			if(paramType !is IntType && arg.exprType != paramType)
-				err(arg, "Invalid argument type (expected $paramType, found ${arg.exprType}")
-			node.hasLongCall = node.hasLongCall || arg.hasLongCall
+
+			if(i >= receiver.params.size) {
+				// ?
+			} else {
+				val paramType = receiver.params[i].type
+				if(paramType !is IntType && arg.exprType != paramType)
+					err(arg, "Invalid argument type (expected $paramType, found ${arg.exprType}")
+				node.hasLongCall = node.hasLongCall || arg.hasLongCall
+			}
 		}
 
 		node.exprType = receiver.returnType

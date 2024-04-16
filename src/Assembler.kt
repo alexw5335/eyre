@@ -113,44 +113,22 @@ class Assembler(private val context: Context) {
 		val function = call.receiver ?: invalid()
 		if(call.args.size != function.params.size) invalid()
 
-		val callDsts = ArrayList<StackVarLoc>()
-		for((i, arg) in call.args.withIndex()) {
-			if(!arg.hasCall) continue
-			val type = function.params[i].type
-			val dst = allocStack()
-			fullGenExpr(dst, type, arg)
-			callDsts.add(dst)
+		val longDsts = arrayOfNulls<StackVarLoc>(call.args.size)
+
+		if(call.hasLongCall) {
+			// Generate args with calls of more than 4 arguments
+			for((i, arg) in call.args.withIndex())
+				if(arg.hasLongCall)
+					fullGenExpr(allocStack().also { longDsts[i] = it }, function.params[i].type, arg)
+			for((i, arg) in call.args.withIndex())
+				if(arg.hasLongCall)
+					if(i >= 4)
+						genMovVarVar(function.params[i].type, RspVarLoc(32 + (i - 4) * 8), longDsts[i]!!, Reg.RAX)
+					else
+						genMovRegVar(function.params[i].type, Reg.arg(i).also(::allocReg), longDsts[i]!!)
 		}
 
-		for(i in call.args.size - 1 downTo 0) {
-			val arg = call.args[i]
-			val type = function.params[i].type
-			if(arg.hasCall) continue
-			if(i >= 4)
-				fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
-			else
-				fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
-		}
-
-		for(i in min(call.args.size - 1, 3) downTo 0) {
-			val arg = call.args[i]
-			val type = function.params[i].type
-			if(arg.hasCall) continue
-			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
-		}
-
-		// Args with calls of more than 4 arguments must be generated first
-		for(i in call.args.indices) {
-			val arg = call.args[i]
-			val type = function.params[i].type
-			if(!arg.hasLongCall) continue
-			if(i >= 4)
-				fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
-			else
-				fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
-		}
-
-		// Args beyond the fourth can be generated in any order
+		// Generate args beyond the fourth in any order
 		for(i in call.args.size - 1 downTo 4) {
 			val arg = call.args[i]
 			val type = function.params[i].type
@@ -158,7 +136,7 @@ class Assembler(private val context: Context) {
 			fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
 		}
 
-		// Args with calls
+		// Generate args with calls
 		for(i in min(call.args.size - 1, 3) downTo 0) {
 			val arg = call.args[i]
 			val type = function.params[i].type
@@ -166,7 +144,7 @@ class Assembler(private val context: Context) {
 			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
 		}
 
-		// Args without calls
+		// Generate args without calls
 		for(i in min(call.args.size - 1, 3) downTo 0) {
 			val arg = call.args[i]
 			val type = function.params[i].type
@@ -174,57 +152,10 @@ class Assembler(private val context: Context) {
 			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
 		}
 
-		for(i in call.args.indices) {
-			val arg = call.args[i]
-			val type = function.params[i].type
-			if(!arg.hasLongCall) continue
-			if(i >= 4)
-				fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
-			else
-				fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
-		}
-
-
-		/*val exprArgs = BooleanArray(4)
-
-		for(argIndex in call.args.size - 1 downTo 0) {
-			val arg = call.args[argIndex]
-			val param = function.params[argIndex]
-			val argType = arg.exprType ?: invalid()
-			val type = param.type
-			if(!checkTypes(type, argType)) invalid()
-			if(argIndex >= 4) {
-				fullGenExpr(StackVarLoc(function.argsOffset + (argIndex - 4 * 8)), type, arg)
-			} else {
-				if(hasCall(arg)) {
-					val dst = Reg.arg(argIndex)
-					allocReg(dst)
-					fullGenExpr(dst, type, arg)
-				} else {
-					exprArgs[argIndex] = true
-				}
-			}
-		}
-
-		for(i in 3 downTo 0) {
-			if(!exprArgs[i]) continue
-			val dst = Reg.arg(i)
-			allocReg(dst)
-			fullGenExpr(dst, function.params[i].type, call.args[i])
-		}
-
 		freeArgRegs()
-		val loc = StackVarLoc(allocateStack(8))
+		val loc = allocStack(8)
 		call.loc = loc
-		genMovRegToVar(call.exprType!!, loc, Reg.RAX)*/
-	}
-
-
-
-	private fun checkTypes(a: Type, b: Type): Boolean = when(a) {
-		is PointerType -> b is PointerType && checkTypes(a.type, b.type)
-		is IntType     -> b is IntType
-		else           -> a == b
+		genMovRegToVar(call.exprType!!, loc, Reg.RAX)
 	}
 
 
@@ -751,9 +682,14 @@ class Assembler(private val context: Context) {
 			return
 		} else if(mem is StackVarLoc) {
 			if(mem.disp.isImm8)
-			byte(0b01_000_101 or (reg shl 3)).byte(mem.disp)
+				byte(0b01_000_101 or (reg shl 3)).byte(mem.disp)
 			else
-			byte(0b10_000_101 or (reg shl 3)).dword(mem.disp)
+				byte(0b10_000_101 or (reg shl 3)).dword(mem.disp)
+		} else if(mem is RspVarLoc) {
+			if(mem.disp.isImm8)
+				byte(0b01_000_100 or (reg shl 3)).byte(0x24).byte(mem.disp)
+			else
+				byte(0b10_000_100 or (reg shl 3)).byte(0x24).dword(mem.disp)
 		} else {
 			invalid()
 		}
@@ -849,6 +785,47 @@ class Assembler(private val context: Context) {
 	/*
 	Complex moves
 	 */
+
+
+
+	private fun genMovRegVar(type: Type, dst: Reg, src: VarLoc) {
+		// 1: movsx/movzx rcx, byte [src]
+		// 2: movsx/movzx rcx, word [src]
+		// 4s: movsxd rcx, [src]
+		// 4u: mov ecx, [src]
+		// 8: mov rcx, [src]
+		when(type.size) {
+			1 -> rm64(if(type.signed) 0xBE0F else 0xB60F, dst, src)
+			2 -> rm64(if(type.signed) 0xBF0F else 0xB70F, dst, src)
+			4 -> if(type.signed) rm64(0x63, dst, src) else rm32(0x8B, dst, src)
+			8 -> rm64(0x8B, dst, src)
+			else -> err("Invalid type size")
+		}
+	}
+
+
+
+	private fun genMovVarVar(type: Type, dst: VarLoc, src: VarLoc, intermediary: Reg) {
+		when(type.size) {
+			1 -> {
+				rm32(0xB60F, intermediary, src) // movzx intermediary, byte [src]
+				rm8(0x88, intermediary, dst) // mov byte [dst], intermediary
+			}
+			2 -> {
+				rm32(0xB70F, intermediary, src) // movzx intermediary, word [src]
+				rm16(0x89, intermediary, dst) // mov word [dst], intermediary
+			}
+			4 -> {
+				rm32(0x89, intermediary, src) // mov intermediary, dword [src]
+				rm32(0x8B, intermediary, src) // mov dword [dst], intermediary
+			}
+			8 -> {
+				rm64(0x89, intermediary, src) // mov intermediary, qword [src]
+				rm32(0x8B, intermediary, src) // mov qword [dst], intermediary
+			}
+			else -> invalid()
+		}
+	}
 
 
 
