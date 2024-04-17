@@ -70,5 +70,4 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 	fun qualifiedName(sym: Sym) = buildString { appendQualifiedName(this, sym) }
 
 
-
 }

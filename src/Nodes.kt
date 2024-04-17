@@ -8,36 +8,27 @@ Interfaces
 
 
 
-enum class GenType(val isLeaf: Boolean = false) {
-	NONE(true),
-	/** Immediate operand, treated like I32 in most cases. */
-	I8(true),
-	/** Immediate operand. */
-	I32(true),
+enum class GenType {
+	NONE,
+	/** Immediate operand, treated like I32 in most cases. Alwatys leaf. */
+	I8,
+	/** Immediate operand. Always leaf. */
+	I32,
 	/** Register operand <- qword or unsigned dword immediate, initialised with `REX.W B8+r MOV R64, I64`. */
-	I64(false),
-	/** Memory operands. */
-	SYM8(true),
-	SYM16(true),
-	SYM32(true),
-	SYM64(true),
-	/** Loads into qword registers using MOVZX or MOVSX. */
-	SYM_U8,
-	SYM_U16,
-	SYM_U32,
-	SYM_I8,
-	SYM_I16,
-	SYM_I32,
-	/** Nodes with children */
+	I64,
+	/** Memory operand, either leaf or non-leaf. */
+	SYM,
+	/** Nodes with children (never leaf) */
 	UNARY_LEAF,
 	UNARY_NODE,
 	BINARY_NODE_NODE_LEFT,
 	BINARY_NODE_NODE_RIGHT,
 	BINARY_NODE_LEAF,
 	BINARY_LEAF_NODE,
-	BINARY_LEAF_LEAF(false),
-	BINARY_LEAF_NODE_COMMUTATIVE(false),
-	BINARY_LEAF_LEAF_COMMUTATIVE(true);
+	BINARY_LEAF_LEAF,
+	BINARY_LEAF_NODE_COMMUTATIVE,
+	/** Always leaf */
+	BINARY_LEAF_LEAF_COMMUTATIVE;
 
 	/**
 	 * If this element can be represented by an immediate operand
@@ -76,6 +67,7 @@ interface Type : Sym {
 	val alignment: Int
 	val isQword get() = size == 8
 	val signed get() = false
+	val unsigned get() = !signed
 }
 
 interface TypedSym : Sym {

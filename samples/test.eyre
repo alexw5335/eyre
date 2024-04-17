@@ -1,9 +1,5 @@
 namespace eyre
 
-fun main() {
-	test(1, test(2, 3))
-}
-
-fun test(a: int, b: int): int {
-
+fun main(a: int, b: int, c: int, d: int) {
+	a = 2 * b
 }

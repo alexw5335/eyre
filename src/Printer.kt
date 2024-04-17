@@ -54,6 +54,7 @@ class Printer(private val context: Context) {
 	fun printDisasm() {
 		val path = context.buildDir.resolve("code.bin")
 		Files.write(path, context.linkWriter.copy(context.textSec.pos, context.textSec.size))
+		Runtime.getRuntime().exec(arrayOf("cd")) // ??
 		Util.run("ndisasm", "-b64", path.toString())
 	}
 
