@@ -18,6 +18,11 @@ enum class GenType {
 	I64,
 	/** Memory operand, either leaf or non-leaf. */
 	SYM,
+	DOT_SYM,
+	STRING,
+
+	MEMBER,
+
 	/** Nodes with children (never leaf) */
 	UNARY_LEAF,
 	UNARY_NODE,
@@ -88,10 +93,17 @@ class StringNode(val value: String, var litSym: StringLitSym? = null) : Node()
 
 class UnNode(val op: UnOp, val child: Node) : Node() {
 	inline fun calc(function: (Node) -> Long): Long = op.calc(function(child))
+	inline fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long = op.calc(
+		function(child, regValid && op == UnOp.POS)
+	)
 }
 
 class BinNode(val op: BinOp, val left: Node, val right: Node) : Node() {
 	inline fun calc(function: (Node) -> Long): Long = op.calc(function(left), function(right))
+	inline fun calc(regValid: Boolean, function: (Node, Boolean) -> Long): Long = op.calc(
+		function(left, regValid && (op == BinOp.ADD || op == BinOp.SUB)),
+		function(right, regValid && op == BinOp.ADD)
+	)
 }
 
 class NameNode(val name: Name) : Node()
@@ -99,9 +111,6 @@ class NameNode(val name: Name) : Node()
 class CallNode(val left: Node, val args: List<Node>) : Node() {
 	var receiver: FunNode? = null
 	var loc: StackVarLoc? = null
-	inline fun iterateReversed(block: (Int, Node, Type) -> Unit) {
-		for(i in args.size - 1 downTo 0) block(i, args[i], receiver!!.params[i].type)
-	}
 }
 
 class ArrayNode(val left: Node, val right: Node) : Node() {
@@ -127,8 +136,6 @@ class TypeNode(val names: List<Name>, val mods: List<Mod>, var type: Type? = nul
 	class ArrayMod(val sizeNode: Node?, var inferredSize: Int = -1) : Mod
 	data object PointerMod : Mod
 }
-
-class DllImportNode(val dllName: Name, val import: DllImport) : Node(), AnonSym
 
 
 
@@ -198,6 +205,7 @@ class EnumNode(
 class FunNode(
 	override val parent: Sym?,
 	override val name: Name,
+	val dllName: Name?
 ) : Node(), Sym {
 	val pos = SecPos()
 	var returnTypeNode: TypeNode? = null
@@ -208,11 +216,15 @@ class FunNode(
 	var mostParams = 0
 	var stackPos = 0
 	var isVararg = false
+
+	val isDllImport get() = dllName != null
+
 	/**
 	 * Offset from RBP for the first arg.
 	 * E.g. arg 4: RBP - 64. Arg 5: RBP - 56. Arg 6: RBP - 48, etc.
 	 */
 	var argsOffset = 0
+
 }
 
 
@@ -220,6 +232,7 @@ class FunNode(
 /*
 Symbols
  */
+
 
 
 class StringLitSym(val value: String) : AnonSym {
@@ -248,6 +261,7 @@ class IntType(override val name: Name, override val size: Int, override val sign
 	override val parent = null
 	override val alignment = size
 	override fun toString() = name.string
+	val width = Width.fromSize(size)
 }
 
 class PointerType(override val type: Type): Type, TypedSym, AnonSym {
@@ -260,7 +274,11 @@ class ArrayType(override val type: Type, var count: Int = 0): Type, TypedSym, An
 	override val alignment get() = type.alignment
 }
 
-object IntTypes {
+object Types {
+	val pointerMap = HashMap<Type, PointerType>()
+	fun getPointer(type: Type) = pointerMap.getOrPut(type) { PointerType(type) }
+
+	val BYTE  = IntType(Name["byte"], 1, true)
 	val INT   = IntType(Name["int"], 4, true)
 	val I8    = IntType(Name["i8"], 1, true)
 	val I16   = IntType(Name["i16"], 2, true)
@@ -270,5 +288,11 @@ object IntTypes {
 	val U16   = IntType(Name["u16"], 2, false)
 	val U32   = IntType(Name["u32"], 4, false)
 	val U64   = IntType(Name["u64"], 8, false)
-	val ALL   = arrayOf(I8, I16, I32, I64, U8, U16, U32, U64, INT)
+	val ALL   = arrayOf(I8, I16, I32, I64, U8, U16, U32, U64, INT, BYTE)
+
+	fun isAssignable(dst: Type, src: Type) =
+		(dst == src) ||
+		(dst is IntType && src is IntType) ||
+		(dst is PointerType && src is ArrayType && src.type == dst.type)
+
 }

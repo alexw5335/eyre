@@ -69,6 +69,11 @@ class BinWriter(bytes: ByteArray) {
 		if(pos >= bytes.size)
 			bytes = bytes.copyOf(pos shl 2)
 	}
+
+	fun ensureCapacityAt(pos: Int) {
+		if(pos > bytes.size)
+			bytes = bytes.copyOf(pos shl 2)
+	}
 	
 	fun ensureCapacity(count: Int) {
 		if(pos + count > bytes.size)

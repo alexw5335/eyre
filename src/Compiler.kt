@@ -1,8 +1,6 @@
 package eyre
 
 import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 import kotlin.io.path.*
 import kotlin.system.exitProcess
 
@@ -60,7 +58,7 @@ class Compiler(val context: Context) {
 
 
 	private fun compileInternal() {
-		IntTypes.ALL.forEach(context.symTable::add)
+		Types.ALL.forEach(context.symTable::add)
 		context.files.forEach(::parseFile)
 		checkErrors()
 		context.files.forEach(resolver::resolveFile)

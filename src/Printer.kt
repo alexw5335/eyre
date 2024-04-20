@@ -54,7 +54,6 @@ class Printer(private val context: Context) {
 	fun printDisasm() {
 		val path = context.buildDir.resolve("code.bin")
 		Files.write(path, context.linkWriter.copy(context.textSec.pos, context.textSec.size))
-		Runtime.getRuntime().exec(arrayOf("cd")) // ??
 		Util.run("ndisasm", "-b64", path.toString())
 	}
 
@@ -119,14 +118,6 @@ class Printer(private val context: Context) {
 
 
 
-	private fun StringBuilder.appendChild(node: Node) {
-		indent++
-		appendNode(node)
-		indent--
-	}
-
-
-
 	private fun StringBuilder.appendChildren(nodes: List<Node>) {
 		indent++
 		for(node in nodes) appendNode(node)
@@ -146,7 +137,6 @@ class Printer(private val context: Context) {
 		for(i in 0 ..< indent) append("    ")
 
 		when(node) {
-			is DllImportNode -> appendLine("DLLIMPORT ${node.dllName} ${node.import.name}")
 			is FunNode -> {
 				append("fun ${node.fullName}(")
 				for((i, param) in node.params.withIndex()) {
@@ -284,6 +274,15 @@ class Printer(private val context: Context) {
 				appendExpr(node.args[0])
 			append(')')
 			append(')')
+		}
+
+		is InitNode -> {
+			append("{ ")
+			for(i in node.elements.indices) {
+				appendExpr(node.elements[i])
+				if(i != node.elements.lastIndex) append(", ")
+			}
+			append(" }")
 		}
 
 		else -> context.internalErr("Non-printable expression node: $node")

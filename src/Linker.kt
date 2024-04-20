@@ -53,10 +53,10 @@ class Linker(private val context: Context) {
 			writer.i32(reloc.pos.totalPos, value)
 		}
 
-		//if(context.entryPoint == null)
-		//	System.err.println("Warning: Missing main function, resulting EXE is invalid.")
-		//else
-		//	writer.i32(entryPointPos, context.entryPoint!!.pos.totalAddr)
+		if(context.entryPoint == null)
+			System.err.println("Warning: Missing main function, resulting EXE is invalid.")
+		else
+			writer.i32(entryPointPos, context.entryPoint!!.pos.totalAddr)
 
 		writer.i32(imageSizePos, currentSecRva)
 		writer.i32(numSectionsPos, numSections)

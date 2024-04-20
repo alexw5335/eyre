@@ -47,9 +47,7 @@ class SecPos(var sec: Section = Section.NULL, var disp: Int = 0) {
 	val totalAddr get() = sec.addr + disp
 }
 
-class DllImport(val name: Name, val pos: SecPos)
-
-class Dll(val name: Name, val imports: HashMap<Name, DllImport>)
+class Dll(val name: Name, val imports: HashMap<Name, FunNode>)
 
 /**
  * - [pos] is where the relocation will be written

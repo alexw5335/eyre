@@ -102,12 +102,12 @@ class Parser(private val context: Context) {
 	private fun parseScopeInner() {
 		while(pos < tokens.size) {
 			when(tokens[pos].type) {
-				TokenType.DLLIMPORT -> parseDllImport()
 				TokenType.ENUM      -> parseEnum()
 				TokenType.UNION     -> parseStruct(scope, true).addNodeSym()
 				TokenType.STRUCT    -> parseStruct(scope, false).addNodeSym()
 				TokenType.VAR       -> parseVar()
-				TokenType.FUN       -> parseFun()
+				TokenType.FUN       -> parseFun(false)
+				TokenType.DLLIMPORT -> parseFun(true)
 				TokenType.CONST     -> parseConst()
 				TokenType.NAMESPACE -> parseNamespace()
 				TokenType.NAME      -> handleName()
@@ -162,18 +162,6 @@ class Parser(private val context: Context) {
 
 	private fun handleName() {
 		parseExpr().addNode()
-	}
-
-
-
-	private fun parseDllImport() {
-	/*	val srcPos = tokens[pos++].srcPos()
-		val dllName = name()
-		expect(TokenType.DOT)
-		val name = name()
-		expectNewline()
-		val import = context.getDllImport(dllName, name)
-		DllImportNode(NodeInfo(srcPos, scope, name), dllName, import).addNodeSym()*/
 	}
 
 
@@ -285,20 +273,25 @@ class Parser(private val context: Context) {
 		val node = VarNode(scope, name, typeNode, valueNode)
 		node.srcPos = srcPos
 		node.addNodeSym()
-		currentFun?.locals?.add(node)
+		if(currentFun != null) {
+			currentFun!!.locals.add(node)
+		} else {
+			node.loc = GlobalVarLoc(SecPos())
+		}
 	}
 
 
 
-	private fun parseFun() {
+	private fun parseFun(isDllImport: Boolean) {
 		val funSrcPos = tokens[pos++].srcPos()
+		if(currentFun != null) err(funSrcPos, "Nested functions not supported")
+		val dllName = if(isDllImport) name().also { expect(TokenType.REF) } else null
 		val name = name()
-		if(currentFun != null)
-			err(funSrcPos, "Nested functions not supported")
-		val node = FunNode(scope, name)
+		val node = FunNode(scope, name, dllName)
 		node.srcPos = funSrcPos
 		node.addNodeSym()
 		expect(TokenType.LPAREN)
+
 		while(true) {
 			if(tokens[pos].type == TokenType.RPAREN) {
 				pos++
@@ -325,13 +318,22 @@ class Parser(private val context: Context) {
 				pos++
 			}
 		}
+
 		node.returnTypeNode = if(tokens[pos].type == TokenType.COLON) {
 			pos++
 			parseType()
 		} else null
-		currentFun = node
-		parseScope(node)
-		currentFun = null
+
+		if(!isDllImport) {
+			currentFun = node
+			parseScope(node)
+			currentFun = null
+		} else {
+			val dll = context.dlls.getOrPut(dllName!!) { Dll(dllName, HashMap()) }
+			if(name in dll.imports) err("Dll import redefinition")
+			dll.imports[name] = node
+			expectNewline()
+		}
 	}
 
 

@@ -43,13 +43,6 @@ class Context(val buildDir: Path, val files: List<SrcFile>) {
 
 
 
-	fun getDllImport(dllName: Name, name: Name): DllImport {
-		return dlls
-			.getOrPut(dllName) { Dll(dllName, HashMap()) }
-			.imports
-			.getOrPut(name) { DllImport(name, SecPos()) }
-	}
-
 	fun err(srcPos: SrcPos?, message: String): Nothing {
 		val error = EyreError(srcPos, message)
 		errors.add(error)

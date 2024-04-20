@@ -65,6 +65,16 @@ enum class Width(val bytes: Int) {
 	operator fun contains(value: Int) = value in min..max
 	operator fun contains(value: Long) = value in min..max
 
+	companion object {
+		fun fromSize(size: Int) = when(size) {
+			1 -> BYTE
+			2 -> WORD
+			4 -> DWORD
+			8 -> QWORD
+			else -> error("Invalid width size: $size")
+		}
+	}
+
 }
 
 

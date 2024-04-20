@@ -7,9 +7,9 @@ import kotlin.io.path.extension
 import kotlin.io.path.relativeTo
 
 
+
 fun main() {
 	Eyre.compile("samples")
-	//Eyre.testRandomExpressions()
 }
 
 

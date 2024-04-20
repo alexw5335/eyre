@@ -22,7 +22,16 @@ class Assembler(private val context: Context) {
 
 	private fun invalid(): Nothing = throw EyreError(currentSrcPos, "Invalid encoding")
 
+	private fun err(node: Node, message: String): Nothing = throw EyreError(node.srcPos, message)
+
+	private fun err(srcPos: SrcPos?, message: String): Nothing = throw EyreError(srcPos, message)
+
 	private fun err(message: String = "No reason given"): Nothing = throw EyreError(currentSrcPos, message)
+
+	private fun section(section: Section) {
+		this.section = section
+		this.writer = section.writer!!
+	}
 
 
 
@@ -37,6 +46,7 @@ class Assembler(private val context: Context) {
 		this.file = file
 
 		try {
+			assembleStringLiterals()
 			assembleScope()
 		} catch(e: EyreError) {
 			context.errors.add(e)
@@ -55,7 +65,7 @@ class Assembler(private val context: Context) {
 				is ScopeEndNode  -> return
 				is NamespaceNode -> assembleScope()
 				is FunNode       -> assembleFunction(node)
-				is VarNode       -> { }
+				is VarNode       -> assembleGlobalVar(node)
 				is CallNode      -> genCall(node)
 				is StructNode    -> { }
 				is BinNode       -> assembleBinNode(node)
@@ -66,7 +76,118 @@ class Assembler(private val context: Context) {
 
 
 
+	private fun assembleStringLiterals() {
+		section(context.dataSec)
+		for(sym in context.stringLiterals) {
+			writer.align(8)
+			sym.pos.sec = section
+			sym.pos.disp = writer.pos
+			writer.asciiNT(sym.value)
+		}
+	}
+
+
+
+	private fun assembleGlobalVar(node: VarNode) {
+		val reloc = (node.loc as GlobalVarLoc).reloc
+
+		if(node.valueNode == null) {
+			context.bssSize = context.bssSize.align(node.type.alignment)
+			reloc.sec = context.bssSec
+			reloc.disp = context.bssSize
+			context.bssSize += node.size
+		} else {
+			section(context.dataSec)
+			writer.align(node.type.alignment)
+			reloc.sec = section
+			reloc.disp = writer.pos
+			writer.ensureCapacity(node.type.size)
+			writeInitialiser(node.type, node.valueNode)
+			writer.pos += node.type.size
+		}
+	}
+
+
+
+	private fun writeInitialiser(type: Type, node: Node) {
+		if(node is InitNode) {
+			if(type is StructNode) {
+				if(node.elements.size > type.members.size)
+					err(node, "Too many initialisers")
+				for(i in node.elements.indices) {
+					val member = type.members[i]
+					writer.at(writer.pos + member.offset) {
+						writeInitialiser(member.type, node.elements[i])
+					}
+				}
+			} else if(type is ArrayType) {
+				if(node.elements.size > type.count)
+					err(node, "Too many initialiser elements")
+				for(i in node.elements.indices) {
+					writer.at(writer.pos + type.type.size * i) {
+						writeInitialiser(type.type, node.elements[i])
+					}
+				}
+			} else if(type is PointerType) {
+				for(i in node.elements.indices) {
+					writer.at(writer.pos + type.type.size * i) {
+						writeInitialiser(type.type, node.elements[i])
+					}
+				}
+			} else {
+				err(node, "Invalid initialiser type: ${type.name}")
+			}
+		} else {
+			if(type is IntType) {
+				writeImm(node, type.width)
+			} else if(type is ArrayType) {
+				val string = (node as? StringNode)?.value ?: invalid()
+				if(string.length + 1 > type.size) invalid()
+				for(c in string) {
+					if(c.code > Byte.MAX_VALUE) invalid()
+					writer.i8(c.code)
+				}
+				writer.i8(0)
+			} else if(type is PointerType) {
+				val sym = (node as? StringNode)?.litSym ?: invalid()
+				context.absRelocs.add(Reloc(SecPos(section, writer.pos), sym.pos, 0, Width.NONE, Width.NONE))
+				writer.i64(0)
+			} else {
+				err(node, "Invalid initialiser")
+			}
+		}
+	}
+
+
+
+	private fun writeImm(node: Node, width: Width) {
+		fun rec(node: Node, regValid: Boolean): Long {
+			if(node.isConst) return node.constValue
+
+			fun sym(sym: Sym?): Long {
+				if(sym == null) invalid()
+				invalid()
+			}
+
+			return when(node) {
+				is BinNode  -> node.calc(regValid, ::rec)
+				is UnNode   -> node.calc(regValid, ::rec)
+				is IntNode  -> node.value
+				is NameNode -> sym(node.exprSym)
+				else        -> invalid()
+			}
+		}
+
+		val value = rec(node, true)
+		if(!writer.writeWidth(width, value))
+			err(node, "value out of range")
+	}
+
+
+
 	private fun assembleFunction(function: FunNode) {
+		if(function.isDllImport) return
+		section(context.textSec)
 		currentFun = function
 
 		writer.pos += 21 // make room for prologue
@@ -91,6 +212,8 @@ class Assembler(private val context: Context) {
 		val endPos = writer.pos
 		val prologueSize = 1 + 3 + if(function.stackPos.isImm8) 4 else 7
 		writer.pos = startPos - prologueSize
+		function.pos.disp = writer.pos
+		function.pos.sec = section
 		byte(0x50 + 5)
 		i24(0xE58948)
 		i24(0xEC8348).byte(stackSize)
@@ -101,12 +224,12 @@ class Assembler(private val context: Context) {
 
 	private fun assembleBinNode(node: BinNode) {
 		if(node.op != BinOp.SET) {
-			fullGenExpr(allocReg(true), IntTypes.I64, node)
+			genExpr(allocReg(true), Types.I64, node)
 			return
 		}
 		val left = node.left.exprSym as? VarNode ?: invalid()
 		if(left.type !is IntType) invalid()
-		fullGenExpr(left.loc!!, left.type, node.right)
+		genExpr(left.loc!!, left.type, node.right)
 	}
 
 
@@ -128,45 +251,58 @@ class Assembler(private val context: Context) {
 
 	private fun genCall(call: CallNode) {
 		val function = call.receiver ?: invalid()
-		if(call.args.size != function.params.size) invalid()
 
 		val longDsts = arrayOfNulls<StackVarLoc>(call.args.size)
+
+		fun paramType(i: Int): Type = when {
+			i < function.params.size -> function.params[i].type
+			function.isVararg -> Types.I64
+			else -> invalid()
+		}
 
 		if(call.hasLongCall) {
 			// Generate args with calls of more than 4 arguments
 			for((i, arg) in call.args.withIndex())
 				if(arg.hasLongCall)
-					fullGenExpr(allocStack().also { longDsts[i] = it }, function.params[i].type, arg)
+					genExpr(allocStack().also { longDsts[i] = it }, paramType(i), arg)
 			for((i, arg) in call.args.withIndex())
 				if(arg.hasLongCall)
 					if(i >= 4)
-						genMovVarVar(function.params[i].type, RspVarLoc(32 + (i - 4) * 8), longDsts[i]!!, Reg.RAX)
+						genMovVarVar(paramType(i), RspVarLoc(32 + (i - 4) * 8), longDsts[i]!!, Reg.RAX)
 					else
-						genMovRegVar(function.params[i].type, Reg.arg(i).also(::allocReg), longDsts[i]!!)
+						genMovRegVar(paramType(i), Reg.arg(i).also(::allocReg), longDsts[i]!!)
 		}
 
 		// Generate args beyond the fourth in any order
 		for(i in call.args.size - 1 downTo 4) {
 			val arg = call.args[i]
-			val type = function.params[i].type
 			if(arg.hasLongCall) continue
-			fullGenExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), type, arg)
+			genExpr(StackVarLoc(function.argsOffset + (i - 4 * 8)), paramType(i), arg)
 		}
 
 		// Generate args with calls
 		for(i in min(call.args.size - 1, 3) downTo 0) {
 			val arg = call.args[i]
-			val type = function.params[i].type
 			if(!arg.hasCall || arg.hasLongCall) continue
-			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+			genExpr(Reg.arg(i).also(::allocReg), paramType(i), arg)
 		}
 
 		// Generate args without calls
 		for(i in min(call.args.size - 1, 3) downTo 0) {
 			val arg = call.args[i]
-			val type = function.params[i].type
 			if(arg.hasCall) continue
-			fullGenExpr(Reg.arg(i).also(::allocReg), type, arg)
+			genExpr(Reg.arg(i).also(::allocReg), paramType(i), arg)
+		}
+
+		val receiver = call.left.exprSym as? FunNode ?: invalid()
+		if(receiver.isDllImport) {
+			byte(0x48)
+			byte(0xFF)
+			writeVarMem(GlobalVarLoc(receiver.pos), 2, Width.NONE)
+		} else {
+			byte(0xE8)
+			context.relRelocs.add(Reloc(SecPos(section, writer.pos), receiver.pos, 0, Width.NONE, Width.DWORD))
+			dword(0)
 		}
 
 		freeArgRegs()
@@ -235,7 +371,23 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun preGenExpr(type: Type, node: Node) = preGenExprRec(type, node, null)
+	private enum class Test {
+		MEMBER,
+		POINTER,
+	}
+
+
+
+	private fun preGenDot(node: DotNode) {
+		when(val left = node.left) {
+			is NameNode -> node.genType = GenType.MEMBER
+			is DotNode -> {
+				preGenDot(left)
+				node.genType = GenType.MEMBER
+			}
+			else -> invalid()
+		}
+	}
 
 
 
@@ -251,7 +403,7 @@ class Assembler(private val context: Context) {
 		}
 
 		fun sym() {
-			val symType = node.exprType as? IntType ?: invalid()
+			val symType = node.exprType!!
 			node.genType = GenType.SYM
 			node.isLeaf = type.size <= symType.size
 			node.numRegs = if(node.isLeaf) 1 else 0
@@ -263,6 +415,21 @@ class Assembler(private val context: Context) {
 				sym()
 			}
 			is NameNode -> sym()
+			is DotNode -> when(node.type) {
+				DotNode.Type.SYM -> sym()
+				DotNode.Type.MEMBER -> {
+					val symType = node.exprType!!
+					node.genType = GenType.MEMBER
+					node.isLeaf = type.size <= symType.size
+					node.numRegs = if(node.isLeaf) 1 else 0
+				}
+				DotNode.Type.DEREF -> invalid()
+			}
+			is StringNode -> {
+				node.genType = GenType.STRING
+				node.isLeaf = true
+				node.numRegs = 0
+			}
 			is UnNode -> {
 				preGenExprRec(type, node.child, null)
 				if(node.child.isLeaf) {
@@ -328,16 +495,16 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun fullGenExpr(dst: Reg, type: Type, node: Node) {
-		preGenExpr(type, node)
+	private fun genExpr(dst: Reg, type: Type, node: Node) {
+		preGenExprRec(type, node, null)
 		if(node.isLeaf)
 			genMov(type, dst, node)
 		else
 			genExprRec(type, dst, node)
 	}
 
-	private fun fullGenExpr(dst: VarLoc, type: Type, node: Node) {
-		preGenExpr(type, node)
+	private fun genExpr(dst: VarLoc, type: Type, node: Node) {
+		preGenExprRec(type, node, null)
 		if(node.genType.isImm) {
 			genMovVarImm(type, dst, node.constValue)
 		} else {
@@ -451,6 +618,12 @@ class Assembler(private val context: Context) {
 			GenType.I8,
 			GenType.I32 -> genMovRegImm(dst, src.constValue)
 			GenType.SYM -> genMovRegVar(src.exprType!!, dst, loc(src))
+			GenType.STRING -> {
+				src as StringNode
+				byte(0x48 or dst.rexR)
+				byte(0x8D)
+				writeVarMem(GlobalVarLoc(src.litSym!!.pos), dst.value, Width.NONE)
+			}
 			GenType.BINARY_LEAF_LEAF_COMMUTATIVE -> {
 				src as BinNode
 				genMov(type, dst, src.left)
@@ -657,6 +830,14 @@ class Assembler(private val context: Context) {
 	private fun Any.qword(value: Long) = writer.i64(value)
 
 
+
+	object Mem {
+		var base = 0
+		var index = 0
+		var scale = 0
+		var disp = 0
+		var reloc: SecPos? = null
+	}
 
 	private fun writeVarMem(mem: VarLoc, reg: Int, immWidth: Width) {
 		if(mem is GlobalVarLoc) {

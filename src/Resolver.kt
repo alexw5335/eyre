@@ -98,7 +98,7 @@ class Resolver(private val context: Context) {
 			?: err(node.srcPos, "Invalid type")
 		for(mod in node.mods) {
 			type = when(mod) {
-				is TypeNode.PointerMod -> PointerType(type)
+				is TypeNode.PointerMod -> Types.getPointer(type)
 				is TypeNode.ArrayMod -> ArrayType(type)
 			}
 		}
@@ -117,7 +117,17 @@ class Resolver(private val context: Context) {
 				param.type = resolveType(param.typeNode!!)
 			node.returnType = node.returnTypeNode?.let(::resolveType) ?: VoidType
 		}
-		is VarNode -> node.type = node.typeNode?.let(::resolveType) ?: err(node.srcPos, "Missing type node")
+		is VarNode -> {
+			if(node.typeNode == null) {
+				if(node.valueNode is StringNode) {
+					node.type = node.valueNode.exprType!!
+				} else {
+					err(node, "Cannot infer variable type")
+				}
+			} else {
+				node.type = resolveType(node.typeNode)
+			}
+		}
 		is StructNode ->
 			for(member in node.members) {
 				if(member.struct != null) {
@@ -188,15 +198,19 @@ class Resolver(private val context: Context) {
 			//node.resolved = true
 		}
 		is FunNode -> {
-			if(node.name == Name.MAIN)
-				context.entryPoint = node
-			pushScope(node)
+			if(node.name == Name.MAIN) context.entryPoint = node
+			if(!node.isDllImport) pushScope(node)
 		}
-		is DllImportNode -> Unit
 		is UnNode -> resolveUnNode(node)
 		is BinNode -> resolveBinNode(node)
 		is IntNode -> resolveIntNode(node)
-
+		is StringNode -> {
+			val sym = StringLitSym(node.value)
+			context.stringLiterals.add(sym)
+			node.litSym = sym
+			node.exprType = ArrayType(Types.BYTE, sym.value.length + 1)
+			node.exprSym = sym
+		}
 		else -> context.internalErr("Unhandled node: $node")
 	}}
 
@@ -208,10 +222,10 @@ class Resolver(private val context: Context) {
 		node.isConst = true
 		node.constValue = value
 		node.exprType = when {
-			value > Int.MAX_VALUE || value < Int.MIN_VALUE -> IntTypes.I64
-			value > Short.MAX_VALUE || value < Short.MIN_VALUE -> IntTypes.I32
-			value > Byte.MAX_VALUE || value < Byte.MIN_VALUE -> IntTypes.I16
-			else -> IntTypes.I32
+			value > Int.MAX_VALUE || value < Int.MIN_VALUE -> Types.I64
+			value > Short.MAX_VALUE || value < Short.MIN_VALUE -> Types.I32
+			value > Byte.MAX_VALUE || value < Byte.MIN_VALUE -> Types.I16
+			else -> Types.I32
 		}
 	}
 
@@ -219,7 +233,7 @@ class Resolver(private val context: Context) {
 
 	private fun resolveUnNode(node: UnNode) {
 		resolveNode(node.child)
-		node.exprType = IntTypes.I32
+		node.exprType = Types.I32
 
 		if(node.child.isConst) {
 			node.isConst = true
@@ -240,6 +254,8 @@ class Resolver(private val context: Context) {
 	private fun resolveBinNode(node: BinNode) {
 		resolveNode(node.left)
 		resolveNode(node.right)
+
+		if(node.op == BinOp.SET) return
 
 		if(node.left.isConst && node.right.isConst) {
 			node.isConst = true
@@ -284,21 +300,19 @@ class Resolver(private val context: Context) {
 		val receiver = left.exprSym as? FunNode ?: err(node.left)
 		node.receiver = receiver
 
+		if(node.args.size < receiver.params.size)
+			err(node, "Too few arguments")
 		if(node.args.size > receiver.params.size && !receiver.isVararg)
 			err(node, "Too many arguments")
 
 		for(i in node.args.indices) {
 			val arg = node.args[i]
 			resolveNode(arg)
-
-			if(i >= receiver.params.size) {
-				// ?
-			} else {
-				val paramType = receiver.params[i].type
-				if(paramType !is IntType && arg.exprType != paramType)
-					err(arg, "Invalid argument type (expected $paramType, found ${arg.exprType}")
-				node.hasLongCall = node.hasLongCall || arg.hasLongCall
-			}
+			node.hasLongCall = node.hasLongCall || arg.hasLongCall
+			if(i >= receiver.params.size) continue
+			val paramType = receiver.params[i].type
+			if(!Types.isAssignable(paramType, arg.exprType!!))
+				err(arg, "Invalid argument type (expected $paramType, found ${arg.exprType})")
 		}
 
 		node.exprType = receiver.returnType
@@ -337,9 +351,8 @@ class Resolver(private val context: Context) {
 			node.member = member
 		} else {
 			node.type = DotNode.Type.SYM
-			val sym = node.left.exprSym ?: err(node.left)
-			node.exprType = exprType(sym)
-			node.exprSym = sym
+			node.exprSym = resolveName(node.srcPos, node.left.exprSym!!, right)
+			node.exprType = exprType(node.exprSym!!)
 		}
 	}
 
