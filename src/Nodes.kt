@@ -18,11 +18,9 @@ enum class GenType {
 	I64,
 	/** Memory operand, either leaf or non-leaf. */
 	SYM,
-	DOT_SYM,
 	STRING,
-
 	MEMBER,
-
+	DEREF,
 	/** Nodes with children (never leaf) */
 	UNARY_LEAF,
 	UNARY_NODE,

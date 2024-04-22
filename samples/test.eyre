@@ -5,8 +5,13 @@ struct Vec {
 	int y
 }
 
-var vec: Vec
+struct Test {
+	Vec a
+	Vec b
+}
+
+var test: Vec*
 
 fun main(a: int) {
-	a = vec.x
+	a = test.y
 }

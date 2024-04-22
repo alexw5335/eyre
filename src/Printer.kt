@@ -51,10 +51,17 @@ class Printer(private val context: Context) {
 	fun write(path: String, builder: StringBuilder) =
 		Files.writeString(context.buildDir.resolve(path), builder.toString())
 
-	fun printDisasm() {
+	fun printDisasm(function: FunNode) {
 		val path = context.buildDir.resolve("code.bin")
-		Files.write(path, context.linkWriter.copy(context.textSec.pos, context.textSec.size))
+		Files.write(path, context.linkWriter.copy(function.pos.totalPos, function.size))
+		println("${context.qualifiedName(function)}:")
 		Util.run("ndisasm", "-b64", path.toString())
+	}
+
+	fun printDisasm() {
+		for(sym in context.symTable.list)
+			if(sym is FunNode)
+				printDisasm(sym)
 	}
 
 
