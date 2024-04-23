@@ -10,8 +10,8 @@ struct Test {
 	Vec b
 }
 
-var test: Vec*
+var vecs: Vec[10]
 
 fun main(a: int) {
-	a = test.y
+	a = vecs[5]
 }

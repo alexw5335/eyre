@@ -20,7 +20,7 @@ class Assembler(private val context: Context) {
 
 	private var currentSrcPos: SrcPos? = null
 
-	private fun invalid(): Nothing = throw EyreError(currentSrcPos, "Invalid encoding")
+	private fun invalid(message: String = "Invalid encoding"): Nothing = throw EyreError(currentSrcPos, message)
 
 	private fun err(node: Node, message: String): Nothing = throw EyreError(node.srcPos, message)
 
@@ -32,6 +32,11 @@ class Assembler(private val context: Context) {
 		this.section = section
 		this.writer = section.writer!!
 	}
+
+	private var addrMem = Mem()
+
+	private fun loc(node: Node): VarLoc = if(node is CallNode) node.loc!! else (node.exprSym as VarNode).loc!!
+
 
 
 
@@ -230,18 +235,7 @@ class Assembler(private val context: Context) {
 		}
 		val left = node.left.exprSym as? VarNode ?: invalid()
 		if(left.type !is IntType) invalid()
-		genExpr(Mem.create(left.loc!!), left.type, node.right)
-	}
-
-
-
-	private fun genMovRegToVar(type: Type, dst: Mem, src: Reg) {
-		when(type.size) {
-			1 -> rm8(0x88, src.asR8, dst)
-			2 -> rm16(0x89, src, dst)
-			4 -> rm32(0x89, src, dst)
-			8 -> rm64(0x89, src, dst)
-		}
+		genExpr(Mem.loc(left.loc!!), left.type, node.right)
 	}
 
 
@@ -299,7 +293,7 @@ class Assembler(private val context: Context) {
 		if(receiver.isDllImport) {
 			byte(0x48)
 			byte(0xFF)
-			Mem.create(receiver.pos).write(2)
+			Mem.rip(receiver.pos).write(2)
 		} else {
 			byte(0xE8)
 			context.relRelocs.add(Reloc(SecPos(section, writer.pos), receiver.pos, 0, Width.NONE, Width.DWORD))
@@ -309,7 +303,7 @@ class Assembler(private val context: Context) {
 		freeArgRegs()
 		val loc = allocStack(8)
 		call.loc = StackVarLoc(loc)
-		genMovRegToVar(call.exprType!!, Mem.rsp(loc), Reg.RAX)
+		rm(0x88, Reg.ofSize(call.exprSize, 0), Mem.rsp(loc))
 	}
 
 
@@ -374,35 +368,34 @@ class Assembler(private val context: Context) {
 
 	private fun preGenAddr(node: Node) {
 		fun sym(sym: Sym?) {
-			when(sym) {
-				is FunNode -> {
-					node.genType = GenType.SYM
-					node.isLeaf = true
-					node.numRegs = 0
-				}
-				is VarNode -> {
-					node.genType = GenType.SYM
-					node.isLeaf = true
-					node.numRegs = 0
-				}
-				else -> invalid()
-			}
+			if(sym == null || (sym !is FunNode && sym !is VarNode)) invalid()
+			node.genType = GenType.SYM
+			node.numRegs = 0
 		}
 
 		when(node) {
+			is ArrayNode -> {
+				preGenAddr(node.left)
+				if(node.right.isConst) {
+					node.numRegs = node.left.numRegs
+				} else {
+					preGenExprRec(node.right.exprType!!, node.right, null)
+					// TODO: Fix this
+					node.numRegs = max(node.left.numRegs, node.right.numRegs)
+				}
+			}
+
 			is NameNode -> sym(node.exprSym)
 			is DotNode -> {
 				when(node.type) {
 					DotNode.Type.SYM -> sym(node.exprSym)
 					DotNode.Type.MEMBER -> {
 						preGenAddr(node.left)
-						node.numRegs = 0
-						node.isLeaf = true
 						node.genType = GenType.MEMBER
+						node.numRegs = node.left.numRegs
 					}
 					DotNode.Type.DEREF -> {
 						preGenAddr(node.left)
-						node.isLeaf = false
 						node.numRegs = 1
 						node.genType = GenType.DEREF
 					}
@@ -416,49 +409,49 @@ class Assembler(private val context: Context) {
 
 	private fun preGenExprRec(type: Type, node: Node, parentOp: BinOp?) {
 		if(node.isConst) {
-			node.genType = when {
-				node.constValue < Byte.MAX_VALUE -> GenType.I8
-				node.constValue < Int.MAX_VALUE -> GenType.I32
-				else -> GenType.I64
+			if(node.constValue.isImm32) {
+				node.genType = GenType.I32
+				node.numRegs = 0
+			} else {
+				node.genType = GenType.I64
+				node.numRegs = 1
 			}
-			node.numRegs = if(node.genType == GenType.I64) 1 else 0
 			return
 		}
 
-		fun sym() {
-			val symType = node.exprType!!
-			node.genType = GenType.SYM
-			node.isLeaf = type.size <= symType.size
-			node.numRegs = if(node.isLeaf) 1 else 0
-		}
-
 		when(node) {
-			is ArrayNode -> {
-				preGenAddr(node.left)
-			}
 			is CallNode -> {
 				genCall(node)
-				sym()
+				node.genType = GenType.SYM
+				node.numRegs = if(type.size <= node.exprSize) 0 else 1
 			}
-			is NameNode -> sym()
+			is NameNode -> {
+				node.genType = GenType.SYM
+				node.numRegs = if(type.size <= node.exprSize) 0 else 1
+			}
+			is ArrayNode -> {
+				preGenAddr(node)
+				node.genType = GenType.ARRAY
+				node.numRegs = if(type.size <= node.exprSize) 0 else 1
+			}
 			is DotNode -> when(node.type) {
-				DotNode.Type.SYM -> sym()
+				DotNode.Type.SYM -> {
+					node.genType = GenType.SYM
+					node.numRegs = if(type.size <= node.exprSize) 0 else 1
+				}
 				DotNode.Type.MEMBER -> {
 					preGenAddr(node.left)
 					node.genType = GenType.MEMBER
-					node.isLeaf = type.size <= node.exprType!!.size
-					node.numRegs = if(node.isLeaf) 1 else 0
+					node.numRegs = if(type.size <= node.exprSize) 0 else 1
 				}
 				DotNode.Type.DEREF -> {
 					preGenAddr(node.left)
 					node.genType = GenType.DEREF
-					node.isLeaf = false
 					node.numRegs = 1
 				}
 			}
 			is StringNode -> {
 				node.genType = GenType.STRING
-				node.isLeaf = true
 				node.numRegs = 0
 			}
 			is UnNode -> {
@@ -483,7 +476,6 @@ class Assembler(private val context: Context) {
 					if(right.isLeaf) {
 						if(op.isCommutative && (parentOp == op)) {
 							node.genType = GenType.BINARY_LEAF_LEAF_COMMUTATIVE
-							node.isLeaf = true
 							node.numRegs = 0
 						} else {
 							node.genType = GenType.BINARY_LEAF_LEAF
@@ -538,7 +530,7 @@ class Assembler(private val context: Context) {
 
 	private fun genExpr(dst: Mem, type: Type, node: Node) {
 		preGenExprRec(type, node, null)
-		if(node.genType.isImm) {
+		if(node.genType == GenType.I32) {
 			genMovVarImm(type, dst, node.constValue)
 		} else {
 			val dst2 = allocReg(type.isQword)
@@ -546,7 +538,7 @@ class Assembler(private val context: Context) {
 				genMov(type, dst2, node)
 			else
 				genExprRec(type, dst2, node)
-			genMovRegToVar(type, dst, dst2)
+			rm(0x88, dst2.ofSize(type.size), dst)
 			freeReg(dst2)
 		}
 	}
@@ -555,15 +547,36 @@ class Assembler(private val context: Context) {
 
 	private fun genExprAddr(dst: Reg, node: Node) {
 		when(node.genType) {
-			GenType.SYM -> Mem.create(loc(node))
+			GenType.ARRAY -> {
+				node as ArrayNode
+				genExprAddr(dst, node.left)
+				if(node.right.isConst) {
+					val addition = node.right.constValue * node.type!!.size
+					if(!addition.isImm32) invalid()
+					addrMem.disp += addition.toInt()
+				} else {
+					val indexReg = allocReg(false)
+					genExprRec(Types.I32, indexReg, node.right)
+					if(node.type!!.size.is1248) {
+						addrMem.sib(dst, indexReg, node.type!!.size, 0)
+					} else {
+						TODO()
+					}
+				}
+			}
+			GenType.SYM -> addrMem.loc(loc(node))
 			GenType.MEMBER -> {
 				node as DotNode
 				genExprAddr(dst, node.left)
-				Mem.disp += node.member!!.offset
+				addrMem.disp += node.member!!.offset
 			}
-			else -> {
-				invalid()
+			GenType.DEREF -> {
+				node as DotNode
+				genExprAddr(dst, node.left)
+				rm64(0x8B, dst, addrMem)
+				addrMem.sib(dst, node.member!!.offset)
 			}
+			else -> invalid()
 		}
 	}
 
@@ -581,14 +594,15 @@ class Assembler(private val context: Context) {
 				qword(node.constValue)
 			}
 			GenType.SYM -> {
-				genMovRegVar(node.exprType!!, dst, Mem.create(loc(node)))
+				genMovRegVar(node.exprType!!, dst, Mem.loc(loc(node)))
 			}
 			GenType.DEREF -> {
-				node as DotNode
-				genExprAddr(dst, node.left)
-				rm64(0x8B, dst, Mem)
-				Mem.sib(dst, node.member!!.offset)
-				rm64(0x8B, dst, Mem.sib(dst, node.member!!.offset))
+				genExprAddr(dst, node)
+				genMovRegVar(node.exprType!!, dst, addrMem)
+			}
+			GenType.MEMBER -> {
+				genExprAddr(dst, node)
+				genMovRegVar(node.exprType!!, dst, addrMem)
 			}
 			GenType.UNARY_LEAF -> {
 				node as UnNode
@@ -636,7 +650,6 @@ class Assembler(private val context: Context) {
 			}
 			GenType.BINARY_LEAF_LEAF -> {
 				node as BinNode
-				// Allow for constant optimisation, otherwise constant gets moved first
 				if(node.left.isConst) {
 					genMov(type, dst, node.right)
 					genBinOp(type, node.op, dst, node.left)
@@ -646,6 +659,51 @@ class Assembler(private val context: Context) {
 				}
 			}
 			else -> err("Invalid GenType: ${node.genType}")
+		}
+	}
+
+
+
+	/**
+	 * [src] must be a leaf node.
+	 */
+	private fun genMov(type: Type, dst: Reg, src: Node) {
+		when(src.genType) {
+			GenType.I32 -> genMovRegImm(dst, src.constValue)
+			GenType.SYM -> rm(0x8A, dst.ofSize(src.exprSize), Mem.loc(loc(src)))
+			GenType.MEMBER -> {
+				genExprAddr(dst, src)
+				rm(0x8A, dst.ofSize(src.exprSize), addrMem)
+			}
+			GenType.STRING -> rm64(0x8D, dst, Mem.rip((src as StringNode).litSym!!.pos))
+			GenType.BINARY_LEAF_LEAF_COMMUTATIVE -> {
+				src as BinNode
+				genMov(type, dst, src.left)
+				genBinOp(type, src.op, dst, src.right)
+			}
+			else -> err("Invalid GenType ${src.genType} for node $src")
+		}
+	}
+
+	
+	
+	/**
+	 * [src] must be a leaf node.
+	 */
+	private fun genBinOp(type: Type, op: BinOp, dst: Reg, src: Node) {
+		when(src.genType) {
+			GenType.I32 -> genBinOpRI(type, op, dst, src.constValue)
+			GenType.SYM -> genBinOpRM(op, dst.ofSize(src.exprSize), loc(src))
+			GenType.MEMBER -> {
+				genExprAddr(dst, src)
+				genBinOpRM(op, dst.ofSize(src.exprSize), loc(src))
+			}
+			GenType.BINARY_LEAF_LEAF_COMMUTATIVE -> {
+				src as BinNode
+				genBinOp(type, op, dst, src.left)
+				genBinOp(type, op, dst, src.right)
+			}
+			else -> invalid()
 		}
 	}
 
@@ -661,81 +719,11 @@ class Assembler(private val context: Context) {
 
 
 
-	private fun loc(node: Node): VarLoc = if(node is CallNode)
-		node.loc!!
-	else
-		(node.exprSym as VarNode).loc!!
-
-
-
-	private fun genDotNode(node: Node) {
-		if(node is NameNode) {
-			Mem.create(loc(node))
-		} else if(node is DotNode) {
-			genDotNode(node.left)
-			Mem.disp += node.member!!.offset
-		} else {
-			invalid()
-		}
-	}
-
-
-
-	/**
-	 * [src] must be a leaf node.
+	/*
+	Integer operation generation
 	 */
-	private fun genMov(type: Type, dst: Reg, src: Node) {
-		when(src.genType) {
-			GenType.I8,
-			GenType.I32 -> genMovRegImm(dst, src.constValue)
-			GenType.SYM -> genMovRegVar(src.exprType!!, dst, Mem.create(loc(src)))
-			GenType.MEMBER -> {
-				src as DotNode
-				genExprAddr(dst, src.left)
-				Mem.disp += src.member!!.offset
-				when(src.member!!.type.size) {
-					1 -> rm8(0x8A, dst, Mem)
-					2 -> rm16(0x8B, dst, Mem)
-					4 -> rm32(0x8B, dst, Mem)
-					8 -> rm64(0x8B, dst, Mem)
-				}
-			}
-			GenType.STRING -> {
-				src as StringNode
-				byte(0x48 or dst.rexR)
-				byte(0x8D)
-				Mem.create(src.litSym!!.pos).write(dst.value)
-			}
-			GenType.BINARY_LEAF_LEAF_COMMUTATIVE -> {
-				src as BinNode
-				genMov(type, dst, src.left)
-				genBinOp(type, src.op, dst, src.right)
-			}
-			else -> err("Invalid GenType ${src.genType} for node $src")
-		}
-	}
 
-	/**
-	 * [src] must be a leaf node.
-	 */
-	private fun genBinOp(type: Type, op: BinOp, dst: Reg, src: Node) {
-		when(src.genType) {
-			GenType.I8,
-			GenType.I32 -> genBinOpRI(type, op, dst, src.constValue)
-			GenType.SYM -> when(src.exprType!!.size) {
-				1 -> genBinOpRM(op, dst.asR8, loc(src))
-				2 -> genBinOpRM(op, dst.asR16, loc(src))
-				4 -> genBinOpRM(op, dst.asR32, loc(src))
-				8 -> genBinOpRM(op, dst.asR64, loc(src))
-			}
-			GenType.BINARY_LEAF_LEAF_COMMUTATIVE -> {
-				src as BinNode
-				genBinOp(type, op, dst, src.left)
-				genBinOp(type, op, dst, src.right)
-			}
-			else -> invalid()
-		}
-	}
+
 
 	private fun genBinOpRR(op: BinOp, dst: Reg, src: Reg) {
 		when(op) {
@@ -753,7 +741,7 @@ class Assembler(private val context: Context) {
 	}
 
 	private fun genBinOpRM(op: BinOp, dst: Reg, src: VarLoc) {
-		val mem = Mem.create(src)
+		val mem = Mem.loc(src)
 		when(op) {
 			BinOp.ADD -> rm(0x02, dst, mem)
 			BinOp.SUB -> rm(0x2A, dst, mem)
@@ -782,7 +770,7 @@ class Assembler(private val context: Context) {
 					word(0x9948) // CQO
 				else
 					byte(0x99) // CDQ
-				m64(0xF7, 7, Mem.create(src))
+				m64(0xF7, 7, Mem.loc(src))
 			}
 			else -> invalid()
 		}
@@ -911,67 +899,6 @@ class Assembler(private val context: Context) {
 	private fun Any.dword(value: Int) = writer.i32(value)
 
 	private fun Any.qword(value: Long) = writer.i64(value)
-
-
-
-	object Mem {
-		enum class Type {
-			RIP,
-			RBP,
-			RSP,
-			SIB;
-		}
-
-		var type = Type.SIB
-		var base = Reg.NONE
-		var index = Reg.NONE
-		var scale = 0
-		var disp = 0
-		var reloc: SecPos? = null
-		var immWidth = Width.NONE
-
-		fun imm(immWidth: Width): Mem {
-			this.immWidth = immWidth
-			return this
-		}
-
-		fun rsp(disp: Int): Mem {
-			type = Type.RSP
-			this.disp = disp
-			return this
-		}
-
-		fun rbp(disp: Int): Mem {
-			type = Type.RBP
-			this.disp = disp
-			return this
-		}
-
-		fun sib(base: Reg, disp: Int): Mem {
-			type = Type.SIB
-			this.disp = disp
-			this.base = base
-			this.index = Reg.NONE
-			this.scale = 0
-			return this
-		}
-
-		fun create(reloc: SecPos): Mem {
-			type = Type.RIP
-			this.reloc = reloc
-			return this
-		}
-
-		fun create(loc: VarLoc, disp: Int = 0, immWidth: Width = Width.NONE): Mem {
-			this.immWidth = immWidth
-			when(loc) {
-				is GlobalVarLoc -> { type = Type.RIP; reloc = loc.reloc; this.disp = disp }
-				is StackVarLoc -> { type = Type.RBP; this.disp = loc.disp + disp }
-				is RspVarLoc -> { type = Type.RSP; this.disp = loc.disp + disp }
-			}
-			return this
-		}
-	}
 
 
 
@@ -1106,7 +1033,6 @@ class Assembler(private val context: Context) {
 		}
 	}
 
-
 	private fun rr3264(opcode: Int, reg: Reg, rm: Reg) {
 		if(reg.isR64) rr64(opcode, reg, rm) else rr32(opcode, reg, rm)
 	}
@@ -1184,14 +1110,14 @@ class Assembler(private val context: Context) {
 		// 8s:  mov qword [rcx], 10
 		// I64: mov rax, qword src; mov qword [rcx], rax
 		when(type.size) {
-			1 -> m32(0xC6, 0, dst.imm(Width.BYTE)).byte(src.toInt())
-			2 -> m16(0xC7, 0, dst.imm(Width.WORD)).word(src.toInt())
-			4 -> m32(0xC7, 0, dst.imm(Width.DWORD)).dword(src.toInt())
+			1 -> m32(0xC6, 0, dst.also { it.immWidth = Width.BYTE }).byte(src.toInt())
+			2 -> m16(0xC7, 0, dst.also { it.immWidth = Width.WORD }).word(src.toInt())
+			4 -> m32(0xC7, 0, dst.also { it.immWidth = Width.DWORD }).dword(src.toInt())
 			8 -> if(src.isImm32) {
 				if(type.signed)
-					m64(0xC7, 0, dst.imm(Width.DWORD)).dword(src.toInt())
+					m64(0xC7, 0, dst.also { it.immWidth = Width.DWORD }).dword(src.toInt())
 				else
-					m32(0xC7, 0, dst.imm(Width.DWORD)).dword(src.toInt())
+					m32(0xC7, 0,dst.also { it.immWidth = Width.DWORD }).dword(src.toInt())
 			} else {
 				word(0xB048).qword(src) // mov rax, qword src
 				m32(0x89, 0, dst) // mov [dst], rax

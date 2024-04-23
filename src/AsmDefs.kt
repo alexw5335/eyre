@@ -82,7 +82,7 @@ enum class Width(val bytes: Int) {
 @JvmInline
 value class Reg(val backing: Int) {
 
-	constructor(type: Int, value: Int) : this((type shl 4) and value)
+	constructor(type: Int, value: Int) : this((type shl 4) or value)
 
 	val size get() = backing shr 4 // size in bytes
 	val type get() = backing shr 4
@@ -116,19 +116,21 @@ value class Reg(val backing: Int) {
 	val isR32 get() = backing shr 4 == TYPE_R32
 	val isR64 get() = backing shr 4 == TYPE_R64
 
-	val isVolatile get() = (volatileFlags and (1 shl index)) != 0
-	val isNonVolatile get() = (volatileFlags and (1 shl index)) == 0
+	val isVolatile get() = (0b00001111_00000111 and (1 shl index)) != 0
+	val isNonVolatile get() = (0b00001111_00000111 and (1 shl index)) == 0
+
+	fun ofSize(size: Int) = Reg(size.countTrailingZeroBits() + 1, value)
 
 	override fun toString() = names.getOrElse(backing) { "invalid" }
 
 	companion object {
-		val volatileFlags = 0b00001111_00000111
-
 		fun r8(index: Int) = Reg(16 or index)
 		fun r16(index: Int) = Reg(32 or index)
 		fun r32(index: Int) = Reg(48 or index)
 		fun r64(index: Int) = Reg(64 or index)
 		fun arg(index: Int) = when(index) { 0->RCX 1->RDX 2->R8 3->R9 else->NONE }
+		fun ofSize(size: Int, value: Int) = Reg(size.countLeadingZeroBits() + 1, value)
+
 		val NONE = Reg(0)
 		const val TYPE_NONE = 0
 		const val TYPE_R8 = 1

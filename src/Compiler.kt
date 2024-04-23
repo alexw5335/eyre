@@ -85,7 +85,7 @@ class Compiler(val context: Context) {
 			System.err.println(error.message)
 
 		for(s in error.stackTrace)
-			if("err" !in s.methodName && "Err" !in s.methodName)
+			if("err" !in s.methodName && "Err" !in s.methodName && "invalid" !in s.methodName)
 				System.err.println("\t$s")
 
 		System.err.println()

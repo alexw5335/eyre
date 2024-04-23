@@ -218,7 +218,6 @@ class Resolver(private val context: Context) {
 
 	private fun resolveIntNode(node: IntNode) {
 		val value = node.value
-		node.isLeaf = true
 		node.isConst = true
 		node.constValue = value
 		node.exprType = when {
@@ -237,7 +236,6 @@ class Resolver(private val context: Context) {
 
 		if(node.child.isConst) {
 			node.isConst = true
-			node.isLeaf = true
 			node.constValue = node.op.calc(node.child.constValue)
 		} else {
 			node.hasCall = node.child.hasCall
@@ -259,7 +257,6 @@ class Resolver(private val context: Context) {
 
 		if(node.left.isConst && node.right.isConst) {
 			node.isConst = true
-			node.isLeaf = true
 			node.constValue = node.op.calc(node.left.constValue, node.right.constValue)
 		} else {
 			node.hasCall = node.left.hasCall || node.right.hasCall

@@ -43,6 +43,8 @@ fun BinWriter.writeWidth(width: Width, value: Long): Boolean {
 
 
 
+val Int.is1248 get() = countOneBits() == 1 && this <= 8
+
 val Int.isImm8 get() = this in Byte.MIN_VALUE..Byte.MAX_VALUE
 val Int.isImm16 get() = this in Short.MIN_VALUE..Short.MAX_VALUE
 val Long.isImm8 get() = this in Byte.MIN_VALUE..Byte.MAX_VALUE

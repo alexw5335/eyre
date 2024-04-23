@@ -10,18 +10,18 @@ Interfaces
 
 enum class GenType {
 	NONE,
-	/** Immediate operand, treated like I32 in most cases. Alwatys leaf. */
-	I8,
-	/** Immediate operand. Always leaf. */
+	/** Immediate operand, always leaf */
 	I32,
 	/** Register operand <- qword or unsigned dword immediate, initialised with `REX.W B8+r MOV R64, I64`. */
 	I64,
-	/** Memory operand, either leaf or non-leaf. */
+	/** Memory operand, potential leaf */
 	SYM,
+	ARRAY,
 	STRING,
 	MEMBER,
+	/** Pointer dereference, non-leaf */
 	DEREF,
-	/** Nodes with children (never leaf) */
+	/** Nodes with children, non-leaf */
 	UNARY_LEAF,
 	UNARY_NODE,
 	BINARY_NODE_NODE_LEFT,
@@ -32,24 +32,24 @@ enum class GenType {
 	BINARY_LEAF_NODE_COMMUTATIVE,
 	/** Always leaf */
 	BINARY_LEAF_LEAF_COMMUTATIVE;
-
-	/**
-	 * If this element can be represented by an immediate operand
-	 */
-	val isImm get() = this == I8 || this == I32
 }
 
 sealed class Node {
+	/** Used by all nodes. */
 	var srcPos: SrcPos? = null
+	/** Used by all expression nodes. */
 	var exprType: Type? = null
+	val exprSize get() = exprType!!.size
+	/** Used by [NameNode] and [DotNode]s of type [DotNode.Type.SYM]. */
 	var exprSym: Sym? = null
+	/** Used by nodes that have constants that are calculated by the [Resolver]. */
 	var resolved = false
 
-	var generated = false // Used for args
+	// Used by expression nodes
 	var hasCall = false
 	var hasLongCall = false // Call with more than 4 args
-	var isLeaf = false
 	var numRegs = 0
+	val isLeaf get() = numRegs == 0
 	var isConst = false
 	var constValue = 0L
 	var genType = GenType.NONE
