@@ -10,6 +10,9 @@ class Mem(
 	var immWidth: Width = Width.NONE
 ) {
 
+	val rexX get() = index.rexX
+	val rexB get() = base.rexB
+
 	enum class Type {
 		RIP,
 		RBP,

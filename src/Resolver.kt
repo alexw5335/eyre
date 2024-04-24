@@ -322,6 +322,7 @@ class Resolver(private val context: Context) {
 	private fun resolveArrayNode(node: ArrayNode) {
 		val left = node.left
 		resolveNode(left)
+		resolveNode(node.right)
 		val receiver = left.exprType ?: err(left)
 		if(receiver !is ArrayType) err(left)
 		node.exprType = receiver.type

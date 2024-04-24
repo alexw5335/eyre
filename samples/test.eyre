@@ -11,7 +11,8 @@ struct Test {
 }
 
 var vecs: Vec[10]
+var values: int[10]
 
 fun main(a: int) {
-	a = vecs[5]
+	a = values[a]
 }

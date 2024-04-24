@@ -8,32 +8,6 @@ Interfaces
 
 
 
-enum class GenType {
-	NONE,
-	/** Immediate operand, always leaf */
-	I32,
-	/** Register operand <- qword or unsigned dword immediate, initialised with `REX.W B8+r MOV R64, I64`. */
-	I64,
-	/** Memory operand, potential leaf */
-	SYM,
-	ARRAY,
-	STRING,
-	MEMBER,
-	/** Pointer dereference, non-leaf */
-	DEREF,
-	/** Nodes with children, non-leaf */
-	UNARY_LEAF,
-	UNARY_NODE,
-	BINARY_NODE_NODE_LEFT,
-	BINARY_NODE_NODE_RIGHT,
-	BINARY_NODE_LEAF,
-	BINARY_LEAF_NODE,
-	BINARY_LEAF_LEAF,
-	BINARY_LEAF_NODE_COMMUTATIVE,
-	/** Always leaf */
-	BINARY_LEAF_LEAF_COMMUTATIVE;
-}
-
 sealed class Node {
 	/** Used by all nodes. */
 	var srcPos: SrcPos? = null
@@ -111,9 +85,7 @@ class CallNode(val left: Node, val args: List<Node>) : Node() {
 	var loc: StackVarLoc? = null
 }
 
-class ArrayNode(val left: Node, val right: Node) : Node() {
-	var type: Type? = null
-}
+class ArrayNode(val left: Node, val right: Node) : Node()
 
 class DotNode(val left: Node, val right: Node) : Node() {
 	enum class Type {

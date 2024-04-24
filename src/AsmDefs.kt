@@ -100,6 +100,7 @@ value class Reg(val backing: Int) {
 	val rexX get() = (backing shr 2) and 2
 	/** RM, base, or opcode reg*/
 	val rexB get() = (backing shr 3) and 1
+	val rexW get() = (type and 4) shl 1 // assuming TYPE_R64 is 4
 	val rex get() = (backing shr 3) and 1
 	val hasRex get() = (backing and 0b1000) != 0
 	val requiresRex get() = value in 20..23
